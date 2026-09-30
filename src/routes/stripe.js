@@ -9,6 +9,7 @@
 import express from 'express';
 import { runDbScope, transaction } from '../db.js';
 import { stripeRequest, verifyWebhook, subscriptionState, StripeError, ACTIVE_STATUSES } from '../stripe.js';
+import { encryptJson, decryptJson } from '../data-protection.js';
 
 const text = value => String(value ?? '').trim();
 export const STRIPE_WEBHOOK_PATH = '/api/stripe/webhook';
@@ -21,19 +22,33 @@ const SUBSCRIPTION_EVENTS = new Set([
 const scopeFor = workspaceId => ({ principalId: '', workspaceId, organizationId: '', jurisdiction: '', role: '' });
 
 /** Write a subscription's state to its workspace. */
-async function saveSubscription(client, workspaceId, state, { customerId = null } = {}) {
+async function saveSubscription(client, workspaceId, state, { customerId = null, billingKey } = {}) {
+  const { rows: [existing] } = await client.query(
+    'SELECT billing_private_enc FROM workspace_billing WHERE workspace_id = $1 FOR UPDATE',
+    [workspaceId]
+  );
+  const privateBilling = existing?.billing_private_enc && billingKey
+    ? decryptJson(billingKey, 'workspace-billing-v1', existing.billing_private_enc)
+    : {};
+  privateBilling.stripeCustomerId = customerId || state.customerId || privateBilling.stripeCustomerId || null;
+  privateBilling.stripeSubscriptionId = state.subscriptionId || null;
+  const encoded = billingKey ? encryptJson(billingKey, 'workspace-billing-v1', privateBilling) : null;
   await client.query(
-    `INSERT INTO workspace_billing (workspace_id, stripe_customer_id, stripe_subscription_id, subscription_status, plan_id, current_period_end, cancel_at_period_end, stripe_synced_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+    `INSERT INTO workspace_billing
+      (workspace_id, billing_email, company_name, tax_id, country, address, stripe_customer_id, stripe_subscription_id, billing_private_enc, billing_encryption_version,
+       subscription_status, plan_id, current_period_end, cancel_at_period_end, stripe_synced_at)
+     VALUES ($1, '', '', '', '', '', NULL, NULL, $2, 1, $3, $4, $5, $6, now())
      ON CONFLICT (workspace_id) DO UPDATE SET
-       stripe_customer_id = COALESCE(EXCLUDED.stripe_customer_id, workspace_billing.stripe_customer_id),
-       stripe_subscription_id = EXCLUDED.stripe_subscription_id,
+       billing_private_enc = EXCLUDED.billing_private_enc,
+       billing_encryption_version = 1,
+       billing_email = '', company_name = '', tax_id = '', country = '', address = '',
+       stripe_customer_id = NULL, stripe_subscription_id = NULL,
        subscription_status = EXCLUDED.subscription_status,
        plan_id = EXCLUDED.plan_id,
        current_period_end = EXCLUDED.current_period_end,
        cancel_at_period_end = EXCLUDED.cancel_at_period_end,
        stripe_synced_at = now()`,
-    [workspaceId, customerId || state.customerId || null, state.subscriptionId || null, state.status, state.planId, state.currentPeriodEnd, state.cancelAtPeriodEnd]
+    [workspaceId, encoded, state.status, state.planId, state.currentPeriodEnd, state.cancelAtPeriodEnd]
   );
 }
 
@@ -77,13 +92,16 @@ export function registerStripeWebhook(app, { config, pool, audit, logger, metric
       if (!rowCount) return 'duplicate';
       // The workspace's own customer only: a subscription for another customer
       // cannot take over a workspace that already pays through Stripe.
-      const { rows: [current] } = await client.query('SELECT stripe_customer_id, stripe_subscription_id FROM workspace_billing WHERE workspace_id = $1 FOR UPDATE', [workspaceId]);
-      if (current?.stripe_customer_id && state.customerId && current.stripe_customer_id !== state.customerId) return 'customer-mismatch';
+      const { rows: [current] } = await client.query('SELECT billing_private_enc FROM workspace_billing WHERE workspace_id = $1 FOR UPDATE', [workspaceId]);
+      const currentBilling = current?.billing_private_enc
+        ? decryptJson(config.stripe ? config.security?.billingEncryptionKey : null, 'workspace-billing-v1', current.billing_private_enc)
+        : {};
+      if (currentBilling.stripeCustomerId && state.customerId && currentBilling.stripeCustomerId !== state.customerId) return 'customer-mismatch';
       // Events can arrive out of order: an old subscription's update must not
       // overwrite a newer one, unless the old one is the one that ended.
-      if (current?.stripe_subscription_id && state.subscriptionId && current.stripe_subscription_id !== state.subscriptionId
+      if (currentBilling.stripeSubscriptionId && state.subscriptionId && currentBilling.stripeSubscriptionId !== state.subscriptionId
           && !ACTIVE_STATUSES.includes(state.status)) return 'stale-subscription';
-      await saveSubscription(client, workspaceId, state, { customerId: text(object.customer) || null });
+      await saveSubscription(client, workspaceId, state, { customerId: text(object.customer) || null, billingKey: config.security.billingEncryptionKey });
       await audit?.record({
         principalId: null, workspaceId, action: 'billing.subscription', target: state.subscriptionId || workspaceId,
         outcome: 'allowed', detail: { event: event.type, status: state.status, plan: state.planId, eventId: event.id }
@@ -112,20 +130,29 @@ export function registerStripeRoutes(app, { config, pool, audit, fetchImpl, rout
 
   /** The workspace's Stripe customer, created on first use and remembered. */
   async function customerFor(req) {
-    const { rows: [row] } = await pool.query('SELECT stripe_customer_id, billing_email, company_name FROM workspace_billing WHERE workspace_id = $1', [req.scope.workspaceId]);
-    if (row?.stripe_customer_id) return row.stripe_customer_id;
+    const { rows: [row] } = await pool.query('SELECT * FROM workspace_billing WHERE workspace_id = $1', [req.scope.workspaceId]);
+    const privateBilling = row?.billing_private_enc
+      ? decryptJson(config.security.billingEncryptionKey, 'workspace-billing-v1', row.billing_private_enc)
+      : {};
+    if (privateBilling.stripeCustomerId) return privateBilling.stripeCustomerId;
     const customer = await stripeRequest(config.stripe, fetchImpl, 'POST', '/v1/customers', {
-      email: row?.billing_email || req.principal.email || undefined,
-      name: row?.company_name || undefined,
+      email: privateBilling.billingEmail || req.principal.email || undefined,
+      name: privateBilling.companyName || undefined,
       metadata: { workspace_id: req.scope.workspaceId }
     }, { idempotencyKey: `customer-${req.scope.workspaceId}` });
+    const encoded = encryptJson(config.security.billingEncryptionKey, 'workspace-billing-v1', { ...privateBilling, stripeCustomerId: customer.id, stripeSubscriptionId: privateBilling.stripeSubscriptionId || null });
     await pool.query(
-      `INSERT INTO workspace_billing (workspace_id, stripe_customer_id, updated_by) VALUES ($1, $2, $3)
-       ON CONFLICT (workspace_id) DO UPDATE SET stripe_customer_id = COALESCE(workspace_billing.stripe_customer_id, EXCLUDED.stripe_customer_id)`,
-      [req.scope.workspaceId, customer.id, req.principal.id]
+      `INSERT INTO workspace_billing
+        (workspace_id, billing_email, company_name, tax_id, country, address, stripe_customer_id, stripe_subscription_id, billing_private_enc, billing_encryption_version, updated_by, updated_at)
+       VALUES ($1, '', '', '', '', '', NULL, NULL, $2, 1, $3, now())
+       ON CONFLICT (workspace_id) DO UPDATE SET
+         billing_private_enc = EXCLUDED.billing_private_enc, billing_encryption_version = 1,
+         billing_email = '', company_name = '', tax_id = '', country = '', address = '',
+         stripe_customer_id = NULL, stripe_subscription_id = NULL,
+         updated_by = EXCLUDED.updated_by, updated_at = now()`,
+      [req.scope.workspaceId, encoded, req.principal.id]
     );
-    const { rows: [saved] } = await pool.query('SELECT stripe_customer_id FROM workspace_billing WHERE workspace_id = $1', [req.scope.workspaceId]);
-    return saved.stripe_customer_id;
+    return customer.id;
   }
 
   app.post('/api/billing/checkout', scoped('admin'), route(async (req, res) => {
