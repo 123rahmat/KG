@@ -1660,7 +1660,6 @@ export const MIGRATIONS = [
         ADD COLUMN IF NOT EXISTS encryption_version INTEGER NOT NULL DEFAULT 0;
     `
   }
-  }
   ,{
     version: 40,
     name: 'encrypt-audit-details',
