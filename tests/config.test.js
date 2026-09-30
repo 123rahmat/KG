@@ -62,6 +62,26 @@ test('production requires dedicated encryption keys for billing and personal dat
   assert.throws(() => loadConfig({ ...base, PERSONAL_DATA_ENCRYPTION_KEY: '' }), /PERSONAL_DATA_ENCRYPTION_KEY is required in production/);
 });
 
+test('production requires encryption keys to be distinct across data classes', () => {
+  const base = env({
+    NODE_ENV: 'production',
+    COOKIE_SECURE: 'true',
+    PGSSLMODE: 'verify',
+    PGSSLROOTCERT: '/tmp/ca.pem',
+    OBJECT_ENCRYPTION_KEY: Buffer.from('object-key-32-bytes-long-0000000').toString('base64'),
+    BILLING_ENCRYPTION_KEY: Buffer.from('billing-key-32-bytes-long-000000').toString('base64'),
+    PERSONAL_DATA_ENCRYPTION_KEY: Buffer.from('personal-key-32-bytes-long-00000').toString('base64'),
+    DATABASE_URL: 'postgres://runtime:secret@db.example/professor',
+    DATABASE_MIGRATION_URL: 'postgres://migrate:secret@db.example/professor',
+    BACKUP_DATABASE_URL: 'postgres://backup:secret@db.example/professor',
+    RESTORE_DATABASE_URL: 'postgres://restore:secret@db.example/professor',
+    ...ALL_AI
+  });
+  assert.throws(() => loadConfig({ ...base, BILLING_ENCRYPTION_KEY: base.OBJECT_ENCRYPTION_KEY }), /BILLING_ENCRYPTION_KEY must be different/);
+  assert.throws(() => loadConfig({ ...base, PERSONAL_DATA_ENCRYPTION_KEY: base.OBJECT_ENCRYPTION_KEY }), /PERSONAL_DATA_ENCRYPTION_KEY must be different/);
+  assert.throws(() => loadConfig({ ...base, PERSONAL_DATA_ENCRYPTION_KEY: base.BILLING_ENCRYPTION_KEY }), /PERSONAL_DATA_ENCRYPTION_KEY must be different from BILLING_ENCRYPTION_KEY/);
+});
+
 test('production requires verified database TLS', () => {
   assert.throws(
     () => loadConfig(env({
