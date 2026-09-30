@@ -27,24 +27,32 @@ const ROLE_REDUNDANCY_PENALTY = 0.08;
 
 const ROLE_CATALOG = Object.freeze({
   strategist: {
-    purpose: 'Turn the current goal, constraints, and evidence into the smallest reliable next strategy; identify dependencies and a viable fallback.',
+    purpose: 'Decompose the goal into the smallest reliable strategy, identify dependencies, sequence decisions, and preserve a viable fallback across any domain.',
     bestFor: ['plan', 'understand', 'discover', 'reassess', 'step', 'respond', 'deliver'],
   },
   researcher: {
-    purpose: 'Identify the highest-impact unknowns, what evidence would discriminate between explanations, and where unsupported assumptions could mislead the work. Do not browse or invent sources.',
-    bestFor: ['understand', 'discover', 'reassess', 'plan', 'respond', 'deliver'],
+    purpose: 'Find the highest-impact unknowns, identify evidence that would discriminate between explanations or options, and expose unsupported assumptions. Do not browse or invent sources.',
+    bestFor: ['understand', 'discover', 'reassess', 'plan', 'respond', 'deliver', 'investigate'],
+  },
+  analyst: {
+    purpose: 'Perform structured analysis: compare alternatives, inspect patterns, quantify or qualify trade-offs, test internal consistency, and surface consequences that are easy to miss.',
+    bestFor: ['understand', 'discover', 'reassess', 'plan', 'respond', 'deliver', 'investigate', 'step'],
   },
   architect: {
-    purpose: 'Design robust implementation boundaries, invariants, interfaces, tests, and failure containment for the requested change.',
-    bestFor: ['build-code', 'prototype', 'code', 'plan'],
+    purpose: 'Design robust solution boundaries, interfaces, invariants, implementation plans, and failure containment for executable or multi-part work, whether technical or non-technical.',
+    bestFor: ['build-code', 'prototype', 'code', 'plan', 'design', 'implement', 'step'],
   },
   critic: {
-    purpose: 'Adversarially challenge the proposed direction against the goal, constraints, evidence, safety, and likely failure modes. Do not rewrite the solution unless a concrete correction is needed.',
-    bestFor: ['plan', 'build-code', 'prototype', 'respond', 'deliver', 'step', 'reassess'],
+    purpose: 'Adversarially challenge the direction against the goal, constraints, evidence, safety, quality bar, and likely failure modes. Require concrete corrections when needed.',
+    bestFor: ['plan', 'build-code', 'prototype', 'respond', 'deliver', 'step', 'reassess', 'write', 'edit'],
+  },
+  communicator: {
+    purpose: 'Optimize how the result is expressed for the intended audience: clarity, structure, tone, completeness, translation fidelity, and ambiguity reduction without changing the underlying facts.',
+    bestFor: ['respond', 'deliver', 'write', 'edit', 'translate'],
   },
   diagnostician: {
-    purpose: 'For failed or retried work, separate symptoms from causes, compare competing hypotheses, and identify the next discriminating test or corrective change.',
-    bestFor: ['build-code', 'prototype', 'respond', 'deliver', 'reassess', 'step', 'plan'],
+    purpose: 'For failed, inconsistent, or retried work, separate symptoms from causes, compare competing hypotheses, and identify the next discriminating test or corrective change.',
+    bestFor: ['build-code', 'prototype', 'respond', 'deliver', 'reassess', 'step', 'plan', 'investigate'],
   }
 });
 
@@ -76,6 +84,17 @@ function normalizedRoleFinding(raw, role) {
 }
 
 
+function goalFlags(goal) {
+  const value = text(goal).toLowerCase();
+  return {
+    communication: /\\b(?:write|rewrite|draft|edit|translate|summar|summarize|email|letter|essay|article|post|caption|speech|message|bio|resume|script|story|poem|copy|document)\\b/.test(value),
+    comparison: /\\b(?:compare|versus|trade[- ]?off|choose|option|alternative|evaluate|assess|priorit|decision)\\b/.test(value),
+    quantitative: /\\b(?:calculate|calculation|budget|cost|price|revenue|profit|metric|metrics|statistics?|data|dataset|percentage|forecast|estimate|measure)\\b/.test(value),
+    design: /\\b(?:design|architecture|system|process|workflow|strategy|framework|model|structure|plan)\\b/.test(value),
+    investigation: /\\b(?:why|diagnos|debug|investigat|root cause|find out|research|discover|unknown|figure out|audit)\\b/.test(value)
+  };
+}
+
 function taskSignals(run, task, progress = {}) {
   const situation = run?.situation ?? {};
   const adaptation = run?.adaptation ?? {};
@@ -83,6 +102,8 @@ function taskSignals(run, task, progress = {}) {
   const taskId = text(task?.id).toLowerCase();
   const type = text(task?.type).toLowerCase();
   const scale = text(adaptation.scale).toLowerCase();
+  const goal = text(progress?.goal ?? run?.goal);
+  const flags = goalFlags(goal);
   const retrying = Number(run?.attempt ?? 1) > 1 || Boolean(situation.failure || situation.error);
   const failedRoleCount = Array.isArray(progress?.failedRoles) ? progress.failedRoles.length : 0;
   const requirements = Array.isArray(task?.metadata?.requirementIds) ? task.metadata.requirementIds.length : 0;
@@ -96,60 +117,75 @@ function taskSignals(run, task, progress = {}) {
     : Array.isArray(workPlan?.steps)
       ? workPlan.steps.length
       : 0;
-  const evidence = Array.isArray(progress?.evidenceSoFar)
-    ? progress.evidenceSoFar
-    : [];
+  const evidence = Array.isArray(progress?.evidenceSoFar) ? progress.evidenceSoFar : [];
   const successCriteria = Array.isArray(situation?.successCriteria) ? situation.successCriteria.length : 0;
+  const constraints = Array.isArray(situation?.constraints) ? situation.constraints.length : 0;
+  const outputs = Array.isArray(situation?.outputs) ? situation.outputs.length : 0;
   const evidenceGap = successCriteria > 0
     ? Math.max(0, Math.min(1, (successCriteria - Math.min(successCriteria, evidence.length)) / successCriteria))
     : 0;
-  const coding = taskId === 'build-code' || ['code', 'prototype'].includes(type);
-  const implementationComplexity = coding
+  const executable = taskId === 'build-code' || ['code', 'prototype', 'tool'].includes(type);
+  const investigative = ['understand', 'discover', 'investigate', 'reassess'].includes(type) || flags.investigation;
+  const communication = ['respond', 'deliver'].includes(type) || flags.communication;
+  const implementationComplexity = executable
     ? (taskId === 'build-code' || task?.metadata?.buildPlan ? 0.34 : 0.24)
-    : 0;
+    : (['plan', 'step', 'design', 'implement'].includes(type) ? 0.12 : 0);
   const scaleComplexity = { small: 0.05, medium: 0.16, complex: 0.32, advanced: 0.43 }[scale] ?? 0.1;
-  const decomposition = Math.min(0.34,
+  const decomposition = Math.min(0.38,
     (requirements >= 2 ? 0.08 : 0) +
     (requirements >= 5 ? 0.08 : 0) +
     (dependencies >= 1 ? 0.07 : 0) +
     (dependencies >= 3 ? 0.08 : 0) +
     (pendingTasks >= 3 ? 0.05 : 0) +
-    (workPlanSteps >= 4 ? 0.06 : 0)
+    (workPlanSteps >= 4 ? 0.06 : 0) +
+    (outputs >= 2 ? 0.05 : 0) +
+    (constraints >= 3 ? 0.05 : 0)
   );
   const unknowns = Math.min(0.45,
     (situation.unknownSituation === true ? 0.18 : 0) +
     (situation.investigationNeeded === true ? 0.15 : 0) +
+    (investigative ? 0.06 : 0) +
     (Array.isArray(situation.unknowns) ? Math.min(0.12, situation.unknowns.length * 0.04) : 0)
   );
-  const evidenceDiversity = Math.min(0.24,
+  const evidenceDiversity = Math.min(0.26,
     (situation.externalData?.hasExternalDataNeed === true ? 0.11 : 0) +
     (evidenceGap * 0.12) +
-    (evidence.length === 0 && successCriteria > 0 ? 0.06 : 0)
+    (evidence.length === 0 && successCriteria > 0 ? 0.06 : 0) +
+    (flags.quantitative ? 0.04 : 0)
   );
   const stakes = HIGH_STAKES.has(text(situation.risk).toLowerCase()) ? 0.2 : 0;
   const recovery = Math.min(0.34, (retrying ? 0.2 : 0) + failedRoleCount * 0.05);
   const depth = ['thorough', 'deep'].includes(text(need.depth).toLowerCase()) ? 0.08 : 0;
-  const taskCoordinationBonus = ['plan', 'understand', 'discover', 'reassess'].includes(type) ? 0.10 : 0;
-  const concurrencyOpportunity = Math.min(0.18,
-    (coding && requirements >= 3 ? 0.07 : 0) +
+  const taskCoordinationBonus = ['plan', 'understand', 'discover', 'reassess', 'investigate'].includes(type) ? 0.10 : 0;
+  const concurrencyOpportunity = Math.min(0.20,
+    (requirements >= 3 ? 0.07 : 0) +
     (dependencies >= 2 ? 0.06 : 0) +
-    (pendingTasks >= 4 ? 0.05 : 0)
+    (pendingTasks >= 4 ? 0.05 : 0) +
+    (outputs >= 2 ? 0.04 : 0)
   );
+  const comparisonComplexity = Math.min(0.24,
+    (flags.comparison ? 0.12 : 0) +
+    (flags.quantitative ? 0.06 : 0) +
+    (requirements >= 3 ? 0.04 : 0) +
+    (outputs >= 2 ? 0.03 : 0)
+  );
+  const communicationComplexity = communication
+    ? Math.min(0.18, (flags.communication ? 0.08 : 0.04) + (outputs >= 1 ? 0.04 : 0) + (constraints >= 2 ? 0.04 : 0))
+    : 0;
   return {
-    coding, scaleComplexity, implementationComplexity, decomposition, unknowns,
+    executable, investigative, communication, flags,
+    scaleComplexity, implementationComplexity, decomposition, unknowns,
     evidenceDiversity, evidenceGap, stakes, recovery, depth, taskCoordinationBonus,
-    concurrencyOpportunity, retrying, requirements, dependencies, pendingTasks,
-    workPlanSteps, evidenceCount: evidence.length, successCriteria, type, taskId
+    concurrencyOpportunity, comparisonComplexity, communicationComplexity,
+    retrying, requirements, dependencies, pendingTasks, workPlanSteps,
+    evidenceCount: evidence.length, successCriteria, constraints, outputs, type, taskId,
+    goalLength: goal.length
   };
 }
 
-/**
- * Compute explainable task-specific coordination pressure. It estimates the
- * value of independent perspectives from observable workflow state; it does
- * not let any specialist decide its own authority or permissions.
- */
-export function decisionPressure(run, task, progress = {}) {
+function decisionPressure(run, task, progress = {}) {
   const signals = taskSignals(run, task, progress);
+  const goalComplexity = Math.min(0.14, signals.goalLength > 160 ? 0.08 : 0);
   return Math.min(1,
     signals.scaleComplexity +
     signals.implementationComplexity +
@@ -160,7 +196,10 @@ export function decisionPressure(run, task, progress = {}) {
     signals.recovery +
     signals.depth +
     signals.taskCoordinationBonus +
-    signals.concurrencyOpportunity
+    signals.concurrencyOpportunity +
+    signals.comparisonComplexity +
+    signals.communicationComplexity +
+    goalComplexity
   );
 }
 
@@ -174,7 +213,6 @@ function targetAgentCount(pressure, maxAgents) {
   return Math.min(maximum, desired);
 }
 
-/** Decide if this task should pay for an adaptive agent panel. */
 export function multiAgentDecision(run, task, { mode = 'auto', progress = {} } = {}) {
   const normalizedMode = MULTI_AGENT_MODES.includes(mode) ? mode : 'auto';
   const pressure = decisionPressure(run, task, progress);
@@ -197,11 +235,16 @@ function roleUtility(role, run, task, progress = {}) {
     ROLE_CATALOG[role]?.bestFor?.includes(signals.taskId) ? 0.18 : 0;
   const completed = new Set(progress.completedRoles ?? []);
   const base = {
-    architect: signals.coding ? 0.46 + signals.implementationComplexity * 0.9 + signals.decomposition * 0.7 : 0.14,
+    strategist: (['plan', 'understand', 'discover', 'reassess'].includes(signals.type) ? 0.46 : 0.18)
+      + signals.decomposition * 1.25 + signals.depth * 0.35 + (signals.flags.design ? 0.08 : 0),
     researcher: signals.unknowns * 1.9 + signals.evidenceDiversity * 1.4,
-    strategist: (['plan', 'understand', 'discover', 'reassess'].includes(signals.type) ? 0.46 : 0.18) + signals.decomposition * 1.25 + signals.depth * 0.35,
-    critic: 0.22 + signals.stakes * 1.3 + signals.scaleComplexity * 0.65 + signals.recovery * 0.35 + typeMatch,
-    diagnostician: signals.retrying ? 0.82 + signals.recovery * 0.5 : 0.1
+    analyst: 0.20 + signals.comparisonComplexity * 1.8 + signals.evidenceDiversity * 1.15 + (signals.flags.quantitative ? 0.14 : 0) + typeMatch,
+    architect: signals.executable ? 0.46 + signals.implementationComplexity * 0.9 + signals.decomposition * 0.7 : 0.14 + signals.decomposition * 0.5,
+    critic: 0.20 + signals.stakes * 1.3 + signals.scaleComplexity * 0.65 + signals.recovery * 0.35 + typeMatch,
+    communicator: signals.communication
+      ? 0.38 + signals.communicationComplexity * 1.6 + (signals.flags.communication ? 0.12 : 0) + typeMatch
+      : 0.06,
+    diagnostician: signals.retrying ? 0.82 + signals.recovery * 0.5 + signals.unknowns * 0.35 : 0.1
   }[role] ?? 0;
   return Math.max(0, Math.min(1.2, base - (completed.has(role) ? 1 : 0)));
 }
@@ -212,11 +255,6 @@ function roleCandidates(run, task, progress = {}) {
     .sort((a, b) => b.utility - a.utility || a.role.localeCompare(b.role));
 }
 
-/**
- * Allocate the smallest role set likely to add independent value. The
- * pressure-derived target is only a provisional capacity; each role must also
- * clear a marginal-utility threshold after diversity/redundancy is considered.
- */
 export function rolesFor(run, task, {
   maxAgents = DEFAULT_MULTI_AGENT_MAX_AGENTS,
   mode = 'auto',
@@ -248,17 +286,20 @@ export function rolesFor(run, task, {
     selectedAgents: roles.length,
     pressure: Number(decision.pressure.toFixed(3)),
     dimensions: {
-      coding: signals.coding,
+      executable: signals.executable,
+      communication: signals.communication,
       complexity: Number((signals.scaleComplexity + signals.implementationComplexity).toFixed(3)),
       uncertainty: Number((signals.unknowns + signals.evidenceDiversity).toFixed(3)),
       decomposition: Number(signals.decomposition.toFixed(3)),
       taskCoordination: Number(signals.taskCoordinationBonus.toFixed(3)),
+      comparison: Number(signals.comparisonComplexity.toFixed(3)),
+      communicationComplexity: Number(signals.communicationComplexity.toFixed(3)),
       stakes: Number(signals.stakes.toFixed(3)),
       recovery: Number(signals.recovery.toFixed(3)),
       concurrencyOpportunity: Number(signals.concurrencyOpportunity.toFixed(3))
     },
     utilities,
-    reason: 'Task-specific allocation from current workflow state; not a fixed domain count.'
+    reason: 'Task-specific allocation from current workflow state; cognitive roles are domain-agnostic.'
   };
   return { decision, roles, agentCount: roles.length, allocation };
 }
@@ -448,6 +489,8 @@ export async function runAdaptiveAgentPanel({
       progress: {
         completedRoles,
         failedRoles,
+        goal: basePayload?.goal,
+        goal: basePayload?.goal,
         workPlan: basePayload?.workPlan,
         evidenceSoFar: basePayload?.evidenceSoFar
       }
