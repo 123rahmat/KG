@@ -78,7 +78,16 @@ export async function backfillSensitiveData(pool, { billingKey = null, personalD
         `SELECT workspace_id, billing_email, company_name, tax_id, country, address,
                 stripe_customer_id, stripe_subscription_id
            FROM workspace_billing
-          WHERE billing_encryption_version = 0 OR billing_private_enc IS NULL
+          WHERE billing_encryption_version <> 1
+             OR billing_private_enc IS NULL
+             OR billing_private_enc = ''
+             OR billing_email <> ''
+             OR company_name <> ''
+             OR tax_id <> ''
+             OR country <> ''
+             OR address <> ''
+             OR stripe_customer_id IS NOT NULL
+             OR stripe_subscription_id IS NOT NULL
           ORDER BY workspace_id
           LIMIT 200`
       );
@@ -129,7 +138,13 @@ export async function backfillSensitiveData(pool, { billingKey = null, personalD
       const { rows } = await pool.query(
         `SELECT id, content, normalized
            FROM memories
-          WHERE encryption_version = 0 OR content_enc IS NULL OR normalized_digest IS NULL
+          WHERE encryption_version <> 1
+             OR content_enc IS NULL
+             OR content_enc = ''
+             OR normalized_digest IS NULL
+             OR normalized_digest = ''
+             OR content <> ''
+             OR normalized <> ''
           ORDER BY id
           LIMIT 200`
       );
