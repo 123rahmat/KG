@@ -238,8 +238,8 @@ export async function backfillSensitiveData(pool, { billingKey = null, personalD
               WHERE id = $1`,
             [
               row.id,
-              row.note !== '' ? encryptField(personalDataKey, 'safety-report-note-v1', row.note) : row.note_enc,
-              row.excerpt !== '' ? encryptField(personalDataKey, 'safety-report-excerpt-v1', row.excerpt) : row.excerpt_enc
+              row.note !== '' ? encryptField(personalDataKey, 'safety-report-note-v1', row.note) : (row.note_enc || encryptField(personalDataKey, 'safety-report-note-v1', '')),
+              row.excerpt !== '' ? encryptField(personalDataKey, 'safety-report-excerpt-v1', row.excerpt) : (row.excerpt_enc || encryptField(personalDataKey, 'safety-report-excerpt-v1', ''))
             ]
           );
         }
