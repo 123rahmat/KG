@@ -11,6 +11,10 @@
 import zlib from 'node:zlib';
 
 export const MAX_TEXT_CHARS = 400_000;
+// PDFs are attacker-controlled input. Bound page fan-out and decoded image size
+// before unpdf extracts every page, while document-runner.js adds a worker timeout.
+export const MAX_PDF_PAGES = 250;
+export const MAX_PDF_IMAGE_PIXELS = 16_777_216;
 const MAX_ZIP_ENTRIES = 5_000;
 const MAX_ENTRY_BYTES = 40 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 120 * 1024 * 1024;
@@ -177,9 +181,17 @@ async function readPdf(buffer) {
   const { extractText, getDocumentProxy } = await import('unpdf');
   let pdf;
   try {
-    pdf = await getDocumentProxy(new Uint8Array(buffer), { isEvalSupported: false, disableFontFace: true });
+    pdf = await getDocumentProxy(new Uint8Array(buffer), {
+      isEvalSupported: false,
+      disableFontFace: true,
+      stopAtErrors: true,
+      maxImageSize: MAX_PDF_IMAGE_PIXELS
+    });
   } catch (error) {
     throw new DocumentError(/password/i.test(error?.message ?? '') ? 'This PDF is password-protected.' : 'This PDF could not be opened.', /password/i.test(error?.message ?? '') ? 'document-encrypted' : 'document-unreadable');
+  }
+  if (pdf.numPages > MAX_PDF_PAGES) {
+    throw new DocumentError(`This PDF has ${pdf.numPages} pages; at most ${MAX_PDF_PAGES} can be read safely.`);
   }
   const { totalPages, text } = await extractText(pdf, { mergePages: false });
   const pages = text.map((page, index) => `Page ${index + 1}\n${page.trim()}`);
