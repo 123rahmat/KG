@@ -9,7 +9,7 @@
 
 import crypto from 'node:crypto';
 import { registerTools } from './toolbox.js';
-import { encryptField, decryptField, keyedDigest } from './data-protection.js';
+import { encryptJson, decryptField, keyedDigest } from './data-protection.js';
 
 const text = value => String(value ?? '').trim();
 export const MEMORY_KINDS = Object.freeze(['about', 'preference', 'project', 'fact']);
@@ -41,11 +41,18 @@ const normalized = value => text(value).toLowerCase().replace(/[^\p{L}\p{N}]+/gu
 const STOP = new Set('a an the and or but of to in on at for with by from is are was were be been am i me my we our you your it its this that these those do does did have has had can could should would will what how why when where which who whom please about into than then so as if not no yes'.split(' '));
 const terms = value => new Set(normalized(value).split(' ').filter(word => word.length > 2 && !STOP.has(word)));
 
-const decode = (row, encryptionKey) => ({
-  ...row,
-  content: decryptField(encryptionKey, 'memory-content-v1', row.content_enc),
-  normalized: row.normalized_digest
-});
+const decode = (row, encryptionKey) => {
+  const raw = decryptField(encryptionKey, 'memory-content-v1', row.content_enc);
+  try {
+    const packed = JSON.parse(raw);
+    if (packed && typeof packed === 'object' && typeof packed.content === 'string') {
+      return { ...row, content: packed.content, normalized: packed.normalized || normalized(packed.content) };
+    }
+  } catch {}
+  // Legacy encrypted rows held only the content string. Its normalized lookup
+  // value can be reconstructed exactly from the same normalization function.
+  return { ...row, content: raw, normalized: normalized(raw) };
+};
 const shape = (row, encryptionKey) => {
   const decoded = row?.content_enc ? decode(row, encryptionKey) : row;
   return {
@@ -121,7 +128,7 @@ export class MemoryStore {
        VALUES ($1, $2, $3, '', '', $4, $5, 1, $6, $7, $8) RETURNING *`,
       [
         crypto.randomUUID(), scope.workspaceId, scope.principalId,
-        encryptField(this.encryptionKey, 'memory-content-v1', value),
+        encryptJson(this.encryptionKey, 'memory-content-v1', { content: value, normalized: key }),
         keyedDigest(this.encryptionKey, 'memory-lookup-v1', key),
         type, sourceRunId, conversation || null
       ]
