@@ -1613,6 +1613,7 @@ export const MIGRATIONS = [
       -- The old unique constraint indexed plaintext normalized content. It
       -- would collapse every encrypted row to the same empty value.
       ALTER TABLE memories DROP CONSTRAINT IF EXISTS memories_workspace_id_principal_id_normalized_key;
+  }
     `
   ,{
     version: 38,
