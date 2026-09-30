@@ -35,7 +35,8 @@ import { runJob, validateJob, jobFromPayload, SandboxError, DEFAULT_IMAGES, LANG
 const text = value => String(value ?? '').trim();
 const HOST = text(process.env.SANDBOX_RUNNER_HOST) || '127.0.0.1';
 const PORT = Number(process.env.SANDBOX_RUNNER_PORT) || 8767;
-const TOKEN = text(process.env.RUNNER_TOKEN);
+const production = text(process.env.NODE_ENV).toLowerCase() === 'production';
+const TOKEN = text(process.env.SANDBOX_RUNNER_TOKEN) || (production ? '' : text(process.env.RUNNER_TOKEN));
 const MAX_BODY = 48 * 1024 * 1024;
 const VERSION = '1.0.0';
 const CONCURRENCY = Math.max(1, Number(process.env.SANDBOX_CONCURRENCY) || 2);
@@ -59,7 +60,6 @@ if (TOKEN.length < 32) {
   process.exit(1);
 }
 
-const production = text(process.env.NODE_ENV).toLowerCase() === 'production';
 const tlsCert = text(process.env.SANDBOX_RUNNER_TLS_CERT);
 const tlsKey = text(process.env.SANDBOX_RUNNER_TLS_KEY);
 if (production) {
