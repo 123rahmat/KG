@@ -198,6 +198,52 @@ export async function backfillSensitiveData(pool, { billingKey = null, personalD
       logger?.info('encrypted memory data batch', { count: rows.length });
     }
   }
+
+  if (personalDataKey) {
+    for (;;) {
+      const { rows } = await pool.query(
+        `SELECT id, note, excerpt
+           FROM safety_reports
+          WHERE encryption_version <> 1
+             OR note_enc IS NULL
+             OR note_enc = ''
+             OR excerpt_enc IS NULL
+             OR excerpt_enc = ''
+             OR note <> ''
+             OR excerpt <> ''
+          ORDER BY id
+          LIMIT 200`
+      );
+      if (!rows.length) break;
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        for (const row of rows) {
+          await client.query(
+            `UPDATE safety_reports
+                SET note_enc = $2,
+                    excerpt_enc = $3,
+                    encryption_version = 1,
+                    note = '',
+                    excerpt = ''
+              WHERE id = $1`,
+            [
+              row.id,
+              encryptField(personalDataKey, 'safety-report-note-v1', row.note),
+              encryptField(personalDataKey, 'safety-report-excerpt-v1', row.excerpt)
+            ]
+          );
+        }
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+      logger?.info('encrypted feedback data batch', { count: rows.length });
+    }
+  }
 }
 
 export async function assertSensitiveDataEncrypted(pool) {
@@ -227,8 +273,9 @@ export async function assertSensitiveDataEncrypted(pool) {
   ]);
   const billing = Number(checks[0].rows[0]?.count ?? 0);
   const memories = Number(checks[1].rows[0]?.count ?? 0);
-  if (billing || memories) {
-    throw new Error('Sensitive application data is not fully encrypted: ' + JSON.stringify({ billing, memories }));
+  const feedback = Number(checks[2].rows[0]?.count ?? 0);
+  if (billing || memories || feedback) {
+    throw new Error('Sensitive application data is not fully encrypted: ' + JSON.stringify({ billing, memories, feedback }));
   }
-  return { billing, memories };
+  return { billing, memories, feedback };
 }
