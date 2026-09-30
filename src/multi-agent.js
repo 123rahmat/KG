@@ -87,11 +87,11 @@ function normalizedRoleFinding(raw, role) {
 function goalFlags(goal) {
   const value = text(goal).toLowerCase();
   return {
-    communication: /\\b(?:write|rewrite|draft|edit|translate|summar|summarize|email|letter|essay|article|post|caption|speech|message|bio|resume|script|story|poem|copy|document)\\b/.test(value),
-    comparison: /\\b(?:compare|versus|trade[- ]?off|choose|option|alternative|evaluate|assess|priorit|decision)\\b/.test(value),
-    quantitative: /\\b(?:calculate|calculation|budget|cost|price|revenue|profit|metric|metrics|statistics?|data|dataset|percentage|forecast|estimate|measure)\\b/.test(value),
-    design: /\\b(?:design|architecture|system|process|workflow|strategy|framework|model|structure|plan)\\b/.test(value),
-    investigation: /\\b(?:why|diagnos|debug|investigat|root cause|find out|research|discover|unknown|figure out|audit)\\b/.test(value)
+    communication: /\b(?:write|rewrite|draft|edit|translate|summar|summarize|email|letter|essay|article|post|caption|speech|message|bio|resume|script|story|poem|copy|document)\b/.test(value),
+    comparison: /\b(?:compare|versus|trade[- ]?off|choose|option|alternative|evaluate|assess|priorit|decision)\b/.test(value),
+    quantitative: /\b(?:calculate|calculation|budget|cost|price|revenue|profit|metric|metrics|statistics?|data|dataset|percentage|forecast|estimate|measure)\b/.test(value),
+    design: /\b(?:design|architecture|system|process|workflow|strategy|framework|model|structure|plan)\b/.test(value),
+    investigation: /\b(?:why|diagnos|debug|investigat|root cause|find out|research|discover|unknown|figure out|audit)\b/.test(value)
   };
 }
 
