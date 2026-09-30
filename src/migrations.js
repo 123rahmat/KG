@@ -1614,5 +1614,39 @@ export const MIGRATIONS = [
       -- would collapse every encrypted row to the same empty value.
       ALTER TABLE memories DROP CONSTRAINT IF EXISTS memories_workspace_id_principal_id_normalized_key;
     `
+  ,{
+    version: 38,
+    name: 'billing-and-webhook-rls',
+    sql: `
+      -- Workspace members may read plan status, but only workspace admins or
+      -- the signed Stripe webhook context may change billing state.
+      DROP POLICY IF EXISTS workspace_billing_policy ON workspace_billing;
+      CREATE POLICY workspace_billing_read ON workspace_billing
+        FOR SELECT
+        USING (workspace_billing.workspace_id = current_setting('app.workspace_id', true));
+      CREATE POLICY workspace_billing_insert ON workspace_billing
+        FOR INSERT
+        WITH CHECK (
+          workspace_billing.workspace_id = current_setting('app.workspace_id', true)
+          AND current_setting('app.role', true) IN ('admin', 'billing-webhook')
+        );
+      CREATE POLICY workspace_billing_update ON workspace_billing
+        FOR UPDATE
+        USING (
+          workspace_billing.workspace_id = current_setting('app.workspace_id', true)
+          AND current_setting('app.role', true) IN ('admin', 'billing-webhook')
+        )
+        WITH CHECK (
+          workspace_billing.workspace_id = current_setting('app.workspace_id', true)
+          AND current_setting('app.role', true) IN ('admin', 'billing-webhook')
+        );
+      CREATE POLICY workspace_billing_delete ON workspace_billing
+        FOR DELETE
+        USING (
+          workspace_billing.workspace_id = current_setting('app.workspace_id', true)
+          AND current_setting('app.role', true) = 'admin'
+        );
+    `
+  }
   }
 ];
