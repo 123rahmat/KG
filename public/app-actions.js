@@ -673,9 +673,9 @@ export function welcome() {
     element('h1', { text: 'What would you like to work on?' }),
     element('p', { class: 'muted', text: 'Describe the question, task, or outcome you need. The workspace adapts its reasoning, evidence, tools, verification, and execution path to the work.' }),
     element('div', { class: 'categories', role: 'tablist', 'aria-label': 'Suggestions' }, groups.map(group => element('button', {
-      type: 'button', role: 'tab', class: `category${group.featured ? ' featured' : ''}`, 'aria-selected': String(group.group === current.group), ,
+      type: 'button', role: 'tab', class: `category${group.featured ? ' featured' : ''}`, 'aria-selected': String(group.group === current.group),
       onclick: () => { state.suggestionGroup = group.group; renderThread(); }
-    }))),
+    }, [svgIcon(group.icon, 'i category-icon'), element('span', { text: group.group })]))),
     element('div', { class: 'examples' }, current.items.map(([label, prompt]) => element('button', {
       class: 'chip', type: 'button',
       onclick: () => {
