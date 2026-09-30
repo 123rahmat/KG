@@ -26,7 +26,7 @@ async function loadActions(runId) {
 }
 
 async function decideAction(run, action, approve, control) {
-  if (control) { control.disabled = true; control.textContent = approve ? 'Working…' : 'Declining…'; }
+  if (control) { control.disabled = true; control.textContent = approve ? 'Processing…' : 'Declining…'; }
   await guard(async () => {
     const { action: decided } = await api('POST', `/api/runs/${encodeURIComponent(run.id)}/actions/${encodeURIComponent(action.id)}`, { approve, taskId: action.taskId });
     state.actions.set(run.id, (state.actions.get(run.id) ?? []).map(item => (item.id === decided.id ? decided : item)));
@@ -59,8 +59,8 @@ function actionCards(run) {
       failed: ['Failed', 'bad'], declined: ['Declined', '']
     }[action.status] ?? [action.status, ''];
     const result = action.status === 'done' && action.result
-      ? element('p', { class: 'small muted', text: action.result.note ?? action.result.tool ?? 'Finished.' })
-      : action.status === 'failed' ? element('p', { class: 'small action-error', text: action.result?.error ?? 'It did not work.' }) : null;
+      ? element('p', { class: 'small muted', text: action.result.note ?? action.result.tool ?? 'Execution completed.' })
+      : action.status === 'failed' ? element('p', { class: 'small action-error', text: action.result?.error ?? 'The action failed.' }) : null;
     return element('div', { class: `action-card ${action.status}` }, [
       element('div', { class: 'action-card-head' }, [
         element('span', { class: 'action-icon' }, [svgIcon(icon)]),
@@ -325,17 +325,17 @@ function openReport(run, actions) {
   if (!actions || actions.nextElementSibling?.classList.contains('report-form')) return;
   const reason = element('select', { 'aria-label': 'Why are you reporting this answer?' },
     REPORT_REASONS.map(([value, label]) => element('option', { value, text: label })));
-  const note = element('textarea', { rows: '2', maxlength: '1000', placeholder: 'What was wrong? (optional)', 'aria-label': 'Details' });
+  const note = element('textarea', { rows: '2', maxlength: '1000', placeholder: 'Additional details (optional)', 'aria-label': 'Details' });
   const form = element('div', { class: 'report-form stack' }, [
     element('strong', { text: 'Report this answer' }),
-    element('span', { class: 'small muted', text: 'Your workspace\'s admins see the report with this answer, to fix what went wrong.' }),
+    element('span', { class: 'small muted', text: 'Workspace administrators receive the report with the associated answer for review.' }),
     reason, note,
     element('div', { class: 'row wrap' }, [
       button('Send report', async event => {
         event.currentTarget.disabled = true;
         await guard(async () => {
           await api('POST', `/api/runs/${run.id}/report`, { reason: reason.value, note: note.value });
-          form.replaceChildren(element('span', { class: 'small', text: 'Thank you. The report was sent.' }));
+          form.replaceChildren(element('span', { class: 'small', text: 'Report submitted.' }));
         }, 'runNotice');
       }, 'primary small'),
       button('Cancel', () => form.remove(), 'ghost small')
@@ -663,15 +663,15 @@ export function welcome() {
   const groups = availableSuggestions();
   if (!groups.length) {
     return element('div', { class: 'welcome stack' }, [
-      element('h1', { text: 'How can I help?' }),
-      element('p', { class: 'muted', text: 'No AI is connected to this workspace yet. You can still describe work here and go through it step by step yourself; an administrator can connect an AI for automatic answers.' })
+      element('h1', { text: 'What would you like to work on?' }),
+      element('p', { class: 'muted', text: 'No reasoning model is connected to this workspace. Work can still be completed manually; an administrator can configure a model for automated reasoning.' })
     ]);
   }
   state.suggestionGroup = groups.some(group => group.group === state.suggestionGroup) ? state.suggestionGroup : groups[0].group;
   const current = groups.find(group => group.group === state.suggestionGroup);
   return element('div', { class: 'welcome stack' }, [
-    element('h1', { text: 'How can I help?' }),
-    element('p', { class: 'muted', text: 'Ask anything good. I am at my best helping you learn, check business ideas and write code, and I go step by step on bigger work.' }),
+    element('h1', { text: 'What would you like to work on?' }),
+    element('p', { class: 'muted', text: 'Describe the question, task, or outcome you need. The workspace adapts its reasoning, evidence, tools, verification, and execution path to the work.' }),
     element('div', { class: 'categories', role: 'tablist', 'aria-label': 'Suggestions' }, groups.map(group => element('button', {
       type: 'button', role: 'tab', class: `category${group.featured ? ' featured' : ''}`, 'aria-selected': String(group.group === current.group), text: `${group.icon} ${group.group}`,
       onclick: () => { state.suggestionGroup = group.group; renderThread(); }
@@ -685,7 +685,7 @@ export function welcome() {
         if (current.attach && !state.attachments.length) $('attachInput').click();
       }
     }, [element('span', { class: 'chip-title', text: label }), element('span', { class: 'chip-text', text: prompt })]))),
-    element('button', { type: 'button', class: 'link see-all', text: 'See everything I can do →', onclick: () => selectTab('explore') })
+    element('button', { type: 'button', class: 'link see-all', text: 'View available capabilities →', onclick: () => selectTab('explore') })
   ]);
 }
 
