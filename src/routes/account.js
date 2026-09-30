@@ -224,8 +224,10 @@ export function registerAccountRoutes(app, { config, pool, identity, audit, rout
 
   const REPORT_REASONS = ['harmful', 'wrong', 'unfair', 'privacy', 'other'];
   const reportRow = row => ({
-    id: row.id, runId: row.run_id, reason: row.reason, note: row.note, excerpt: row.excerpt, status: row.status,
-    createdAt: row.created_at, resolvedAt: row.resolved_at
+    id: row.id, runId: row.run_id, reason: row.reason,
+    note: row.note_enc ? decryptJson(config.security.personalDataEncryptionKey, 'safety-report-note-v1', row.note_enc) : row.note,
+    excerpt: row.excerpt_enc ? decryptJson(config.security.personalDataEncryptionKey, 'safety-report-excerpt-v1', row.excerpt_enc) : row.excerpt,
+    status: row.status, createdAt: row.created_at, resolvedAt: row.resolved_at
   });
 
   // Anyone who can read an answer can report it; the workspace's admins review.
@@ -238,11 +240,15 @@ export function registerAccountRoutes(app, { config, pool, identity, audit, rout
       "SELECT evidence->>'text' AS text FROM run_tasks WHERE run_id = $1 AND type IN ('respond', 'deliver', 'prototype', 'investigate', 'tool') AND evidence ? 'text' ORDER BY position DESC LIMIT 1",
       [run.id]
     ).catch(() => ({ rows: [] }));
+    const note = String(req.body?.note ?? '').trim().slice(0, 1000);
+    const excerpt = String(tasks[0]?.text ?? '').slice(0, 2000);
     const { rows: [row] } = await pool.query(
-      `INSERT INTO safety_reports (id, workspace_id, principal_id, run_id, reason, note, excerpt)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      `INSERT INTO safety_reports
+        (id, workspace_id, principal_id, run_id, reason, note, excerpt, note_enc, excerpt_enc, encryption_version)
+       VALUES ($1, $2, $3, $4, $5, '', '', $6, $7, 1) RETURNING *`,
       [crypto.randomUUID(), req.scope.workspaceId, req.principal.id, run.id, reason,
-        String(req.body?.note ?? '').trim().slice(0, 1000), String(tasks[0]?.text ?? '').slice(0, 2000)]
+        encryptJson(config.security.personalDataEncryptionKey, 'safety-report-note-v1', note),
+        encryptJson(config.security.personalDataEncryptionKey, 'safety-report-excerpt-v1', excerpt)]
     );
     await audit?.record({ principalId: req.principal.id, workspaceId: req.scope.workspaceId, action: 'answer.report', target: run.id, outcome: 'allowed', detail: { reason }, requestId: req.requestId });
     res.status(201).json({ report: reportRow(row) });
