@@ -278,6 +278,15 @@ export async function assertSensitiveDataEncrypted(pool) {
            OR normalized_digest IS NULL
            OR content <> ''
            OR normalized <> ''`
+    ),
+    pool.query(
+      `SELECT COUNT(*)::int AS count
+         FROM safety_reports
+        WHERE encryption_version <> 1
+           OR note_enc IS NULL
+           OR excerpt_enc IS NULL
+           OR note <> ''
+           OR excerpt <> ''`
     )
   ]);
   const billing = Number(checks[0].rows[0]?.count ?? 0);
