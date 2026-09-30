@@ -75,7 +75,7 @@ test('PostgreSQL RLS blocks cross-user and cross-workspace access for the runtim
         assert.deepEqual(idempotentOwner.rows, [
           { key: 'owner-key', response: { private: 'owner' } }
         ]);
-        const billingInsert = await client.query(
+        await await client.query(
           `INSERT INTO workspace_billing (workspace_id, billing_email, company_name, tax_id, country, address, billing_private_enc, billing_encryption_version)
            VALUES ($1, '', '', '', '', '', $2, 1)
            ON CONFLICT (workspace_id) DO NOTHING`,
