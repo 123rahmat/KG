@@ -96,14 +96,18 @@ export async function backfillSensitiveData(pool, { billingKey = null, personalD
       try {
         await client.query('BEGIN');
         for (const row of rows) {
-          const privateData = {
-            billingEmail: String(row.billing_email ?? ''),
-            companyName: String(row.company_name ?? ''),
-            taxId: String(row.tax_id ?? ''),
-            country: String(row.country ?? ''),
-            address: String(row.address ?? ''),
-            stripeCustomerId: row.stripe_customer_id ? String(row.stripe_customer_id) : null,
-            stripeSubscriptionId: row.stripe_subscription_id ? String(row.stripe_subscription_id) : null
+          let privateData = {};
+          if (row.billing_private_enc) {
+            try { privateData = decryptJson(billingKey, 'workspace-billing-v1', row.billing_private_enc) || {}; } catch { privateData = {}; }
+          }
+          privateData = {
+            billingEmail: row.billing_email !== '' ? String(row.billing_email ?? '') : String(privateData.billingEmail ?? ''),
+            companyName: row.company_name !== '' ? String(row.company_name ?? '') : String(privateData.companyName ?? ''),
+            taxId: row.tax_id !== '' ? String(row.tax_id ?? '') : String(privateData.taxId ?? ''),
+            country: row.country !== '' ? String(row.country ?? '') : String(privateData.country ?? ''),
+            address: row.address !== '' ? String(row.address ?? '') : String(privateData.address ?? ''),
+            stripeCustomerId: row.stripe_customer_id ? String(row.stripe_customer_id) : (privateData.stripeCustomerId || null),
+            stripeSubscriptionId: row.stripe_subscription_id ? String(row.stripe_subscription_id) : (privateData.stripeSubscriptionId || null)
           };
           await client.query(
             `UPDATE workspace_billing
@@ -164,6 +168,15 @@ export async function backfillSensitiveData(pool, { billingKey = null, personalD
       try {
         await client.query('BEGIN');
         for (const row of rows) {
+          let content = String(row.content ?? '');
+          if (!content && row.content_enc) {
+            try { content = decryptField(personalDataKey, 'memory-content-v1', row.content_enc); } catch { content = ''; }
+          }
+          const digest = row.normalized_digest || keyedDigest(
+            personalDataKey,
+            'memory-lookup-v1',
+            String(row.normalized ?? '')
+          );
           await client.query(
             `UPDATE memories
                 SET content_enc = $2,
@@ -181,11 +194,7 @@ export async function backfillSensitiveData(pool, { billingKey = null, personalD
                   OR content <> ''
                   OR normalized <> ''
                 )`,
-            [
-              row.id,
-              encryptField(personalDataKey, 'memory-content-v1', row.content),
-              keyedDigest(personalDataKey, 'memory-lookup-v1', row.normalized)
-            ]
+            [row.id, encryptField(personalDataKey, 'memory-content-v1', content), digest]
           );
         }
         await client.query('COMMIT');
@@ -229,8 +238,8 @@ export async function backfillSensitiveData(pool, { billingKey = null, personalD
               WHERE id = $1`,
             [
               row.id,
-              encryptField(personalDataKey, 'safety-report-note-v1', row.note),
-              encryptField(personalDataKey, 'safety-report-excerpt-v1', row.excerpt)
+              row.note !== '' ? encryptField(personalDataKey, 'safety-report-note-v1', row.note) : row.note_enc,
+              row.excerpt !== '' ? encryptField(personalDataKey, 'safety-report-excerpt-v1', row.excerpt) : row.excerpt_enc
             ]
           );
         }
