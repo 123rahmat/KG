@@ -140,7 +140,7 @@ test('an admin buys a plan through Stripe Checkout; only a signed webhook makes 
     assert.equal(stored.billing_encryption_version, 1);
     assert.ok(stored.billing_private_enc);
     assert.equal(stored.billing_private_enc.includes('cus_123'), false);
-    assert.equal(stored.billing_private_enc.includes('sub_123'), false);
+    assert.equal(stored.billing_private_enc.includes('sub_1'), false);
     assert.equal(after.body.stripe.subscription.status, 'active');
     assert.equal(after.body.stripe.subscription.planId, 'pro');
     assert.equal(new Date(after.body.stripe.subscription.currentPeriodEnd).getTime(), 1_900_000_000_000);
