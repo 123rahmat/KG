@@ -71,12 +71,45 @@ export function keyedDigest(masterKey, purpose, value) {
 
 
 /** Move legacy plaintext private fields into encrypted columns. */
-export async function backfillSensitiveData(pool, { billingKey = null, personalDataKey = null, logger = null } = {}) {
-  if (billingKey) {
+export function decryptFieldWithKeys(keys, purpose, encoded) {
+  const candidates = (Array.isArray(keys) ? keys : [keys]).filter(Boolean);
+  if (!candidates.length) throw new Error('No encryption key is configured');
+  let lastError = null;
+  for (let index = 0; index < candidates.length; index += 1) {
+    try {
+      return { value: decryptField(candidates[index], purpose, encoded), keyIndex: index };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error('Encrypted field could not be authenticated with the configured key set', { cause: lastError });
+}
+
+export function decryptJsonWithKeys(keys, purpose, encoded) {
+  const result = decryptFieldWithKeys(keys, purpose, encoded);
+  try {
+    return { value: JSON.parse(result.value), keyIndex: result.keyIndex };
+  } catch {
+    throw new Error('Encrypted JSON field is malformed');
+  }
+}
+
+const normalizeLookup = value =>
+  String(value ?? '').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu, ' ').trim();
+
+export async function backfillSensitiveData(pool, {
+  billingKey = null,
+  billingPreviousKey = null,
+  personalDataKey = null,
+  personalDataPreviousKey = null,
+  logger = null
+} = {}) {
+  const billingKeys = [billingKey, billingPreviousKey].filter(Boolean);
+  if (billingKeys.length) {
     for (;;) {
       const { rows } = await pool.query(
         `SELECT workspace_id, billing_email, company_name, tax_id, country, address,
-                stripe_customer_id, stripe_subscription_id
+                stripe_customer_id, stripe_subscription_id, billing_private_enc
            FROM workspace_billing
           WHERE billing_encryption_version <> 1
              OR billing_private_enc IS NULL
@@ -96,46 +129,43 @@ export async function backfillSensitiveData(pool, { billingKey = null, personalD
       try {
         await client.query('BEGIN');
         for (const row of rows) {
-          let privateData = {};
+          let privateBilling = {};
+          let keyIndex = 0;
           if (row.billing_private_enc) {
-            try { privateData = decryptJson(billingKey, 'workspace-billing-v1', row.billing_private_enc) || {}; } catch { privateData = {}; }
+            const decoded = decryptJsonWithKeys(billingKeys, 'workspace-billing-v1', row.billing_private_enc);
+            privateBilling = decoded.value && typeof decoded.value === 'object' ? decoded.value : {};
+            keyIndex = decoded.keyIndex;
           }
-          privateData = {
-            billingEmail: row.billing_email !== '' ? String(row.billing_email ?? '') : String(privateData.billingEmail ?? ''),
-            companyName: row.company_name !== '' ? String(row.company_name ?? '') : String(privateData.companyName ?? ''),
-            taxId: row.tax_id !== '' ? String(row.tax_id ?? '') : String(privateData.taxId ?? ''),
-            country: row.country !== '' ? String(row.country ?? '') : String(privateData.country ?? ''),
-            address: row.address !== '' ? String(row.address ?? '') : String(privateData.address ?? ''),
-            stripeCustomerId: row.stripe_customer_id ? String(row.stripe_customer_id) : (privateData.stripeCustomerId || null),
-            stripeSubscriptionId: row.stripe_subscription_id ? String(row.stripe_subscription_id) : (privateData.stripeSubscriptionId || null)
+          privateBilling = {
+            billingEmail: row.billing_email !== '' ? String(row.billing_email ?? '') : String(privateBilling.billingEmail ?? ''),
+            companyName: row.company_name !== '' ? String(row.company_name ?? '') : String(privateBilling.companyName ?? ''),
+            taxId: row.tax_id !== '' ? String(row.tax_id ?? '') : String(privateBilling.taxId ?? ''),
+            country: row.country !== '' ? String(row.country ?? '') : String(privateBilling.country ?? ''),
+            address: row.address !== '' ? String(row.address ?? '') : String(privateBilling.address ?? ''),
+            stripeCustomerId: row.stripe_customer_id ? String(row.stripe_customer_id) : (privateBilling.stripeCustomerId || null),
+            stripeSubscriptionId: row.stripe_subscription_id ? String(row.stripe_subscription_id) : (privateBilling.stripeSubscriptionId || null),
+            stripeLastEventCreated: Number.isFinite(Number(privateBilling.stripeLastEventCreated)) ? Number(privateBilling.stripeLastEventCreated) : 0,
+            stripeLastEventId: privateBilling.stripeLastEventId ? String(privateBilling.stripeLastEventId) : null
           };
-          await client.query(
-            `UPDATE workspace_billing
-                SET billing_private_enc = $2,
-                    billing_encryption_version = 1,
-                    billing_email = '',
-                    company_name = '',
-                    tax_id = '',
-                    country = '',
-                    address = '',
-                    stripe_customer_id = NULL,
-                    stripe_subscription_id = NULL,
-                    updated_at = now()
-              WHERE workspace_id = $1
-                AND (
-                  billing_encryption_version <> 1
-                  OR billing_private_enc IS NULL
-                  OR billing_private_enc = ''
-                  OR billing_email <> ''
-                  OR company_name <> ''
-                  OR tax_id <> ''
-                  OR country <> ''
-                  OR address <> ''
-                  OR stripe_customer_id IS NOT NULL
-                  OR stripe_subscription_id IS NOT NULL
-                )`,
-            [row.workspace_id, encryptJson(billingKey, 'workspace-billing-v1', privateData)]
-          );
+          if (keyIndex !== 0 || row.billing_encryption_version !== 1 || !row.billing_private_enc
+              || row.billing_email !== '' || row.company_name !== '' || row.tax_id !== '' || row.country !== ''
+              || row.address !== '' || row.stripe_customer_id !== null || row.stripe_subscription_id !== null) {
+            await client.query(
+              `UPDATE workspace_billing
+                  SET billing_private_enc = $2,
+                      billing_encryption_version = 1,
+                      billing_email = '',
+                      company_name = '',
+                      tax_id = '',
+                      country = '',
+                      address = '',
+                      stripe_customer_id = NULL,
+                      stripe_subscription_id = NULL,
+                      updated_at = now()
+                WHERE workspace_id = $1`,
+              [row.workspace_id, encryptJson(billingKey, 'workspace-billing-v1', privateBilling)]
+            );
+          }
         }
         await client.query('COMMIT');
       } catch (error) {
@@ -148,10 +178,11 @@ export async function backfillSensitiveData(pool, { billingKey = null, personalD
     }
   }
 
-  if (personalDataKey) {
+  const personalKeys = [personalDataKey, personalDataPreviousKey].filter(Boolean);
+  if (personalKeys.length) {
     for (;;) {
       const { rows } = await pool.query(
-        `SELECT id, content, normalized
+        `SELECT id, content, normalized, content_enc, normalized_digest, encryption_version
            FROM memories
           WHERE encryption_version <> 1
              OR content_enc IS NULL
@@ -169,14 +200,28 @@ export async function backfillSensitiveData(pool, { billingKey = null, personalD
         await client.query('BEGIN');
         for (const row of rows) {
           let content = String(row.content ?? '');
-          if (!content && row.content_enc) {
-            try { content = decryptField(personalDataKey, 'memory-content-v1', row.content_enc); } catch { content = ''; }
+          let normalized = String(row.normalized ?? '');
+          let keyIndex = 0;
+          if (row.content_enc) {
+            const decoded = decryptFieldWithKeys(personalKeys, 'memory-content-v1', row.content_enc);
+            keyIndex = decoded.keyIndex;
+            try {
+              const packed = JSON.parse(decoded.value);
+              if (packed && typeof packed === 'object' && typeof packed.content === 'string') {
+                content = packed.content;
+                normalized = typeof packed.normalized === 'string' ? packed.normalized : normalizeLookup(content);
+              } else {
+                content = decoded.value;
+                normalized = normalizeLookup(content);
+              }
+            } catch {
+              content = decoded.value;
+              normalized = normalizeLookup(content);
+            }
           }
-          const digest = row.normalized_digest || keyedDigest(
-            personalDataKey,
-            'memory-lookup-v1',
-            String(row.normalized ?? '')
-          );
+          if (!content) throw new Error(`Memory ${row.id} cannot be re-encrypted because its authenticated content is empty`);
+          normalized = normalized || normalizeLookup(content);
+          const digest = keyedDigest(personalDataKey, 'memory-lookup-v1', normalized);
           await client.query(
             `UPDATE memories
                 SET content_enc = $2,
@@ -184,17 +229,8 @@ export async function backfillSensitiveData(pool, { billingKey = null, personalD
                     encryption_version = 1,
                     content = '',
                     normalized = ''
-              WHERE id = $1
-                AND (
-                  encryption_version <> 1
-                  OR content_enc IS NULL
-                  OR content_enc = ''
-                  OR normalized_digest IS NULL
-                  OR normalized_digest = ''
-                  OR content <> ''
-                  OR normalized <> ''
-                )`,
-            [row.id, encryptField(personalDataKey, 'memory-content-v1', content), digest]
+              WHERE id = $1`,
+            [row.id, encryptJson(personalDataKey, 'memory-content-v1', { content, normalized }), digest]
           );
         }
         await client.query('COMMIT');
@@ -208,10 +244,10 @@ export async function backfillSensitiveData(pool, { billingKey = null, personalD
     }
   }
 
-  if (personalDataKey) {
+  if (personalKeys.length) {
     for (;;) {
       const { rows } = await pool.query(
-        `SELECT id, note, excerpt
+        `SELECT id, note, excerpt, note_enc, excerpt_enc, encryption_version
            FROM safety_reports
           WHERE encryption_version <> 1
              OR note_enc IS NULL
@@ -228,6 +264,12 @@ export async function backfillSensitiveData(pool, { billingKey = null, personalD
       try {
         await client.query('BEGIN');
         for (const row of rows) {
+          const note = row.note !== '' ? String(row.note) : (row.note_enc
+            ? decryptFieldWithKeys(personalKeys, 'safety-report-note-v1', row.note_enc).value
+            : '');
+          const excerpt = row.excerpt !== '' ? String(row.excerpt) : (row.excerpt_enc
+            ? decryptFieldWithKeys(personalKeys, 'safety-report-excerpt-v1', row.excerpt_enc).value
+            : '');
           await client.query(
             `UPDATE safety_reports
                 SET note_enc = $2,
@@ -238,8 +280,8 @@ export async function backfillSensitiveData(pool, { billingKey = null, personalD
               WHERE id = $1`,
             [
               row.id,
-              row.note !== '' ? encryptField(personalDataKey, 'safety-report-note-v1', row.note) : (row.note_enc || encryptField(personalDataKey, 'safety-report-note-v1', '')),
-              row.excerpt !== '' ? encryptField(personalDataKey, 'safety-report-excerpt-v1', row.excerpt) : (row.excerpt_enc || encryptField(personalDataKey, 'safety-report-excerpt-v1', ''))
+              encryptField(personalDataKey, 'safety-report-note-v1', note),
+              encryptField(personalDataKey, 'safety-report-excerpt-v1', excerpt)
             ]
           );
         }
