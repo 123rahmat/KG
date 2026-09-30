@@ -600,6 +600,7 @@ export function loadConfig(env = process.env) {
       && config.runners.sandboxToken && config.runners.toolToken
       && config.runners.sandboxToken === config.runners.toolToken) {
     errors.push('SANDBOX_RUNNER_TOKEN and TOOL_RUNNER_TOKEN must be different in production');
+  }
 
   if (
     production
