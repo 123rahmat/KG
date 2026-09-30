@@ -41,7 +41,7 @@ test('auto mode stays single-agent for simple work and expands for material comp
   assert.equal(multiAgentDecision(run(), { id: 'respond', type: 'respond' }).enabled, false);
   const complex = multiAgentDecision(run({ adaptation: { scale: 'complex' } }), { id: 'plan', type: 'plan' });
   assert.equal(complex.enabled, true);
-  assert.match(complex.reason, /complexity/);
+  assert.match(complex.reason, /adaptive-value/);
   assert.equal(multiAgentDecision(run({ situation: { risk: 'crisis' }, adaptation: { scale: 'complex' } }), { id: 'plan', type: 'plan' }).enabled, false);
   assert.equal(multiAgentDecision(run({ adaptation: { scale: 'complex' } }), { id: 'verify', type: 'verify' }).enabled, false);
 });
@@ -195,4 +195,83 @@ test('high-impact uncertainty recruits researcher and critic alongside the task 
 
   assert.deepEqual(result.roles, ['architect', 'researcher', 'critic']);
   assert.equal(result.decision.enabled, true);
+});
+
+
+test('agent count is task-specific instead of fixed', () => {
+  const simpleCode = rolesFor(run(), { id: 'code', type: 'code' });
+  const mediumCode = rolesFor(run({ adaptation: { scale: 'medium' } }), { id: 'code', type: 'code' });
+  const complexCode = rolesFor(run({ adaptation: { scale: 'complex' } }), { id: 'build-code', type: 'code' });
+  const decomposedCode = rolesFor(run({ adaptation: { scale: 'complex' } }), {
+    id: 'build-code',
+    type: 'code',
+    metadata: { buildPlan: true, requirementIds: ['a', 'b', 'c', 'd', 'e'], dependencies: ['x', 'y', 'z'] }
+  });
+  const extreme = rolesFor(run({
+    adaptation: { scale: 'advanced' },
+    attempt: 2,
+    situation: {
+      risk: 'high-impact',
+      unknownSituation: true,
+      investigationNeeded: true,
+      externalData: { hasExternalDataNeed: true },
+      successCriteria: ['a', 'b', 'c']
+    },
+    tasks: [{ status: 'pending' }, { status: 'pending' }, { status: 'pending' }, { status: 'pending' }]
+  }), {
+    id: 'build-code',
+    type: 'code',
+    metadata: { buildPlan: true, requirementIds: ['a', 'b', 'c', 'd', 'e'], dependencies: ['x', 'y', 'z'] }
+  }, { maxAgents: 5 });
+
+  assert.equal(simpleCode.agentCount, 0);
+  assert.equal(mediumCode.agentCount, 1);
+  assert.equal(mediumCode.roles[0], 'architect');
+  assert.equal(complexCode.agentCount, 2);
+  assert.deepEqual(complexCode.roles, ['architect', 'critic']);
+  assert.equal(decomposedCode.agentCount, 3);
+  assert.equal(extreme.agentCount, 4);
+  assert.ok(extreme.agentCount > complexCode.agentCount);
+});
+
+test('allocation re-evaluates after each specialist completes without exposing peer findings', async () => {
+  const seen = [];
+  const fakeModel = async (messages, options) => {
+    seen.push({
+      role: messages[0].content.match(/You are the (.+?) agent/)[1],
+      body: JSON.parse(messages[1].content)
+    });
+    return {
+      text: JSON.stringify(finding('proceed', 'independent view')),
+      provider: 'google',
+      model: options.modelId,
+      usage: null
+    };
+  };
+  const result = await runAdaptiveAgentPanel({
+    run: run({
+      adaptation: { scale: 'advanced' },
+      situation: { risk: 'high-impact', unknownSituation: true }
+    }),
+    task: {
+      id: 'build-code',
+      type: 'code',
+      metadata: { buildPlan: true, requirementIds: ['a', 'b', 'c', 'd'] }
+    },
+    basePayload: {
+      goal: 'Build code',
+      task: { id: 'build-code', type: 'code' },
+      evidenceSoFar: []
+    },
+    selection,
+    primaryModelId: 'google:gemini-3.8-flash',
+    config: { agents: { multiAgent: 'auto', maxAgents: 4 } },
+    canSpend: async () => true,
+    modelCaller: fakeModel
+  });
+
+  assert.ok(result.findings.length >= 2);
+  assert.ok(result.brief.allocation.allocationRounds >= result.findings.length);
+  assert.ok(seen.every(item => Array.isArray(item.body.advisoryFindings) && item.body.advisoryFindings.length === 0));
+  assert.equal(result.brief.allocation.completedRoles.length, result.findings.length);
 });
