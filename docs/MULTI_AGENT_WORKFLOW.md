@@ -6,7 +6,7 @@ Kindgleam already has a server-owned adaptive workflow, targeted context, model 
 
 `MULTI_AGENT_MODE=auto` is the production default. The panel activates when the situation has material complexity or uncertainty, high-impact/physical risk, external-data uncertainty, code/prototype work, or a retry. Crisis and safety-adaptive responses do not wait for the panel, and verification keeps its dedicated reviewer path rather than paying for two overlapping review systems.
 
-The panel uses at most `MULTI_AGENT_MAX_AGENTS` specialists (1-3). Typical roles are strategist, researcher, architect, critic, and diagnostician. Role selection follows the task and the current attempt instead of a fixed domain list.
+The panel uses at most `MULTI_AGENT_MAX_AGENTS` specialists (1-5), but the configured value is only a ceiling. For each task, the server scores implementation complexity, uncertainty/evidence gaps, task decomposition, dependencies, stakes, retries/failures, and concurrency opportunity, then chooses the smallest useful set of role perspectives. A medium coding task can use one architect; a complex code change can add critique; a decomposed or uncertain coding task can add strategy or research; recovery can add diagnosis. The allocator is re-evaluated after each specialist completes or fails.
 
 ## Iteration and disagreement
 
@@ -20,10 +20,10 @@ The same provider/model policy and data-transfer governance used by the primary 
 
 ```env
 MULTI_AGENT_MODE=auto
-MULTI_AGENT_MAX_AGENTS=3
+MULTI_AGENT_MAX_AGENTS=5
 ```
 
-`auto` expands only when the situation warrants it, `always` allows the specialist layer whenever governance permits, and `off` disables it. Keeping `auto` avoids paying multi-agent latency/tokens for routine questions.
+`auto` enables the panel only when its coordination value clears the adaptive threshold. `always` enables the panel but still uses the task-specific allocator rather than blindly spawning the maximum. `off` disables it. Auto mode may choose 0 specialists for routine work, then 1-5 when extra perspectives have enough marginal value, subject to the configured ceiling and the same spend/data governance as the primary model.
 
 ## Why this fits the existing architecture
 
@@ -37,3 +37,12 @@ Specialists are independent by default: each receives the same server-curated si
 Every accepted finding carries a bounded confidence value plus optional evidence and assumptions. The coordinator treats materially different recommendations, large confidence spreads, or divergent action sets as substantive disagreement. When arbitration is unavailable because of policy, data access, or budget limits, the result is explicitly marked `unresolved-disagreement`; no individual agent finding is promoted to consensus.
 
 The multi-agent layer is advisory. It never becomes a tool authority, approval authority, execution receipt, or substitute for verification. The primary workflow remains responsible for authorization, tool execution, evidence collection, verification and final delivery.
+
+
+## Task-specific agent-count contract
+
+Agent count is not a fixed domain preset. The coordinator first estimates explainable coordination pressure from current workflow state, maps that pressure to a provisional capacity, then selects roles by marginal utility. Role redundancy is penalized so a larger panel is only used when additional perspectives still add value.
+
+Coding tasks are treated specifically: implementation complexity and decomposition increase pressure, while requirement count, dependencies, work-plan size, unknowns, external-data needs, high-impact/physical stakes, and retry/failure state can recruit additional independent perspectives. The selected pressure, dimensions, utilities, roles, completion/failure state, and allocation rounds are included in the advisory brief for observability.
+
+After every specialist attempt, the server recomputes the remaining role set using completion/failure state. Specialist prompts never receive peer findings; only the arbiter receives the independent findings. This preserves independent reasoning while still allowing the panel size to adapt during a run.
