@@ -657,7 +657,12 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
             executionTarget: executionDecision?.target ?? null,
             executionId: managedExecutionId,
             preflight: executionDecision?.local?.preflight ?? req.body?.preflight ?? null
-          }, { config, fetchImpl, ...(executionDecision?.target === 'general-ai-sandbox' ? { timeoutMs: SANDBOX_TIMEOUT_MS } : {}) })
+          }, {
+            config,
+            fetchImpl,
+            token: runnerKey === 'sandbox' ? config.runners.sandboxToken : config.runners.toolToken,
+            ...(executionDecision?.target === 'general-ai-sandbox' ? { timeoutMs: SANDBOX_TIMEOUT_MS } : {})
+          })
         : MODEL_TASKS.has(task.type) || task.metadata?.modelGenerated === true || BUILTIN_TOOL_TARGETS.has(executionDecision?.target)
           ? await reason(run, task, {
               managedTarget: BUILTIN_TOOL_TARGETS.has(executionDecision?.target) ? executionDecision.target : null,
