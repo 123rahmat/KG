@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>Kindgleam</title>
-<meta name="description" content="Ask anything or describe what you want done. Kindgleam answers, works through bigger tasks step by step, and asks you only when your input is needed.">
+<meta name="description" content="Kindgleam is an adaptive intelligence workspace for reasoning, research, creation, analysis, and governed execution.">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -58,6 +58,48 @@
   <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
 </svg>
 
+<!-- Public landing ------------------------------------------------------ -->
+<section class="landing" id="landing" aria-labelledby="landingTitle">
+  <header class="landing-nav">
+    <a class="brand landing-brand" href="/" aria-label="Kindgleam home">
+      <svg class="logo" aria-hidden="true"><use href="#i-logo"/></svg>
+      <span>Kindgleam</span>
+    </a>
+    <button class="landing-signin" id="landingSignIn" type="button">Sign in</button>
+  </header>
+
+  <main class="landing-main">
+    <div class="landing-copy">
+      <p class="landing-kicker">Adaptive intelligence workspace</p>
+      <h1 id="landingTitle">One system for complex work.</h1>
+      <p class="landing-lead">Kindgleam adapts its reasoning, evidence, tools, verification, and specialist support to the task in front of you.</p>
+      <div class="landing-actions">
+        <button class="primary landing-cta" id="landingSignInPrimary" type="button">Sign in</button>
+        <a class="landing-policy" href="/policy.html">Terms and usage policy</a>
+      </div>
+    </div>
+
+    <div class="landing-capabilities" aria-label="Core capabilities">
+      <article>
+        <strong>Adaptive workflow</strong>
+        <span>The system determines the next justified step from the current situation.</span>
+      </article>
+      <article>
+        <strong>Selective multi-agent reasoning</strong>
+        <span>Independent specialist perspectives are added only when they provide material value.</span>
+      </article>
+      <article>
+        <strong>Verification and controls</strong>
+        <span>Execution, data access, evidence, budgets, and approvals remain server-governed.</span>
+      </article>
+    </div>
+  </main>
+
+  <footer class="landing-footer">
+    <span>Reasoning, research, creation, analysis, and execution in one workspace.</span>
+  </footer>
+</section>
+
 <!-- Sign in ------------------------------------------------------------- -->
 <div class="gate" id="gate" hidden>
   <div class="gate-card stack">
@@ -66,8 +108,8 @@
     <!-- 1. Email: sign in, or create an account, with a one-time link -->
     <section class="gate-step stack" id="gateEmail" hidden>
       <div class="gate-head">
-        <h1 class="gate-title">Welcome</h1>
-        <p class="muted">Sign in or create your account with your email.</p>
+        <h1 class="gate-title">Sign in</h1>
+        <p class="muted">Use your email to access your workspace.</p>
       </div>
       <form id="emailSignin" class="stack" novalidate>
         <label class="sr-only" for="signinEmail">Email address</label>
@@ -75,7 +117,7 @@
                placeholder="you@example.com" required>
         <button class="primary" type="submit" id="emailContinue">Continue with email</button>
       </form>
-      <p class="muted small">We'll email you a link to sign in. No password needed.</p>
+      <p class="muted small">A secure one-time sign-in link will be sent to your email.</p>
     </section>
 
     <!-- 2. The link and code are on their way -->
