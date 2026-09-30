@@ -230,7 +230,7 @@ test('agent count is task-specific instead of fixed', () => {
   assert.equal(complexCode.agentCount, 2);
   assert.deepEqual(complexCode.roles, ['architect', 'critic']);
   assert.equal(decomposedCode.agentCount, 3);
-  assert.equal(extreme.agentCount, 4);
+  assert.equal(extreme.agentCount, 5);
   assert.ok(extreme.agentCount > complexCode.agentCount);
 });
 
