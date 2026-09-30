@@ -118,9 +118,9 @@ export class MemoryStore {
     const { rows: [row] } = await this.pool.query(
       `INSERT INTO memories
         (id, workspace_id, principal_id, content, normalized, content_enc, normalized_digest, encryption_version, kind, source_run_id, conversation_id)
-       VALUES ($1, '', '', $3, $4, $5, $6, 1, $7, $8, $9) RETURNING *`,
+       VALUES ($1, $2, $3, '', '', $4, $5, 1, $6, $7, $8) RETURNING *`,
       [
-        crypto.randomUUID(), scope.workspaceId,
+        crypto.randomUUID(), scope.workspaceId, scope.principalId,
         encryptField(this.encryptionKey, 'memory-content-v1', value),
         keyedDigest(this.encryptionKey, 'memory-lookup-v1', key),
         type, sourceRunId, conversation || null
