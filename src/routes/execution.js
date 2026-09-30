@@ -1219,7 +1219,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       allowBackup,
       allowsModel: id => modelPolicyAllows(run, id, 'medium'),
       dataAllowed,
-      canSpend: async () => !Boolean(await usageBlock(scope)),
+      canSpend: async () => !(await usageBlock(scope)),
       recordUsage: async (usage, provider, model) => {
         await runs.addTokens(run.id, { ...usage, provider, model }, { source: 'multi-agent' });
       }
