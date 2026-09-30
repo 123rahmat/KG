@@ -2,6 +2,7 @@
 import crypto from 'node:crypto';
 import { text } from './context.js';
 import { encryptJson, decryptJsonWithKeys } from '../data-protection.js';
+import { encryptJson, decryptJsonWithKeys } from '../data-protection.js';
 
 export function createWorkspaceIdempotency({ pool, route, encryptionKey, previousEncryptionKey = null }) {
   const encryptionKeys = [encryptionKey, previousEncryptionKey].filter(Boolean);
