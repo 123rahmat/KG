@@ -87,6 +87,17 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
     hsts: config.production ? { maxAge: 31_536_000, includeSubDomains: true } : false
   }));
 
+  // Reject compressed API request bodies. The service has strict byte limits
+  // but must not inflate attacker-controlled compressed payloads before the
+  // limit is enforced.
+  app.use((req, res, next) => {
+    const encoding = text(req.get('content-encoding')).toLowerCase();
+    if (encoding && encoding !== 'identity') {
+      return res.status(415).json({ error: 'Compressed request bodies are not accepted', code: 'content-encoding-not-supported' });
+    }
+    next();
+  });
+
   // Stripe signs the raw request body, so its webhook reads the body itself.
   // Keys that could reach an object's prototype are dropped from every body
   // at parse time, so no merge anywhere can be steered into prototype
@@ -94,6 +105,7 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
   const PROTO_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
   const json = express.json({
     limit: config.limits.requestBytes,
+    inflate: false,
     reviver: (key, value) => (PROTO_KEYS.has(key) ? undefined : value)
   });
   app.use((req, res, next) => (req.path === STRIPE_WEBHOOK_PATH ? next() : json(req, res, next)));
