@@ -70,7 +70,7 @@ test('past the 4-hour limit, AI steps wait and say when they open again', () =>
   }, { env: { ...AI, USAGE_LIMIT_4H_TOKENS: '60' }, fetchImpl: provider }));
 
 test('billing details are for admins, never hold card numbers, and link to the payment portal', () =>
-  withServer(async ({ call, seed }) => {
+  withServer(async ({ call, seed, pool }) => {
     const admin = await seed();
     const viewer = await seed({ name: 'Viewer', role: 'viewer' });
     const asAdmin = { token: admin.token, workspace: admin.workspace };
@@ -86,6 +86,21 @@ test('billing details are for admins, never hold card numbers, and link to the p
     assert.equal(saved.status, 200);
     const read = await call('GET', '/api/billing', asAdmin);
     assert.equal(read.body.details.companyName, 'Example Ltd');
+    const { rows: [stored] } = await pool.query(
+      'SELECT billing_email, company_name, tax_id, country, address, stripe_customer_id, stripe_subscription_id, billing_private_enc, billing_encryption_version FROM workspace_billing WHERE workspace_id = $1',
+      [admin.workspace]
+    );
+    assert.equal(stored.billing_email, '');
+    assert.equal(stored.company_name, '');
+    assert.equal(stored.tax_id, '');
+    assert.equal(stored.country, '');
+    assert.equal(stored.address, '');
+    assert.equal(stored.stripe_customer_id, null);
+    assert.equal(stored.stripe_subscription_id, null);
+    assert.equal(stored.billing_encryption_version, 1);
+    assert.ok(stored.billing_private_enc);
+    assert.equal(stored.billing_private_enc.includes('Example Ltd'), false);
+    assert.equal(stored.billing_private_enc.includes('accounts@example.com'), false);
 
     const card = await call('PUT', '/api/billing', { ...asAdmin, body: { address: 'Card 4242 4242 4242 4242' } });
     assert.equal(card.status, 400);
