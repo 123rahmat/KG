@@ -82,7 +82,9 @@ export async function start({ env = process.env } = {}) {
     });
     await backfillSensitiveData(migrationTarget, {
       billingKey: config.security.billingEncryptionKey,
+      billingPreviousKey: config.security.billingEncryptionKeyPrevious,
       personalDataKey: config.security.personalDataEncryptionKey,
+      personalDataPreviousKey: config.security.personalDataEncryptionKeyPrevious,
       logger
     });
     if (config.security.objectEncryptionKey && !(await assertNoPlaintextObjects(migrationTarget))) {
