@@ -129,3 +129,70 @@ test('sandbox run phase keeps host escape controls disabled', () => {
   assert.match(joined, /--pids-limit 256/);
   assert.match(joined, /65534:65534/);
 });
+
+
+test('idempotency replay cache encrypts private workflow responses', () =>
+  withServer(async ({ call, seed, pool }) => {
+    const person = await seed();
+    const headers = {
+      'idempotency-key': 'red-team-private-replay',
+      'x-workspace-id': person.workspace
+    };
+    const first = await call('POST', '/api/runs', {
+      token: person.token,
+      workspace: person.workspace,
+      headers,
+      body: { goal: 'Private workflow material that must not sit in a replay cache.' }
+    });
+    assert.equal(first.status, 201);
+    const { rows: [stored] } = await pool.query(
+      'SELECT response, response_enc, encryption_version FROM idempotency_keys WHERE key = $1 AND principal_id = $2',
+      ['red-team-private-replay', person.principal.id]
+    );
+    assert.deepEqual(stored.response, {});
+    assert.ok(stored.response_enc);
+    assert.equal(stored.encryption_version, 1);
+    assert.equal(stored.response_enc.includes('Private workflow material'), false);
+
+    const replay = await call('POST', '/api/runs', {
+      token: person.token,
+      workspace: person.workspace,
+      headers,
+      body: { goal: 'Private workflow material that must not sit in a replay cache.' }
+    });
+    assert.equal(replay.status, 201);
+    assert.equal(replay.headers.get('idempotent-replay'), 'true');
+    assert.equal(replay.body.goal, first.body.goal);
+  }));
+
+test('audit detail is encrypted at rest while event metadata remains queryable', () =>
+  withServer(async ({ call, seed, pool }) => {
+    const person = await seed();
+    const created = await call('POST', '/api/runs', {
+      token: person.token,
+      workspace: person.workspace,
+      body: { goal: 'Audit should preserve event shape without storing private detail in plaintext.' }
+    });
+    assert.equal(created.status, 201);
+    const { rows: [row] } = await pool.query(
+      'SELECT detail, detail_enc, detail_encryption_version FROM audit_log WHERE workspace_id = $1 AND action = $2 ORDER BY id DESC LIMIT 1',
+      [person.workspace, 'run.create']
+    );
+    assert.equal(row.detail, null);
+    assert.ok(row.detail_enc);
+    assert.equal(row.detail_encryption_version, 1);
+  }));
+
+test('invalid bearer credentials hit an IP admission ceiling before key lookup', async () => {
+  await withServer(async ({ call }) => {
+    let last = null;
+    for (let i = 0; i < 125; i += 1) {
+      last = await call('GET', '/api/me', {
+        token: 'kg.invalid-id-' + String(i).padStart(8, '0') + '.invalid-secret-' + String(i)
+      });
+      if (last.status === 429) break;
+    }
+    assert.equal(last?.status, 429);
+    assert.equal(last?.body?.code, 'rate-limited');
+  });
+});
