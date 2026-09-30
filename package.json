@@ -5,7 +5,7 @@
   "description": "Open-world adaptive workflow for known, unknown and future goals.",
   "type": "module",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "main": "server.js",
   "scripts": {
