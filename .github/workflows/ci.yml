@@ -25,7 +25,10 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run lint
-      - run: npm audit --omit=dev --audit-level=high
+      # Audit the complete dependency graph, including build/test tooling. A
+      # compromised development dependency can still execute in CI and poison
+      # artifacts or source before production packaging.
+      - run: npm audit --audit-level=high
       - name: Validate and unit-test the alert rules
         run: |
           docker run --rm -v "$PWD/docs/ops:/rules:ro" --entrypoint promtool prom/prometheus:v3.5.0 check rules /rules/prometheus-alerts.yml
@@ -68,7 +71,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
-      - run: npm audit --omit=dev --audit-level=high
+      - run: npm audit --audit-level=high
       - run: npm test
 
   migrations:
