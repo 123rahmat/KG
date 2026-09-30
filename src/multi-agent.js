@@ -490,7 +490,6 @@ export async function runAdaptiveAgentPanel({
         completedRoles,
         failedRoles,
         goal: basePayload?.goal,
-        goal: basePayload?.goal,
         workPlan: basePayload?.workPlan,
         evidenceSoFar: basePayload?.evidenceSoFar
       }
@@ -561,6 +560,7 @@ export async function runAdaptiveAgentPanel({
       progress: {
         completedRoles,
         failedRoles,
+        goal: basePayload?.goal,
         workPlan: basePayload?.workPlan,
         evidenceSoFar: basePayload?.evidenceSoFar
       }
