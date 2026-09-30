@@ -626,6 +626,7 @@ async function ensureTerms() {
 }
 
 export async function enterApp() {
+  $('landing').hidden = true;
   const me = await api('GET', '/api/me', undefined, { workspace: false });
   state.principal = me.principal;
   state.workspaces = me.workspaces;
@@ -712,6 +713,7 @@ function showStep(step) {
 /** Show the sign-in card at the right step: confirm a link, email, or key. */
 export async function showGate() {
   $('app').hidden = true;
+  $('landing').hidden = true;
   $('gate').hidden = false;
   if (!gate.options) {
     gate.options = await api('GET', '/api/sign-in/options', undefined, { workspace: false, retries: 1 })
@@ -831,6 +833,9 @@ async function submitSignInCode() {
 
 /** Wire the sign-in card once, at start-up. */
 export function initGate() {
+  const openSignIn = () => { showGate().catch(error => notify('gateNotice', 'bad', error.message)); };
+  $('landingSignIn')?.addEventListener('click', openSignIn);
+  $('landingSignInPrimary')?.addEventListener('click', openSignIn);
   $('emailSignin').addEventListener('submit', event => { event.preventDefault(); sendSignInLink(); });
   $('resendLink').addEventListener('click', async () => {
     $('signinEmail').value = gate.email;
