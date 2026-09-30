@@ -1557,4 +1557,31 @@ export const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS login_links_ip_idx ON login_links (ip, created_at DESC);
     `
   }
+  ,{
+    version: 35,
+    name: 'application-encryption-for-private-data',
+    sql: `
+      -- High-sensitivity billing metadata is encrypted by the application with
+      -- a dedicated deployment key. Legacy columns remain only as empty
+      -- compatibility fields after backfill; payment-card data is never stored.
+      ALTER TABLE workspace_billing
+        ADD COLUMN IF NOT EXISTS billing_private_enc TEXT,
+        ADD COLUMN IF NOT EXISTS billing_encryption_version INTEGER NOT NULL DEFAULT 0;
+
+      -- Individual user memory is private content. The encrypted content and a
+      -- keyed lookup digest let the app search without keeping the memory text
+      -- or normalized plaintext in PostgreSQL.
+      ALTER TABLE memories
+        ADD COLUMN IF NOT EXISTS content_enc TEXT,
+        ADD COLUMN IF NOT EXISTS normalized_digest TEXT,
+        ADD COLUMN IF NOT EXISTS encryption_version INTEGER NOT NULL DEFAULT 0;
+
+      DROP INDEX IF EXISTS memories_scope_normalized_idx;
+      CREATE UNIQUE INDEX IF NOT EXISTS memories_scope_digest_idx
+        ON memories (workspace_id, principal_id, COALESCE(conversation_id, ''), normalized_digest)
+        WHERE normalized_digest IS NOT NULL AND normalized_digest <> '';
+      CREATE INDEX IF NOT EXISTS memories_scope_time_idx
+        ON memories (workspace_id, principal_id, conversation_id, updated_at DESC);
+    `
+  }
 ];
