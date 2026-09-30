@@ -408,7 +408,7 @@ export async function callModel(messages, {
  * With no runner configured the result is an explicit `not-configured` record
  * with `executed: false`, surfaced to the caller verbatim.
  */
-export async function callRunner(url, payload, { config, fetchImpl = fetch, sleep = wait, timeoutMs = RUNNER_TIMEOUT_MS } = {}) {
+export async function callRunner(url, payload, { config, fetchImpl = fetch, sleep = wait, timeoutMs = RUNNER_TIMEOUT_MS, token = null } = {}) {
   const endpoint = text(url);
   if (!endpoint) {
     return {
@@ -420,7 +420,8 @@ export async function callRunner(url, payload, { config, fetchImpl = fetch, slee
   }
 
   const headers = { 'content-type': 'application/json' };
-  if (config.runners.token) headers.authorization = `Bearer ${config.runners.token}`;
+  const runnerToken = text(token);
+  if (runnerToken) headers.authorization = `Bearer ${runnerToken}`;
   // The execution ID lets a runner deduplicate retries of the same request,
   // and binds the runner's receipt to exactly this request.
   const executionId = text(payload?.executionId);
