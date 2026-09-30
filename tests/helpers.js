@@ -14,6 +14,7 @@ import { loadConfig } from '../src/config.js';
 import { migrate } from '../src/db.js';
 import { createLogger, createMetrics } from '../src/observability.js';
 import { build } from '../server.js';
+import { backfillSensitiveData, assertSensitiveDataEncrypted } from '../src/data-protection.js';
 
 const ADMIN_URL = process.env.TEST_DATABASE_URL ?? 'postgres://postgres@127.0.0.1:5433/postgres';
 
@@ -184,6 +185,12 @@ export async function withServer(run, { env = {}, fetchImpl } = {}) {
   const adminConfig = loadConfig({ ...baseEnv, DATABASE_URL: adminUrl.toString() });
   const adminParts = build({ config: adminConfig, logger, metrics, fetchImpl: noFetch });
   await migrate(adminParts.pool, logger, { runtimeRole: role, hardenRuntime: true });
+  await backfillSensitiveData(adminParts.pool, {
+    billingKey: adminConfig.security.billingEncryptionKey,
+    personalDataKey: adminConfig.security.personalDataEncryptionKey,
+    logger
+  });
+  await assertSensitiveDataEncrypted(adminParts.pool);
 
   const config = loadConfig({ ...baseEnv, DATABASE_URL: runtimeUrl.toString() });
   const parts = build({ config, logger, metrics, fetchImpl: fetchImpl ?? noFetch });
