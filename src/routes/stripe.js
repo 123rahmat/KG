@@ -19,10 +19,10 @@ const SUBSCRIPTION_EVENTS = new Set([
   'customer.subscription.paused', 'customer.subscription.resumed'
 ]);
 
-const scopeFor = workspaceId => ({ principalId: '', workspaceId, organizationId: '', jurisdiction: '', role: '' });
+const scopeFor = workspaceId => ({ principalId: '', workspaceId, organizationId: '', jurisdiction: '', role: 'billing-webhook' });
 
 /** Write a subscription's state to its workspace. */
-async function saveSubscription(client, workspaceId, state, { customerId = null, billingKey } = {}) {
+async function saveSubscription(client, workspaceId, state, { customerId = null, billingKey, eventCreated = 0, eventId = null } = {}) {
   const { rows: [existing] } = await client.query(
     'SELECT billing_private_enc FROM workspace_billing WHERE workspace_id = $1 FOR UPDATE',
     [workspaceId]
@@ -32,6 +32,10 @@ async function saveSubscription(client, workspaceId, state, { customerId = null,
     : {};
   privateBilling.stripeCustomerId = customerId || state.customerId || privateBilling.stripeCustomerId || null;
   privateBilling.stripeSubscriptionId = state.subscriptionId || null;
+  if (Number.isFinite(Number(eventCreated)) && Number(eventCreated) > 0) {
+    privateBilling.stripeLastEventCreated = Number(eventCreated);
+    privateBilling.stripeLastEventId = text(eventId) || privateBilling.stripeLastEventId || null;
+  }
   const encoded = billingKey ? encryptJson(billingKey, 'workspace-billing-v1', privateBilling) : null;
   await client.query(
     `INSERT INTO workspace_billing
@@ -97,11 +101,22 @@ export function registerStripeWebhook(app, { config, pool, audit, logger, metric
         ? decryptJson(config.security.billingEncryptionKey, 'workspace-billing-v1', current.billing_private_enc)
         : {};
       if (currentBilling.stripeCustomerId && state.customerId && currentBilling.stripeCustomerId !== state.customerId) return 'customer-mismatch';
+      const eventCreated = Number(event.created);
+      if (
+        Number.isFinite(eventCreated)
+        && eventCreated > 0
+        && Number(currentBilling.stripeLastEventCreated || 0) > eventCreated
+      ) return 'stale-event';
       // Events can arrive out of order: an old subscription's update must not
       // overwrite a newer one, unless the old one is the one that ended.
       if (currentBilling.stripeSubscriptionId && state.subscriptionId && currentBilling.stripeSubscriptionId !== state.subscriptionId
           && !ACTIVE_STATUSES.includes(state.status)) return 'stale-subscription';
-      await saveSubscription(client, workspaceId, state, { customerId: text(object.customer) || null, billingKey: config.security.billingEncryptionKey });
+      await saveSubscription(client, workspaceId, state, {
+        customerId: text(object.customer) || null,
+        billingKey: config.security.billingEncryptionKey,
+        eventCreated: Number(event.created),
+        eventId: event.id
+      });
       await audit?.record({
         principalId: null, workspaceId, action: 'billing.subscription', target: state.subscriptionId || workspaceId,
         outcome: 'allowed', detail: { event: event.type, status: state.status, plan: state.planId, eventId: event.id }
