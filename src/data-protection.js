@@ -130,8 +130,10 @@ export async function backfillSensitiveData(pool, {
         await client.query('BEGIN');
         for (const row of rows) {
           let privateBilling = {};
+          let keyIndex = 0;
           if (row.billing_private_enc) {
             const decoded = decryptJsonWithKeys(billingKeys, 'workspace-billing-v1', row.billing_private_enc);
+            keyIndex = decoded.keyIndex;
             privateBilling = decoded.value && typeof decoded.value === 'object' ? decoded.value : {};
           }
           privateBilling = {
@@ -199,10 +201,8 @@ export async function backfillSensitiveData(pool, {
         for (const row of rows) {
           let content = String(row.content ?? '');
           let normalized = String(row.normalized ?? '');
-          let keyIndex = 0;
           if (row.content_enc) {
             const decoded = decryptFieldWithKeys(personalKeys, 'memory-content-v1', row.content_enc);
-            keyIndex = decoded.keyIndex;
             try {
               const packed = JSON.parse(decoded.value);
               if (packed && typeof packed === 'object' && typeof packed.content === 'string') {
