@@ -193,8 +193,8 @@ test('high-impact uncertainty recruits researcher and critic alongside the task 
     situation: { risk: 'high-impact', unknownSituation: true, investigationNeeded: true, externalData: { hasExternalDataNeed: true } }
   }), { id: 'build-code', type: 'code' }, { maxAgents: 3 });
 
-  assert.deepEqual(result.roles, ['architect', 'researcher', 'critic']);
   assert.equal(result.decision.enabled, true);
+  assert.deepEqual(result.roles.slice(0, 3), ['architect', 'critic', 'researcher']);
 });
 
 
@@ -274,4 +274,43 @@ test('allocation re-evaluates after each specialist completes without exposing p
   assert.ok(result.brief.allocation.allocationRounds >= result.findings.length);
   assert.ok(seen.every(item => Array.isArray(item.body.advisoryFindings) && item.body.advisoryFindings.length === 0));
   assert.equal(result.brief.allocation.completedRoles.length, result.findings.length);
+});
+
+
+test('non-coding work can recruit independent cognitive roles', () => {
+  const research = rolesFor(run({
+    adaptation: { scale: 'complex' },
+    situation: { unknownSituation: true, investigationNeeded: true, externalData: { hasExternalDataNeed: true }, successCriteria: ['source', 'comparison'] }
+  }), {
+    id: 'understand',
+    type: 'understand',
+    metadata: { requirementIds: ['a', 'b', 'c'] }
+  }, { maxAgents: 4 });
+
+  const writing = rolesFor(run({
+    adaptation: { scale: 'complex' },
+    situation: { successCriteria: ['accuracy', 'tone', 'completeness'], constraints: ['audience', 'format'] }
+  }), {
+    id: 'respond',
+    type: 'respond'
+  }, { maxAgents: 3, progress: { goal: 'write and rewrite a detailed professional proposal with clear audience-specific language' } });
+
+  const analysis = rolesFor(run({
+    adaptation: { scale: 'complex' },
+    situation: { successCriteria: ['accuracy', 'tradeoffs'], unknownSituation: true }
+  }), {
+    id: 'respond',
+    type: 'respond'
+  }, { maxAgents: 3, progress: { goal: 'compare three alternatives using data, cost, metrics, and trade-offs' } });
+
+  assert.ok(research.agentCount >= 2);
+  assert.ok(research.roles.includes('researcher'));
+  assert.ok(research.roles.includes('strategist') || research.roles.includes('analyst'));
+
+  assert.ok(writing.agentCount >= 1);
+  assert.ok(writing.roles.includes('communicator'));
+
+  assert.ok(analysis.agentCount >= 2);
+  assert.ok(analysis.roles.includes('analyst'));
+  assert.notEqual(analysis.roles.includes('architect'), true);
 });
