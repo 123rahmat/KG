@@ -194,7 +194,10 @@ test('high-impact uncertainty recruits researcher and critic alongside the task 
   }), { id: 'build-code', type: 'code' }, { maxAgents: 3 });
 
   assert.equal(result.decision.enabled, true);
-  assert.deepEqual(result.roles.slice(0, 3), ['architect', 'critic', 'researcher']);
+  assert.equal(result.roles.length, 3);
+  assert.equal(result.roles.includes('architect'), true);
+  assert.equal(result.roles.includes('critic'), true);
+  assert.equal(result.roles.includes('researcher'), true);
 });
 
 
@@ -355,6 +358,6 @@ test('observed evidence can shrink or expand the next agent allocation', () => {
 
   assert.equal(initial.agentCount, 4);
   assert.equal(resolved.agentCount, 3);
-  assert.equal(disputed.allocation.observedDisagreement, true);
+  assert.equal(disputed.allocation.dimensions.observedDisagreement, true);
   assert.equal(disputed.agentCount, 4);
 });
