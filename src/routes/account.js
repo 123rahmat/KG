@@ -13,6 +13,7 @@ import { ScheduleError } from '../scheduling.js';
 import { MemoryError } from '../memory.js';
 import { termsStatus, acceptTerms } from '../terms.js';
 import crypto from 'node:crypto';
+import { encryptJson, decryptJson } from '../data-protection.js';
 
 const CONVERSATION_ID = /^[A-Za-z0-9-]{8,64}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -40,6 +41,9 @@ export function registerAccountRoutes(app, { config, pool, identity, audit, rout
   app.get('/api/billing', scoped('viewer'), route(async (req, res) => {
     const admin = req.scope.role === 'admin';
     const { rows: [row] } = await pool.query('SELECT * FROM workspace_billing WHERE workspace_id = $1', [req.scope.workspaceId]);
+    const privateBilling = row?.billing_private_enc
+      ? decryptJson(config.security.billingEncryptionKey, 'workspace-billing-v1', row.billing_private_enc)
+      : null;
     const limits = await limitsFor(pool, config, req.scope.workspaceId);
     res.json({
       plan: limits.planName,
@@ -66,7 +70,9 @@ export function registerAccountRoutes(app, { config, pool, identity, audit, rout
           cancelAtPeriodEnd: row.cancel_at_period_end
         } : null
       } : null,
-      details: admin ? Object.fromEntries(Object.entries(BILLING_FIELDS).map(([key, field]) => [key, row?.[field.column] ?? ''])) : null,
+      details: admin && privateBilling
+        ? Object.fromEntries(Object.keys(BILLING_FIELDS).map(key => [key, privateBilling[key] ?? '']))
+        : admin ? Object.fromEntries(Object.keys(BILLING_FIELDS).map(key => [key, ''])) : null,
       updatedAt: admin ? row?.updated_at ?? null : null
     });
   }));
@@ -87,13 +93,26 @@ export function registerAccountRoutes(app, { config, pool, identity, audit, rout
       return res.status(400).json({ error: 'Do not enter card numbers here. Payment methods are managed in the payment portal.', code: 'billing-card-data' });
     }
     await transaction(pool, async client => {
+      const { rows: [existing] } = await client.query(
+        'SELECT billing_private_enc FROM workspace_billing WHERE workspace_id = $1 FOR UPDATE',
+        [req.scope.workspaceId]
+      );
+      const current = existing?.billing_private_enc
+        ? decryptJson(config.security.billingEncryptionKey, 'workspace-billing-v1', existing.billing_private_enc)
+        : {};
+      const privateBilling = { ...current, ...values, stripeCustomerId: current.stripeCustomerId ?? null, stripeSubscriptionId: current.stripeSubscriptionId ?? null };
+      const encoded = encryptJson(config.security.billingEncryptionKey, 'workspace-billing-v1', privateBilling);
       await client.query(
-        `INSERT INTO workspace_billing (workspace_id, billing_email, company_name, tax_id, country, address, updated_by, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+        `INSERT INTO workspace_billing
+          (workspace_id, billing_email, company_name, tax_id, country, address, stripe_customer_id, stripe_subscription_id, billing_private_enc, billing_encryption_version, updated_by, updated_at)
+         VALUES ($1, '', '', '', '', '', NULL, NULL, $2, 1, $3, now())
          ON CONFLICT (workspace_id) DO UPDATE SET
-           billing_email = EXCLUDED.billing_email, company_name = EXCLUDED.company_name, tax_id = EXCLUDED.tax_id,
-           country = EXCLUDED.country, address = EXCLUDED.address, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-        [req.scope.workspaceId, values.billingEmail, values.companyName, values.taxId, values.country, values.address, req.principal.id]
+           billing_private_enc = EXCLUDED.billing_private_enc,
+           billing_encryption_version = 1,
+           billing_email = '', company_name = '', tax_id = '', country = '', address = '',
+           stripe_customer_id = NULL, stripe_subscription_id = NULL,
+           updated_by = EXCLUDED.updated_by, updated_at = now()`,
+        [req.scope.workspaceId, encoded, req.principal.id]
       );
       await audit?.record({
         principalId: req.principal.id, workspaceId: req.scope.workspaceId, action: 'billing.update',
