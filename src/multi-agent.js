@@ -608,7 +608,7 @@ export async function runAdaptiveAgentPanel({
       fetchImpl,
       modelId,
       allowBackup,
-      effort: decision.pressure >= 0.75 ? 'high' : 'medium',
+      effort: lastAllocation?.pressure >= 0.72 ? 'high' : 'medium',
       json: true,
       maxOutputTokens: ARBITER_MAX_OUTPUT_TOKENS
     }).catch(() => null);
@@ -622,10 +622,18 @@ export async function runAdaptiveAgentPanel({
     }
   }
 
-  const brief = buildBrief(findings, arbiter, decision, agentStates);
+  const finalDecision = allocationResult.decision;
+  const finalAllocation = {
+    ...lastAllocation,
+    allocationRounds,
+    completedRoles,
+    failedRoles
+  };
+  const brief = buildBrief(findings, arbiter, finalDecision, agentStates, finalAllocation);
   return {
     enabled: true,
-    decision,
+    decision: finalDecision,
+    allocation: finalAllocation,
     agents: agentStates,
     findings,
     arbiter,
