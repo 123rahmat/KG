@@ -1648,6 +1648,7 @@ export const MIGRATIONS = [
           AND current_setting('app.role', true) = 'admin'
         );
     `
+  }
   ,{
     version: 39,
     name: 'encrypt-idempotency-replays',
