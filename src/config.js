@@ -294,6 +294,15 @@ export function loadConfig(env = process.env) {
   if (production && !personalDataEncryptionKey) {
     errors.push('PERSONAL_DATA_ENCRYPTION_KEY is required in production and must decode to 32 bytes');
   }
+  if (production && objectEncryptionKey && billingEncryptionKey && objectEncryptionKey.equals(billingEncryptionKey)) {
+    errors.push('BILLING_ENCRYPTION_KEY must be different from OBJECT_ENCRYPTION_KEY in production');
+  }
+  if (production && objectEncryptionKey && personalDataEncryptionKey && objectEncryptionKey.equals(personalDataEncryptionKey)) {
+    errors.push('PERSONAL_DATA_ENCRYPTION_KEY must be different from OBJECT_ENCRYPTION_KEY in production');
+  }
+  if (production && billingEncryptionKey && personalDataEncryptionKey && billingEncryptionKey.equals(personalDataEncryptionKey)) {
+    errors.push('PERSONAL_DATA_ENCRYPTION_KEY must be different from BILLING_ENCRYPTION_KEY in production');
+  }
 
   const config = {
     nodeEnv,
