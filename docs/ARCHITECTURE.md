@@ -84,16 +84,19 @@ tokens are recorded under its own model, it runs under the same governance and
 data-transfer rules as the verifier, and if it cannot answer the verdict stands
 with a visible warning. Cost: one extra model call per reviewed run.
 
-The specialist panel (`src/multi-agent.js`) adds a second advisory layer
-without changing that authority model. In `MULTI_AGENT_MODE=auto`, planning,
-code/design, uncertain work and recovery can recruit up to three role-specific
-agents (strategist, researcher, architect, critic, diagnostician). Agents have
-no tools. Their findings are treated as data, recorded as usage, and fed into
-the primary model. An arbiter is called only when specialist recommendations
-disagree; a panel outage or budget block falls back to the primary workflow.
-The existing verification reviewer remains separate so verification is not
-accidentally duplicated. This keeps routine requests cheap while giving harder
-runs a structured hypothesis/critique loop.
+The specialist panel (`src/multi-agent.js`) adds a domain-agnostic advisory
+layer without changing that authority model. In `MULTI_AGENT_MODE=auto`, the
+server estimates the value of additional independent perspectives from the
+current task and situation, then recruits the smallest useful set up to the
+configured five-agent ceiling. Reusable roles include strategist, researcher,
+analyst, architect, critic, communicator and diagnostician. Allocation reacts
+to complexity, decomposition, uncertainty, evidence gaps, comparison needs,
+communication needs, stakes, retries and observed specialist confidence or
+disagreement. Agents have no tools. Their findings are treated as data, usage
+is recorded, and an arbiter is used only when disagreement becomes decision
+relevant. A panel outage or budget/data-policy block falls back to the primary
+workflow. The existing verification reviewer remains separate so verification
+is not accidentally duplicated.
 
 Independent execution steps are still not run in parallel. The dependency
 planner locks and evaluates stored rows serially, and changing that is a larger,
