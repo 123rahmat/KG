@@ -399,6 +399,26 @@ every response states plainly that nothing was reasoned or executed.
 
 ---
 
+## Application-level private data protection
+
+PostgreSQL RLS protects tenant boundaries, and PostgreSQL should also use encrypted
+storage/transport in production. Kindgleam additionally encrypts high-sensitivity
+application fields before they enter PostgreSQL:
+
+- **Workspace billing:** invoice email, company name, tax ID, country, address,
+  Stripe customer ID and Stripe subscription ID are encrypted with a dedicated
+  `BILLING_ENCRYPTION_KEY`.
+- **Individual memory:** saved memory text is encrypted with a separate
+  `PERSONAL_DATA_ENCRYPTION_KEY`; lookups use a keyed digest instead of plaintext
+  normalized text.
+- **Payment cards:** card numbers, CVC/CVV and payment-method details are not
+  stored by Kindgleam. Checkout and payment-method management stay on Stripe.
+- **Key separation:** production requires the billing and personal-data keys to
+  be distinct from each other and from the object-storage encryption key.
+
+Keys belong in a secret manager, with a documented rotation procedure and no
+plaintext keys in source control.
+
 ## Production database hardening
 
 Production uses three separate database trust planes:
@@ -616,7 +636,8 @@ operations:
   images pinned to reviewed immutable digests rather than floating tags.
 - **Key management** for Gemini and other production credentials: use a secret
   manager, rotation procedures, least privilege, and no secrets in source
-  control.
+  control. The production deployment must also provide separate
+  `BILLING_ENCRYPTION_KEY` and `PERSONAL_DATA_ENCRYPTION_KEY` values.
 - **Backups and recovery.** Schedule encrypted backups, retain them separately
   from the primary database, and perform a documented restore drill plus
   point-in-time recovery test.
