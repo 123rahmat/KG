@@ -28,7 +28,8 @@ const HOST = text(process.env.TOOL_RUNNER_HOST) || '127.0.0.1';
 // a valid port falls back to the default, as before.
 const requestedPort = Number(String(process.env.TOOL_RUNNER_PORT ?? '').trim() || NaN);
 const PORT = Number.isInteger(requestedPort) && requestedPort >= 0 && requestedPort <= 65535 ? requestedPort : 8766;
-const TOKEN = text(process.env.RUNNER_TOKEN);
+const production = text(process.env.NODE_ENV).toLowerCase() === 'production';
+const TOKEN = text(process.env.TOOL_RUNNER_TOKEN) || (production ? '' : text(process.env.RUNNER_TOKEN));
 const MAX_BODY = 1024 * 1024;
 const TOOL_TIMEOUT_MS = 30_000;
 const VERSION = '1.0.0';
@@ -40,7 +41,6 @@ if (TOKEN.length < 32) {
   process.exit(1);
 }
 
-const production = text(process.env.NODE_ENV).toLowerCase() === 'production';
 const tlsCert = text(process.env.TOOL_RUNNER_TLS_CERT);
 const tlsKey = text(process.env.TOOL_RUNNER_TLS_KEY);
 if (production && (!tlsCert || !tlsKey)) {
