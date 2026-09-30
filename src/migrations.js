@@ -1595,6 +1595,7 @@ export const MIGRATIONS = [
         ADD COLUMN IF NOT EXISTS excerpt_enc TEXT,
         ADD COLUMN IF NOT EXISTS encryption_version INTEGER NOT NULL DEFAULT 0;
     `
+  }
   ,{
     version: 37,
     name: 'allow-encrypted-memory-columns',
@@ -1613,6 +1614,5 @@ export const MIGRATIONS = [
       -- would collapse every encrypted row to the same empty value.
       ALTER TABLE memories DROP CONSTRAINT IF EXISTS memories_workspace_id_principal_id_normalized_key;
     `
-  }
   }
 ];
