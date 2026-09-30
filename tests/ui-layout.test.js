@@ -21,3 +21,22 @@ test('Escape closes the phone menu, one layer at a time', () => {
   assert.match(js, /Escape closes the phone menu/);
   assert.match(js, /event\.preventDefault\(\);\n\s*\}\n\s*\}\);/, 'closing the notifications uses up that Escape');
 });
+
+
+test('public landing is a single-screen product surface with sign-in actions separate from the form', () => {
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.match(html, /<section class="landing" id="landing"/);
+  assert.match(html, /id="landingSignIn"/);
+  assert.match(html, /id="landingSignInPrimary"/);
+  const landing = html.match(/<section class="landing" id="landing"[\s\S]*?<\/section>/)?.[0] ?? '';
+  assert.doesNotMatch(landing, /id="emailSignin"|id="signin"|type="password"/);
+  assert.match(css, /\.landing \{[^}]*min-height: 100vh/);
+  assert.match(css, /\.landing-main \{[^}]*align-content: center/);
+});
+
+test('production response style rules prohibit casual filler', () => {
+  const reasoning = fs.readFileSync(new URL('../src/reasoning-context.js', import.meta.url), 'utf8');
+  assert.match(reasoning, /professional language appropriate for a real production assistant/);
+  assert.match(reasoning, /Do not use cheerleading, filler, hype/);
+  assert.match(reasoning, /Avoid stock openings/);
+});
