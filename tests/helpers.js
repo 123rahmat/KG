@@ -173,6 +173,8 @@ export async function withServer(run, { env = {}, fetchImpl } = {}) {
     MULTI_AGENT_MODE: 'off',
     AGENTS_REVIEW: 'off',
     OBJECT_ENCRYPTION_KEY: Buffer.from('test-object-encryption-key-32byt').toString('base64'),
+    BILLING_ENCRYPTION_KEY: Buffer.from('test-billing-encryption-key-32-by').toString('base64'),
+    PERSONAL_DATA_ENCRYPTION_KEY: Buffer.from('test-personal-data-key-32-bytes').toString('base64'),
     ...env
   };
   const logger = recordingLogger();
