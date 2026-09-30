@@ -19,7 +19,7 @@ import { AuthError } from './identity.js';
 import { runDbScope, currentDbScope } from './db.js';
 import { text, parseCookies, SESSION_COOKIE, sessionCookieName, CSRF_HEADER, LEGACY_CSRF_HEADERS } from './http/context.js';
 import { rateLimiter } from './http/rate-limit.js';
-import { createIdempotency } from './http/idempotency.js';
+import { createWorkspaceIdempotency as createIdempotency } from './http/workspace-idempotency.js';
 import { errorHandler } from './http/errors.js';
 import { registerPlatformRoutes } from './routes/platform.js';
 import { registerGovernanceRoutes } from './routes/governance.js';
