@@ -1648,5 +1648,16 @@ export const MIGRATIONS = [
           AND current_setting('app.role', true) = 'admin'
         );
     `
+  ,{
+    version: 39,
+    name: 'encrypt-idempotency-replays',
+    sql: `
+      -- Idempotency responses can contain private workflow data. Keep the
+      -- replayable copy encrypted and remove the plaintext JSONB body.
+      ALTER TABLE idempotency_keys
+        ADD COLUMN IF NOT EXISTS response_enc TEXT,
+        ADD COLUMN IF NOT EXISTS encryption_version INTEGER NOT NULL DEFAULT 0;
+    `
+  }
   }
 ];
