@@ -1,4 +1,4 @@
-/ ** Workspace-bound idempotency middleware. */
+/** Workspace-bound idempotency middleware. */
 import crypto from 'node:crypto';
 import { text } from './context.js';
 
