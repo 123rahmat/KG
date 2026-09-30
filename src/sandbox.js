@@ -111,6 +111,35 @@ const shell = script => ['sh', '-c', script];
 function eachProgram(programs) {
   return `fail=0; ${programs.map(({ name, build, run }) => `if ${build ? `${build} && ` : ''}${run}; then echo "# PASS "${quote(name)}; else echo "# FAIL "${quote(name)}; fail=1; fi;`).join(' ')} exit $fail`;
 }
+export function isImmutableImageReference(value) {
+  return /^[a-z0-9][a-z0-9._\/-]*(?:@[A-Za-z0-9._:-]+)?@sha256:[0-9a-f]{64}$/i.test(String(value ?? '').trim());
+}
+
+export function assertProductionSandboxConfiguration({ images = DEFAULT_IMAGES, runtime = '', installProxy = '', tlsConfigured = false, pullOnDemand = false, languages = null } = {}) {
+  if (!String(runtime ?? '').trim()) throw new Error('SANDBOX_RUNTIME is required in production');
+  const runtimeName = path.basename(String(runtime).trim());
+  if (!['runsc', 'kata-runtime'].includes(runtimeName)) {
+    throw new Error('SANDBOX_RUNTIME must be an isolated runtime such as runsc or kata-runtime in production');
+  }
+  if (!String(installProxy ?? '').trim()) {
+    throw new Error('SANDBOX_INSTALL_PROXY is required in production so package-install egress can be controlled');
+  }
+  let proxy;
+  try { proxy = new URL(String(installProxy).trim()); } catch { throw new Error('SANDBOX_INSTALL_PROXY must be a valid HTTPS URL in production'); }
+  if (proxy.protocol !== 'https:') throw new Error('SANDBOX_INSTALL_PROXY must use HTTPS in production');
+  if (!tlsConfigured) throw new Error('Sandbox runner TLS certificate and key are required in production');
+  if (pullOnDemand) throw new Error('SANDBOX_PULL_ON_DEMAND=false is required in production; pre-pull pinned images during deployment');
+  const enabled = languages && languages.size ? [...languages] : Object.keys(LANGUAGES);
+  for (const name of enabled) {
+    const key = LANGUAGES[name]?.image;
+    const image = images?.[key];
+    if (!image || !isImmutableImageReference(image)) {
+      throw new Error(`Sandbox image for ${name} must be pinned to an immutable @sha256 digest in production`);
+    }
+  }
+  return true;
+}
+
 export const LIMITS = Object.freeze({
   maxFiles: 40, maxProjectFiles: 300, maxFileBytes: 10 * 1024 * 1024, maxTotalBytes: 40 * 1024 * 1024,
   maxPackages: 20, maxTimeoutMs: 120_000, defaultTimeoutMs: 30_000, installTimeoutMs: 180_000,
