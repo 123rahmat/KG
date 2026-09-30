@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { withServer } from './helpers.js';
 import {
   encryptField, decryptField, encryptJson, decryptJson
 } from '../src/data-protection.js';
