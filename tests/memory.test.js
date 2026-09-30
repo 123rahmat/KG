@@ -23,7 +23,7 @@ async function ask(call, who, goal, conversationId = crypto.randomUUID()) {
 }
 
 test('memory: people add, list and delete their own memories; secrets are refused', () =>
-  withServer(async ({ call, seed }) => {
+  withServer(async ({ call, seed, pool }) => {
     const me = await seed();
     const auth = { token: me.token, workspace: me.workspace };
     const added = await call('POST', '/api/memories', { ...auth, body: { content: 'Works as a site engineer in Lahore', kind: 'about' } });
@@ -33,6 +33,17 @@ test('memory: people add, list and delete their own memories; secrets are refuse
     assert.equal(secret.status, 400);
     assert.equal(secret.body.code, 'memory-secret');
     assert.equal((await call('POST', '/api/memories', { ...auth, body: { content: 'Card 4242 4242 4242 4242' } })).status, 400);
+
+    const { rows: [stored] } = await pool.query(
+      'SELECT content, normalized, content_enc, normalized_digest, encryption_version FROM memories WHERE id = $1',
+      [added.body.memory.id]
+    );
+    assert.equal(stored.content, '');
+    assert.equal(stored.normalized, '');
+    assert.equal(stored.encryption_version, 1);
+    assert.ok(stored.content_enc);
+    assert.ok(stored.normalized_digest);
+    assert.equal(stored.content_enc.includes('site engineer'), false);
 
     const { body } = await call('GET', '/api/memories', auth);
     assert.equal(body.crossChatMemory, false);
