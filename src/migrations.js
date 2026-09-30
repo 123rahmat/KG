@@ -1660,4 +1660,15 @@ export const MIGRATIONS = [
     `
   }
   }
+  ,{
+    version: 40,
+    name: 'encrypt-audit-details',
+    sql: `
+      -- Audit metadata remains searchable, but arbitrary detail is encrypted
+      -- because it may contain private workflow context.
+      ALTER TABLE audit_log
+        ADD COLUMN IF NOT EXISTS detail_enc TEXT,
+        ADD COLUMN IF NOT EXISTS detail_encryption_version INTEGER NOT NULL DEFAULT 0;
+    `
+  }
 ];
