@@ -26,7 +26,10 @@ import { createApp, VERSION } from './src/app.js';
 /** Wire the object graph. Exported so tests build the same one. */
 export function build({ config, logger, metrics, fetchImpl }) {
   const pool = createPool(config, logger);
-  const audit = new Audit(pool, logger);
+  const audit = new Audit(pool, logger, {
+    encryptionKey: config.security.personalDataEncryptionKey,
+    previousEncryptionKey: config.security.personalDataEncryptionKeyPrevious
+  });
   const governance = new GovernanceStore(pool);
   const capabilities = new CapabilityStore(pool, { audit });
   const identity = new Identity(pool, { sessionHours: config.limits.sessionHours });
