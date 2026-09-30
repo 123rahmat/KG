@@ -154,7 +154,7 @@ test('memory: people who had memories before cross-chat became a choice keep it 
     }
     await pool.query(`INSERT INTO user_preferences (principal_id, settings) VALUES ($1, '{"memory": false}'), ($2, '{"crossChatMemory": false}')`, [off.principal.id, chose.principal.id]);
     await pool.query(MIGRATIONS.find(item => item.version === 31).sql);
-    const store = new MemoryStore(pool);
+    const store = new MemoryStore(pool, { encryptionKey: Buffer.from('personal-key-32-bytes-long-00000') });
     assert.equal(await store.crossChatEnabled(kept.principal.id), true, 'the old default was on');
     assert.equal(await store.crossChatEnabled(off.principal.id), false, 'an old "off" stays off');
     assert.equal(await store.crossChatEnabled(chose.principal.id), false, 'a choice already made is kept');
