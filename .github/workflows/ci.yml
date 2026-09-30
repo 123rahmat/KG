@@ -146,6 +146,8 @@ jobs:
       AI_API_KEY: ci-dummy-key
       AI_MODEL: gemini-3.8-flash
       OBJECT_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      BILLING_ENCRYPTION_KEY: YmlsbGluZy1rZXktMDEyMzQ1Njc4OWFiY2RlZi0wMDA=
+      PERSONAL_DATA_ENCRYPTION_KEY: cGVyc29uYWwta2V5LTAxMjM0NTY3ODlhYmNkZWYtMDA=
       RUNNER_TOKEN: ci-dummy-runner-token-32-characters-min
       MAX_REQUEST_BYTES: 8388608
     steps:
