@@ -604,21 +604,35 @@ only one of them can have.
 
 ## What is still deployment work
 
-This implements the workflow, the governance model, tenancy, auditing and the
-storage contracts, and it is tested against real PostgreSQL. It is not a claim
-that every operational concern is finished. Before a public launch you still
-own:
+The repository contains the production application, PostgreSQL tenancy/RLS
+hardening, authenticated runner boundaries, the sealed sandbox implementation,
+encrypted backup/restore commands, structured observability, and automated
+checks. A public launch still depends on configuring and proving the surrounding
+operations:
 
-- **Execution runners.** The code and tool runners are an HTTP contract;
-  the sandboxing, resource limits, and isolation behind that contract are yours
-  to build. Nothing executes untrusted code in this process.
-- **Key management** for Gemini API credentials (they are read from environment).
-- **Backups and restore drills**, and a tested point-in-time recovery.
-- **Log and metric shipping** — structured output exists; nothing ships it.
-- **Content scanning** on upload if you accept untrusted files.
-- **Load testing** at your intended scale, and a horizontal-scaling review: the
-  rate limiter is per-instance and in-memory, so multiple instances multiply
-  the effective limit. Move it to Postgres or Redis before relying on it.
+- **Execution isolation.** Deploy the sandbox and tool runner as separate
+  services/hosts with the documented isolation, HTTPS, runner token, resource
+  limits, and preferably a stronger OCI runtime such as gVisor. Keep runner
+  images pinned to reviewed immutable digests rather than floating tags.
+- **Key management** for Gemini and other production credentials: use a secret
+  manager, rotation procedures, least privilege, and no secrets in source
+  control.
+- **Backups and recovery.** Schedule encrypted backups, retain them separately
+  from the primary database, and perform a documented restore drill plus
+  point-in-time recovery test.
+- **Observability.** Ship structured logs and metrics to a monitored system,
+  define alerts for readiness failures, database pressure, rate-limit-store
+  errors, failed runs and authentication anomalies, and set retention/redaction
+  policies.
+- **Untrusted uploads.** Add malware/content scanning and operational quarantine
+  if the service accepts arbitrary user files. Document the file types and
+  retention policy.
+- **Capacity and rollout.** Run `npm run load-test` against staging at the
+  intended concurrency, size PostgreSQL connections across all instances, and
+  verify graceful drain, readiness, rollback and database migration procedures.
+- **Release gate.** Do not expose the service publicly until the current main
+  commit has a successful `verify`, CI, CodeQL and secret-scan run, and the
+  deployed URL passes `npm run smoke:deploy`.
 
 
 ## Open-world capability model
