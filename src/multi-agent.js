@@ -183,9 +183,28 @@ function taskSignals(run, task, progress = {}) {
   };
 }
 
+function observedPanelSignals(progress = {}) {
+  const findings = Array.isArray(progress.findings) ? progress.findings : [];
+  if (!findings.length) return { count: 0, confidence: 0, confidenceSpread: 0, disagreement: false, resolution: 0 };
+  const confidence = findings.reduce((sum, item) => sum + confidenceValue(item?.confidence), 0) / findings.length;
+  const spread = findings.length > 1
+    ? Math.max(...findings.map(item => confidenceValue(item?.confidence))) -
+      Math.min(...findings.map(item => confidenceValue(item?.confidence)))
+    : 0;
+  const recommendations = new Set(findings.map(item => text(item?.recommendation).toLowerCase()).filter(Boolean));
+  const disagreement = recommendations.size > 1 || spread >= 0.35;
+  const resolution = Math.min(0.28,
+    Math.max(0, confidence - 0.5) * 0.22 +
+    Math.min(0.12, Math.max(0, findings.length - 1) * 0.06)
+  );
+  return { count: findings.length, confidence, confidenceSpread: spread, disagreement, resolution };
+}
+
 function decisionPressure(run, task, progress = {}) {
   const signals = taskSignals(run, task, progress);
+  const observed = observedPanelSignals(progress);
   const goalComplexity = Math.min(0.14, signals.goalLength > 160 ? 0.08 : 0);
+  const disagreementEscalation = observed.disagreement ? 0.18 + Math.min(0.10, observed.confidenceSpread * 0.2) : 0;
   return Math.min(1,
     signals.scaleComplexity +
     signals.implementationComplexity +
@@ -199,7 +218,9 @@ function decisionPressure(run, task, progress = {}) {
     signals.concurrencyOpportunity +
     signals.comparisonComplexity +
     signals.communicationComplexity +
-    goalComplexity
+    goalComplexity +
+    disagreementEscalation -
+    observed.resolution
   );
 }
 
@@ -231,9 +252,13 @@ export function multiAgentDecision(run, task, { mode = 'auto', progress = {} } =
 
 function roleUtility(role, run, task, progress = {}) {
   const signals = taskSignals(run, task, progress);
+  const observed = observedPanelSignals(progress);
   const typeMatch = ROLE_CATALOG[role]?.bestFor?.includes(signals.type) ||
     ROLE_CATALOG[role]?.bestFor?.includes(signals.taskId) ? 0.18 : 0;
   const completed = new Set(progress.completedRoles ?? []);
+  const disagreementBoost = observed.disagreement &&
+    ['critic', 'analyst', 'researcher', 'strategist'].includes(role) ? 0.16 : 0;
+  const resolutionPenalty = observed.count > 0 && !observed.disagreement && observed.confidence >= 0.82 ? 0.10 : 0;
   const base = {
     strategist: (['plan', 'understand', 'discover', 'reassess'].includes(signals.type) ? 0.46 : 0.18)
       + signals.decomposition * 1.25 + signals.depth * 0.35 + (signals.flags.design ? 0.08 : 0),
@@ -246,7 +271,7 @@ function roleUtility(role, run, task, progress = {}) {
       : 0.06,
     diagnostician: signals.retrying ? 0.82 + signals.recovery * 0.5 + signals.unknowns * 0.35 : 0.1
   }[role] ?? 0;
-  return Math.max(0, Math.min(1.2, base - (completed.has(role) ? 1 : 0)));
+  return Math.max(0, Math.min(1.2, base + disagreementBoost - resolutionPenalty - (completed.has(role) ? 1 : 0)));
 }
 
 function roleCandidates(run, task, progress = {}) {
@@ -296,7 +321,12 @@ export function rolesFor(run, task, {
       communicationComplexity: Number(signals.communicationComplexity.toFixed(3)),
       stakes: Number(signals.stakes.toFixed(3)),
       recovery: Number(signals.recovery.toFixed(3)),
-      concurrencyOpportunity: Number(signals.concurrencyOpportunity.toFixed(3))
+      concurrencyOpportunity: Number(signals.concurrencyOpportunity.toFixed(3)),
+      observedFindings: observedPanelSignals(progress).count,
+      observedConfidence: Number(observedPanelSignals(progress).confidence.toFixed(3)),
+      observedConfidenceSpread: Number(observedPanelSignals(progress).confidenceSpread.toFixed(3)),
+      observedDisagreement: observedPanelSignals(progress).disagreement,
+      observedResolution: Number(observedPanelSignals(progress).resolution.toFixed(3))
     },
     utilities,
     reason: 'Task-specific allocation from current workflow state; cognitive roles are domain-agnostic.'
@@ -491,7 +521,8 @@ export async function runAdaptiveAgentPanel({
         failedRoles,
         goal: basePayload?.goal,
         workPlan: basePayload?.workPlan,
-        evidenceSoFar: basePayload?.evidenceSoFar
+        evidenceSoFar: basePayload?.evidenceSoFar,
+        findings
       }
     });
     allocationResult = nextAllocation;
@@ -562,7 +593,8 @@ export async function runAdaptiveAgentPanel({
         failedRoles,
         goal: basePayload?.goal,
         workPlan: basePayload?.workPlan,
-        evidenceSoFar: basePayload?.evidenceSoFar
+        evidenceSoFar: basePayload?.evidenceSoFar,
+        findings
       }
     });
     lastAllocation = allocationResult.allocation ?? lastAllocation;
