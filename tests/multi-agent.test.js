@@ -24,13 +24,17 @@ const selection = {
   configuredModelIds: ['google:gemini-3.8-flash', 'google:gemini-3.1-pro-preview']
 };
 
-const finding = (recommendation, summary) => ({
+const finding = (recommendation, summary, extra = {}) => ({
   verdict: 'unused',
   recommendation,
   summary,
+  confidence: 0.8,
   risks: [],
   unknowns: [],
-  actions: []
+  actions: [],
+  evidence: [],
+  assumptions: [],
+  ...extra
 });
 
 test('auto mode stays single-agent for simple work and expands for material complexity', () => {
@@ -103,6 +107,11 @@ test('the panel runs specialists, records usage, and adds an arbiter only on dis
   assert.equal(calls[0].options.maxOutputTokens, AGENT_MAX_OUTPUT_TOKENS);
   assert.equal(calls[2].options.maxOutputTokens, ARBITER_MAX_OUTPUT_TOKENS);
   assert.equal(result.brief.policy.includes('not tool commands'), true);
+  assert.equal(result.brief.consensusState, 'arbitrated');
+  assert.equal(result.brief.findings[0].confidence, 0.8);
+  assert.deepEqual(JSON.parse(calls[0].messages[1].content).advisoryFindings, []);
+  assert.deepEqual(JSON.parse(calls[1].messages[1].content).advisoryFindings, []);
+  assert.equal(JSON.stringify(calls[1].messages[1].content).includes('Architecture is coherent.'), false);
 });
 
 test('the panel stops before extra calls when spend is no longer available', async () => {
@@ -122,4 +131,68 @@ test('the panel stops before extra calls when spend is no longer available', asy
   });
   assert.equal(calls, 1);
   assert.equal(result.agents[1].status, 'budget-blocked');
+});
+
+
+test('confidence divergence triggers arbitration even when recommendations match', async () => {
+  const calls = [];
+  const fakeModel = async (messages, options) => {
+    calls.push({ messages, options });
+    if (calls.length === 1) return { text: JSON.stringify(finding('proceed', 'strong evidence', { confidence: 0.95, evidence: ['test suite'] })), provider: 'google', model: options.modelId, usage: null };
+    if (calls.length === 2) return { text: JSON.stringify(finding('proceed', 'weak evidence', { confidence: 0.45, assumptions: ['environment is unchanged'] })), provider: 'google', model: options.modelId, usage: null };
+    return { text: JSON.stringify(finding('investigate', 'Run one discriminating check before proceeding.', { confidence: 0.9 })), provider: 'google', model: options.modelId, usage: null };
+  };
+
+  const result = await runAdaptiveAgentPanel({
+    run: run({ adaptation: { scale: 'complex' } }),
+    task: { id: 'build-code', type: 'code' },
+    basePayload: { goal: 'Build code', task: { id: 'build-code', type: 'code' } },
+    selection,
+    primaryModelId: 'google:gemini-3.8-flash',
+    config: { agents: { multiAgent: 'auto', maxAgents: 2 } },
+    canSpend: async () => true,
+    modelCaller: fakeModel
+  });
+
+  assert.equal(result.brief.disagreement, true);
+  assert.equal(result.brief.disagreementProfile.confidenceDisagreement, true);
+  assert.equal(result.brief.consensusState, 'arbitrated');
+  assert.equal(result.arbiter?.recommendation, 'investigate');
+  assert.deepEqual(result.brief.evidence, ['test suite']);
+  assert.deepEqual(result.brief.assumptions, ['environment is unchanged']);
+  assert.equal(calls.length, 3);
+});
+
+test('unresolved disagreement is explicitly surfaced when arbitration is budget-blocked', async () => {
+  let calls = 0;
+  const result = await runAdaptiveAgentPanel({
+    run: run({ adaptation: { scale: 'complex' } }),
+    task: { id: 'build-code', type: 'code' },
+    basePayload: { goal: 'Build code', task: { id: 'build-code', type: 'code' } },
+    selection,
+    primaryModelId: 'google:gemini-3.8-flash',
+    config: { agents: { multiAgent: 'auto', maxAgents: 2 } },
+    canSpend: async () => calls < 2,
+    modelCaller: async (_messages, options) => {
+      calls += 1;
+      const recommendation = calls === 1 ? 'proceed' : 'revise';
+      return { text: JSON.stringify(finding(recommendation, `finding-${calls}`)), provider: 'google', model: options.modelId, usage: null };
+    }
+  });
+
+  assert.equal(calls, 2);
+  assert.equal(result.arbiter, null);
+  assert.equal(result.brief.consensusState, 'unresolved-disagreement');
+  assert.equal(result.brief.consensus, null);
+  assert.match(result.brief.policy, /unresolved/);
+});
+
+test('high-impact uncertainty recruits researcher and critic alongside the task specialist', () => {
+  const result = rolesFor(run({
+    adaptation: { scale: 'complex' },
+    situation: { risk: 'high-impact', unknownSituation: true, investigationNeeded: true, externalData: { hasExternalDataNeed: true } }
+  }), { id: 'build-code', type: 'code' }, { maxAgents: 3 });
+
+  assert.deepEqual(result.roles, ['architect', 'researcher', 'critic']);
+  assert.equal(result.decision.enabled, true);
 });
