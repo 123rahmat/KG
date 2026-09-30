@@ -309,7 +309,12 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
     next();
   });
 
-  const idempotent = createIdempotency({ pool, route });
+  const idempotent = createIdempotency({
+    pool,
+    route,
+    encryptionKey: config.security.personalDataEncryptionKey,
+    previousEncryptionKey: config.security.personalDataEncryptionKeyPrevious
+  });
   const memories = new MemoryStore(pool, { encryptionKey: config.security.personalDataEncryptionKey });
   const deps = {
     config, pool, identity, governance, capabilities, objects, runs, jobs, scheduler, memories, audit,
