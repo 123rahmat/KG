@@ -1,0 +1,97 @@
+# Prometheus alert rules for Kindgleam.
+#
+# Scrape /api/metrics on every instance with the METRICS_TOKEN you set on the
+# app (32+ characters). That token is checked in memory, so scrapes keep
+# working while the database is down and the database alerts can fire.
+# (Without METRICS_TOKEN, any valid API key works, but only while the
+# database is up.) Label the job "kindgleam":
+#
+#   - job_name: kindgleam
+#     metrics_path: /api/metrics
+#     authorization: { credentials_file: /etc/prometheus/kindgleam-metrics.token }
+#     static_configs: [{ targets: ['app-1:3000', 'app-2:3000'] }]
+#
+# Check with: promtool check rules docs/ops/prometheus-alerts.yml
+# Tests:      promtool test rules docs/ops/prometheus-alerts.test.yml
+
+groups:
+  - name: kindgleam
+    rules:
+      - alert: KindgleamInstanceDown
+        expr: up{job="kindgleam"} == 0
+        for: 2m
+        labels: { severity: page }
+        annotations:
+          summary: 'Kindgleam instance {{ $labels.instance }} is not answering scrapes'
+
+      - alert: KindgleamReadinessFailing
+        # Readiness touches the database; failures mean requests cannot be served.
+        expr: increase(readiness_failures_total{job="kindgleam"}[5m]) > 0
+        labels: { severity: page }
+        annotations:
+          summary: 'Readiness checks are failing on {{ $labels.instance }} (database unreachable?)'
+
+      - alert: KindgleamHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{job="kindgleam", status=~"5.."}[5m]))
+            / sum(rate(http_requests_total{job="kindgleam"}[5m])) > 0.02
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: 'More than 2% of requests are failing with 5xx'
+
+      - alert: KindgleamSlowRequests
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(http_request_duration_ms_bucket{job="kindgleam"}[5m]))) > 2500
+        for: 10m
+        labels: { severity: ticket }
+        annotations:
+          summary: 'p95 request latency is above 2.5 s'
+
+      - alert: KindgleamDatabasePoolExhausted
+        # Requests are queueing for a connection: raise PG_POOL_MAX (within the
+        # server's max_connections), add instances, or find slow queries.
+        expr: db_pool_connections{job="kindgleam", state="waiting"} > 0
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: 'Requests on {{ $labels.instance }} are waiting for database connections'
+
+      - alert: KindgleamRunnerFailures
+        expr: |
+          sum(increase(executions_total{job="kindgleam",
+            outcome=~"failed|unreachable|invalid-runner-receipt"}[15m])) > 5
+        labels: { severity: ticket }
+        annotations:
+          summary: 'Execution runners failed more than 5 times in 15 minutes'
+
+      - alert: KindgleamVerificationFailures
+        expr: |
+          sum(increase(executions_total{job="kindgleam",
+            outcome=~"verification-inconclusive|completed-with-verification-failure"}[1h])) > 20
+        labels: { severity: ticket }
+        annotations:
+          summary: 'Many results failed verification in the last hour'
+
+      - alert: KindgleamGeminiKeyRejected
+        # Gemini refused the API key or the model: every AI answer fails until
+        # an administrator fixes the key or chooses another model in Settings.
+        expr: sum(increase(model_provider_errors_total{job="kindgleam", code=~"model-not-authorized|model-not-found"}[5m])) > 0
+        labels: { severity: page }
+        annotations:
+          summary: 'Gemini is rejecting the API key or the selected model'
+
+      - alert: KindgleamGeminiRateLimited
+        # The Gemini project's quota is too small for the traffic.
+        expr: sum(increase(model_provider_errors_total{job="kindgleam", code="model-rate-limited"}[15m])) > 10
+        labels: { severity: ticket }
+        annotations:
+          summary: 'Gemini is rate-limiting Kindgleam; raise the project quota or tier'
+
+      - alert: KindgleamRateLimitStoreErrors
+        # The PostgreSQL rate-limit store failed; limits may not be enforced.
+        expr: increase(rate_limit_store_errors_total{job="kindgleam"}[5m]) > 0
+        labels: { severity: page }
+        annotations:
+          summary: 'The rate-limit store is failing on {{ $labels.instance }}'

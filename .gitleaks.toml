@@ -1,0 +1,23 @@
+title = "kindgleam gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known-safe placeholders and fixtures"
+regexes = [
+  '''replace-with-a-(long|different)-random-secret''',
+  '''change-me''',
+  '''local-development-jwt-secret''',
+  '''sk_test_[0]{10,}''',
+  '''ci-dummy-key''',
+  '''ci-dummy-runner-token-32-characters-min''',
+  '''test-key''',
+  '''anthropic-secret''',
+  '''test-anthropic''',
+  '''MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=''',
+]
+paths = [
+  '''package-lock\.json''',
+  '''\.gitleaks\.toml''',
+]

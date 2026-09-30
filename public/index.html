@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Kindgleam</title>
+<meta name="description" content="Ask anything or describe what you want done. Kindgleam answers, works through bigger tasks step by step, and asks you only when your input is needed.">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/kindgleam.svg" type="image/svg+xml">
+<link rel="icon" href="/kindgleam-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/kindgleam-192.png">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+
+<!-- Icons: one line-icon set, referenced with <use href="#i-name"> -->
+<svg xmlns="http://www.w3.org/2000/svg" class="icon-sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-new" viewBox="0 0 24 24"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.4 2.6a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="i-explore" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="m15.8 8.2-2.1 5.5-5.5 2.1 2.1-5.5Z"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-logo" viewBox="0 0 24 24"><g fill="currentColor" stroke="none"><path id="kg-arm" d="M21.963 15.248C21.947 15.19 21.927 15.133 21.904 15.077C21.881 15.021 21.854 14.967 21.824 14.915C21.794 14.862 21.76 14.812 21.724 14.764C21.688 14.716 21.648 14.67 21.606 14.627C21.564 14.584 21.518 14.543 21.471 14.506C21.424 14.469 21.374 14.435 21.322 14.404C21.27 14.373 21.216 14.345 21.161 14.321C21.106 14.297 21.049 14.276 20.991 14.259C20.933 14.242 20.874 14.229 20.815 14.219C20.755 14.21 20.695 14.204 20.634 14.202C20.574 14.201 20.513 14.203 20.454 14.209C20.394 14.215 20.334 14.224 20.275 14.238C20.216 14.251 20.158 14.269 20.102 14.29C20.045 14.31 19.99 14.335 19.936 14.363C19.883 14.391 19.831 14.422 19.781 14.456C19.732 14.491 19.684 14.529 19.64 14.569C19.595 14.609 19.553 14.653 19.514 14.699C19.474 14.744 19.438 14.793 19.405 14.843C19.372 14.894 19.344 14.948 19.315 15.001C19.287 15.054 19.263 15.109 19.234 15.162C19.205 15.215 19.175 15.268 19.144 15.319C19.112 15.371 19.08 15.422 19.046 15.471C19.011 15.521 18.976 15.57 18.939 15.618C18.902 15.666 18.864 15.712 18.825 15.758C18.786 15.804 18.745 15.849 18.703 15.893C18.662 15.936 18.619 15.979 18.575 16.02C18.531 16.062 18.487 16.102 18.441 16.141C18.395 16.181 18.348 16.219 18.3 16.255C18.252 16.292 18.203 16.328 18.154 16.362C18.104 16.396 18.053 16.43 18.002 16.461C17.951 16.493 17.899 16.524 17.846 16.553C17.793 16.582 17.74 16.61 17.685 16.636C17.631 16.663 17.576 16.688 17.521 16.712C17.466 16.736 17.41 16.759 17.353 16.78C17.297 16.801 17.239 16.821 17.182 16.839C17.125 16.858 17.067 16.875 17.008 16.89C16.95 16.906 16.891 16.92 16.832 16.933C16.773 16.946 16.714 16.957 16.655 16.968C16.595 16.978 16.535 16.986 16.476 16.994C16.416 17.001 16.356 17.007 16.295 17.011C16.235 17.016 16.175 17.019 16.115 17.021C16.054 17.023 15.994 17.023 15.934 17.022C15.873 17.021 15.813 17.019 15.753 17.015C15.692 17.011 15.632 17.006 15.572 17C15.512 16.993 15.452 16.985 15.393 16.976C15.333 16.967 15.274 16.957 15.214 16.945C15.155 16.933 15.096 16.92 15.038 16.906C14.979 16.892 14.921 16.876 14.863 16.859C14.805 16.842 14.747 16.824 14.69 16.804C14.633 16.785 14.576 16.764 14.52 16.743C14.464 16.721 14.408 16.698 14.353 16.673C14.297 16.649 14.243 16.624 14.188 16.597C14.134 16.57 14.081 16.543 14.028 16.514C13.975 16.485 13.922 16.455 13.871 16.424C13.819 16.393 13.768 16.36 13.717 16.327C13.667 16.294 13.617 16.26 13.568 16.224C13.519 16.189 13.471 16.153 13.424 16.115C13.376 16.078 13.33 16.04 13.284 16.001C13.238 15.961 13.193 15.921 13.149 15.88C13.104 15.839 13.067 15.788 13.019 15.754C12.97 15.72 12.914 15.68 12.86 15.676C12.805 15.672 12.734 15.695 12.691 15.729C12.649 15.764 12.613 15.83 12.607 15.884C12.6 15.939 12.628 16.001 12.651 16.056C12.674 16.11 12.713 16.16 12.745 16.211C12.777 16.262 12.81 16.313 12.844 16.362C12.878 16.412 12.913 16.462 12.948 16.51C12.984 16.559 13.021 16.607 13.058 16.654C13.095 16.702 13.134 16.748 13.173 16.794C13.212 16.84 13.252 16.885 13.293 16.93C13.333 16.974 13.375 17.018 13.417 17.061C13.46 17.104 13.503 17.147 13.546 17.188C13.59 17.23 13.635 17.27 13.68 17.31C13.725 17.35 13.771 17.39 13.818 17.428C13.864 17.466 13.912 17.504 13.96 17.54C14.008 17.577 14.056 17.613 14.105 17.648C14.155 17.683 14.204 17.717 14.255 17.75C14.305 17.783 14.356 17.816 14.408 17.847C14.459 17.879 14.511 17.909 14.564 17.939C14.616 17.969 14.669 17.997 14.723 18.025C14.776 18.053 14.83 18.08 14.885 18.106C14.939 18.132 14.994 18.157 15.05 18.181C15.105 18.206 15.161 18.229 15.217 18.251C15.273 18.273 15.329 18.295 15.386 18.315C15.443 18.335 15.5 18.355 15.558 18.373C15.615 18.391 15.673 18.409 15.731 18.425C15.789 18.442 15.847 18.457 15.906 18.472C15.964 18.487 16.023 18.5 16.082 18.513C16.141 18.525 16.2 18.537 16.26 18.547C16.319 18.558 16.379 18.568 16.439 18.576C16.498 18.585 16.558 18.593 16.618 18.599C16.678 18.606 16.738 18.612 16.798 18.616C16.859 18.621 16.919 18.625 16.979 18.628C17.039 18.63 17.1 18.632 17.16 18.633C17.22 18.634 17.281 18.633 17.341 18.632C17.402 18.631 17.462 18.629 17.522 18.626C17.582 18.623 17.643 18.619 17.703 18.614C17.763 18.608 17.823 18.602 17.883 18.595C17.943 18.588 18.003 18.581 18.062 18.572C18.122 18.563 18.182 18.553 18.241 18.542C18.3 18.531 18.36 18.519 18.419 18.507C18.478 18.494 18.536 18.48 18.595 18.466C18.654 18.451 18.712 18.436 18.77 18.42C18.828 18.403 18.886 18.386 18.943 18.368C19.001 18.349 19.058 18.33 19.115 18.31C19.172 18.29 19.229 18.269 19.285 18.248C19.341 18.226 19.397 18.203 19.453 18.18C19.509 18.156 19.564 18.132 19.619 18.107C19.673 18.082 19.728 18.055 19.782 18.029C19.836 18.002 19.89 17.974 19.943 17.945C19.996 17.917 20.049 17.887 20.101 17.857C20.153 17.827 20.205 17.796 20.256 17.764C20.308 17.733 20.358 17.7 20.409 17.667C20.459 17.633 20.509 17.599 20.558 17.564C20.607 17.53 20.656 17.494 20.704 17.458C20.753 17.421 20.8 17.384 20.847 17.346C20.894 17.309 20.941 17.27 20.987 17.231C21.033 17.192 21.078 17.152 21.123 17.112C21.168 17.071 21.212 17.03 21.255 16.988C21.299 16.946 21.342 16.904 21.384 16.861C21.426 16.818 21.468 16.774 21.509 16.73C21.55 16.685 21.59 16.641 21.629 16.595C21.669 16.549 21.708 16.503 21.744 16.454C21.779 16.405 21.811 16.354 21.84 16.301C21.869 16.248 21.894 16.193 21.916 16.137C21.938 16.081 21.956 16.023 21.971 15.964C21.985 15.906 21.996 15.846 22.003 15.786C22.01 15.727 22.013 15.666 22.013 15.606C22.012 15.546 22.007 15.485 21.999 15.425C21.991 15.366 21.979 15.306 21.963 15.248Z"/><use href="#kg-arm" transform="rotate(51.428571 12 12)"/><use href="#kg-arm" transform="rotate(102.857143 12 12)"/><use href="#kg-arm" transform="rotate(154.285714 12 12)"/><use href="#kg-arm" transform="rotate(205.714286 12 12)"/><use href="#kg-arm" transform="rotate(257.142857 12 12)"/><use href="#kg-arm" transform="rotate(308.571429 12 12)"/><path fill-rule="evenodd" d="M13.657 12a1.657 1.657 0 1 0 -3.314 0a1.657 1.657 0 1 0 3.314 0ZM12.947 12a0.947 0.947 0 1 1 -1.893 0a0.947 0.947 0 1 1 1.893 0Z"/></g></symbol>
+  <symbol id="i-run" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+  <symbol id="i-files" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M20 7h-9M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-retry" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z"/><path d="M19 17v4M17 19h4"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-contrast" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+  <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+  <symbol id="i-building" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 7h1M14 7h1M9 11h1M14 11h1M9 15h1M14 15h1M10 21v-3h4v3"/></symbol>
+  <symbol id="i-account" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18.5a6 6 0 0 1 11 0"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M12 14l4-4"/><path d="M3.5 18a9.5 9.5 0 1 1 17 0"/><circle cx="12" cy="14" r="1.5" fill="currentColor"/></symbol>
+  <symbol id="i-card" viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19M6.5 15h4"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-memory" viewBox="0 0 24 24"><path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 6 1V5a2 2 0 0 0-3-1z"/><path d="M15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-6 1"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7.5l8.5 6 8.5-6"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
+</svg>
+
+<!-- Sign in ------------------------------------------------------------- -->
+<div class="gate" id="gate" hidden>
+  <div class="gate-card stack">
+    <div class="brand big"><svg class="logo" aria-hidden="true"><use href="#i-logo"/></svg> <span>Kindgleam</span></div>
+
+    <!-- 1. Email: sign in, or create an account, with a one-time link -->
+    <section class="gate-step stack" id="gateEmail" hidden>
+      <div class="gate-head">
+        <h1 class="gate-title">Welcome</h1>
+        <p class="muted">Sign in or create your account with your email.</p>
+      </div>
+      <form id="emailSignin" class="stack" novalidate>
+        <label class="sr-only" for="signinEmail">Email address</label>
+        <input id="signinEmail" type="email" autocomplete="email" inputmode="email" autocapitalize="off" spellcheck="false"
+               placeholder="you@example.com" required>
+        <button class="primary" type="submit" id="emailContinue">Continue with email</button>
+      </form>
+      <p class="muted small">We'll email you a link to sign in. No password needed.</p>
+    </section>
+
+    <!-- 2. The link and code are on their way -->
+    <section class="gate-step stack" id="gateSent" hidden aria-live="polite">
+      <div class="gate-badge" aria-hidden="true"><svg class="i"><use href="#i-mail"/></svg></div>
+      <div class="gate-head">
+        <h1 class="gate-title">Check your email</h1>
+        <p class="muted">We sent a sign-in link to <strong id="sentTo"></strong>. Open it to get your 8-digit code, then enter the code here.</p>
+      </div>
+      <form id="codeForm" class="stack" novalidate>
+        <label class="sr-only" for="signinCode">8-digit code</label>
+        <input id="signinCode" class="code-input" type="text" inputmode="numeric" autocomplete="one-time-code"
+               maxlength="9" placeholder="0000 0000" spellcheck="false">
+        <button class="primary" type="submit" id="codeSubmit">Sign in</button>
+      </form>
+      <p class="muted small">The link works for <span id="sentMinutes">15</span> minutes.</p>
+      <button class="ghost" type="button" id="resendLink">Resend email</button>
+      <button class="text-button" type="button" id="changeEmail">Use a different email</button>
+    </section>
+
+    <!-- 3. Opened from the email: the code to type where sign-in started -->
+    <section class="gate-step stack" id="gateConfirm" hidden>
+      <div class="gate-badge" aria-hidden="true"><svg class="i"><use href="#i-shield"/></svg></div>
+      <div class="gate-head">
+        <h1 class="gate-title">Your sign-in code</h1>
+        <p class="muted">Enter this code on the sign-in page where you asked to sign in<span id="codeForWrap" hidden> as <strong id="codeFor"></strong></span>.</p>
+      </div>
+      <output class="code-display" id="linkCode" aria-live="polite">•••• ••••</output>
+      <button class="ghost" type="button" id="copyCode">Copy code</button>
+      <p class="muted small">It works once and expires in <span id="codeMinutes">15</span> minutes.</p>
+      <span class="gate-or"><span>or</span></span>
+      <button class="text-button" type="button" id="confirmSignin">Sign in on this device instead</button>
+    </section>
+
+    <!-- Access key: for accounts an administrator set up with a key -->
+    <section class="gate-step stack" id="gateKey" hidden>
+      <div class="gate-head">
+        <h1 class="gate-title">Sign in with a key</h1>
+        <p class="muted">Use the access key you were given.</p>
+      </div>
+      <form id="signin" class="stack">
+        <label class="sr-only" for="apiKey">Access key</label>
+        <input id="apiKey" type="password" autocomplete="off" spellcheck="false"
+               placeholder="Access key" required>
+        <button class="primary" type="submit">Sign in</button>
+      </form>
+      <p class="muted small">Your key is swapped for a secure session and is never stored in the browser.</p>
+    </section>
+
+    <div id="gateNotice" hidden></div>
+
+    <div class="gate-switch" id="gateSwitch" hidden>
+      <span class="gate-or"><span>or</span></span>
+      <button class="text-button" type="button" id="gateSwitchButton">Sign in with an access key</button>
+    </div>
+    <p class="muted small gate-foot">By continuing you accept the <a href="/policy.html" target="_blank" rel="noopener">terms and usage policy</a>.</p>
+  </div>
+</div>
+
+<!-- First use: age and terms --------------------------------------------- -->
+<dialog class="terms-dialog" id="termsDialog" aria-labelledby="termsTitle">
+  <form class="stack" id="termsForm" method="dialog">
+    <h2 id="termsTitle">Before you start</h2>
+    <p class="muted">Kindgleam is an AI assistant. It can make mistakes, so check important information. It helps with anything good and declines what would hurt people.</p>
+    <label class="terms-check"><input type="checkbox" id="termsAge"> <span>I am <strong id="termsMinimumAge">16</strong> or older.</span></label>
+    <label class="terms-check"><input type="checkbox" id="termsAccept"> <span>I accept the <a href="/policy.html" target="_blank" rel="noopener">terms and usage policy</a>.</span></label>
+    <div id="termsNotice" hidden></div>
+    <button class="primary" type="submit" id="termsContinue" disabled>Continue</button>
+  </form>
+</dialog>
+
+<!-- App ----------------------------------------------------------------- -->
+<div id="app" class="app-shell" hidden>
+
+  <!-- Left rail: everything that is not the chat itself -->
+  <aside class="rail" id="chatSidebar">
+    <div class="rail-top">
+      <button class="icon-btn" id="collapseRail" aria-label="Hide sidebar" title="Hide sidebar"><svg class="i"><use href="#i-sidebar"/></svg></button>
+      <div class="brand"><svg class="logo" aria-hidden="true"><use href="#i-logo"/></svg> <span>Kindgleam</span></div>
+    </div>
+    <button class="new-chat" id="newWork" title="New chat"><svg class="i" aria-hidden="true"><use href="#i-new"/></svg> New chat</button>
+    <nav class="rail-nav" id="tabs" role="tablist" aria-label="Pages">
+      <button role="tab" aria-selected="true" data-tab="runs" hidden>Chat</button>
+      <button role="tab" aria-selected="false" data-tab="explore" title="Explore"><svg class="i" aria-hidden="true"><use href="#i-explore"/></svg> Explore</button>
+      <button role="tab" aria-selected="false" data-tab="objects" title="Files"><svg class="i" aria-hidden="true"><use href="#i-files"/></svg> Files</button>
+      <button role="tab" aria-selected="false" data-tab="audit" title="Activity"><svg class="i" aria-hidden="true"><use href="#i-activity"/></svg> Activity</button>
+    </nav>
+    <button class="rail-mini-only rail-chats" id="railChats" title="Chats" aria-label="Show chats"><svg class="i" aria-hidden="true"><use href="#i-chat"/></svg></button>
+    <div class="rail-section">
+      <div class="rail-heading">
+        <span>Chats</span>
+        <button class="icon-btn" id="refreshRuns" aria-label="Refresh chats" title="Refresh"><svg class="i"><use href="#i-refresh"/></svg></button>
+      </div>
+      <label class="search-box">
+        <svg class="i" aria-hidden="true"><use href="#i-search"/></svg>
+        <input id="chatSearch" class="search" type="search" placeholder="Search chats" aria-label="Search chats">
+      </label>
+      <div id="runList" class="run-list"></div>
+    </div>
+    <div class="rail-footer">
+      <select id="workspace" aria-label="Workspace"></select>
+      <div class="user-row">
+        <button class="user-button" id="openSettings" aria-label="Settings" title="Settings">
+          <span class="user-avatar" id="userInitial" aria-hidden="true"></span>
+          <span class="who" id="who"></span>
+          <svg class="i gear" aria-hidden="true"><use href="#i-settings"/></svg>
+        </button>
+        <button class="icon-btn bell" id="notifyBell" type="button" aria-label="Notifications" title="Notifications" aria-expanded="false" aria-controls="notifyPanel">
+          <svg class="i" aria-hidden="true"><use href="#i-bell"/></svg><span class="bell-count" id="notifyCount" hidden></span>
+        </button>
+        <button class="usage-ring" id="usageRing" type="button" aria-label="AI usage" title="AI usage" hidden>
+          <svg viewBox="0 0 36 36" aria-hidden="true"><circle class="track" cx="18" cy="18" r="15"/><circle class="fill" id="usageRingFill" cx="18" cy="18" r="15"/></svg>
+          <span id="usageRingText"></span>
+        </button>
+      </div>
+      <div class="notify-panel" id="notifyPanel" role="dialog" aria-label="Notifications" hidden>
+        <div class="notify-head"><strong>Notifications</strong><button type="button" class="ghost small" id="notifyReadAll">Mark all read</button></div>
+        <ul class="notify-list" id="notifyList"></ul>
+      </div>
+    </div>
+  </aside>
+  <div class="rail-backdrop" id="railBackdrop"></div>
+
+  <div class="main-col">
+    <!-- Phones only -->
+    <header class="mobile-bar">
+      <button class="icon-btn" id="chatsTop" aria-label="Menu"><svg class="i"><use href="#i-menu"/></svg></button>
+      <div class="brand"><svg class="logo" aria-hidden="true"><use href="#i-logo"/></svg> <span class="truncate" id="mobileTitle">Kindgleam</span></div>
+      <button class="icon-btn" id="newWorkTop" aria-label="New chat"><svg class="i"><use href="#i-new"/></svg></button>
+    </header>
+
+    <main>
+      <div id="notice" hidden></div>
+
+      <!-- Chat -------------------------------------------------------- -->
+      <section id="tab-runs" class="chat">
+        <header class="chat-head" id="chatHead">
+          <button class="icon-btn rail-open" id="expandRail" aria-label="Show sidebar" title="Show sidebar"><svg class="i"><use href="#i-sidebar"/></svg></button>
+          <button class="icon-btn rail-open" id="newWorkHead" aria-label="New chat" title="New chat"><svg class="i"><use href="#i-new"/></svg></button>
+          <div class="chat-head-text" id="chatHeadText" hidden>
+            <h1 class="chat-title truncate" id="chatTitle"></h1>
+            <div class="chat-meta" id="chatMeta"></div>
+          </div>
+        </header>
+        <div id="adaptiveWorkspaceBar" class="adaptive-workspace-bar" aria-live="polite"></div>
+        <div class="thread" id="thread" aria-live="polite"></div>
+        <div id="runNotice" hidden></div>
+        <form class="composer" id="composer">
+          <div class="composer-top">
+            <div class="attach-list" id="attachList" hidden></div>
+            <div class="composer-status" aria-live="polite">
+              <span id="networkStatus" class="connection-pill online" hidden><span class="status-dot"></span><span>Online</span></span>
+              <span id="draftStatus" class="draft-status" hidden>Saved locally while you type</span>
+              <span id="voiceStatus" class="voice-status" hidden></span>
+            </div>
+          </div>
+          <label class="sr-only" for="goal">Message</label>
+          <textarea id="goal" rows="1" placeholder="Ask anything…"></textarea>
+          <div class="composer-bar">
+            <input id="attachInput" type="file" multiple class="sr-only" tabindex="-1" aria-hidden="true">
+            <button type="button" class="attach-btn" id="attachBtn" aria-label="Attach files" title="Attach files">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 0-2.6-2.6l7.9-7.9"/></svg>
+            </button>
+            <input id="shareRun" type="checkbox" class="sr-only">
+            <label for="shareRun" class="share-toggle" title="Who can see this chat">
+              <span class="off"><svg class="i"><use href="#i-lock"/></svg> Only me</span><span class="on"><svg class="i"><use href="#i-users"/></svg> Shared with workspace</span>
+            </label>
+            <div class="spacer"></div>
+            <button type="button" class="voice-btn" id="voiceBtn" aria-label="Use voice input" title="Use voice input">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Zm6-3a6 6 0 0 1-12 0m6 6v4m-4 0h8"/></svg>
+            </button>
+            <button class="send" id="createRun" type="submit" aria-label="Send" title="Send">
+              <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="currentColor" d="M3.7 10.8 20 4.5c.7-.3 1.4.4 1.1 1.1l-6.3 16.3c-.3.8-1.5.8-1.7-.1l-1.7-6.2-6.2-1.7c-.9-.2-1-1.4-.1-1.7Z"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="m4.4 11.8 9.4-3.8"/></svg>
+            </button>
+          </div>
+        </form>
+        <p class="footnote">Kindgleam can make mistakes. Check important information.</p>
+      </section>
+
+      <!-- Explore ----------------------------------------------------- -->
+      <section id="tab-explore" class="page" hidden>
+        <div class="page-head">
+          <div>
+            <h1>Explore</h1>
+            <p class="muted">What I can help with in this workspace. Pick one to start a new chat.</p>
+          </div>
+        </div>
+        <div id="exploreList" class="explore"></div>
+      </section>
+
+      <!-- Files ------------------------------------------------------- -->
+      <section id="tab-objects" class="page" hidden>
+        <div class="page-head">
+          <h1>Files</h1>
+          <button class="ghost small" id="refreshObjects">Refresh</button>
+        </div>
+        <div class="upload stack">
+          <div class="row wrap">
+            <input id="file" type="file" aria-label="Choose a file">
+            <input id="objectType" value="document" aria-label="Label" class="label-input" placeholder="Label">
+            <label class="checkbox small"><input id="shareObject" type="checkbox"><span>Share with workspace</span></label>
+            <button class="primary" id="uploadObject">Upload</button>
+          </div>
+          <div id="usage" class="usage"></div>
+        </div>
+        <div id="objectList"></div>
+      </section>
+
+      <!-- Activity ---------------------------------------------------- -->
+      <section id="tab-audit" class="page" hidden>
+        <div class="page-head">
+          <h1>Activity</h1>
+          <button class="ghost small" id="refreshAudit">Refresh</button>
+        </div>
+        <p class="muted small">A permanent record of who did what in this workspace, and whether it was allowed.</p>
+        <div id="auditList"></div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- Settings ------------------------------------------------------------ -->
+<dialog class="settings" id="settings" aria-labelledby="settingsTitle">
+  <div class="settings-shell">
+    <aside class="settings-sidebar" aria-label="Settings sections">
+      <div class="settings-sidebar-head">
+        <div class="settings-account-mini">
+          <span class="user-avatar" id="settingsAvatar" aria-hidden="true"></span>
+          <span>
+            <strong id="settingsAccountName">Account</strong>
+            <small id="settingsAccountRole">Personal workspace</small>
+          </span>
+        </div>
+        <button class="icon-btn" id="settingsClose" type="button" aria-label="Close settings" title="Close"><svg class="i" aria-hidden="true"><use href="#i-close"/></svg></button>
+      </div>
+      <label class="settings-nav-search">
+        <svg class="i" aria-hidden="true"><use href="#i-search"/></svg>
+        <input id="settingsSearch" type="search" placeholder="Search settings…" autocomplete="off">
+      </label>
+      <nav class="settings-nav" id="settingsNav" aria-label="Settings">
+        <button type="button" class="settings-nav-item active" data-settings-section="general"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-sliders"/></svg></span><span>General</span></button>
+        <button type="button" class="settings-nav-item" data-settings-section="personalization"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-sparkle"/></svg></span><span>Personalization</span></button>
+        <button type="button" class="settings-nav-item" data-settings-section="appearance"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-contrast"/></svg></span><span>Appearance</span></button>
+        <button type="button" class="settings-nav-item" data-settings-section="voice"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-mic"/></svg></span><span>Voice</span></button>
+        <button type="button" class="settings-nav-item" data-settings-section="data"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-database"/></svg></span><span>Data controls</span></button>
+        <button type="button" class="settings-nav-item" data-settings-section="schedules"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-activity"/></svg></span><span>Schedules</span></button>
+        <button type="button" class="settings-nav-item" data-settings-section="usage"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-gauge"/></svg></span><span>Usage</span></button>
+        <button type="button" class="settings-nav-item" data-settings-section="billing"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-card"/></svg></span><span>Billing</span></button>
+        <button type="button" class="settings-nav-item" data-settings-section="security"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg></span><span>Security</span></button>
+        <button type="button" class="settings-nav-item" data-settings-section="mail" data-platform-only hidden><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-mail"/></svg></span><span>Email sending</span></button>
+        <button type="button" class="settings-nav-item" data-settings-section="workspace"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-building"/></svg></span><span>Workspace</span></button>
+        <button type="button" class="settings-nav-item" data-settings-section="account"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-account"/></svg></span><span>Account</span></button>
+      </nav>
+      <div class="settings-sidebar-foot">
+        <span class="settings-status-dot"></span>
+        <span>Changes save automatically</span>
+      </div>
+    </aside>
+
+    <form method="dialog" class="settings-body" id="settingsForm">
+      <div class="settings-head">
+        <div class="settings-title">
+          <div class="settings-eyebrow">Preferences</div>
+          <h2 id="settingsTitle">General</h2>
+          <p class="muted small" id="settingsDescription">Control how Kindgleam responds and adapts to your work.</p>
+        </div>
+        <div class="settings-head-actions">
+          <span id="settingsSaveState" class="save-state">Saved</span>
+        </div>
+      </div>
+
+      <div class="settings-content" id="settingsContent">
+        <section class="settings-group settings-section" data-settings-section="general" data-settings-title="General" data-settings-description="Control how Kindgleam responds and adapts to your work.">
+          <h3>Response preferences</h3>
+          <label>Language
+            <select id="setLanguage">
+              <option value="">Same as my browser</option><option value="en">English</option><option value="ur">اردو (Urdu)</option><option value="ar">العربية (Arabic)</option><option value="hi">हिन्दी (Hindi)</option><option value="bn">বাংলা (Bengali)</option><option value="fa">فارسی (Persian)</option><option value="tr">Türkçe (Turkish)</option><option value="es">Español</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="pt">Português</option><option value="id">Bahasa Indonesia</option><option value="zh">中文 (Chinese)</option>
+            </select>
+          </label>
+          <label>How should answers be written?
+            <select id="setStyle"><option value="">Balanced</option><option value="beginner">Simple, step by step, no jargon</option><option value="expert">Brief and technical</option></select>
+          </label>
+          <label>Answer length
+            <select id="setLength"><option value="">Whatever fits</option><option value="concise">Short</option><option value="detailed">Detailed</option></select>
+          </label>
+          <label>Your country or region
+            <input id="setCountry" maxlength="80" placeholder="e.g. Pakistan">
+            <span class="hint">Used to adapt jurisdiction-sensitive answers and reduce repeated questions.</span>
+          </label>
+          <label>What should the AI know about you? <span class="optional">Optional</span>
+            <textarea id="setAbout" rows="4" maxlength="400" placeholder="e.g. I am a teacher; I prefer practical examples."></textarea>
+          </label>
+          <label class="settings-toggle-row"><span><strong>Press Enter to send</strong><small>Use Shift+Enter for a new line.</small></span><input id="setEnter" type="checkbox"></label>
+        </section>
+
+        <section class="settings-group settings-section" data-settings-section="personalization" data-settings-title="Personalization" data-settings-description="Tune how the adaptive system plans, acts and changes its approach.">
+          <h3>Adaptive behavior</h3>
+          <label>How much should Kindgleam take the lead?
+            <select id="setAutonomy"><option value="guided">Guided — I approve each major step</option><option value="assist">Assist — automate routine steps, ask when needed</option><option value="autopilot">Autopilot — act automatically inside allowed boundaries</option></select>
+          </label>
+          <label>Adaptive intensity
+            <select id="setAdaptiveIntensity"><option value="low">Low — change only when necessary</option><option value="standard">Standard</option><option value="high">High — adapt frequently to new evidence</option></select>
+          </label>
+          <label>How much work should the adaptive system use?
+            <select id="setAdaptiveDepth">
+              <option value="brief">Brief — use the minimum needed</option>
+              <option value="standard">Standard — balance depth and resources</option>
+              <option value="thorough">Thorough — use more evidence and iteration</option>
+            </select>
+            <span class="hint">This controls the working budget. The system does not silently expand beyond it.</span>
+          </label>
+          <label>What should happen when a needed capability is missing?
+            <select id="setCapabilityInvestment">
+              <option value="ask">Ask me — propose the gap and let me decide</option>
+              <option value="prepare">Prepare a build design — do not make it executable</option>
+              <option value="build-candidate">Prepare a candidate build — still verify before use</option>
+            </select>
+          </label>
+          <label class="settings-toggle-row"><span><strong>Allow adaptive expansion</strong><small>When enabled, the system may propose or request additional resources during the work. Safety, policy and approval rules still apply.</small></span><input id="setAllowAdaptiveExpansion" type="checkbox"></label>
+          <h3 class="settings-subhead">Memory</h3>
+          <label class="settings-toggle-row"><span><strong>Use memory across chats</strong><small>Every chat keeps its own memory automatically. Turn this on only when you want relevant saved memories from other chats to be available here.</small></span><input id="setCrossChatMemory" type="checkbox"></label>
+          <ul class="memory-list" id="memoryList" aria-live="polite"></ul>
+          <div class="memory-add">
+            <input id="memoryInput" maxlength="500" aria-label="Cross-chat memory to save" placeholder="Save a memory to use across chats">
+            <button type="button" id="memoryAdd">Remember across chats</button>
+          </div>
+          <button type="button" class="ghost small danger-text" id="memoryClear">Forget cross-chat memories</button>
+          <p class="hint">Chat-local memory cannot be turned off. This setting controls only whether memory can be used between separate chats.</p>
+          <div class="settings-info-card"><strong>Situation-adaptive workflow</strong><p>The interface and workflow can change with the task. Unknown requirements remain explicit until an actual capability or runner is available.</p></div>
+        </section>
+
+        <section class="settings-group settings-section" data-settings-section="appearance" data-settings-title="Appearance" data-settings-description="Choose how Kindgleam looks and behaves on your screen.">
+          <h3>Theme</h3>
+          <label>Color theme
+            <select id="setTheme"><option value="">Same as my device</option><option value="light">Light</option><option value="dark">Dark</option></select>
+          </label>
+          <div class="settings-theme-preview" aria-hidden="true"><span class="theme-preview light"><i></i><b></b></span><span class="theme-preview dark"><i></i><b></b></span></div>
+          <label class="settings-toggle-row"><span><strong>Reduce motion</strong><small>Minimize animations and transitions.</small></span><input id="setReducedMotion" type="checkbox"></label>
+          <label class="settings-toggle-row"><span><strong>Higher contrast</strong><small>Increase contrast for controls and text.</small></span><input id="setHighContrast" type="checkbox"></label>
+        </section>
+
+        <section class="settings-group settings-section" data-settings-section="voice" data-settings-title="Voice" data-settings-description="Configure voice input.">
+          <h3>Voice input</h3>
+          <label class="settings-toggle-row"><span><strong>Enable voice input</strong><small>Use your browser microphone when supported.</small></span><input id="setVoiceInput" type="checkbox"></label>
+          <label>Voice language
+            <select id="setVoiceLanguage"><option value="">Use my browser language</option><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option><option value="ur-PK">اردو (Pakistan)</option><option value="ar-SA">العربية</option><option value="hi-IN">हिन्दी</option></select>
+          </label>
+        </section>
+
+        <section class="settings-group settings-section" data-settings-section="data" data-settings-title="Data controls" data-settings-description="Control sharing, external context and local resilience.">
+          <h3>Privacy & sharing</h3>
+          <label class="settings-toggle-row"><span><strong>AI conversation consent</strong><small>Allow the AI to read your chats without asking each time.</small></span><input id="setConsent" type="checkbox"></label>
+          <label class="settings-toggle-row"><span><strong>Share new chats</strong><small>Make new chats visible to your workspace.</small></span><input id="setShare" type="checkbox"></label>
+          <div class="settings-toggle-row"><span><strong>Memory</strong><small>Each chat remembers its own conversation. Cross-chat memory is optional and user-controlled.</small></span><button type="button" class="ghost small" id="openMemorySettings">Manage memory</button></div>
+          <label>External context
+            <select id="setExternalContext"><option value="ask">Ask before sending private context</option><option value="allow">Allow when policy permits</option><option value="deny">Never send private context to external providers</option></select>
+          </label>
+          <label class="settings-toggle-row"><span><strong>Offline queue</strong><small>Keep unsent work on this device and retry when you reconnect.</small></span><input id="setOfflineQueue" type="checkbox"></label>
+          <div class="settings-info-card"><strong>Local-first resilience</strong><p>While offline, unsent text stays in this browser session and is not uploaded until a connection is available.</p></div>
+          <h3 class="settings-subhead">Notifications</h3>
+          <label class="settings-toggle-row"><span><strong>Workflow notifications</strong><small>Show progress and completion notices.</small></span><input id="setNotifications" type="checkbox"></label>
+        </section>
+
+        <section class="settings-group settings-section" data-settings-section="schedules" data-settings-title="Schedules" data-settings-description="Reminders and questions asked at a set time.">
+          <p class="hint">Ask in any chat, e.g. "remind me every Monday at 9 to check the tank" or "every morning at 8 ask for today's copper price". You approve each one before it is set.</p>
+          <ul class="schedule-list" id="scheduleList" aria-live="polite"></ul>
+          <h3 class="settings-subhead">New reminder</h3>
+          <div class="schedule-form" id="scheduleForm">
+            <label>Title<input id="scheduleTitle" maxlength="120" placeholder="e.g. Check the tank"></label>
+            <label>Message<input id="scheduleMessage" maxlength="1000" placeholder="What to remind you of"></label>
+            <label>Repeat
+              <select id="scheduleRepeat"><option value="once">Once</option><option value="daily">Every day</option><option value="weekly">Every week</option><option value="monthly">Every month</option></select>
+            </label>
+            <label id="scheduleAtRow">When<input id="scheduleAt" type="datetime-local"></label>
+            <label id="scheduleTimeRow" hidden>Time<input id="scheduleTime" type="time" value="09:00"></label>
+            <fieldset class="schedule-days" id="scheduleDaysRow" hidden><legend>Days</legend></fieldset>
+            <label id="scheduleDayRow" hidden>Day of the month<input id="scheduleDay" type="number" min="1" max="28" value="1"></label>
+            <div class="wide row"><button type="button" class="primary small" id="scheduleCreate">Add reminder</button><span class="small muted" id="scheduleSaved" aria-live="polite"></span></div>
+          </div>
+        </section>
+
+        <section class="settings-group settings-section" data-settings-section="usage" data-settings-title="Usage" data-settings-description="How much AI you have used, against your limits, and how full the model's context is.">
+          <div class="usage-meters" id="usageMeters" aria-live="polite"><p class="muted small">Loading usage…</p></div>
+          <h3 class="settings-subhead">Last 7 days</h3>
+          <div class="usage-days" id="usageDays" role="img" aria-label="Tokens used per day over the last 7 days"></div>
+          <h3 class="settings-subhead">What the tokens went to</h3>
+          <div class="usage-sources" id="usageSources"></div>
+          <h3 class="settings-subhead">Model & context window</h3>
+          <div class="usage-model" id="usageModel"></div>
+          <div class="settings-model-choice" id="userModelChoice">
+            <label>Preferred AI model
+              <select id="userModelSelect" aria-describedby="userModelHint"></select>
+            </label>
+            <p class="hint" id="userModelHint">Kindgleam runs on Google Gemini through the direct Gemini API. Choose among the models your workspace administrator enabled; your plan controls usage capacity and service limits.</p>
+            <span class="small muted" id="userModelSaved" aria-live="polite"></span>
+          </div>
+          <p class="hint">A token is roughly ¾ of a word. The 4-hour and weekly windows roll: usage frees up as it gets older. The context window is how much the model can read at once; long chats fill it.</p>
+        </section>
+
+        <section class="settings-group settings-section" data-settings-section="billing" data-settings-title="Billing" data-settings-description="Your plan, payment method, invoices and billing details.">
+          <div class="notice" id="billingNotice" hidden aria-live="polite"></div>
+          <div class="billing-plan" id="billingPlan"></div>
+          <div class="billing-plans" id="billingPlans" hidden></div>
+          <h3 class="settings-subhead">Payment method & invoices</h3>
+          <div class="settings-action-row" id="billingPortalRow">
+            <span><strong>Managed by the payment provider</strong><small id="billingPortalNote">Card details are entered only on the provider's secure page, never in Kindgleam.</small></span>
+            <button type="button" class="small" id="billingPortal" hidden><svg class="i" aria-hidden="true"><use href="#i-external"/></svg> Manage payment</button>
+          </div>
+          <h3 class="settings-subhead">Billing details</h3>
+          <p class="hint" id="billingDetailsNote"></p>
+          <div class="billing-form" id="billingForm">
+            <label>Billing email<input id="billingEmail" type="email" maxlength="200" autocomplete="email" placeholder="accounts@company.com"></label>
+            <label>Company or name<input id="billingCompany" maxlength="200" autocomplete="organization"></label>
+            <label>Tax ID (optional)<input id="billingTaxId" maxlength="64" placeholder="e.g. NTN or VAT number"></label>
+            <label>Country<input id="billingCountry" maxlength="80" autocomplete="country-name"></label>
+            <label class="wide">Address<textarea id="billingAddress" rows="3" maxlength="500" autocomplete="street-address"></textarea></label>
+            <div class="wide row"><button type="button" class="primary small" id="billingSave">Save billing details</button><span class="small muted" id="billingSaved" aria-live="polite"></span></div>
+          </div>
+          <p class="hint" id="billingSupport"></p>
+        </section>
+
+        <section class="settings-group settings-section" data-settings-section="security" data-settings-title="Security" data-settings-description="Where you are signed in, and how your data is protected.">
+          <h3>Signed-in sessions</h3>
+          <ul class="session-list" id="sessionList" aria-live="polite"><li class="muted small">Loading…</li></ul>
+          <div class="settings-action-row"><span><strong>Sign out everywhere else</strong><small>End every session except this one, e.g. after using a shared computer.</small></span><button type="button" class="small" id="revokeSessions">Sign out others</button></div>
+          <h3 class="settings-subhead">Protection</h3>
+          <div class="settings-info-card"><strong>How your data is kept</strong><p>Sessions use a secure, script-proof cookie. Files are encrypted at rest. Every workspace is isolated at the database level, and each action is recorded in Activity.</p></div>
+        </section>
+
+        <section class="settings-group settings-section" data-settings-section="mail" data-platform-only data-settings-title="Email sending" data-settings-description="The email account Kindgleam sends sign-in links from. Only platform administrators see this.">
+          <div class="settings-info-card" id="mailStatus"><strong>Loading…</strong></div>
+          <h3 class="settings-subhead">Sending account</h3>
+          <label>Email provider
+            <select id="mailPreset">
+              <option value="gmail">Gmail / Google Workspace</option>
+              <option value="outlook">Outlook / Microsoft 365</option>
+              <option value="yahoo">Yahoo Mail</option>
+              <option value="custom">Other (custom SMTP)</option>
+            </select>
+          </label>
+          <label>Email address
+            <input id="mailUsername" type="email" autocomplete="off" placeholder="admin@example.com">
+          </label>
+          <label>App password
+            <input id="mailPassword" type="password" autocomplete="new-password" placeholder="Leave empty to keep the saved one">
+            <small class="hint" id="mailPasswordHint">For Gmail, create an app password in your Google Account under Security → App passwords. Your normal password will not work.</small>
+          </label>
+          <label>Sender name
+            <input id="mailFromName" type="text" maxlength="80" placeholder="Kindgleam">
+          </label>
+          <div class="mail-server-row" id="mailServerRow">
+            <label>SMTP server <input id="mailHost" type="text" autocomplete="off" spellcheck="false" placeholder="smtp.example.com"></label>
+            <label>Port <input id="mailPort" type="number" min="1" max="65535" placeholder="465"></label>
+            <label>Security
+              <select id="mailSecurity"><option value="tls">SSL/TLS</option><option value="starttls">STARTTLS</option><option value="none">None</option></select>
+            </label>
+          </div>
+          <div class="settings-actions">
+            <button type="button" class="primary" id="mailSave">Save</button>
+            <button type="button" class="ghost" id="mailTest">Send a test email</button>
+          </div>
+          <div id="mailNotice" hidden></div>
+        </section>
+
+        <section class="settings-group settings-section" data-settings-section="workspace" data-settings-title="Workspace" data-settings-description="See what this workspace can do and manage workspace resources.">
+          <h3>Capabilities</h3>
+          <ul class="capabilities" id="capabilityList"></ul>
+          <h3 class="settings-subhead">Tools Kindgleam built</h3>
+          <p class="hint">When a task needs a tool that does not exist, Kindgleam writes one, tests it in its sandbox, and asks an admin to keep it. Kept tools are reused by every chat in this workspace.</p>
+          <ul class="workspace-tools" id="workspaceTools" aria-live="polite"></ul>
+          <div class="settings-model-manager" id="modelManager" hidden>
+            <h3 class="settings-subhead">AI model</h3>
+            <p class="hint">Choose the Gemini model this workspace uses, and which models people may pick. The list is the models the server offers (the operator's <code>AI_MODELS</code> setting). A new default is tried with Gemini before it is saved, so a retired or misspelled model is refused instead of breaking chats.</p>
+            <div id="modelManagerList" class="model-manager-list" aria-live="polite"></div>
+            <div class="model-manager-actions">
+              <label>Workspace default
+                <select id="modelDefaultSelect"></select>
+              </label>
+              <button type="button" class="primary small" id="modelSettingsSave">Save model settings</button>
+              <span class="small muted" id="modelSettingsSaved" aria-live="polite"></span>
+            </div>
+          </div>
+          <h3 class="settings-subhead">Reports and safety</h3>
+          <p class="hint"><span id="reportsLead">Answers people reported.</span> Kindgleam follows a <a href="/policy.html" target="_blank" rel="noopener">usage policy</a>.</p>
+          <div class="declined-summary" id="declinedSummary" hidden></div>
+          <ul class="report-list" id="reportList" aria-live="polite"></ul>
+          <div class="settings-divider"></div>
+          <div class="settings-action-row"><span><strong>Your files</strong><small>Open files stored in this workspace.</small></span><button type="button" class="small" id="settingsFiles">Open files</button></div>
+          <div class="settings-action-row"><span><strong>Activity</strong><small>Review workspace actions and policy decisions.</small></span><button type="button" class="small" id="settingsActivity">Open activity</button></div>
+        </section>
+
+        <section class="settings-group settings-section" data-settings-section="account" data-settings-title="Account" data-settings-description="Review your signed-in account and session.">
+          <h3>Signed-in account</h3>
+          <div class="settings-account-card"><span class="user-avatar" id="settingsAvatarLarge" aria-hidden="true"></span><div><strong id="accountLine"></strong><span>Current workspace membership and role</span></div></div>
+          <div class="settings-action-row danger-row"><span><strong>Sign out</strong><small>End this browser session.</small></span><button type="button" class="small danger" id="signout">Sign out</button></div>
+        </section>
+
+        <div class="settings-footer"><button type="button" class="ghost small" id="resetSettings">Reset all settings to defaults</button><span>Kindgleam · Preferences sync automatically</span></div>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

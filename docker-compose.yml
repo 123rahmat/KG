@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kindgleam
+      POSTGRES_PASSWORD: kindgleam
+      POSTGRES_DB: kindgleam
+    volumes: ['pgdata:/var/lib/postgresql/data']
+    ports: ['5432:5432']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U kindgleam']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://kindgleam:kindgleam@db:5432/kindgleam
+      NODE_ENV: development
+      # This Compose file is a local development stack, not a production deployment.
+      # In production use a secret manager for credentials, secure cookies, and verified DB TLS.
+      COOKIE_SECURE: 'false'
+      # No proxy sits in front of this stack, so forwarded headers are untrusted.
+      TRUST_PROXY: 'false'
+      LOG_LEVEL: info
+    ports: ['3000:3000']
+
+volumes:
+  pgdata:

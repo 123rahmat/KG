@@ -1,0 +1,187 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kindgleam-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-check:
+    name: source-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run check
+      - run: npm run lint
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Validate and unit-test the alert rules
+        run: |
+          docker run --rm -v "$PWD/docs/ops:/rules:ro" --entrypoint promtool prom/prometheus:v3.5.0 check rules /rules/prometheus-alerts.yml
+          docker run --rm -v "$PWD/docs/ops:/rules:ro" -w /rules --entrypoint promtool prom/prometheus:v3.5.0 test rules prometheus-alerts.test.yml
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+
+    # The suite runs against a real PostgreSQL, because everything it is
+    # meant to prove — transactions, constraints, row locks, isolation —
+    # only exists in a real one.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node-version }}
+          package-manager-cache: false
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm test
+
+  migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: kindgleam_migrations
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/kindgleam_migrations
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - run: npm ci
+      # Migrations must be safe to run twice — a rolling deploy will.
+      - run: npm run migrate
+      - run: npm run migrate
+
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [test, migrations]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build production image
+        run: docker build --pull --tag kindgleam:ci .
+      - name: Inspect image configuration
+        run: |
+          test "$(docker image inspect kindgleam:ci --format '{{.Config.User}}')" = "node"
+          docker image inspect kindgleam:ci --format '{{.Config.Env}}' | grep 'NODE_ENV=production'
+      - name: Smoke test image runtime
+        run: docker run --rm --entrypoint node kindgleam:ci -e "console.log('production image runtime OK')"
+
+
+  production-boot:
+    name: production-boot
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: kindgleam
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d kindgleam"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/kindgleam
+      DATABASE_URL: postgres://kindgleam_runtime:runtime@127.0.0.1:5432/kindgleam
+      DATABASE_MIGRATION_URL: postgres://kindgleam_migration:migration@127.0.0.1:5432/kindgleam
+      BACKUP_DATABASE_URL: postgres://kindgleam_backup:backup@127.0.0.1:5432/kindgleam
+      RESTORE_DATABASE_URL: postgres://kindgleam_restore:restore@127.0.0.1:5432/kindgleam
+      NODE_ENV: production
+      PORT: 3100
+      PGSSLMODE: disable
+      COOKIE_SECURE: true
+      RATE_LIMIT_STORE: postgres
+      AI_PROVIDER: google
+      AI_API_KEY: ci-dummy-key
+      AI_MODEL: gemini-3.8-flash
+      OBJECT_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      RUNNER_TOKEN: ci-dummy-runner-token-32-characters-min
+      MAX_REQUEST_BYTES: 8388608
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci
+      - name: Create isolated production database roles
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE kindgleam_migration LOGIN SUPERUSER PASSWORD 'migration';
+          CREATE ROLE kindgleam_runtime LOGIN PASSWORD 'runtime';
+          CREATE ROLE kindgleam_backup LOGIN PASSWORD 'backup';
+          CREATE ROLE kindgleam_restore LOGIN PASSWORD 'restore';
+          SQL
+      - name: Boot the production application against real PostgreSQL
+        run: |
+          node server.js > production-boot.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3100/api/ready > ready.json; then
+              cat ready.json
+              kill "$pid"
+              wait "$pid" || true
+              exit 0
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              cat production-boot.log
+              exit 1
+            fi
+            sleep 1
+          done
+          cat production-boot.log
+          exit 1

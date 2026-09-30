@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+coverage/
+.DS_Store
+
+# Local UI screenshots
+ui-tour/
+live-eval-report.json
+backups/
+*.dump.enc
+*.dump.enc.manifest.json

@@ -1,0 +1,43 @@
+{
+  "name": "kindgleam",
+  "version": "10.4.0",
+  "private": true,
+  "description": "Open-world adaptive workflow for known, unknown and future goals.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "migrate": "node bin/admin.js migrate",
+    "bootstrap": "node bin/admin.js bootstrap",
+    "local-agent": "node bin/local-agent.js",
+    "test": "node --test",
+    "lint": "eslint .",
+    "verify": "npm run check && npm run lint && npm test",
+    "check": "node bin/check-source.js",
+    "backup": "node bin/backup.js",
+    "restore": "node bin/restore.js",
+    "reencrypt:objects": "node bin/reencrypt-objects.js",
+    "tool-runner": "node bin/tool-runner.js",
+    "sandbox-runner": "node bin/sandbox-runner.js",
+    "smoke:providers": "node bin/provider-smoke.js",
+    "eval:live": "node bin/live-eval.js",
+    "smoke:deploy": "node bin/deploy-smoke.js",
+    "load-test": "node bin/workflow-load.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "helmet": "^8.3.0",
+    "nodemailer": "^10.0.12",
+    "pg": "^8.13.1",
+    "unpdf": "1.8.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.11.0",
+    "globals": "^17.12.0"
+  }
+}

@@ -1,0 +1,64 @@
+# Unit tests for prometheus-alerts.yml: promtool test rules docs/ops/prometheus-alerts.test.yml
+rule_files:
+  - prometheus-alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'up{job="kindgleam", instance="app-1"}'
+        values: '1 1 0 0 0 0'
+      - series: 'db_pool_connections{job="kindgleam", instance="app-1", state="waiting"}'
+        values: '0 2 2 2 2 2 2 2'
+      - series: 'readiness_failures_total{job="kindgleam", instance="app-1"}'
+        values: '0 0 1 1'
+      - series: 'http_requests_total{job="kindgleam", instance="app-1", method="GET", status="200"}'
+        values: '0+100x10'
+      - series: 'http_requests_total{job="kindgleam", instance="app-1", method="GET", status="500"}'
+        values: '0+10x10'
+      - series: 'model_provider_errors_total{job="kindgleam", instance="app-1", code="model-not-authorized"}'
+        values: '0 0 3 3 3'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: KindgleamGeminiKeyRejected
+        exp_alerts:
+          - exp_labels: { severity: page }
+            exp_annotations: { summary: 'Gemini is rejecting the API key or the selected model' }
+      - eval_time: 5m
+        alertname: KindgleamInstanceDown
+        exp_alerts:
+          - exp_labels: { severity: page, job: kindgleam, instance: app-1 }
+            exp_annotations: { summary: 'Kindgleam instance app-1 is not answering scrapes' }
+      - eval_time: 7m
+        alertname: KindgleamDatabasePoolExhausted
+        exp_alerts:
+          - exp_labels: { severity: page, job: kindgleam, instance: app-1, state: waiting }
+            exp_annotations: { summary: 'Requests on app-1 are waiting for database connections' }
+      - eval_time: 3m
+        alertname: KindgleamReadinessFailing
+        exp_alerts:
+          - exp_labels: { severity: page, job: kindgleam, instance: app-1 }
+            exp_annotations: { summary: 'Readiness checks are failing on app-1 (database unreachable?)' }
+      - eval_time: 10m
+        alertname: KindgleamHighErrorRate
+        exp_alerts:
+          - exp_labels: { severity: page }
+            exp_annotations: { summary: 'More than 2% of requests are failing with 5xx' }
+
+  - interval: 1m
+    # A healthy instance raises nothing.
+    input_series:
+      - series: 'up{job="kindgleam", instance="app-1"}'
+        values: '1x10'
+      - series: 'db_pool_connections{job="kindgleam", instance="app-1", state="waiting"}'
+        values: '0x10'
+      - series: 'readiness_failures_total{job="kindgleam", instance="app-1"}'
+        values: '0x10'
+      - series: 'http_requests_total{job="kindgleam", instance="app-1", method="GET", status="200"}'
+        values: '0+100x10'
+    alert_rule_test:
+      - { eval_time: 10m, alertname: KindgleamInstanceDown, exp_alerts: [] }
+      - { eval_time: 10m, alertname: KindgleamDatabasePoolExhausted, exp_alerts: [] }
+      - { eval_time: 10m, alertname: KindgleamReadinessFailing, exp_alerts: [] }
+      - { eval_time: 10m, alertname: KindgleamHighErrorRate, exp_alerts: [] }
