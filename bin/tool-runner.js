@@ -40,6 +40,14 @@ if (TOKEN.length < 32) {
   process.exit(1);
 }
 
+const production = text(process.env.NODE_ENV).toLowerCase() === 'production';
+const tlsCert = text(process.env.TOOL_RUNNER_TLS_CERT);
+const tlsKey = text(process.env.TOOL_RUNNER_TLS_KEY);
+if (production && (!tlsCert || !tlsKey)) {
+  console.error('TOOL_RUNNER_TLS_CERT and TOOL_RUNNER_TLS_KEY are required in production.');
+  process.exit(1);
+}
+
 function authorized(req) {
   const presented = Buffer.from(text(req.headers.authorization).replace(/^Bearer\s+/i, ''));
   const expected = Buffer.from(TOKEN);
@@ -128,8 +136,6 @@ async function handle(req, res) {
   }
 }
 
-const tlsCert = text(process.env.TOOL_RUNNER_TLS_CERT);
-const tlsKey = text(process.env.TOOL_RUNNER_TLS_KEY);
 const server = tlsCert && tlsKey
   ? https.createServer({ cert: fs.readFileSync(tlsCert), key: fs.readFileSync(tlsKey) }, handle)
   : http.createServer(handle);
