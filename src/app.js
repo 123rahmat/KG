@@ -249,6 +249,17 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
 
   /* ---------------------------------------------------- authentication */
 
+  // Invalid bearer tokens otherwise bypass the principal-scoped limiter because
+  // authentication has not succeeded yet. Cap credential amplification by IP.
+  const preAuthLimiter = rateLimiter({
+    name: 'api-auth-ip',
+    windowMs: 60_000,
+    max: 120,
+    metrics,
+    pool,
+    store: config.limits.rateStore
+  });
+
   app.use('/api', route(async (req, res, next) => {
     // /api/health, /api/ready, /api/session and /api/sign-in/* are declared above this
     // middleware, so they never reach it.
@@ -257,11 +268,19 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
 
     if (header) {
       if (!/^Bearer\s+/i.test(header)) throw new AuthError('Authorization must be "Bearer <api key>"');
+      await new Promise((resolve, reject) => preAuthLimiter(req, res, error => error ? reject(error) : resolve()));
       req.principal = await identity.principalFromKey(header.replace(/^Bearer\s+/i, ''));
     } else if (cookies[sessionCookie]) {
       req.principal = await identity.principalFromSession(cookies[sessionCookie]);
-      // SameSite=Strict already blocks the classic cross-site form post; this
-      // header additionally requires a caller that could read our own origin.
+      const origin = text(req.get('origin'));
+      const fetchSite = text(req.get('sec-fetch-site')).toLowerCase();
+      const expectedOrigin = config.publicUrl ? new URL(config.publicUrl).origin : null;
+      if (config.production && origin && expectedOrigin && origin !== expectedOrigin) {
+        throw new AuthError('Origin is not allowed', { status: 403, code: 'csrf-origin' });
+      }
+      if (config.production && fetchSite && !['same-origin', 'same-site', 'none'].includes(fetchSite)) {
+        throw new AuthError('Cross-site requests are not allowed', { status: 403, code: 'csrf-site' });
+      }
       if (req.method !== 'GET' && ![CSRF_HEADER, ...LEGACY_CSRF_HEADERS].some(name => text(req.get(name)) === 'web')) {
         throw new AuthError('Missing client header on a cookie-authenticated write', {
           status: 403, code: 'csrf'
