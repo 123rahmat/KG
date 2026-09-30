@@ -1,8 +1,11 @@
 /** Workspace-bound idempotency middleware. */
 import crypto from 'node:crypto';
 import { text } from './context.js';
+import { encryptJson, decryptJsonWithKeys } from '../data-protection.js';
 
-export function createWorkspaceIdempotency({ pool, route }) {
+export function createWorkspaceIdempotency({ pool, route, encryptionKey, previousEncryptionKey = null }) {
+  const encryptionKeys = [encryptionKey, previousEncryptionKey].filter(Boolean);
+  if (!encryptionKeys.length) throw new Error('PERSONAL_DATA_ENCRYPTION_KEY is required for idempotency storage');
   return route(async (req, res, next) => {
     const key = text(req.get('idempotency-key'));
     if (!key) return next();
@@ -27,14 +30,17 @@ export function createWorkspaceIdempotency({ pool, route }) {
 
     if (!created.rows[0]) {
       const { rows: [existing] } = await pool.query(
-        'SELECT request_hash, status_code, response, state, lease_until FROM idempotency_keys WHERE key = $1 AND principal_id = $2',
+        'SELECT request_hash, status_code, response, response_enc, encryption_version, state, lease_until FROM idempotency_keys WHERE key = $1 AND principal_id = $2',
         [key, req.principal.id]
       );
       if (!existing) return res.status(409).json({ error: 'The idempotency reservation disappeared; retry the request.', code: 'idempotency-retry' });
       if (existing.request_hash !== hash) return res.status(409).json({ error: 'This Idempotency-Key was used with a different request or workspace', code: 'idempotency-mismatch' });
       if (existing.state === 'complete') {
+        const replay = existing.response_enc
+          ? decryptJsonWithKeys(encryptionKeys, 'idempotency-response-v1', existing.response_enc).value
+          : existing.response;
         res.set('idempotent-replay', 'true');
-        return res.status(existing.status_code).json(existing.response);
+        return res.status(existing.status_code).json(replay);
       }
       const expired = !existing.lease_until || new Date(existing.lease_until).getTime() <= Date.now();
       if (expired) {
@@ -63,9 +69,10 @@ export function createWorkspaceIdempotency({ pool, route }) {
       try {
         await pool.query(
           `UPDATE idempotency_keys
-              SET state = 'complete', status_code = $3, response = $4, completed_at = now(), lease_until = NULL
+              SET state = 'complete', status_code = $3, response = '{}'::jsonb,
+                  response_enc = $4, encryption_version = 1, completed_at = now(), lease_until = NULL
             WHERE key = $1 AND principal_id = $2 AND state = 'pending'`,
-          [key, req.principal.id, res.statusCode, JSON.stringify(body)]
+          [key, req.principal.id, res.statusCode, encryptJson(encryptionKey, 'idempotency-response-v1', body)]
         );
       } catch (error) {
         req.log.error('idempotency completion write failed', { error });
