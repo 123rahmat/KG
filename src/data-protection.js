@@ -295,6 +295,50 @@ export async function backfillSensitiveData(pool, {
       logger?.info('encrypted feedback data batch', { count: rows.length });
     }
   }
+  if (personalKeys.length) {
+    for (;;) {
+      const { rows } = await pool.query(
+        `SELECT key, principal_id, response, response_enc, encryption_version
+           FROM idempotency_keys
+          WHERE state = 'complete'
+            AND (
+              encryption_version <> 1
+              OR response_enc IS NULL
+              OR response_enc = ''
+              OR response <> '{}'::jsonb
+            )
+          ORDER BY created_at
+          LIMIT 200`
+      );
+      if (!rows.length) break;
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        for (const row of rows) {
+          let response = row.response ?? {};
+          if (row.response_enc) {
+            response = decryptJsonWithKeys(personalKeys, 'idempotency-response-v1', row.response_enc).value;
+          }
+          await client.query(
+            `UPDATE idempotency_keys
+                SET response = '{}'::jsonb,
+                    response_enc = $3,
+                    encryption_version = 1
+              WHERE key = $1 AND principal_id = $2`,
+            [row.key, row.principal_id, encryptJson(personalDataKey, 'idempotency-response-v1', response)]
+          );
+        }
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+      logger?.info('encrypted idempotency replay batch', { count: rows.length });
+    }
+  }
+
 }
 
 export async function assertSensitiveDataEncrypted(pool) {
@@ -329,13 +373,25 @@ export async function assertSensitiveDataEncrypted(pool) {
            OR excerpt_enc IS NULL
            OR note <> ''
            OR excerpt <> ''`
+    ),
+    pool.query(
+      `SELECT COUNT(*)::int AS count
+         FROM idempotency_keys
+        WHERE state = 'complete'
+          AND (
+            encryption_version <> 1
+            OR response_enc IS NULL
+            OR response_enc = ''
+            OR response <> '{}'::jsonb
+          )`
     )
   ]);
   const billing = Number(checks[0].rows[0]?.count ?? 0);
   const memories = Number(checks[1].rows[0]?.count ?? 0);
   const feedback = Number(checks[2].rows[0]?.count ?? 0);
-  if (billing || memories || feedback) {
-    throw new Error('Sensitive application data is not fully encrypted: ' + JSON.stringify({ billing, memories, feedback }));
+  const idempotency = Number(checks[3].rows[0]?.count ?? 0);
+  if (billing || memories || feedback || idempotency) {
+    throw new Error('Sensitive application data is not fully encrypted: ' + JSON.stringify({ billing, memories, feedback, idempotency }));
   }
-  return { billing, memories, feedback };
+  return { billing, memories, feedback, idempotency };
 }
