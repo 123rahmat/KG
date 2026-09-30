@@ -109,7 +109,7 @@ test('a person confirms their age and accepts the terms before starting', () =>
   }));
 
 test('anyone who can read an answer can report it; only admins review reports', () =>
-  withServer(async ({ call, seed }) => {
+  withServer(async ({ call, seed, pool }) => {
     const admin = await seed();
     const member = await seed({ name: 'Member', role: 'editor' });
     const asAdmin = { token: admin.token, workspace: admin.workspace };
