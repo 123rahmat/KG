@@ -146,8 +146,6 @@ jobs:
       AI_API_KEY: ci-dummy-key
       AI_MODEL: gemini-3.8-flash
       OBJECT_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
-      BILLING_ENCRYPTION_KEY: YmlsbGluZy1rZXktMDEyMzQ1Njc4OWFiY2RlZi0wMDA=
-      PERSONAL_DATA_ENCRYPTION_KEY: cGVyc29uYWwta2V5LTAxMjM0NTY3ODlhYmNkZWYtMDA=
       RUNNER_TOKEN: ci-dummy-runner-token-32-characters-min
       MAX_REQUEST_BYTES: 8388608
     steps:
@@ -157,6 +155,10 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: npm ci
+      - name: Generate CI-only encryption fixtures
+        run: |
+          echo "BILLING_ENCRYPTION_KEY=$(node -e "process.stdout.write(Buffer.alloc(32,0x42).toString('base64'))")" >> "$GITHUB_ENV"
+          echo "PERSONAL_DATA_ENCRYPTION_KEY=$(node -e "process.stdout.write(Buffer.alloc(32,0x50).toString('base64'))")" >> "$GITHUB_ENV"
       - name: Create isolated production database roles
         env:
           PGPASSWORD: postgres
