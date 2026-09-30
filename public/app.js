@@ -134,7 +134,7 @@ const CONFIRMABLE_TASKS = ['understand', 'discover', 'discover-capabilities', 'a
 const nextTaskOf = run => run?.tasks?.find(item => item.id === run.next) ?? null;
 
 export function runStatus(run) {
-  if (run.state === 'complete') return ['Done', 'ok'];
+  if (run.state === 'complete') return ['Completed', 'ok'];
   if (run.state === 'failed') return ['Stopped', 'bad'];
   if (run.state === 'exhausted') return ['Out of attempts', 'bad'];
   if (run.state === 'blocked') return ['Not allowed by policy', 'bad'];
@@ -316,7 +316,7 @@ async function waitForJob(runId, jobId, button) {
     }
     if (!['queued', 'running'].includes(job.state)) return job;
     const seconds = Math.round((Date.now() - started) / 1000);
-    if (button) button.textContent = `Working… ${seconds}s`;
+    if (button) button.textContent = `Processing… ${seconds}s`;
     if (Date.now() - started > 30 * 60_000) throw new Error('This is still running. Come back later to see the result.');
     // Quick at first, when most steps finish; gentler on long ones.
     await new Promise(resolve => setTimeout(resolve, seconds < 20 ? 1000 : seconds < 120 ? 2000 : 4000));
@@ -346,7 +346,7 @@ async function runStep(button, extra = {}) {
   if (!run || !task || state.busy) return;
   state.busy = true;
   const original = button?.textContent;
-  if (button) { button.disabled = true; button.textContent = 'Working…'; }
+  if (button) { button.disabled = true; button.textContent = 'Processing…'; }
 
   await guard(async () => {
     state.network.interruptedRunId = null;
@@ -881,7 +881,7 @@ export async function autoDrive(run) {
     for (let steps = 0; steps < 30 && isAutomatic(state.run); steps += 1) {
       const before = `${state.run.next}:${state.run.attempt}`;
       const rerun = repairRerun(state.run);
-      state.drivingLabel = rerun ? 'Running the fixed code again' : taskLabel(nextTaskOf(state.run));
+      state.drivingLabel = rerun ? 'Running the revised code' : taskLabel(nextTaskOf(state.run));
       renderThread();
       await runStep(null, rerun ?? {});
       if (`${state.run.next}:${state.run.attempt}` === before) break;
@@ -1324,4 +1324,4 @@ setupVoiceInput();
 // A sign-in link from an email goes straight to its confirm step. Otherwise
 // an existing cookie means we are already signed in; if not, show the gate.
 if (takeSignInToken()) showGate();
-else enterApp().catch(() => { showGate(); updateConnectionUI(); });
+else enterApp().catch(() => { $('landing').hidden = false; updateConnectionUI(); });
