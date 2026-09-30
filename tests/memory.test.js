@@ -113,7 +113,7 @@ test('memory: "forget everything" forgets every chat; cross-chat recall never pu
   withServer(async ({ call, seed, pool }) => {
     const me = await seed();
     const scope = { workspaceId: me.workspace, principalId: me.principal.id };
-    const store = new MemoryStore(pool);
+    const store = new MemoryStore(pool, { encryptionKey: Buffer.from('personal-key-32-bytes-long-00000') });
     const here = crypto.randomUUID();
     await store.add(scope, { content: 'The pump in this chat is a Grundfos CR 10', conversationId: here });
     // Many newer memories from other chats.
