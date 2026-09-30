@@ -38,7 +38,7 @@ const subscription = (workspace, { id = 'sub_1', status = 'active', price = 'pri
   metadata: { workspace_id: workspace },
   items: { data: [{ price: { id: price }, current_period_end: 1_900_000_000 }] }
 });
-const event = (id, type, object) => ({ id, type, data: { object } });
+const event = (id, type, object, created = Math.floor(Date.now() / 1000)) => ({ id, type, created, data: { object } });
 
 async function deliver(base, payload, { secret = WEBHOOK_SECRET, timestamp } = {}) {
   const body = JSON.stringify(payload);
@@ -223,3 +223,18 @@ test('an Enterprise subscription set up by sales activates from its Stripe metad
     await deliver(base, event('evt_x', 'customer.subscription.created', sneaky));
     assert.equal((await call('GET', '/api/billing', { token: other.token, workspace: 'ws2' })).body.plan, 'Pro');
   }, { env: STRIPE_ENV }));
+
+
+test('older Stripe events cannot roll subscription state backward', () => {
+  const calls = [];
+  return withServer(async ({ call, seed, base }) => {
+    const admin = await seed();
+    const fresh = await deliver(base, event('evt_new', 'customer.subscription.updated', subscription(admin.workspace, { id: 'sub_1', status: 'active', price: 'price_team123' }), 200));
+    assert.equal(fresh.body.outcome, 'applied');
+    const stale = await deliver(base, event('evt_old', 'customer.subscription.updated', subscription(admin.workspace, { id: 'sub_1', status: 'canceled', price: 'price_pro123' }), 100));
+    assert.equal(stale.body.outcome, 'stale-event');
+    const billing = await call('GET', '/api/billing', { token: admin.token, workspace: admin.workspace });
+    assert.equal(billing.body.plan, 'Team');
+    assert.equal(billing.body.stripe.subscription.status, 'active');
+  }, { env: STRIPE_ENV, fetchImpl: fakeStripe(calls) });
+});
