@@ -93,7 +93,7 @@ test('things made on a person\'s behalf follow the policy too', async () => {
 });
 
 test('a person confirms their age and accepts the terms before starting', () =>
-  withServer(async ({ call, seed }) => {
+  withServer(async ({ call, seed, pool }) => {
     const fresh = await seed({ acceptTerms: false });
     const auth = { token: fresh.token, workspace: fresh.workspace };
     const status = (await call('GET', '/api/terms', auth)).body;
@@ -120,6 +120,16 @@ test('anyone who can read an answer can report it; only admins review reports', 
     const report = await call('POST', `/api/runs/${run.body.id}/report`, { ...asMember, body: { reason: 'wrong', note: 'It said Lyon.' } });
     assert.equal(report.status, 201, JSON.stringify(report.body));
     assert.equal(report.body.report.excerpt, 'Lyon.');
+    const { rows: [stored] } = await pool.query(
+      'SELECT note, excerpt, note_enc, excerpt_enc, encryption_version FROM safety_reports WHERE id = $1',
+      [report.body.report.id]
+    );
+    assert.equal(stored.note, '');
+    assert.equal(stored.excerpt, '');
+    assert.equal(stored.encryption_version, 1);
+    assert.ok(stored.note_enc);
+    assert.ok(stored.excerpt_enc);
+    assert.equal(stored.note_enc.includes('It said Lyon'), false);
 
     const mine = (await call('GET', '/api/reports', asMember)).body;
     assert.deepEqual([mine.reports.length, mine.canReview, mine.declined], [1, false, null]);
