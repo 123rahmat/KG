@@ -46,3 +46,22 @@ Agent count is not a fixed domain preset. The coordinator first estimates explai
 Coding tasks are treated specifically: implementation complexity and decomposition increase pressure, while requirement count, dependencies, work-plan size, unknowns, external-data needs, high-impact/physical stakes, and retry/failure state can recruit additional independent perspectives. The selected pressure, dimensions, utilities, roles, completion/failure state, and allocation rounds are included in the advisory brief for observability.
 
 After every specialist attempt, the server recomputes the remaining role set using completion/failure state. Specialist prompts never receive peer findings; only the arbiter receives the independent findings. This preserves independent reasoning while still allowing the panel size to adapt during a run.
+
+
+## Domain-agnostic role management
+
+The manager does not classify a request into a hard-coded "coding" or "non-coding" branch. It estimates the current coordination need from workflow structure and observable signals, then recruits reusable cognitive roles:
+
+| Role | Primary contribution |
+| --- | --- |
+| strategist | decomposition, sequencing, dependencies, fallback |
+| researcher | unknowns, evidence gaps, discriminating evidence |
+| analyst | comparisons, trade-offs, quantitative/structured reasoning |
+| architect | solution boundaries, interfaces, implementation/design integrity |
+| critic | adversarial quality, safety and failure-mode review |
+| communicator | audience fit, clarity, structure, translation and wording quality |
+| diagnostician | root-cause analysis and recovery after failure/retry |
+
+A task can therefore receive different panels without being labeled as a particular industry or domain. For example, a difficult research question may recruit researcher + analyst + critic; a complex writing task may recruit strategist + communicator + critic; a design decision may recruit strategist + analyst + researcher + critic; a failed implementation may add diagnostician. The same mechanism applies to future task types that the capability system discovers.
+
+The panel is still optional. Routine work remains single-agent. The maximum is a configurable ceiling, while marginal utility and budget determine how many specialists are actually called.
