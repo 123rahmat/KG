@@ -12,6 +12,7 @@ import { pathToFileURL } from 'node:url';
 import { loadConfig } from './src/config.js';
 import { createPool, migrate, assertNoPlaintextObjects, assertRlsReady, assertMaintenanceBypassRls } from './src/db.js';
 import { createLogger, createMetrics } from './src/observability.js';
+import { backfillSensitiveData, assertSensitiveDataEncrypted } from './src/data-protection.js';
 import { Identity } from './src/identity.js';
 import { ObjectStore } from './src/objects.js';
 import { RunStore } from './src/runs.js';
@@ -79,6 +80,11 @@ export async function start({ env = process.env } = {}) {
       restoreRole: username(config.database.restoreUrl),
       hardenRuntime: Boolean(migrationPool)
     });
+    await backfillSensitiveData(migrationTarget, {
+      billingKey: config.security.billingEncryptionKey,
+      personalDataKey: config.security.personalDataEncryptionKey,
+      logger
+    });
     if (config.security.objectEncryptionKey && !(await assertNoPlaintextObjects(migrationTarget))) {
       const error = new Error('Plaintext object blobs remain. Run the re-encryption operator command before starting the application.');
       error.code = 'EOBJECTSNEEDREENCRYPTION';
@@ -87,6 +93,7 @@ export async function start({ env = process.env } = {}) {
     if (config.production) {
       await assertMaintenanceBypassRls(migrationTarget, 'migration');
       await assertRlsReady(pool);
+      await assertSensitiveDataEncrypted(migrationTarget);
     }
   } finally {
     await migrationPool?.end();
