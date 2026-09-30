@@ -275,6 +275,26 @@ export function loadConfig(env = process.env) {
     errors.push('OBJECT_ENCRYPTION_KEY is required in production and must decode to 32 bytes');
   }
 
+  let billingEncryptionKey = null;
+  try {
+    billingEncryptionKey = parseBase64Key(env.BILLING_ENCRYPTION_KEY);
+  } catch (error) {
+    errors.push(error.message.replace('OBJECT_ENCRYPTION_KEY', 'BILLING_ENCRYPTION_KEY'));
+  }
+  if (production && !billingEncryptionKey) {
+    errors.push('BILLING_ENCRYPTION_KEY is required in production and must decode to 32 bytes');
+  }
+
+  let personalDataEncryptionKey = null;
+  try {
+    personalDataEncryptionKey = parseBase64Key(env.PERSONAL_DATA_ENCRYPTION_KEY);
+  } catch (error) {
+    errors.push(error.message.replace('OBJECT_ENCRYPTION_KEY', 'PERSONAL_DATA_ENCRYPTION_KEY'));
+  }
+  if (production && !personalDataEncryptionKey) {
+    errors.push('PERSONAL_DATA_ENCRYPTION_KEY is required in production and must decode to 32 bytes');
+  }
+
   const config = {
     nodeEnv,
     production,
@@ -294,7 +314,9 @@ export function loadConfig(env = process.env) {
     logLevel,
 
     security: {
-      objectEncryptionKey
+      objectEncryptionKey,
+      billingEncryptionKey,
+      personalDataEncryptionKey
     },
 
     database: {
