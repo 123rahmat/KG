@@ -5,6 +5,8 @@ import { loadConfig } from '../src/config.js';
 function env(overrides = {}) {
   return {
     DATABASE_URL: 'postgres://user:pass@localhost:5432/professor',
+    BILLING_ENCRYPTION_KEY: Buffer.from('billing-key-32-bytes-long-000000').toString('base64'),
+    PERSONAL_DATA_ENCRYPTION_KEY: Buffer.from('personal-key-32-bytes-long-00000').toString('base64'),
     ...overrides
   };
 }
@@ -42,6 +44,23 @@ test('valid local-agent pairing configuration loads', () => {
   assert.equal(config.execution.localAgentSharedSecret.length, 32);
 });
 
+
+test('production requires dedicated encryption keys for billing and personal data', () => {
+  const base = env({
+    NODE_ENV: 'production',
+    COOKIE_SECURE: 'true',
+    PGSSLMODE: 'verify',
+    PGSSLROOTCERT: '/tmp/ca.pem',
+    OBJECT_ENCRYPTION_KEY: Buffer.from('test-object-encryption-key-32byt').toString('base64'),
+    DATABASE_URL: 'postgres://runtime:secret@db.example/professor',
+    DATABASE_MIGRATION_URL: 'postgres://migrate:secret@db.example/professor',
+    BACKUP_DATABASE_URL: 'postgres://backup:secret@db.example/professor',
+    RESTORE_DATABASE_URL: 'postgres://restore:secret@db.example/professor',
+    ...ALL_AI
+  });
+  assert.throws(() => loadConfig({ ...base, BILLING_ENCRYPTION_KEY: '' }), /BILLING_ENCRYPTION_KEY is required in production/);
+  assert.throws(() => loadConfig({ ...base, PERSONAL_DATA_ENCRYPTION_KEY: '' }), /PERSONAL_DATA_ENCRYPTION_KEY is required in production/);
+});
 
 test('production requires verified database TLS', () => {
   assert.throws(
