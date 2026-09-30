@@ -341,6 +341,44 @@ export async function backfillSensitiveData(pool, {
 
 }
 
+  if (personalKeys.length) {
+    for (;;) {
+      const { rows } = await pool.query(
+        `SELECT id, detail, detail_enc, detail_encryption_version
+           FROM audit_log
+          WHERE detail_encryption_version <> 1
+             OR (detail IS NOT NULL AND detail IS NOT NULL AND detail_enc IS NULL)
+          ORDER BY id
+          LIMIT 200`
+      );
+      if (!rows.length) break;
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        for (const row of rows) {
+          const detail = row.detail_enc
+            ? decryptJsonWithKeys(personalKeys, 'audit-detail-v1', row.detail_enc).value
+            : (row.detail ?? null);
+          await client.query(
+            `UPDATE audit_log
+                SET detail = NULL,
+                    detail_enc = $2,
+                    detail_encryption_version = 1
+              WHERE id = $1`,
+            [row.id, encryptJson(personalDataKey, 'audit-detail-v1', detail)]
+          );
+        }
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+      logger?.info('encrypted audit detail batch', { count: rows.length });
+    }
+  }
+
 export async function assertSensitiveDataEncrypted(pool) {
   const checks = await Promise.all([
     pool.query(
@@ -384,14 +422,22 @@ export async function assertSensitiveDataEncrypted(pool) {
             OR response_enc = ''
             OR response <> '{}'::jsonb
           )`
+    ),
+    pool.query(
+      `SELECT COUNT(*)::int AS count
+         FROM audit_log
+        WHERE detail_encryption_version <> 1
+           OR detail IS NOT NULL
+           OR (detail_enc IS NULL)`
     )
   ]);
   const billing = Number(checks[0].rows[0]?.count ?? 0);
   const memories = Number(checks[1].rows[0]?.count ?? 0);
   const feedback = Number(checks[2].rows[0]?.count ?? 0);
   const idempotency = Number(checks[3].rows[0]?.count ?? 0);
-  if (billing || memories || feedback || idempotency) {
-    throw new Error('Sensitive application data is not fully encrypted: ' + JSON.stringify({ billing, memories, feedback, idempotency }));
+  const audit = Number(checks[4].rows[0]?.count ?? 0);
+  if (billing || memories || feedback || idempotency || audit) {
+    throw new Error('Sensitive application data is not fully encrypted: ' + JSON.stringify({ billing, memories, feedback, idempotency, audit }));
   }
-  return { billing, memories, feedback, idempotency };
+  return { billing, memories, feedback, idempotency, audit };
 }
