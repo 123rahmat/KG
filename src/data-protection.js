@@ -339,8 +339,6 @@ export async function backfillSensitiveData(pool, {
     }
   }
 
-}
-
   if (personalKeys.length) {
     for (;;) {
       const { rows } = await pool.query(
@@ -378,6 +376,7 @@ export async function backfillSensitiveData(pool, {
       logger?.info('encrypted audit detail batch', { count: rows.length });
     }
   }
+}
 
 export async function assertSensitiveDataEncrypted(pool) {
   const checks = await Promise.all([
