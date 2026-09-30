@@ -1,3 +1,22 @@
+  ,{
+    version: 37,
+    name: 'allow-encrypted-memory-columns',
+    sql: `
+      -- Encrypted memory rows intentionally keep plaintext content/normalized
+      -- blank. Remove the legacy plaintext-only constraints and let the
+      -- encrypted representation enforce that a memory still has content.
+      ALTER TABLE memories DROP CONSTRAINT IF EXISTS memories_content_check;
+      ALTER TABLE memories
+        ADD CONSTRAINT memories_content_check CHECK (
+          (encryption_version = 1 AND content_enc IS NOT NULL AND length(content_enc) > 0)
+          OR length(content) BETWEEN 1 AND 500
+        );
+
+      -- The old unique constraint indexed plaintext normalized content. It
+      -- would collapse every encrypted row to the same empty value.
+      ALTER TABLE memories DROP CONSTRAINT IF EXISTS memories_workspace_id_principal_id_normalized_key;
+    `
+  }
 /**
  * The database schema, as an ordered list of migrations.
  *
@@ -1582,25 +1601,6 @@ export const MIGRATIONS = [
         WHERE normalized_digest IS NOT NULL AND normalized_digest <> '';
       CREATE INDEX IF NOT EXISTS memories_scope_time_idx
         ON memories (workspace_id, principal_id, conversation_id, updated_at DESC);
-    `
-  }
-  ,{
-    version: 37,
-    name: 'allow-encrypted-memory-columns',
-    sql: `
-      -- Encrypted memory rows intentionally keep plaintext content/normalized
-      -- blank. Remove the legacy plaintext-only constraints and let the
-      -- encrypted representation enforce that a memory still has content.
-      ALTER TABLE memories DROP CONSTRAINT IF EXISTS memories_content_check;
-      ALTER TABLE memories
-        ADD CONSTRAINT memories_content_check CHECK (
-          (encryption_version = 1 AND content_enc IS NOT NULL AND length(content_enc) > 0)
-          OR length(content) BETWEEN 1 AND 500
-        );
-
-      -- The old unique constraint indexed plaintext normalized content. It
-      -- would collapse every encrypted row to the same empty value.
-      ALTER TABLE memories DROP CONSTRAINT IF EXISTS memories_workspace_id_principal_id_normalized_key;
     `
   }
   ,{
