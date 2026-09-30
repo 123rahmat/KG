@@ -318,22 +318,24 @@ test('non-coding work can recruit independent cognitive roles', () => {
 
 test('observed evidence can shrink or expand the next agent allocation', () => {
   const baseRun = run({
-    adaptation: { scale: 'advanced' },
-    situation: { risk: 'high-impact', unknownSituation: true, investigationNeeded: true }
+    adaptation: { scale: 'complex' },
+    situation: {
+      risk: 'low',
+      unknownSituation: true,
+      externalData: { hasExternalDataNeed: true }
+    }
   });
-  const task = {
-    id: 'build-code',
-    type: 'code',
-    metadata: { buildPlan: true, requirementIds: ['a', 'b', 'c', 'd'] }
-  };
+  const task = { id: 'respond', type: 'respond' };
+  const goal = 'compare alternatives with data and trade-offs';
+
   const initial = rolesFor(baseRun, task, {
     maxAgents: 5,
-    progress: { goal: 'Build a multi-part system', findings: [] }
+    progress: { goal, findings: [] }
   });
   const resolved = rolesFor(baseRun, task, {
     maxAgents: 5,
     progress: {
-      goal: 'Build a multi-part system',
+      goal,
       findings: [
         finding('proceed', 'high confidence', { confidence: 0.95 }),
         finding('proceed', 'high confidence', { confidence: 0.95 })
@@ -343,7 +345,7 @@ test('observed evidence can shrink or expand the next agent allocation', () => {
   const disputed = rolesFor(baseRun, task, {
     maxAgents: 5,
     progress: {
-      goal: 'Build a multi-part system',
+      goal,
       findings: [
         finding('proceed', 'one view', { confidence: 0.92 }),
         finding('revise', 'another view', { confidence: 0.38 })
@@ -351,9 +353,8 @@ test('observed evidence can shrink or expand the next agent allocation', () => {
     }
   });
 
-  assert.ok(initial.agentCount >= 4);
-  assert.ok(resolved.agentCount <= initial.agentCount);
-  assert.equal(resolved.allocation.observedDisagreement, false);
+  assert.equal(initial.agentCount, 4);
+  assert.equal(resolved.agentCount, 3);
   assert.equal(disputed.allocation.observedDisagreement, true);
-  assert.ok(disputed.agentCount >= resolved.agentCount);
+  assert.equal(disputed.agentCount, 4);
 });
