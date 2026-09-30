@@ -304,6 +304,25 @@ export function loadConfig(env = process.env) {
     errors.push('PERSONAL_DATA_ENCRYPTION_KEY must be different from BILLING_ENCRYPTION_KEY in production');
   }
 
+  let billingEncryptionKeyPrevious = null;
+  try {
+    billingEncryptionKeyPrevious = parseBase64Key(env.BILLING_ENCRYPTION_KEY_PREVIOUS);
+  } catch (error) {
+    errors.push(error.message.replace('OBJECT_ENCRYPTION_KEY', 'BILLING_ENCRYPTION_KEY_PREVIOUS'));
+  }
+  let personalDataEncryptionKeyPrevious = null;
+  try {
+    personalDataEncryptionKeyPrevious = parseBase64Key(env.PERSONAL_DATA_ENCRYPTION_KEY_PREVIOUS);
+  } catch (error) {
+    errors.push(error.message.replace('OBJECT_ENCRYPTION_KEY', 'PERSONAL_DATA_ENCRYPTION_KEY_PREVIOUS'));
+  }
+  if (production && billingEncryptionKey && billingEncryptionKeyPrevious && billingEncryptionKey.equals(billingEncryptionKeyPrevious)) {
+    errors.push('BILLING_ENCRYPTION_KEY_PREVIOUS must be different from BILLING_ENCRYPTION_KEY in production');
+  }
+  if (production && personalDataEncryptionKey && personalDataEncryptionKeyPrevious && personalDataEncryptionKey.equals(personalDataEncryptionKeyPrevious)) {
+    errors.push('PERSONAL_DATA_ENCRYPTION_KEY_PREVIOUS must be different from PERSONAL_DATA_ENCRYPTION_KEY in production');
+  }
+
   const config = {
     nodeEnv,
     production,
@@ -325,7 +344,9 @@ export function loadConfig(env = process.env) {
     security: {
       objectEncryptionKey,
       billingEncryptionKey,
-      personalDataEncryptionKey
+      billingEncryptionKeyPrevious,
+      personalDataEncryptionKey,
+      personalDataEncryptionKeyPrevious
     },
 
     database: {
