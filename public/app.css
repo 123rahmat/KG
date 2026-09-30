@@ -697,10 +697,13 @@ main > #notice { margin: 14px auto 0; width: min(var(--read), calc(100% - 32px))
 .welcome > p { max-width: 500px; font-size: 1.02rem; }
 .categories { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 18px; }
 .category {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   border-radius: 999px; padding: 6px 14px; font-size: .86rem; font-weight: 520;
   background: var(--panel); border: 1px solid var(--line); color: var(--ink-2);
 }
 .category:hover:not(:disabled) { border-color: var(--line-strong); background: var(--soft); color: var(--ink); }
+.category-icon { width: 15px; height: 15px; flex: none; }
+.file-chip > .i { width: 14px; height: 14px; flex: none; color: var(--muted); }
 .category[aria-selected="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .category[aria-selected="true"]:hover:not(:disabled) { background: var(--ink); color: var(--bg); }
 .examples { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; margin-top: 18px; }
@@ -1853,4 +1856,14 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
 }
 @media (prefers-reduced-motion: reduce) {
   .landing * { animation: none !important; transition: none !important; }
+}
+
+@media (max-height: 720px) and (min-width: 721px) {
+  .landing { padding-top: 16px; padding-bottom: 16px; }
+  .landing-main { gap: 28px; padding: 18px 0; }
+  .landing-copy h1 { font-size: clamp(2.7rem, 6vw, 4.9rem); }
+  .landing-lead { margin-top: 16px; }
+  .landing-actions { margin-top: 20px; }
+  .landing-capabilities article { min-height: 90px; padding-top: 13px; }
+  .landing-footer { padding-top: 10px; }
 }
