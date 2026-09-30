@@ -372,7 +372,8 @@ export function loadConfig(env = process.env) {
       sandbox: httpUrl(env.SANDBOX_RUNNER_URL, { name: 'SANDBOX_RUNNER_URL', errors }),
       // Generic tool boundary for discovered/research/adaptive capabilities.
       tools: httpUrl(env.TOOL_RUNNER_URL, { name: 'TOOL_RUNNER_URL', errors }),
-      token: text(env.RUNNER_TOKEN) || null
+      sandboxToken: text(env.SANDBOX_RUNNER_TOKEN) || (production ? null : text(env.RUNNER_TOKEN) || null),
+      toolToken: text(env.TOOL_RUNNER_TOKEN) || (production ? null : text(env.RUNNER_TOKEN) || null)
     },
 
     execution: {
@@ -568,13 +569,16 @@ export function loadConfig(env = process.env) {
     errors.push('RATE_LIMIT_STORE must be postgres in production for multi-instance rate limiting');
   }
 
-  if (
-    production
-    && (config.runners.tools || config.runners.sandbox)
-    && (!config.runners.token || config.runners.token.length < 32)
-  ) {
-    errors.push('RUNNER_TOKEN must be at least 32 characters in production when any managed runner is configured');
+  if (production && config.runners.sandbox && (!config.runners.sandboxToken || config.runners.sandboxToken.length < 32)) {
+    errors.push('SANDBOX_RUNNER_TOKEN must be at least 32 characters in production when the sandbox runner is configured');
   }
+  if (production && config.runners.tools && (!config.runners.toolToken || config.runners.toolToken.length < 32)) {
+    errors.push('TOOL_RUNNER_TOKEN must be at least 32 characters in production when the tool runner is configured');
+  }
+  if (production && config.runners.sandbox && config.runners.tools
+      && config.runners.sandboxToken && config.runners.toolToken
+      && config.runners.sandboxToken === config.runners.toolToken) {
+    errors.push('SANDBOX_RUNNER_TOKEN and TOOL_RUNNER_TOKEN must be different in production');
 
   if (
     production
