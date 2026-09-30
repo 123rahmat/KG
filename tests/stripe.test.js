@@ -79,7 +79,7 @@ test('Stripe settings are validated: signed webhooks, a public URL, real plans, 
 
 test('an admin buys a plan through Stripe Checkout; only a signed webhook makes it active', () => {
   const calls = [];
-  return withServer(async ({ call, seed, base }) => {
+  return withServer(async ({ call, seed, base, pool }) => {
     const admin = await seed();
     const editor = await seed({ name: 'Editor', role: 'editor' });
     const auth = { token: admin.token, workspace: admin.workspace };
@@ -131,6 +131,16 @@ test('an admin buys a plan through Stripe Checkout; only a signed webhook makes 
 
     const after = await call('GET', '/api/billing', auth);
     assert.equal(after.body.plan, 'Pro');
+    const { rows: [stored] } = await pool.query(
+      'SELECT stripe_customer_id, stripe_subscription_id, billing_private_enc, billing_encryption_version FROM workspace_billing WHERE workspace_id = $1',
+      [admin.workspace]
+    );
+    assert.equal(stored.stripe_customer_id, null);
+    assert.equal(stored.stripe_subscription_id, null);
+    assert.equal(stored.billing_encryption_version, 1);
+    assert.ok(stored.billing_private_enc);
+    assert.equal(stored.billing_private_enc.includes('cus_123'), false);
+    assert.equal(stored.billing_private_enc.includes('sub_123'), false);
     assert.equal(after.body.stripe.subscription.status, 'active');
     assert.equal(after.body.stripe.subscription.planId, 'pro');
     assert.equal(new Date(after.body.stripe.subscription.currentPeriodEnd).getTime(), 1_900_000_000_000);
