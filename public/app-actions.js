@@ -55,7 +55,7 @@ function actionCards(run) {
   return element('div', { class: 'action-cards' }, actions.map(action => {
     const [icon, label] = toolLabel(action.tool);
     const status = {
-      proposed: ['Waiting for your approval', 'warn'], running: ['Running…', ''], done: ['Done', 'ok'],
+      proposed: ['Awaiting approval', 'warn'], running: ['Running…', ''], done: ['Completed', 'ok'],
       failed: ['Failed', 'bad'], declined: ['Declined', '']
     }[action.status] ?? [action.status, ''];
     const result = action.status === 'done' && action.result
@@ -562,7 +562,7 @@ export function assistantMessage(run, active) {
 // Everyday suggestions. `needs` names what must be connected for it to work.
 const SUGGESTIONS = [
   // What Kindgleam is best at comes first.
-  { group: 'Learn', icon: '🎓', featured: true, description: 'A tutor that explains at your level, step by step, then checks you understood.', needs: 'ai', items: [
+  { group: 'Learn', icon: 'explore', featured: true, description: 'A tutor that explains at your level, step by step, then checks you understood.', needs: 'ai', items: [
     ['Teach me step by step', 'Teach me how to solve quadratic equations, step by step. I am in grade 10. Check that I understand before moving on.'],
     ['Quiz me', 'Quiz me with 10 questions on the causes of World War I. Ask one at a time and tell me if I am right.'],
     ['Check my answer', 'Here is my answer to a physics problem. Do not just give the solution: tell me where I went wrong. '],
@@ -570,13 +570,13 @@ const SUGGESTIONS = [
     ['Explain simply', 'Explain how compound interest works, simply, with one example.'],
     ['Translate', 'Translate this into Urdu, keeping the tone polite: ']
   ] },
-  { group: 'Business ideas', icon: '💡', featured: true, description: 'Check an idea: customers, market with sources, competitors, pricing and a 12-month projection.', needs: 'ai', items: [
+  { group: 'Business ideas', icon: 'card', featured: true, description: 'Check an idea: customers, market with sources, competitors, pricing and a 12-month projection.', needs: 'ai', items: [
     ['Check my idea', 'Check my business idea: a home tutoring app for students in Lahore. Who are the customers, the competitors, the pricing, the risks, and what should I test first?'],
     ['12-month projection', 'Project 12 months for a small bakery: 300,000 start-up cost, 40 new customers a month growing 5%, 2,000 per customer a month, 800 cost per customer, 150,000 fixed costs a month.'],
     ['Find my customers', 'Who exactly would pay for weekend coding classes for school students, and how do I reach them?'],
     ['Pitch outline', 'Write a one-page pitch outline for my idea: ']
   ] },
-  { group: 'Code', icon: '💻', featured: true, description: 'Write, explain, review, fix, run and test code.', full: 'runCode',
+  { group: 'Code', icon: 'run', featured: true, description: 'Write, explain, review, fix, run and test code.', full: 'runCode',
     limited: 'Write, explain, review and fix code. Running code is not set up here, so you get code and steps to run it yourself.', needs: 'ai', items: [
     ['Write code', 'Write a Python function that removes duplicate emails from a list, with tests.'],
     ['Fix a bug', 'This code gives an error. Find the cause and fix it: '],
@@ -584,31 +584,31 @@ const SUGGESTIONS = [
     ['Explain code', 'Explain what this code does, line by line: '],
     ['Write and test code', 'Write a Python function that checks if a word is a palindrome, and test it.', 'runCode']
   ] },
-  { group: 'Write', icon: '✍️', description: 'Emails, messages, letters and posts, or make your own text clearer.', needs: 'ai', items: [
+  { group: 'Write', icon: 'chat', description: 'Emails, messages, letters and posts, or make your own text clearer.', needs: 'ai', items: [
     ['Write an email', 'Write a short, polite email to my landlord asking them to fix the heater this week.'],
     ['Improve my text', 'Make this clearer and friendlier, and keep it short: '],
     ['Write a cover letter', 'Write a cover letter for a junior accountant job. My experience: '],
     ['Write a message', 'Help me write a kind message to a friend who is going through a hard time.']
   ] },
-  { group: 'Plan', icon: '🗓️', description: 'Plans for your week, meals, trips and money.', needs: 'ai', items: [
+  { group: 'Plan', icon: 'activity', description: 'Plans for your week, meals, trips and money.', needs: 'ai', items: [
     ['Plan my week', 'Help me plan my week. My main tasks are: '],
     ['Meal plan', 'Make a simple, cheap vegetarian meal plan for 5 days with a shopping list.'],
     ['Trip plan', 'Plan a 3-day trip to Lahore on a small budget.'],
     ['Budget', 'Help me make a monthly budget. My income is … and my main costs are …']
   ] },
-  { group: 'Work', icon: '💼', description: 'Meeting notes, reports, interview prep and customer replies.', needs: 'ai', items: [
+  { group: 'Work', icon: 'building', description: 'Meeting notes, reports, interview prep and customer replies.', needs: 'ai', items: [
     ['Meeting summary', 'Turn these meeting notes into a short summary with action items: '],
     ['Prepare for an interview', 'Help me prepare for a job interview for a sales role: likely questions and good answers.'],
     ['Write a report', 'Draft a one-page report on our quarterly sales. Key numbers: '],
     ['Reply to a customer', 'Write a calm, helpful reply to a customer whose order arrived late.']
   ] },
-  { group: 'Files', icon: '📄', description: 'Attach documents, notes, CSV or code and ask about them.', needs: 'ai', attach: true, items: [
+  { group: 'Files', icon: 'files', description: 'Attach documents, notes, CSV or code and ask about them.', needs: 'ai', attach: true, items: [
     ['Summarise a document', 'Summarise the attached file in 5 bullet points.'],
     ['Find key points', 'What are the most important points and dates in the attached file?'],
     ['Check my CV', 'Review the attached CV and suggest improvements.'],
     ['Explain a spreadsheet', 'Explain what the attached CSV file shows, in simple words.']
   ] },
-  { group: 'Research', icon: '🔎', description: 'Searches the web and shows where each fact came from.', needs: 'research', items: [
+  { group: 'Research', icon: 'explore', description: 'Searches the web and shows where each fact came from.', needs: 'research', items: [
     ['Latest evidence', 'Research what the latest evidence says about the health effects of intermittent fasting.'],
     ['Compare products', 'Research and compare the three most popular budget smartphones this year.'],
     ['Check a claim', 'Is it true that drinking coffee dehydrates you? Check reliable sources.'],
@@ -647,7 +647,7 @@ export function renderExplore() {
   }
   host.replaceChildren(...groups.map(group => element('section', { class: 'explore-group' }, [
     element('div', { class: 'explore-head' }, [
-      element('span', { class: 'explore-icon', 'aria-hidden': 'true', text: group.icon }),
+      element('span', { class: 'explore-icon', 'aria-hidden': 'true' }, [svgIcon(group.icon)]),
       element('div', {}, [
         element('h2', { text: group.group }),
         element('p', { class: 'muted small', text: group.description })
@@ -673,7 +673,7 @@ export function welcome() {
     element('h1', { text: 'What would you like to work on?' }),
     element('p', { class: 'muted', text: 'Describe the question, task, or outcome you need. The workspace adapts its reasoning, evidence, tools, verification, and execution path to the work.' }),
     element('div', { class: 'categories', role: 'tablist', 'aria-label': 'Suggestions' }, groups.map(group => element('button', {
-      type: 'button', role: 'tab', class: `category${group.featured ? ' featured' : ''}`, 'aria-selected': String(group.group === current.group), text: `${group.icon} ${group.group}`,
+      type: 'button', role: 'tab', class: `category${group.featured ? ' featured' : ''}`, 'aria-selected': String(group.group === current.group), ,
       onclick: () => { state.suggestionGroup = group.group; renderThread(); }
     }))),
     element('div', { class: 'examples' }, current.items.map(([label, prompt]) => element('button', {
