@@ -1584,4 +1584,16 @@ export const MIGRATIONS = [
         ON memories (workspace_id, principal_id, conversation_id, updated_at DESC);
     `
   }
+  ,{
+    version: 36,
+    name: 'encrypt-private-feedback',
+    sql: `
+      -- Feedback notes and answer excerpts can contain private user/workspace
+      -- content. Keep searchable status/reason fields separate from the text.
+      ALTER TABLE safety_reports
+        ADD COLUMN IF NOT EXISTS note_enc TEXT,
+        ADD COLUMN IF NOT EXISTS excerpt_enc TEXT,
+        ADD COLUMN IF NOT EXISTS encryption_version INTEGER NOT NULL DEFAULT 0;
+    `
+  }
 ];
