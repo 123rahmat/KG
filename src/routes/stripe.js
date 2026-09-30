@@ -94,7 +94,7 @@ export function registerStripeWebhook(app, { config, pool, audit, logger, metric
       // cannot take over a workspace that already pays through Stripe.
       const { rows: [current] } = await client.query('SELECT billing_private_enc FROM workspace_billing WHERE workspace_id = $1 FOR UPDATE', [workspaceId]);
       const currentBilling = current?.billing_private_enc
-        ? decryptJson(config.stripe ? config.security?.billingEncryptionKey : null, 'workspace-billing-v1', current.billing_private_enc)
+        ? decryptJson(config.security.billingEncryptionKey, 'workspace-billing-v1', current.billing_private_enc)
         : {};
       if (currentBilling.stripeCustomerId && state.customerId && currentBilling.stripeCustomerId !== state.customerId) return 'customer-mismatch';
       // Events can arrive out of order: an old subscription's update must not
