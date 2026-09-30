@@ -36,7 +36,12 @@ export function installIngressBoundary(app, { trustProxy = false } = {}) {
       return res.status(400).json({ error: 'Invalid request path', code: 'invalid-request-path' });
     }
 
-    const requestId = validRequestId(req.get('x-request-id')) ?? crypto.randomUUID();
+    // A client-controlled correlation id is useful only when it came through
+    // a proxy we explicitly trust. Otherwise an attacker can choose log and
+    // trace identifiers for other requests. Generate our own value instead.
+    const requestId = trustProxy
+      ? (validRequestId(req.get('x-request-id')) ?? crypto.randomUUID())
+      : crypto.randomUUID();
     req.requestId = requestId;
     res.set('x-request-id', requestId);
 
