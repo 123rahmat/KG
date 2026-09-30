@@ -314,3 +314,46 @@ test('non-coding work can recruit independent cognitive roles', () => {
   assert.ok(analysis.roles.includes('analyst'));
   assert.notEqual(analysis.roles.includes('architect'), true);
 });
+
+
+test('observed evidence can shrink or expand the next agent allocation', () => {
+  const baseRun = run({
+    adaptation: { scale: 'advanced' },
+    situation: { risk: 'high-impact', unknownSituation: true, investigationNeeded: true }
+  });
+  const task = {
+    id: 'build-code',
+    type: 'code',
+    metadata: { buildPlan: true, requirementIds: ['a', 'b', 'c', 'd'] }
+  };
+  const initial = rolesFor(baseRun, task, {
+    maxAgents: 5,
+    progress: { goal: 'Build a multi-part system', findings: [] }
+  });
+  const resolved = rolesFor(baseRun, task, {
+    maxAgents: 5,
+    progress: {
+      goal: 'Build a multi-part system',
+      findings: [
+        finding('proceed', 'high confidence', { confidence: 0.95 }),
+        finding('proceed', 'high confidence', { confidence: 0.95 })
+      ]
+    }
+  });
+  const disputed = rolesFor(baseRun, task, {
+    maxAgents: 5,
+    progress: {
+      goal: 'Build a multi-part system',
+      findings: [
+        finding('proceed', 'one view', { confidence: 0.92 }),
+        finding('revise', 'another view', { confidence: 0.38 })
+      ]
+    }
+  });
+
+  assert.ok(initial.agentCount >= 4);
+  assert.ok(resolved.agentCount <= initial.agentCount);
+  assert.equal(resolved.allocation.observedDisagreement, false);
+  assert.equal(disputed.allocation.observedDisagreement, true);
+  assert.ok(disputed.agentCount >= resolved.agentCount);
+});
