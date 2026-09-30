@@ -28,3 +28,12 @@ MULTI_AGENT_MAX_AGENTS=3
 ## Why this fits the existing architecture
 
 The design is intentionally additive. It does not replace the server-owned workflow, adaptive safety gates, capability compiler, tool approval path, local execution receipts, or verification. It gives difficult runs a structured second layer for planning, architecture, critique, and recovery while preserving the system's existing stop/iterate semantics.
+
+
+## Adaptive consensus contract
+
+Specialists are independent by default: each receives the same server-curated situation, constraints, success criteria, work plan and observed evidence, but no peer findings. This reduces anchoring and herding. Peer findings are passed only to the arbiter.
+
+Every accepted finding carries a bounded confidence value plus optional evidence and assumptions. The coordinator treats materially different recommendations, large confidence spreads, or divergent action sets as substantive disagreement. When arbitration is unavailable because of policy, data access, or budget limits, the result is explicitly marked `unresolved-disagreement`; no individual agent finding is promoted to consensus.
+
+The multi-agent layer is advisory. It never becomes a tool authority, approval authority, execution receipt, or substitute for verification. The primary workflow remains responsible for authorization, tool execution, evidence collection, verification and final delivery.
