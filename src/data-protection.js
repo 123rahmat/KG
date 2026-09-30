@@ -130,11 +130,9 @@ export async function backfillSensitiveData(pool, {
         await client.query('BEGIN');
         for (const row of rows) {
           let privateBilling = {};
-          let keyIndex = 0;
           if (row.billing_private_enc) {
             const decoded = decryptJsonWithKeys(billingKeys, 'workspace-billing-v1', row.billing_private_enc);
             privateBilling = decoded.value && typeof decoded.value === 'object' ? decoded.value : {};
-            keyIndex = decoded.keyIndex;
           }
           privateBilling = {
             billingEmail: row.billing_email !== '' ? String(row.billing_email ?? '') : String(privateBilling.billingEmail ?? ''),
