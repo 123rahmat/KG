@@ -9,6 +9,7 @@
 
 import crypto from 'node:crypto';
 import { registerTools } from './toolbox.js';
+import { encryptField, decryptField, keyedDigest } from './data-protection.js';
 
 const text = value => String(value ?? '').trim();
 export const MEMORY_KINDS = Object.freeze(['about', 'preference', 'project', 'fact']);
@@ -40,16 +41,26 @@ const normalized = value => text(value).toLowerCase().replace(/[^\p{L}\p{N}]+/gu
 const STOP = new Set('a an the and or but of to in on at for with by from is are was were be been am i me my we our you your it its this that these those do does did have has had can could should would will what how why when where which who whom please about into than then so as if not no yes'.split(' '));
 const terms = value => new Set(normalized(value).split(' ').filter(word => word.length > 2 && !STOP.has(word)));
 
-const shape = row => ({
-  id: row.id, content: row.content, kind: row.kind,
+const decode = (row, encryptionKey) => ({
+  ...row,
+  content: decryptField(encryptionKey, 'memory-content-v1', row.content_enc),
+  normalized: row.normalized_digest
+});
+const shape = (row, encryptionKey) => {
+  const decoded = row?.content_enc ? decode(row, encryptionKey) : row;
+  return {
+  id: decoded.id, content: decoded.content, kind: decoded.kind,
   sourceRunId: row.source_run_id ?? null,
   conversationId: row.conversation_id ?? null,
-  createdAt: row.created_at, updatedAt: row.updated_at, lastUsedAt: row.last_used_at ?? null
-});
+  createdAt: decoded.created_at, updatedAt: decoded.updated_at, lastUsedAt: decoded.last_used_at ?? null
+  };
+};
 
 export class MemoryStore {
-  constructor(pool) {
+  constructor(pool, { encryptionKey = null } = {}) {
     this.pool = pool;
+    this.encryptionKey = encryptionKey;
+    if (!this.encryptionKey) throw new Error('PERSONAL_DATA_ENCRYPTION_KEY is required for memory storage');
   }
 
   /** Cross-chat recall is off by default. Chat-local memory is never disabled. */
@@ -70,7 +81,7 @@ export class MemoryStore {
         ORDER BY updated_at DESC LIMIT $3`,
       [scope.workspaceId, scope.principalId, Math.min(MAX_MEMORIES, Math.max(1, limit))]
     );
-    return rows.map(shape);
+    return rows.map(row => shape(row, this.encryptionKey));
   }
 
   /** Automatic memories are bound to the current chat. */
@@ -90,23 +101,30 @@ export class MemoryStore {
       throw new MemoryError('Invalid conversation memory scope.', { status: 400, code: 'invalid-conversation' });
     }
     const key = normalized(value);
+    const digest = keyedDigest(this.encryptionKey, 'memory-lookup-v1', key);
     const { rows: [same] } = await this.pool.query(
       `SELECT * FROM memories
         WHERE workspace_id = $1 AND principal_id = $2
           AND COALESCE(conversation_id, '') = COALESCE($3, '')
-          AND normalized = $4`,
-      [scope.workspaceId, scope.principalId, conversation || null, key]
+          AND normalized_digest = $4`,
+      [scope.workspaceId, scope.principalId, conversation || null, digest]
     );
     if (same) {
       const { rows: [row] } = await this.pool.query(
         'UPDATE memories SET updated_at = now() WHERE id = $1 RETURNING *', [same.id]
       );
-      return { memory: shape(row), created: false };
+      return { memory: shape(row, this.encryptionKey), created: false };
     }
     const { rows: [row] } = await this.pool.query(
-      `INSERT INTO memories (id, workspace_id, principal_id, content, normalized, kind, source_run_id, conversation_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [crypto.randomUUID(), scope.workspaceId, scope.principalId, value, key, type, sourceRunId, conversation || null]
+      `INSERT INTO memories
+        (id, workspace_id, principal_id, content, normalized, content_enc, normalized_digest, encryption_version, kind, source_run_id, conversation_id)
+       VALUES ($1, '', '', $3, $4, $5, $6, 1, $7, $8, $9) RETURNING *`,
+      [
+        crypto.randomUUID(), scope.workspaceId,
+        encryptField(this.encryptionKey, 'memory-content-v1', value),
+        keyedDigest(this.encryptionKey, 'memory-lookup-v1', key),
+        type, sourceRunId, conversation || null
+      ]
     );
     // Memory capacity is per chat, or per explicit cross-chat scope;
     // one chat can never evict another chat's private memory.
@@ -123,7 +141,7 @@ export class MemoryStore {
           ORDER BY COALESCE(last_used_at, updated_at) DESC OFFSET $${conversation ? 4 : 3})`,
       params
     );
-    return { memory: shape(row), created: true };
+    return { memory: shape(row, this.encryptionKey), created: true };
   }
 
   async forget(scope, id) {
@@ -154,7 +172,7 @@ export class MemoryStore {
             [scope.workspaceId, scope.principalId, id, MAX_MEMORIES]
           )).rows
         : [];
-    const matches = rows.map(shape).filter(memory => {
+    const matches = rows.map(row => shape(row, this.encryptionKey)).filter(memory => {
       const have = terms(memory.content);
       return [...wanted].every(word => have.has(word));
     });
@@ -199,7 +217,7 @@ export class MemoryStore {
              WHERE workspace_id = $1 AND principal_id = $2 AND conversation_id = $3
              ORDER BY updated_at DESC LIMIT $4`,
           [scope.workspaceId, scope.principalId, id, MAX_MEMORIES]
-        )).rows.map(shape)
+        )).rows.map(row => shape(row, this.encryptionKey))
       : [];
     // This chat's own memories always come first; other chats add to them
     // and can never push them out.
@@ -210,7 +228,7 @@ export class MemoryStore {
                AND ($3::text IS NULL OR conversation_id IS DISTINCT FROM $3)
              ORDER BY updated_at DESC LIMIT $4`,
           [scope.workspaceId, scope.principalId, id || null, MAX_MEMORIES]
-        )).rows.map(shape)]
+        )).rows.map(row => shape(row, this.encryptionKey))]
       : local;
     if (!all.length) return [];
     const wanted = terms(goal);
