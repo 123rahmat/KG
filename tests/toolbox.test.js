@@ -1,0 +1,143 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { geminiFromStandIn, jsonResponse } from './helpers.js';
+import { answerWithTools, toolCatalog, toolPrompt, useTool, parseToolCall, registerTools } from '../src/toolbox.js';
+import { loadConfig } from '../src/config.js';
+import { xlsx, docx } from './document-fixtures.js';
+
+const config = loadConfig({ DATABASE_URL: 'postgres://u:p@h:5432/d', AI_PROVIDER: 'google', AI_API_KEY: 'test-key' });
+
+/** Attached files served from memory, the way objects.read returns them. */
+function filesContext(files) {
+  const store = new Map(files.map((file, index) => [`obj${index}`, file]));
+  return {
+    scope: { workspaceId: 'ws', principalId: 'p1' },
+    attachments: files.map((file, index) => ({ id: `obj${index}`, name: file.name, format: file.format, readable: true })),
+    objects: { read: async (_scope, id) => ({ metadata: { name: store.get(id).name, contentType: '', digest: `d${id}` }, content: store.get(id).content }) }
+  };
+}
+
+/** A model that answers from a script: each reply in turn, recording what it was sent. */
+function scripted(replies, sent) {
+  let index = 0;
+  return geminiFromStandIn(async (_url, options) => {
+    sent.push(JSON.parse(options.body));
+    return jsonResponse({ output_text: replies[Math.min(index++, replies.length - 1)], usage: { input_tokens: 10, output_tokens: 5 } });
+  });
+}
+
+test('the catalog says which tools are ready and what the others need', () => {
+  const none = toolCatalog({ config });
+  assert.equal(none.find(tool => tool.name === 'file.read').ready, false);
+  assert.equal(none.find(tool => tool.name === 'file.read').needs, 'files');
+  assert.equal(none.find(tool => tool.name === 'math.evaluate').ready, true);
+  const withFiles = toolCatalog({ config, ...filesContext([{ name: 'a.csv', format: 'csv', content: Buffer.from('x\n1') }]) });
+  assert.equal(withFiles.find(tool => tool.name === 'data.analyze').ready, true);
+  const offline = toolCatalog({ config: { ...config, tools: { webAccess: false } } });
+  assert.match(offline.find(tool => tool.name === 'web.fetch').reason, /turned off/);
+});
+
+test('the AI is shown how to call only the tools it can use now', () => {
+  const listed = ctx => JSON.parse(toolPrompt(ctx).split('Available tools:\n')[1]);
+  const none = listed({ config });
+  const fileRead = none.find(tool => tool.name === 'file.read');
+  assert.equal(fileRead.input, undefined, 'a tool that is not ready has no input format to follow');
+  assert.equal(fileRead.needs, 'files', 'but the AI can still say what it needs');
+  assert.ok(none.find(tool => tool.name === 'math.evaluate').input);
+  const withFiles = listed({ config, ...filesContext([{ name: 'a.csv', format: 'csv', content: Buffer.from('x\n1') }]) });
+  assert.ok(withFiles.find(tool => tool.name === 'file.read').input);
+});
+
+test('the AI reads a file and analyses a table before answering', async () => {
+  const sent = [];
+  const ctx = { config, ...filesContext([
+    { name: 'loads.xlsx', format: 'xlsx', content: xlsx('Loads', [['Room', 'Watts'], ['Kitchen', 3000], ['Hall', 200]]) },
+    { name: 'spec.docx', format: 'docx', content: docx(['Supply is 230 V']) }
+  ]) };
+  const answer = await answerWithTools([{ role: 'system', content: 'You help.' }, { role: 'user', content: 'Total load?' }], ctx, {
+    config,
+    fetchImpl: scripted([
+      '{"tool":"data.analyze","input":{"file":"loads"},"why":"sum the watts"}',
+      '{"tool":"file.read","input":{"file":"spec.docx"}}',
+      '{"tool":"math.evaluate","input":{"expression":"3200 / 230"}}',
+      'The total is 3200 W, about 13.9 A at 230 V.'
+    ], sent)
+  });
+  assert.equal(answer.text, 'The total is 3200 W, about 13.9 A at 230 V.');
+  assert.deepEqual(answer.toolLog.map(item => [item.tool, item.outcome]), [['data.analyze', 'ok'], ['file.read', 'ok'], ['math.evaluate', 'ok']]);
+  assert.deepEqual(answer.usage, { inputTokens: 40, outputTokens: 20 });
+  assert.match(sent[0].input[0].content, /^You help\.\n\nTOOLS\./, 'the tool list joins the system prompt');
+  const results = sent.at(-1).input.filter(message => message.role === 'user').map(message => message.content);
+  assert.match(results[1], /"name":"Watts","count":2,"empty":0,"type":"number","min":200,"max":3000/);
+  assert.match(results[2], /Supply is 230 V/);
+  assert.match(results[3], /"value":13\.91/);
+});
+
+test('tools that are missing or not ready are reported, and the loop always ends with an answer', async () => {
+  assert.match((await useTool('teleport', {}, { config })).error, /no tool "teleport"/);
+  assert.equal((await useTool('file.read', { file: 'x' }, { config })).needs, 'files');
+  const sent = [];
+  const answer = await answerWithTools([{ role: 'user', content: 'Loop forever' }], { config }, {
+    config, maxRounds: 2, fetchImpl: scripted(['{"tool":"math.evaluate","input":{"expression":"1+1"}}', '{"tool":"math.evaluate","input":{"expression":"1+1"}}', '{"tool":"math.evaluate","input":{"expression":"1+1"}}', 'Two.'], sent)
+  });
+  assert.equal(answer.text, 'Two.');
+  assert.equal(answer.toolLog.length, 2);
+  assert.match(sent.at(-1).input.at(-1).content, /No more tools can be used/);
+  assert.equal(parseToolCall('The answer is {"tool":"x"}'), null, 'prose that mentions JSON is an answer');
+});
+
+test('a tool with side effects is proposed for approval, never run by the AI', async () => {
+  let ran = false;
+  registerTools([{
+    name: 'test.remind', title: 'Set a reminder', description: 'test', input: {}, sideEffect: true,
+    ready: () => ({ ready: true }), summarize: input => `Remind at ${input.at}`, run: () => { ran = true; return { ok: true }; }
+  }]);
+  const proposals = [];
+  const ctx = { config, propose: async action => { proposals.push(action); return { id: 'act_1' }; } };
+  const result = await useTool('test.remind', { at: '09:00' }, ctx);
+  assert.deepEqual([result.proposed, result.actionId, result.summary], [true, 'act_1', 'Remind at 09:00']);
+  assert.equal(ran, false);
+  assert.deepEqual(proposals, [{ tool: 'test.remind', input: { at: '09:00' }, summary: 'Remind at 09:00' }]);
+  assert.match((await useTool('test.remind', {}, { config })).error, /needs the person's approval/);
+});
+
+test('the AI downloads a spreadsheet and a PDF from the web and reads them', async () => {
+  const http = await import('node:http');
+  const { pdf } = await import('./document-fixtures.js');
+  const files = {
+    '/tariffs.xlsx': ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xlsx('Tariff', [['Units', 'Rate'], ['0-100', 22], ['101-200', 32]])],
+    '/standard.pdf': ['application/pdf', pdf(['Clause 4.2 minimum cover 25 mm'])]
+  };
+  const server = http.createServer((req, res) => {
+    const file = files[req.url];
+    if (!file) { res.writeHead(404); return res.end(); }
+    res.writeHead(200, { 'content-type': file[0] });
+    res.end(file[1]);
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+  const ctx = { config, webOptions: { isAllowed: address => address === '127.0.0.1', ports: [port] } };
+  try {
+    const sheet = await useTool('web.download', { url: `http://127.0.0.1:${port}/tariffs.xlsx` }, ctx);
+    assert.equal(sheet.format, 'xlsx');
+    assert.equal(sheet.tables[0].columns.find(column => column.name === 'Rate').max, 32);
+    assert.match(sheet.sha256, /^[0-9a-f]{64}$/);
+    const standard = await useTool('web.download', { url: `http://127.0.0.1:${port}/standard.pdf` }, ctx);
+    assert.match(standard.text, /Clause 4\.2 minimum cover 25 mm/);
+    assert.match((await useTool('web.download', { url: `http://127.0.0.1:${port}/missing.pdf` }, ctx)).error, /404/);
+    // Private and internal addresses stay out of reach without the test hook.
+    assert.match((await useTool('web.download', { url: `http://127.0.0.1:${port}/tariffs.xlsx` }, { config })).error, /./);
+  } finally {
+    server.close();
+  }
+});
+
+
+test('the active adaptive scope hides and blocks tools that are not selected', async () => {
+  const scoped = { config, allowedTools: ['math.evaluate'] };
+  assert.deepEqual(toolCatalog(scoped).map(item => item.name), ['math.evaluate']);
+  assert.equal((await useTool('math.evaluate', { expression: '2 + 3' }, scoped)).value, 5);
+  const blocked = await useTool('web.search', { query: 'unrelated' }, scoped);
+  assert.equal(blocked.code, 'tool-out-of-scope');
+  assert.match(blocked.error, /outside the current adaptive scope/);
+});
