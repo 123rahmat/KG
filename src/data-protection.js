@@ -118,7 +118,18 @@ export async function backfillSensitiveData(pool, { billingKey = null, personalD
                     stripe_subscription_id = NULL,
                     updated_at = now()
               WHERE workspace_id = $1
-                AND (billing_encryption_version = 0 OR billing_private_enc IS NULL)`,
+                AND (
+                  billing_encryption_version <> 1
+                  OR billing_private_enc IS NULL
+                  OR billing_private_enc = ''
+                  OR billing_email <> ''
+                  OR company_name <> ''
+                  OR tax_id <> ''
+                  OR country <> ''
+                  OR address <> ''
+                  OR stripe_customer_id IS NOT NULL
+                  OR stripe_subscription_id IS NOT NULL
+                )`,
             [row.workspace_id, encryptJson(billingKey, 'workspace-billing-v1', privateData)]
           );
         }
@@ -161,7 +172,15 @@ export async function backfillSensitiveData(pool, { billingKey = null, personalD
                     content = '',
                     normalized = ''
               WHERE id = $1
-                AND (encryption_version = 0 OR content_enc IS NULL OR normalized_digest IS NULL)`,
+                AND (
+                  encryption_version <> 1
+                  OR content_enc IS NULL
+                  OR content_enc = ''
+                  OR normalized_digest IS NULL
+                  OR normalized_digest = ''
+                  OR content <> ''
+                  OR normalized <> ''
+                )`,
             [
               row.id,
               encryptField(personalDataKey, 'memory-content-v1', row.content),
