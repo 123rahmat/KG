@@ -22,7 +22,11 @@ function sslMode() {
 /** Environment for a libpq child process (pg_dump, pg_restore). */
 export function postgresEnvironment(connectionString) {
   const url = new URL(connectionString);
-  const env = { ...process.env, PGHOST: url.hostname };
+  const env = {
+    PATH: process.env.PATH || '/usr/bin:/bin',
+    LANG: process.env.LANG || 'C',
+    PGHOST: url.hostname
+  };
   if (url.port) env.PGPORT = url.port;
   if (url.username) env.PGUSER = decodeURIComponent(url.username);
   if (url.password) env.PGPASSWORD = decodeURIComponent(url.password);
@@ -31,6 +35,7 @@ export function postgresEnvironment(connectionString) {
   const mode = sslMode();
   if (!LIBPQ_SSLMODE[mode]) throw new Error('Unsupported PGSSLMODE: ' + mode);
   env.PGSSLMODE = LIBPQ_SSLMODE[mode];
+  if (mode === 'verify' && process.env.PGSSLROOTCERT) env.PGSSLROOTCERT = process.env.PGSSLROOTCERT;
   return env;
 }
 
