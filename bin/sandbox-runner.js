@@ -30,7 +30,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
-import { runJob, validateJob, jobFromPayload, SandboxError, DEFAULT_IMAGES, LANGUAGES, languageName, languageReady } from '../src/sandbox.js';
+import { runJob, validateJob, jobFromPayload, SandboxError, DEFAULT_IMAGES, LANGUAGES, languageName, languageReady, assertProductionSandboxConfiguration } from '../src/sandbox.js';
 
 const text = value => String(value ?? '').trim();
 const HOST = text(process.env.SANDBOX_RUNNER_HOST) || '127.0.0.1';
@@ -57,6 +57,25 @@ let running = 0;
 if (TOKEN.length < 32) {
   console.error('RUNNER_TOKEN must be at least 32 characters; the sandbox runner will not start without it.');
   process.exit(1);
+}
+
+const production = text(process.env.NODE_ENV).toLowerCase() === 'production';
+const tlsCert = text(process.env.SANDBOX_RUNNER_TLS_CERT);
+const tlsKey = text(process.env.SANDBOX_RUNNER_TLS_KEY);
+if (production) {
+  try {
+    assertProductionSandboxConfiguration({
+      images: OPTIONS.images,
+      runtime: OPTIONS.runtime,
+      installProxy: OPTIONS.network.proxy,
+      tlsConfigured: Boolean(tlsCert && tlsKey),
+      pullOnDemand: OPTIONS.pullOnDemand,
+      languages: OPTIONS.languages
+    });
+  } catch (error) {
+    console.error(error.message);
+    process.exit(1);
+  }
 }
 
 function authorized(req) {
@@ -141,8 +160,6 @@ async function handle(req, res) {
   }
 }
 
-const tlsCert = text(process.env.SANDBOX_RUNNER_TLS_CERT);
-const tlsKey = text(process.env.SANDBOX_RUNNER_TLS_KEY);
 const server = tlsCert && tlsKey
   ? https.createServer({ cert: fs.readFileSync(tlsCert), key: fs.readFileSync(tlsKey) }, handle)
   : http.createServer(handle);
