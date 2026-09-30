@@ -153,31 +153,6 @@ place, equipment, projects, how they like answers) and uses it in later chats. E
 workspace, never include secrets, and can be seen, deleted or turned off in
 Settings → Personalization. See `docs/SANDBOX_AND_TOOL_FORGE.md`.
 
-### User-controlled adaptive scope
-
-The adaptive planner separates **available** resources from the **active working set**.
-For each request it selects the minimum capability, data-source, artifact and UI set
-needed for the current situation, then applies explicit user-controlled limits:
-
-- **Depth:** brief, standard or thorough.
-- **Scope:** capability, data-source and artifact include/exclude controls.
-- **Investment:** ask before a missing capability is built, or prepare a governed candidate
-  without silently making it executable.
-- **Expansion:** disabled by default. When explicitly enabled, the system may expand one
-  depth level when evidence shows the current scope is insufficient; another expansion
-  requires another decision.
-- **Budgets:** context items, attachment/evidence size, external sources, tool rounds,
-  discovery rounds and execution stages are bounded by the selected depth.
-
-The model is given the selected working scope and must not bring omitted resources into a
-step unless the server-approved workflow expands that scope. A missing capability is a
-proposal until a concrete implementation, independent verification, registration and
-required approval exist.
-
-This preserves the open-world property without turning open-world into uncontrolled
-resource consumption: the system can discover what might be needed, while the person
-controls how much additional work, data and implementation investment is allowed.
-
 ### Situation-aware governance
 
 Governance is part of the situation model, not a separate static rules page. For each workflow,
