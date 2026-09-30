@@ -75,6 +75,22 @@ test('PostgreSQL RLS blocks cross-user and cross-workspace access for the runtim
         assert.deepEqual(idempotentOwner.rows, [
           { key: 'owner-key', response: { private: 'owner' } }
         ]);
+        const billingInsert = await client.query(
+          `INSERT INTO workspace_billing (workspace_id, billing_email, company_name, tax_id, country, address, billing_private_enc, billing_encryption_version)
+           VALUES ($1, '', '', '', '', '', $2, 1)
+           ON CONFLICT (workspace_id) DO NOTHING`,
+          ['shared', 'v1.testcipher']
+        );
+        const billingVisible = await client.query('SELECT workspace_id, billing_private_enc FROM workspace_billing');
+        assert.equal(billingVisible.rows.length, 1);
+        const billingWrite = await client.query(
+          `UPDATE workspace_billing
+              SET subscription_status = 'tampered'
+            WHERE workspace_id = $1`,
+          ['shared']
+        );
+        assert.equal(billingWrite.rowCount, 0);
+
         const sharedScope = await client.query(
           "SELECT id, visibility, principal_id FROM runs ORDER BY id"
         );
