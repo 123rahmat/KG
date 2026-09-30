@@ -23,7 +23,7 @@ const RECOMMENDATIONS = new Set(['proceed', 'investigate', 'revise', 'stop']);
 const HIGH_STAKES = new Set(['high-impact', 'physical']);
 const AUTO_PANEL_THRESHOLD = 0.34;
 const MIN_ROLE_UTILITY = 0.25;
-const ROLE_REDUNDANCY_PENALTY = 0.10;
+const ROLE_REDUNDANCY_PENALTY = 0.08;
 
 const ROLE_CATALOG = Object.freeze({
   strategist: {
