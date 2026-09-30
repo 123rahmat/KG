@@ -1585,6 +1585,25 @@ export const MIGRATIONS = [
     `
   }
   ,{
+    version: 37,
+    name: 'allow-encrypted-memory-columns',
+    sql: `
+      -- Encrypted memory rows intentionally keep plaintext content/normalized
+      -- blank. Remove the legacy plaintext-only constraints and let the
+      -- encrypted representation enforce that a memory still has content.
+      ALTER TABLE memories DROP CONSTRAINT IF EXISTS memories_content_check;
+      ALTER TABLE memories
+        ADD CONSTRAINT memories_content_check CHECK (
+          (encryption_version = 1 AND content_enc IS NOT NULL AND length(content_enc) > 0)
+          OR length(content) BETWEEN 1 AND 500
+        );
+
+      -- The old unique constraint indexed plaintext normalized content. It
+      -- would collapse every encrypted row to the same empty value.
+      ALTER TABLE memories DROP CONSTRAINT IF EXISTS memories_workspace_id_principal_id_normalized_key;
+    `
+  }
+  ,{
     version: 36,
     name: 'encrypt-private-feedback',
     sql: `
