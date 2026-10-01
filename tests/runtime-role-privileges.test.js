@@ -19,7 +19,8 @@ test('the live runtime role has only the intended audit privileges', () =>
   }));
 
 
-test('the live runtime role can execute the exact audit-chain query', () =>
+test('the live runtime role can use the secured audit-chain lookup', () =>
   withServer(async ({ appPool }) => {
-    await appPool.query('SELECT entry_hash FROM audit_log WHERE workspace_id IS NOT DISTINCT FROM $1 ORDER BY id DESC LIMIT 1 FOR SHARE', ['ws']);
+    const { rows: [row] } = await appPool.query('SELECT kg_audit_previous_hash($1) AS entry_hash', ['ws']);
+    assert.ok(Object.hasOwn(row, 'entry_hash'));
   }));
