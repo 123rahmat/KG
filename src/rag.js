@@ -119,8 +119,8 @@ export class RagStore {
     const decoded = rows.map(row => {
       let content = '';
       try {
-        content = decryptField(this.encryptionKey, 'rag-content-v1', row.content_enc);
-        const packed = JSON.parse(content);
+        const plaintext = decryptField(this.encryptionKey, 'rag-content-v1', row.content_enc);
+        const packed = JSON.parse(plaintext);
         content = text(packed?.content);
       } catch {
         content = '';
