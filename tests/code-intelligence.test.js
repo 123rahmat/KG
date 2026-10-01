@@ -13,13 +13,10 @@ const files = [
     'export function requireAuth(req) {',
     '  return verifyToken(req.token);',
     '}'
-  ].join('
-') },
+  ].join('\n') },
   { path: 'src/db.js', content: 'export const db = { verify: token => Boolean(token) };' },
-  { path: 'src/routes.js', content: "import { requireAuth } from './auth.js';
-export function route(req) { return requireAuth(req); }" },
-  { path: 'tests/auth.test.js', content: "import test from 'node:test';
-test('auth', () => {});" },
+  { path: 'src/routes.js', content: "import { requireAuth } from './auth.js';\nexport function route(req) { return requireAuth(req); }" },
+  { path: 'tests/auth.test.js', content: "import test from 'node:test';\ntest('auth', () => {});" },
   { path: 'package.json', content: '{"scripts":{"test":"node --test"}}' }
 ];
 
@@ -68,7 +65,7 @@ test('context compiler prioritizes changed code and related verification', () =>
 
   const compact = compactContextPack(pack, { maxChars: 2500, maxFiles: 3 });
   assert.ok(compact.files.length <= 3);
-  assert.ok(compact.budget.maxChars === 2500);
+  assert.equal(compact.budget.maxChars, 2500);
 });
 
 test('code task detection stays conservative', () => {
