@@ -294,3 +294,4 @@ export function compactContextPack(pack,{maxChars=18_000,maxFiles=10}={}) {
       criticalFilesOmitted:criticalOmitted
     }
   };
+}
