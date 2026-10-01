@@ -38,7 +38,7 @@ async function readSnapshotFiles(objects, scope, objectId) {
 function mergeSourceDelta(baseFiles, changedFiles, deletedPaths) {
   const map = new Map(normalizeSourceFiles(baseFiles).map(file => [file.path, file.content]));
   for (const path of Array.isArray(deletedPaths) ? deletedPaths : []) {
-    const safe = String(path ?? '').trim().replaceAll('\\\\', '/').replace(/^\\.\\//, '');
+    const safe = String(path ?? '').trim().replaceAll('\\', '/').replace(/^\.\//, '');
     if (safe) map.delete(safe);
   }
   for (const file of normalizeSourceFiles(changedFiles)) map.set(file.path, file.content);
