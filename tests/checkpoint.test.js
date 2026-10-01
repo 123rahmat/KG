@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { cleanCheckpoint } from '../src/checkpoint.js';
 
 const reassess = sourceTask => ({ id: sourceTask ? `reassess-${sourceTask}` : 'reassess', type: 'reassess', status: 'pending', metadata: sourceTask ? { sourceTask } : {} });
-const built = { id: 'build-code', type: 'code', status: 'complete', evidence: { structured: { language: 'python', source: 'x = 1', tests: 'import unittest' } } };
+const built = { id: 'build-code', type: 'code', status: 'complete', evidence: { structured: { language: 'python', source: 'x = 1', tests: 'import unittest\n\nclass TestX(unittest.TestCase):\n    def test_x(self):\n        self.assertEqual(1, 1)\n' } } };
 const tested = (summary, over = {}) => ({ id: 'test-code', type: 'code', status: 'complete', evidence: { result: { executed: true, output: { status: 'completed', exitCode: 0, testSummary: summary, ...over } } } });
 const pendingTest = { id: 'test-code', type: 'code', status: 'pending' };
 const toolRun = verdict => ({ id: 'tool', type: 'tool', status: 'complete', evidence: { structured: { verification: { verdict } } } });
