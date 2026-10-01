@@ -8,7 +8,7 @@
  * what the current task needs.
  */
 
-import { impactClosure, relatedSymbols, relatedTests } from './project-index.js';
+import { impactClosure, relatedSymbols, relatedTests, changeRiskSignals } from './project-index.js';
 import { normalizeWorkspaceFiles, safeWorkspacePath, workspaceContentHash } from './code-workspace.js';
 import crypto from 'node:crypto';
 
@@ -199,6 +199,7 @@ export function compileCodeContext({
   const selectedPaths = selected.map(file => file.path);
   const dependencies = dependenciesFor(index, selectedPaths);
   const symbols = relatedSymbols(index, terms.slice(0,8).join(' '), [...changed], { max: 80 });
+  const riskSignals = changeRiskSignals(index, [...changed]);
   const cacheKey = digest(JSON.stringify({
     contentHash:index?.contentHash, goal, task:task?.id, changed:[...changed].sort(),
     failure:failure ? { status:failure.status, stderr:clean(failure.stderr).slice(-1000) } : null,
@@ -223,7 +224,8 @@ export function compileCodeContext({
     task:{ id:clean(task?.id), type:clean(task?.type), goal:clean(goal).slice(0,2000) },
     focus:{
       changedFiles:[...changed].slice(0,80), impactedFiles:[...impacted].slice(0,100),
-      relatedTests:[...testPaths].slice(0,50), relevantSymbols:symbols
+      relatedTests:[...testPaths].slice(0,50), relevantSymbols:symbols,
+      changeRisk:riskSignals
     },
     dependencies,
     previousAttempts:(Array.isArray(previousAttempts) ? previousAttempts : []).slice(-3).map(item => ({
@@ -281,7 +283,8 @@ export function compactContextPack(pack,{maxChars=18_000,maxFiles=10}={}) {
       changedFiles:pack.focus?.changedFiles ?? [],
       impactedFiles:(pack.focus?.impactedFiles ?? []).slice(0,60),
       relatedTests:(pack.focus?.relatedTests ?? []).slice(0,30),
-      relevantSymbols:(pack.focus?.relevantSymbols ?? []).slice(0,40)
+      relevantSymbols:(pack.focus?.relevantSymbols ?? []).slice(0,40),
+      changeRisk:pack.focus?.changeRisk ?? null
     },
     dependencies:(pack.dependencies ?? []).slice(0,60),
     previousAttempts:pack.previousAttempts ?? [], failure:pack.failure ?? null,
