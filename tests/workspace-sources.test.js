@@ -161,6 +161,24 @@ test('GitHub snapshots reject invalid UTF-8 instead of replacing source bytes', 
   );
 });
 
+test('GitHub write-back rejects overwriting an existing unsnapshotted file', async () => {
+  const fetchImpl = async (url, init = {}) => {
+    if (url.includes('/commits/main')) return new Response(JSON.stringify({ sha: 'base123', commit: { tree: { sha: 'tree123' } } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (url.includes('/git/trees/base123?recursive=1')) return new Response(JSON.stringify({
+      truncated: false,
+      tree: [{ type: 'blob', path: 'src/excluded.js', size: 10, sha: 'blob-excluded' }]
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+    throw new Error('blob/commit writes must not happen after the pre-image rejection');
+  };
+  await assert.rejects(
+    () => githubApplyChanges({
+      fetchImpl, token: 'secret', owner: 'demo', repo: 'app', ref: 'main', expectedCommitSha: 'base123',
+      changes: [{ path: 'src/excluded.js', content: 'replacement' }]
+    }),
+    error => error.code === 'github-preimage-required'
+  );
+});
+
 test('workspace deletion paths use the same canonical traversal boundary', () => {
   assert.equal(workspacePath('src/file.js'), 'src/file.js');
   assert.equal(workspacePath('src/../file.js'), null);

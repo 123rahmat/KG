@@ -224,6 +224,10 @@ export async function githubApplyChanges({
     }
     const content = String(change?.content ?? '');
     if (Buffer.byteLength(content, 'utf8') > MAX_FILE_BYTES) throw new Error('GitHub changed file is too large: ' + path);
+    if (text(change?.beforeDigest)) {
+      const expected = text(change.beforeDigest);
+      if (!/^[0-9a-f]{64}$/i.test(expected)) throw new Error('GitHub pre-image digest is invalid: ' + path);
+    }
     const blob = await githubJson(
       fetchImpl,
       'https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/git/blobs',
@@ -238,6 +242,35 @@ export async function githubApplyChanges({
     elements.push({ path, mode: '100644', type: 'blob', sha: blob.sha });
   }
   if (!elements.length) return { unchanged: true, commitSha: revision.sha, ref: revision.ref };
+
+  // The workspace snapshot may intentionally omit generated, binary, or
+  // over-budget files. Never let a later write silently turn one of those
+  // existing upstream files into a "new" file. Resolve the exact immutable
+  // tree again and require an explicit pre-image for every existing path.
+  const currentTree = await githubJson(
+    fetchImpl,
+    'https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/git/trees/' + encodeURIComponent(revision.sha) + '?recursive=1',
+    token
+  );
+  if (currentTree?.truncated === true || !Array.isArray(currentTree?.tree) || currentTree.tree.length > MAX_TREE_ENTRIES) {
+    throw new Error('GitHub repository tree is too large for a safe workspace write; narrow the source to a smaller repository or ref.');
+  }
+  const upstreamPaths = new Set(
+    currentTree.tree
+      .filter(entry => entry?.type === 'blob')
+      .map(entry => safePath(entry.path))
+      .filter(Boolean)
+  );
+  for (const change of list) {
+    const path = safePath(change?.path);
+    if (!path || !upstreamPaths.has(path)) continue;
+    if (!text(change?.beforeDigest)) {
+      const error = new Error('An explicit pre-image digest is required before overwriting an existing GitHub file: ' + path);
+      error.code = 'github-preimage-required';
+      throw error;
+    }
+  }
+
   const tree = await githubJson(
     fetchImpl,
     'https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/git/trees',
