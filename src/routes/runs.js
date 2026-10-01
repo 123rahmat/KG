@@ -285,6 +285,11 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
     res.status(201).json({ feedback: saved });
   }));
 
+  app.get('/api/audit/integrity', scoped('admin'), route(async (req, res) => {
+    const result = audit ? await audit.verify({ workspaceId: req.scope.workspaceId, limit: req.query.limit }) : { ok: false, checked: 0, reason: 'audit-unavailable' };
+    res.status(result.ok ? 200 : 503).json({ audit: result });
+  }));
+
   app.get('/api/evolution/proposals', scoped('admin'), route(async (req, res) => {
     res.json({ proposals: evolution ? await evolution.list(req.scope, { status: req.query.status, limit: req.query.limit }) : [] });
   }));
