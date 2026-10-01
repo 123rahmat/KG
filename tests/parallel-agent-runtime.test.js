@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parallelDecision, buildParallelExecutionPlan, workspaceLanesConflict, adaptConcurrency } from '../src/parallel-orchestrator.js';
-test('adaptive scheduler exposes bounded parallelism', () => {
-  const plan = buildParallelExecutionPlan({ mode: 'auto', maxParallel: 4, pressure: 0.8, concurrencyOpportunity: 0.8, stages: [{ id: 'a', metadata: {} }, { id: 'b', metadata: {} }, { id: 'c', metadata: {} }] });
+test('adaptive scheduler exposes elastic but bounded parallelism', () => {
+  const plan = buildParallelExecutionPlan({ mode: 'auto', maxParallel: 16, pressure: 0.8, concurrencyOpportunity: 0.8, stages: [{ id: 'a', metadata: {} }, { id: 'b', metadata: {} }, { id: 'c', metadata: {} }] });
   assert.equal(plan.decision.enabled, true); assert.ok(plan.decision.maxParallel <= 4); assert.equal(plan.waves[0].items.length, 3);
 });
 test('high-stakes auto mode stays conservative without explicit concurrency', () => {

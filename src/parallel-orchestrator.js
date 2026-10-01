@@ -11,7 +11,7 @@ const text = value => String(value ?? '').trim();
 
 export const PARALLEL_MODES = Object.freeze(['auto', 'always', 'off']);
 export const DEFAULT_MAX_PARALLEL = 4;
-export const ABSOLUTE_MAX_PARALLEL = 8;
+export const ABSOLUTE_MAX_PARALLEL = 16;
 
 const HIGH_STAKES = new Set(['high-impact', 'physical', 'regulated']);
 

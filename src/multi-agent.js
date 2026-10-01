@@ -15,8 +15,8 @@ import { mergeBlackboard } from './blackboard.js';
 import { adaptConcurrency } from './parallel-orchestrator.js';
 
 export const MULTI_AGENT_MODES = Object.freeze(['auto', 'always', 'off']);
-export const DEFAULT_MULTI_AGENT_MAX_AGENTS = 5;
-export const MAX_MULTI_AGENT_SPECIALISTS = 5;
+export const DEFAULT_MULTI_AGENT_MAX_AGENTS = 11;
+export const MAX_MULTI_AGENT_SPECIALISTS = 11;
 export const AGENT_MAX_OUTPUT_TOKENS = 1200;
 export const ARBITER_MAX_OUTPUT_TOKENS = 1000;
 
@@ -247,10 +247,16 @@ function decisionPressure(run, task, progress = {}) {
 
 function targetAgentCount(pressure, maxAgents) {
   const maximum = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
-  const desired = pressure >= 0.80 ? 4
-    : pressure >= 0.65 ? 3
-      : pressure >= 0.41 ? 2
-        : 1;
+  const p = Math.max(0, Math.min(1, Number(pressure) || 0));
+  // Scale panel breadth with justified complexity. The role catalog is the
+  // semantic ceiling; runtime concurrency and budgets decide how many run
+  // simultaneously and whether later waves are recruited.
+  const desired = p >= 0.97 ? maximum
+    : p >= 0.90 ? Math.min(maximum, 7)
+      : p >= 0.80 ? Math.min(maximum, 5)
+        : p >= 0.65 ? Math.min(maximum, 3)
+          : p >= 0.41 ? Math.min(maximum, 2)
+            : 1;
   return Math.min(maximum, desired);
 }
 
@@ -331,8 +337,8 @@ export function rolesFor(run, task, {
   if (advancedBuildPlan && highStakeBuild) {
     targetCount = maximum;
   } else if (disagreement) {
-    // Four independent perspectives is the disagreement ceiling. A fifth
-    // specialist is reserved for explicitly advanced/high-stakes build plans.
+    // Four independent perspectives is the minimum disagreement panel. Larger
+    // panels remain available when task pressure or explicit advanced work justifies them.
     targetCount = Math.min(maximum, Math.max(targetCount, 4));
   }
   const candidates = roleCandidates(run, task, progress);

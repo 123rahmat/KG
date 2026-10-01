@@ -245,7 +245,7 @@ test('agent count is task-specific instead of fixed', () => {
     id: 'build-code',
     type: 'code',
     metadata: { buildPlan: true, requirementIds: ['a', 'b', 'c', 'd', 'e'], dependencies: ['x', 'y', 'z'] }
-  }, { maxAgents: 5 });
+  }, { maxAgents: 11 });
 
   assert.equal(simpleCode.agentCount, 0);
   assert.equal(mediumCode.agentCount, 1);
@@ -253,8 +253,9 @@ test('agent count is task-specific instead of fixed', () => {
   assert.equal(complexCode.agentCount, 2);
   assert.deepEqual(complexCode.roles, ['architect', 'critic']);
   assert.equal(decomposedCode.agentCount, 3);
-  assert.equal(extreme.agentCount, 5);
+  assert.equal(extreme.agentCount, 11);
   assert.ok(extreme.agentCount > complexCode.agentCount);
+  assert.equal(new Set(extreme.roles).size, extreme.agentCount);
 });
 
 test('allocation re-evaluates after each specialist completes without exposing peer findings', async () => {

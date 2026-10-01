@@ -180,7 +180,7 @@ export function loadConfig(env = process.env) {
   if (!['auto', 'always', 'off'].includes(reviewMode)) errors.push(`AGENTS_REVIEW must be auto, always or off (got "${reviewMode}")`);
   const multiAgentMode = (text(env.MULTI_AGENT_MODE) || 'auto').toLowerCase();
   if (!['auto', 'always', 'off'].includes(multiAgentMode)) errors.push(`MULTI_AGENT_MODE must be auto, always or off (got "${multiAgentMode}")`);
-  const multiAgentMax = integer(env.MULTI_AGENT_MAX_AGENTS, 5, { min: 1, max: 5, name: 'MULTI_AGENT_MAX_AGENTS', errors });
+  const multiAgentMax = integer(env.MULTI_AGENT_MAX_AGENTS, 11, { min: 1, max: 11, name: 'MULTI_AGENT_MAX_AGENTS', errors });
 
   // PostgreSQL is the only datastore. Object content lives in it too, so
   // there is no filesystem state to back up, mount, or keep in sync.
