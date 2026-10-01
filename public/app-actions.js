@@ -51,11 +51,24 @@ function actionDetails(action) {
 function codeWorkspaceChanges(structured) {
   if (!structured || typeof structured !== 'object') return [];
   const changes = [];
+  const manifest = new Map(
+    Array.isArray(state.workspaceSource?.metadata?.manifest)
+      ? state.workspaceSource.metadata.manifest.map(item => [item.path, item.digest])
+      : []
+  );
   for (const file of Array.isArray(structured.files) ? structured.files : []) {
-    if (file?.path) changes.push({ path: file.path, content: String(file.content ?? '') });
+    if (file?.path) changes.push({
+      path: file.path,
+      content: String(file.content ?? ''),
+      ...(manifest.has(file.path) ? { beforeDigest: manifest.get(file.path) } : {})
+    });
   }
   for (const path of Array.isArray(structured.delete) ? structured.delete : []) {
-    if (path) changes.push({ path, kind: 'delete' });
+    if (path) changes.push({
+      path,
+      kind: 'delete',
+      ...(manifest.has(path) ? { beforeDigest: manifest.get(path) } : {})
+    });
   }
   return changes;
 }
@@ -94,7 +107,7 @@ function workspaceApplyCard(run, structured) {
     button('Apply changes', () => applyCodeWorkspace(run, structured), writable ? 'primary small' : 'ghost small'),
     element('span', { class: 'muted small', text: source.kind === 'github' && !writable
       ? 'GitHub source is read-only'
-      : `\${changes.length} change\${changes.length === 1 ? '' : 's'} ready for review` })
+      : `${changes.length} change${changes.length === 1 ? '' : 's'} ready for review` })
   ]);
 }
 
