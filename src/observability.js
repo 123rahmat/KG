@@ -6,7 +6,32 @@
  * every record passes through a redactor first.
  */
 
+import crypto from 'node:crypto';
+
 const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
+const TRACE_ID_RE = /^[0-9a-f]{32}$/i;
+const SPAN_ID_RE = /^[0-9a-f]{16}$/i;
+
+export function parseTraceparent(value) {
+  const raw = String(value ?? '').trim();
+  const match = /^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/i.exec(raw);
+  if (!match || /^0+$/.test(match[1]) || /^0+$/.test(match[2])) return null;
+  return { version: '00', traceId: match[1].toLowerCase(), parentSpanId: match[2].toLowerCase(), traceFlags: match[3].toLowerCase() };
+}
+
+export function createTraceContext(incoming = null) {
+  const parent = parseTraceparent(incoming);
+  const traceId = parent?.traceId ?? crypto.randomUUID().replaceAll('-', '');
+  const spanId = crypto.randomBytes(8).toString('hex');
+  return { traceId, spanId, parentSpanId: parent?.parentSpanId ?? null, traceFlags: parent?.traceFlags ?? '01' };
+}
+
+export function traceparentOf(context) {
+  if (!context?.traceId || !context?.spanId) return null;
+  if (!TRACE_ID_RE.test(context.traceId) || !SPAN_ID_RE.test(context.spanId)) return null;
+  return `00-${context.traceId}-${context.spanId}-${context.traceFlags === '00' ? '00' : '01'}`;
+}
+
 
 /** Keys whose values are never written to a log, at any depth. */
 // Exact names, plus any name that carries a secret (secretKey, webhookSecret,
