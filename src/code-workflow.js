@@ -355,14 +355,9 @@ export function untestedCode(run) {
  */
 export function missingTests(structured, { previous = null, baseFiles = [] } = {}) {
   if (!structured) return false;
-  if (isProject(structured)) {
-    if (text(structured.tests) || projectTests(structured).length) return false;
-    const spec = LANGUAGES[languageOf(structured.language)];
-    const earlier = [...(isProject(previous) ? codeFiles(previous) : []), ...baseFiles];
-    return !(spec && earlier.some(file => String(file.content ?? '').trim() && (spec.test.test(text(file?.path)) || spec.inline?.test(String(file.content)))));
-  }
+  if (isProject(structured)) return !hasMeaningfulTests(structured, { previous, baseFiles });
   const inline = LANGUAGES[languageOf(structured.language)]?.inline;
-  return Boolean(text(structured.source) && !text(structured.tests) && !inline?.test(structured.source));
+  return Boolean(text(structured.source) && !hasMeaningfulTests(structured) && !inline?.test(structured.source));
 }
 
 /** A package in one shape, whatever shape the model used: files as [{ path, content }]. */
