@@ -1743,6 +1743,19 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
 .plan-brief .brief-mark { display: inline-block; width: 1.1em; font-weight: 700; }
 .plan-brief .brief-mark.bring { color: var(--ok); }
 .plan-brief .brief-mark.leave { color: var(--muted); }
+.brainstorm-card { margin: 8px 0 4px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius: 12px; background: linear-gradient(135deg, var(--accent-soft), var(--softer) 55%); }
+.brainstorm-card > summary { display: flex; align-items: center; gap: 10px; }
+.brainstorm-card > summary .brainstorm-head { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.brainstorm-head > div { display: grid; gap: 1px; }
+.brainstorm-count, .brainstorm-current { padding: 2px 7px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); white-space: nowrap; }
+.brainstorm-card[open] > summary { margin-bottom: 8px; }
+.brainstorm-principle { margin: 0 0 9px; }
+.brainstorm-options { display: grid; gap: 7px; }
+.brainstorm-option { padding: 9px 10px; border: 1px solid var(--line); border-radius: 9px; background: color-mix(in srgb, var(--panel) 90%, transparent); }
+.brainstorm-option[data-selected="true"] { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); box-shadow: inset 3px 0 0 var(--accent); }
+.brainstorm-option-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; text-transform: capitalize; }
+.brainstorm-option p { margin: 4px 0 0; font-size: .84rem; line-height: 1.42; }
+.brainstorm-evidence { color: var(--ink-2); font-weight: 560; }
 
 /* What a step adapted (fixed after a failing test, not run here). */
 .steps .step-note { color: var(--muted); font-size: .85em; }
