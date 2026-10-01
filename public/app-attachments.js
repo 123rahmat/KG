@@ -163,7 +163,7 @@ export function growComposer() {
 
 export function newChat() {
   if ($('tab-runs').hidden) selectTab('runs');
-  state.chat = { id: null, runs: [], pending: null, consent: state.settings.consent };
+  state.chat = { id: null, runs: [], pending: null, consent: state.settings.consent, workspaceSourceId: null };
   if (state.usage) state.usage.context = null;
   $('shareRun').checked = state.settings.share;
   clearDraft();
@@ -246,8 +246,13 @@ export async function openChat(id) {
       id,
       runs,
       pending: null,
+      workspaceSourceId: runs.at(-1)?.adaptation?.workspaceSourceId ?? null,
       consent: runs.some(run => run.adaptation?.privacy?.consent?.modelProvider === true)
     };
+    if (state.chat.workspaceSourceId) {
+      state.workspaceSourceId = state.chat.workspaceSourceId;
+      state.workspaceSource = null;
+    }
     for (const run of runs) if (state.chat.consent) state.consented.add(run.id);
     state.run = runs.at(-1) ?? null;
     document.body.classList.remove('chats-open');
@@ -356,7 +361,7 @@ async function queueOfflineMessage(goal, files, visibility, idempotencyKey = cry
     conversationId: state.chat.id,
     workspaceId: state.workspaceId,
     visibility,
-    workspaceSourceId: state.workspaceSourceId ?? null,
+    workspaceSourceId: state.chat.workspaceSourceId ?? state.workspaceSourceId ?? null,
     attachmentIds: [],
     files
   };
@@ -456,7 +461,9 @@ export async function sendMessage(text) {
   const visibility = $('shareRun').checked ? 'workspace' : 'private';
   state.chat.id ??= crypto.randomUUID();
 
-  if (navigator.onLine !== false && state.workspaceSourceId) {
+  const chatSourceId = state.chat.workspaceSourceId ?? state.workspaceSourceId ?? null;
+  if (navigator.onLine !== false && chatSourceId) {
+    state.workspaceSourceId = chatSourceId;
     await syncActiveWorkspaceSource().catch(error => notify('runNotice', 'warn', error.message || 'Workspace source synchronization failed.'));
   }
 
@@ -485,7 +492,7 @@ export async function sendMessage(text) {
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       ...personalContext(),
       attachments,
-      ...(state.workspaceSourceId ? { workspaceSourceId: state.workspaceSourceId } : {}),
+      ...(chatSourceId ? { workspaceSourceId: chatSourceId } : {}),
       visibility,
       privacyConsent: { modelProvider: state.chat.consent }
     }, { idempotencyKey });
