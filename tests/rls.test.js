@@ -66,7 +66,7 @@ test('PostgreSQL RLS blocks cross-user and cross-workspace access for the runtim
         await client.query('BEGIN');
         await client.query(
           "SELECT set_config('app.principal_id', $1, true), set_config('app.workspace_id', $2, true), set_config('app.organization_id', $3, true), set_config('app.jurisdiction', $4, true), set_config('app.role', $5, true)",
-          [owner.principal.id, 'shared', 'org-shared', '', 'editor']
+          [owner.principal.id, 'shared', 'org-shared', '', 'billing-webhook']
         );
 
         const idempotentOwner = await client.query(
@@ -81,6 +81,7 @@ test('PostgreSQL RLS blocks cross-user and cross-workspace access for the runtim
            ON CONFLICT (workspace_id) DO NOTHING`,
           ['shared', 'v1.testcipher']
         );
+        await client.query("SELECT set_config('app.role', 'editor', true)");
         const billingVisible = await client.query('SELECT workspace_id, billing_private_enc FROM workspace_billing');
         assert.equal(billingVisible.rows.length, 1);
         const billingWrite = await client.query(
