@@ -5,9 +5,13 @@ import { withServer, jsonResponse, advanceTo, codeWritten } from './helpers.js';
 // Runners configured, so plans include real code steps.
 const RUNNERS = { SANDBOX_RUNNER_URL: 'https://code-runner.test', RUNNER_TOKEN: 'r'.repeat(40) };
 
-const modelReply = (textValue, usage = { inputTokens: 10, outputTokens: 5 }) =>
+const modelReply = (textValue, usage = { inputTokens: 10, outputTokens: 5 }, groundingMetadata = undefined) =>
   jsonResponse({
-    candidates: [{ content: { parts: [{ text: textValue }] }, finishReason: 'STOP' }],
+    candidates: [{
+      content: { parts: [{ text: textValue }] },
+      finishReason: 'STOP',
+      ...(groundingMetadata ? { groundingMetadata } : {})
+    }],
     usageMetadata: {
       promptTokenCount: Number(usage.inputTokens ?? usage.input_tokens ?? 0),
       candidatesTokenCount: Number(usage.outputTokens ?? usage.output_tokens ?? 0),
@@ -34,7 +38,7 @@ const CHAT_CLASSIFICATION = {
   unknownSituation: false,
   confidence: 0.9
 };
-// The classifier's instructions are Claude's system prompt; the goal is the user message.
+// The classifier's instructions are the system instruction; the goal is the user message.
 const isClassification = options => requestFrom(JSON.parse(options.body)).system.startsWith('Classify the goal');
 
 /** A passing verdict that checks every success criterion the run currently has. */
@@ -301,15 +305,11 @@ test('research searches the web with the AI provider, reads what it found, and k
       if (body.tools) {
         // The exact Gemini tool ({ google_search: {} }) is checked in runtime.test.js.
         assert.ok(body.tools?.length, 'the search call asks for web search');
-        return jsonResponse({
-          stop_reason: 'end_turn',
-          content: [{
-            type: 'text',
-            text: 'The newest study (2026) reports X.',
-            citations: [{ type: 'web_search_result_location', url: 'https://example.com/source', title: 'Example source' }]
-          }],
-          usage: { input_tokens: 12, output_tokens: 18 }
-        });
+        return modelReply(
+          'The newest study (2026) reports X.',
+          { inputTokens: 12, outputTokens: 18 },
+          { groundingChunks: [{ web: { uri: 'https://example.com/source', title: 'Example source' } }] }
+        );
       }
       const text = calls.length === 1 ? '{"tool":"web.search","input":{"query":"latest evidence unfamiliar topic"}}' : 'Current research result, from example.com.';
       return modelReply(text, { input_tokens: 5, output_tokens: 5 });
@@ -358,27 +358,23 @@ test('verifying researched work checks its facts on the web, and an unsupported 
       const { system, contents, request } = requestFrom(body);
       if (request.task?.type === 'verify') {
         verifyCalls.push(body);
-        return jsonResponse({
-          stop_reason: 'end_turn',
-          content: [{
-            type: 'text',
-            text: JSON.stringify({
-              verdict: 'pass',
-              criteria: (request.situation?.successCriteria ?? []).map(criterion => ({ criterion, met: true })),
-              problems: [],
-              claims: [{ claim: 'The study found a 90% effect', supported: false, note: 'The study reports 9%' }]
-            }),
-            citations: [{ type: 'web_search_result_location', url: 'https://journal.example/study', title: 'The study' }]
-          }],
-          usage: { input_tokens: 8, output_tokens: 8 }
-        });
+        return modelReply(
+          JSON.stringify({
+            verdict: 'pass',
+            criteria: (request.situation?.successCriteria ?? []).map(criterion => ({ criterion, met: true })),
+            problems: [],
+            claims: [{ claim: 'The study found a 90% effect', supported: false, note: 'The study reports 9%' }]
+          }),
+          { inputTokens: 8, outputTokens: 8 },
+          { groundingChunks: [{ web: { uri: 'https://journal.example/study', title: 'The study' } }] }
+        );
       }
       if (body.tools) {
-        return jsonResponse({
-          stop_reason: 'end_turn',
-          content: [{ type: 'text', text: 'The newest study reports X.', citations: [{ type: 'web_search_result_location', url: 'https://example.com/source', title: 'Example source' }] }],
-          usage: { input_tokens: 5, output_tokens: 5 }
-        });
+        return modelReply(
+          'The newest study reports X.',
+          { inputTokens: 5, outputTokens: 5 },
+          { groundingChunks: [{ web: { uri: 'https://example.com/source', title: 'Example source' } }] }
+        );
       }
       if (request.task?.type === 'investigate' && !contents.some(message => message.role === 'model')) {
         return modelReply('{"tool":"web.search","input":{"query":"latest evidence"}}');
@@ -1113,7 +1109,11 @@ test('a declined model answer leaves the task pending and records nothing', () =
     assert.equal(answered.evidence, null);
   }, {
     env: { AI_PROVIDER: 'google', AI_API_KEY: 'test-key' },
-    fetchImpl: async () => jsonResponse({ stop_reason: 'refusal', content: [], usage: { input_tokens: 3, output_tokens: 0 } })
+    fetchImpl: async () => jsonResponse({
+      promptFeedback: { blockReason: 'SAFETY' },
+      candidates: [],
+      usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 0, totalTokenCount: 3 }
+    })
   }));
 
 /* --------------------------------------------------- goal classification */
