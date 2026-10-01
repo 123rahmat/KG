@@ -167,7 +167,9 @@ async function openTerminal() {
         return;
       }
       if (message.type === 'ready') {
+        const sandbox = message.sandbox || {};
         terminal?.writeln('\r\nKindgleam sandbox terminal ready.\r');
+        terminal?.writeln('Environment: ' + (sandbox.image || 'sandbox') + ' · network ' + (sandbox.network || 'restricted') + ' · user ' + (sandbox.user || 'unprivileged') + ' · ' + (sandbox.workspace || '/work') + '\r');
         if (!currentSource) terminal?.writeln('No project source is connected; this session starts with an empty /work.\r');
         return;
       }
