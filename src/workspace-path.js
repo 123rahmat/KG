@@ -5,7 +5,7 @@
  * .gitignore and .github); traversal, absolute paths, control characters and
  * ambiguous separators are not.
  */
-const SEGMENT = /^[\p{L}\p{N}._ +@-]+$/u;
+const SEGMENT = /^(?![ -])[\p{L}\p{N}._ +@-]+$/u;
 const MAX_PATH_LENGTH = 240;
 
 export function workspacePath(value) {
