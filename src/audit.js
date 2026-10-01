@@ -66,6 +66,7 @@ export class Audit {
         `INSERT INTO audit_log
           (id, at, principal_id, workspace_id, action, target, outcome,
            detail, detail_enc, detail_encryption_version, request_id, ip, prev_hash, entry_hash)
+         OVERRIDING SYSTEM VALUE
          VALUES ($1,$2,$3,$4,$5,$6,$7,NULL,$8,1,$9,$10,$11,$12)`,
         [id, at, row.principalId, row.workspaceId, row.action, row.target, row.outcome,
          detailEnc, row.requestId, row.ip, prevHash, entryHash]
