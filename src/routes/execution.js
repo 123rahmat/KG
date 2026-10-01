@@ -37,6 +37,7 @@ import { buildUnifiedWorkContext } from '../unified-work-context.js';
 import { buildProjectIndex } from '../project-index.js';
 import { compileCodeContext, isCodeTask } from '../context-compiler.js';
 import { RagStore } from '../rag.js';
+import { BlackboardStore } from '../blackboard.js';
 
 /** Which tasks execute where. Everything else needs a human decision. */
 const RUNNER_FOR = {
@@ -128,6 +129,9 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
   const actions = new RunActions(pool, { audit });
   const rag = config.security?.personalDataEncryptionKey
     ? new RagStore(pool, { encryptionKey: config.security.personalDataEncryptionKey, maxChunkChars: 12000 })
+    : null;
+  const blackboard = config.security?.personalDataEncryptionKey
+    ? new BlackboardStore(pool, { encryptionKey: config.security.personalDataEncryptionKey })
     : null;
 
   /** What tools may use in a step: the person's files and scope, and a way to propose actions. */
@@ -1279,6 +1283,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       // The steps planned for this need, and where this one stands.
       workPlan: workPlan(run.tasks, task.id),
       evidenceSoFar: evidence,
+      blackboard: blackboard ? await blackboard.load(scope ?? currentDbScope(), run.id).catch(() => null) : null,
       rag: ragResults.map(item => ({ id: item.id, sourceType: item.sourceType, sourceId: item.sourceId, title: item.title, content: item.content, score: item.score ?? null, metadata: item.metadata ?? {} })).slice(0, 8),
       // Code that failed its run, and how, for a targeted fix.
       codeRepair: task.id === 'build-code' ? repairContext(run, repairCeiling(run)) : null,
@@ -1319,6 +1324,25 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
           'INSERT INTO run_agents (id, run_id, task_id, role, model_id, state, wave_index, finding, error_code, started_at, completed_at) VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7::jsonb, $8, now(), now()) ON CONFLICT (run_id, role, wave_index) DO UPDATE SET model_id = EXCLUDED.model_id, state = EXCLUDED.state, finding = EXCLUDED.finding, error_code = EXCLUDED.error_code, completed_at = now()',
           [currentRun.id, currentTask.id, role, modelId || null, agentState, JSON.stringify(finding ?? {}), errorCode || null, waveIndex]
         );
+      },
+      loadBlackboard: async () => blackboard && scope
+        ? blackboard.load(scope, run.id).catch(() => null)
+        : null,
+      recordBlackboard: async ({ run: currentRun, blackboard: currentBoard }) => {
+        if (!blackboard || !scope || !currentBoard) return;
+        const contribution = {
+          objective: currentBoard.objective,
+          facts: currentBoard.facts,
+          hypotheses: currentBoard.hypotheses,
+          decisions: currentBoard.decisions,
+          findings: currentBoard.findings,
+          blockers: currentBoard.blockers,
+          evidence: currentBoard.evidence,
+          openQuestions: currentBoard.openQuestions
+        };
+        await blackboard.merge(scope, currentRun.id, contribution, Math.max(0, Number(currentBoard.version) - 1)).catch(error => {
+          if (error?.code !== 'blackboard-conflict') throw error;
+        });
       }
     });
     if (multiAgent.brief) payload = { ...payload, multiAgent: multiAgent.brief };
