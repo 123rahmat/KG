@@ -218,11 +218,15 @@ export async function githubReadRepository({
     if (files.length >= MAX_FILES) {
       for (const remaining of (tree?.tree ?? []).slice((tree?.tree ?? []).indexOf(entry) + 1)) {
         if (remaining?.type !== 'blob') continue;
-        const remainingPath = safePath(remaining.path);
-        if (!remainingPath || !isUsefulSourcePath(remainingPath)) continue;
+        const remainingRemotePath = safePath(remaining.path);
+        if (!remainingRemotePath || !isUsefulSourcePath(remainingRemotePath)) continue;
+        const remainingPath = prefix
+          ? (remainingRemotePath === prefix ? '' : remainingRemotePath.startsWith(prefix + '/') ? remainingRemotePath.slice(prefix.length + 1) : null)
+          : remainingRemotePath;
+        if (!remainingPath || !safePath(remainingPath) || !isUsefulSourcePath(remainingPath)) continue;
         skippedCount += 1;
         skippedBytes += Number(remaining.size) || 0;
-        if (skipped.length < MAX_SKIPPED_EXAMPLES) skipped.push({ path: remaining.path, reason: 'file-count-limit', bytes: Number(remaining.size) || 0 });
+        if (skipped.length < MAX_SKIPPED_EXAMPLES) skipped.push({ path: remainingPath, reason: 'file-count-limit', bytes: Number(remaining.size) || 0 });
       }
       break;
     }
