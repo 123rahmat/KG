@@ -73,14 +73,14 @@ async function applyCodeWorkspace(run, structured) {
     }
     if (source.kind !== 'github') throw new Error('This project source cannot receive code changes.');
     if (source.permissions?.write !== true) throw new Error('This GitHub source is read-only. Reconnect with explicit write-back permission first.');
-    const result = await api('POST', `/api/workspace/sources/\${encodeURIComponent(sourceId)}/apply`, {
+    const result = await api('POST', `/api/workspace/sources/${encodeURIComponent(sourceId)}/apply`, {
       confirm: 'APPLY_WORKSPACE_CHANGES',
       expectedCommitSha: source.metadata?.commitSha ?? '',
       changes,
       message: 'workspace: apply reviewed code changes'
     });
     state.workspaceSource = result.source;
-    notify('runNotice', 'info', `Changes committed to \${source.repoOwner}/\${source.repoName} · \${source.repoRef}`);
+    notify('runNotice', 'info', `Changes committed to ${source.repoOwner}/${source.repoName} · ${source.repoRef}`);
   }, 'runNotice');
 }
 
@@ -294,9 +294,9 @@ export function codeMarkdown(structured) {
   const isTest = path => /(^|\/)test[^/]*\.py$|\.test\.(mjs|cjs|js)$/.test(path);
   const ordered = [...files.filter(file => !isTest(file.path)), ...files.filter(file => isTest(file.path))];
   return [
-    ...(files.length ? [`**${files.length} file${files.length === 1 ? '' : 's'}**${structured.entry ? ` · runs from `${structured.entry}`` : ''}`] : []),
+    ...(files.length ? [`**${files.length} file${files.length === 1 ? '' : 's'}**${structured.entry ? ` · runs from \`${structured.entry}\`` : ''}`] : []),
     ...(Array.isArray(structured.delete) && structured.delete.length ? [`**Deleted:** ${structured.delete.map(path => '`' + path + '`').join(', ')}`] : []),
-    ...ordered.map(file => ``${file.path}`\n\n${fence(file.content ?? '')}`),
+    ...ordered.map(file => `\`${file.path}\`\n\n${fence(file.content ?? '')}`),
     structured.source ? fence(structured.source) : '',
     structured.tests ? `**Tests**\n\n${fence(structured.tests)}` : '',
     Array.isArray(structured.packages) && structured.packages.length ? `Libraries: ${structured.packages.map(item => '`' + item + '`').join(', ')}` : ''
