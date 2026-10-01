@@ -34,9 +34,12 @@ export function normalizeSourceFiles(files = []) {
     const path = safePath(item?.path || item?.name);
     if (!path) continue;
     const content = typeof item?.content === 'string' ? item.content : '';
+    if (content.includes('\\0')) throw new Error(`Source file contains invalid binary data: ${path}`);
     const bytes = Buffer.byteLength(content, 'utf8');
+    const previous = map.get(path);
     if (bytes > MAX_FILE_BYTES) throw new Error(`Source file is too large: ${path}`);
-    if (!map.has(path)) total += bytes;
+    if (previous) total -= Buffer.byteLength(previous, 'utf8');
+    total += bytes;
     if (total > MAX_TOTAL_BYTES) throw new Error('Source snapshot is too large');
     map.set(path, content);
     if (map.size > MAX_FILES) throw new Error('Source contains too many files');
