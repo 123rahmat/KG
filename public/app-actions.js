@@ -9,6 +9,7 @@ import { growComposer, loadRuns, newChat, personalContext, renderThread, stopRun
 import { TERMINAL_STATES, autoDrive, copyText, governanceCard, isAutomatic, renderNextStep, resultText, runStatus, saveAnswer, stepsList, svgIcon, timeAgo, toolLabel } from './app.js';
 import { selectTab } from './app-account.js';
 import { applyLocalWorkspaceChanges } from './workspace-sources.js';
+import { renderWorkStatus } from './adaptive-workspace.js';
 
 const actionsLoading = new Set();
 
@@ -526,7 +527,73 @@ function requirementsCard(run) {
   ]);
 }
 
-export function assistantMessage(run, active) {
+export function workStatusCard(run) {
+  const tasks = Array.isArray(run?.tasks) ? run.tasks : [];
+  const total = tasks.length;
+  const done = tasks.filter(task => ['complete', 'skipped'].includes(task.status)).length;
+  const failed = tasks.filter(task => task.status === 'failed').length;
+  const waiting = tasks.some(task => ['waiting', 'approval'].includes(task.status));
+  const next = tasks.find(task => task.id === run.next) ?? tasks.find(task => !['complete', 'skipped'].includes(task.status)) ?? null;
+  const current = next?.metadata?.title || next?.purpose || next?.id || (run.state === 'complete' ? 'Verified result' : 'Adapting the workflow');
+  const multi = tasks.map(task => task.evidence?.multiAgent).filter(Boolean).at(-1) ?? run.adaptation?.multiAgent ?? null;
+  const agentStates = Array.isArray(multi?.agentStates) ? multi.agentStates : [];
+  const agents = agentStates.filter(item => item?.status === 'complete').map(item => item.role).filter(Boolean);
+  const execution = [...tasks].reverse().map(task => ({
+    task,
+    target: task.evidence?.executionTarget ?? task.evidence?.result?.executionTarget ?? task.evidence?.receipt?.executionTarget ?? null,
+    result: task.evidence?.result ?? null
+  })).find(item => item.target || item.result);
+  const output = execution?.result?.output && typeof execution.result.output === 'object' ? execution.result.output : execution?.result;
+  const tests = output?.testSummary;
+  const changed = new Set();
+  for (const task of tasks) {
+    for (const file of task.evidence?.structured?.files ?? []) if (file?.path) changed.add(file.path);
+    for (const file of task.evidence?.result?.changedFiles ?? []) if (typeof file === 'string') changed.add(file);
+  }
+  const verificationTask = [...tasks].reverse().find(task => task.type === 'verify');
+  const verification = verificationTask?.status === 'complete'
+    ? (verificationTask.evidence?.verdict?.verdict === 'pass' || verificationTask.evidence?.verdict?.status === 'pass' ? 'Verified' : 'Checked')
+    : verificationTask ? 'Verification in progress' : 'Not required yet';
+  const status = run.state === 'complete'
+    ? 'Finished'
+    : run.state === 'blocked'
+      ? 'Blocked by policy'
+      : run.state === 'waiting'
+        ? 'Waiting for you'
+        : run.state === 'iterate'
+          ? 'Ready to refine'
+          : 'Working';
+  const tone = run.state === 'blocked' || failed ? 'bad' : waiting || run.state === 'waiting' ? 'warn' : run.state === 'complete' ? 'ok' : '';
+  const details = [
+    ['Now', current],
+    execution?.target ? ['Execution', execution.target === 'general-ai-sandbox' ? 'Kindgleam sandbox' : execution.target.replaceAll('-', ' ')] : null,
+    agents.length ? ['Specialists', agents.join(' · ')] : null,
+    tests ? ['Tests', (tests.passed ?? 0) + '/' + (tests.total ?? 0) + ' passed' + (tests.failed ? ' · ' + tests.failed + ' failed' : '')] : null,
+    ['Verification', verification],
+    changed.size ? ['Changes', changed.size + ' file' + (changed.size === 1 ? '' : 's') + ' touched'] : null
+  ].filter(Boolean);
+  return element('details', { class: 'work-status-card ' + tone, open: run.state !== 'complete' }, [
+    element('summary', { class: 'work-status-summary' }, [
+      element('span', { class: 'work-status-mark', 'aria-hidden': 'true' }),
+      element('div', { class: 'work-status-head' }, [
+        element('strong', { text: 'Work status' }),
+        element('span', { class: 'small muted', text: status + ' · ' + done + '/' + Math.max(total, 1) + ' steps' })
+      ]),
+      element('span', { class: 'work-status-now', text: current })
+    ]),
+    element('div', { class: 'work-status-progress', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(Math.max(total, 1)), 'aria-valuenow': String(done) }, [
+      element('i', { style: { width: (total ? Math.min(100, (done / total) * 100) : run.state === 'complete' ? 100 : 6) + '%' } })
+    ]),
+    element('div', { class: 'work-status-grid' }, details.map(([label, value]) =>
+      element('div', { class: 'work-status-item' }, [
+        element('span', { class: 'small muted', text: label }),
+        element('strong', { class: 'small', text: value })
+      ]))),
+    renderWorkStatus(run),
+    failed ? element('p', { class: 'work-status-warning small', text: failed + ' step' + (failed === 1 ? '' : 's') + ' failed; failure evidence is available for repair or replanning.' }) : null
+  ].filter(Boolean));
+}
+function assistantMessage(run, active) {
   const parts = [];
   const text = resultText(run);
   const driving = state.driving === run.id;
@@ -577,6 +644,7 @@ export function assistantMessage(run, active) {
   if (notHere.length) {
     parts.push(element('p', { class: 'limit-note', text: 'Running code is not set up here, so you will get the code and steps to run it yourself.' }));
   }
+  parts.push(workStatusCard(run));
   if (text) parts.push(answerBlock(text));
   const trail = toolTrail(run, text);
   if (trail) parts.push(trail);
