@@ -1718,7 +1718,7 @@ export const MIGRATIONS = [
   ,{
     version: 42,
     name: 'unified-agent-workspace-rag-state',
-    sql: \`
+    sql: `
       CREATE TABLE IF NOT EXISTS run_agents (
         id TEXT PRIMARY KEY,
         run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
@@ -1835,6 +1835,6 @@ export const MIGRATIONS = [
       );
 
       REVOKE ALL ON run_agents, run_waves, code_workspace_sessions, rag_documents FROM PUBLIC;
-    \`
+        `
   }
 ];
