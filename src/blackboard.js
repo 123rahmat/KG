@@ -31,6 +31,7 @@ function normalizeList(value, limit = 100, maxItem = 1200) {
 }
 
 function normalizeBoard(value = {}, runId = null) {
+  value = value && typeof value === 'object' ? value : {};
   const base = emptyBoard(runId);
   const merged = {
     ...base,
