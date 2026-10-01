@@ -415,6 +415,45 @@ function planBriefCard(brief, run = null) {
   return element('div', { class: 'plan-brief' }, [element('div', { class: 'plan-brief-title', text: brief.headline }), ...body]);
 }
 
+// The server creates these options from the current situation. This view is
+// deliberately read-only: choosing an approach remains evidence-led in the
+// workflow, never a client-side planning decision.
+function brainstormCard(run) {
+  const root = run?.adaptation?.unifiedIntelligence?.metaReasoning
+    ?? run?.tasks?.find(task => task.id === 'understand')?.metadata?.metaReasoning
+    ?? null;
+  const brainstorm = root?.brainstorm;
+  const options = Array.isArray(root?.alternatives) ? root.alternatives.slice(0, 3) : [];
+  if (!brainstorm?.enabled || !options.length) return null;
+  const selected = String(brainstorm.selectedInitial ?? '');
+  return section(run, 'approach', {
+    className: 'brainstorm-card',
+    open: !TERMINAL_STATES.includes(run.state),
+    label: 'Approach options grounded in the current situation',
+    summary: element('div', { class: 'brainstorm-head' }, [
+      element('div', {}, [
+        element('strong', { text: 'Approach' }),
+        element('span', { class: 'muted small', text: 'Options, trade-offs, and the evidence needed before changing course' })
+      ]),
+      element('span', { class: 'brainstorm-count small', text: `${options.length} options` })
+    ])
+  }, [
+    element('p', { class: 'brainstorm-principle small muted', text: brainstorm.principle }),
+    element('div', { class: 'brainstorm-options' }, options.map(option =>
+      element('article', { class: 'brainstorm-option', 'data-selected': String(option.id === selected) }, [
+        element('div', { class: 'brainstorm-option-title' }, [
+          element('strong', { text: option.id === selected ? 'Current path: ' + option.id.replace(/-/g, ' ') : option.id.replace(/-/g, ' ') }),
+          ...(option.id === selected ? [element('span', { class: 'brainstorm-current small', text: 'selected from current evidence' })] : [])
+        ]),
+        element('p', { text: option.strategy }),
+        element('p', { class: 'small muted', text: `Use when: ${option.whenBest}` }),
+        element('p', { class: 'small muted', text: `Trade-off: ${option.tradeOff}` }),
+        element('p', { class: 'small brainstorm-evidence', text: `Check first: ${(option.evidenceNeeded ?? []).join(' · ')}` })
+      ])
+    ))
+  ]);
+}
+
 function requirementsCard(run) {
   const model = run?.requirements;
   const items = Array.isArray(model?.items) ? model.items : [];
@@ -473,6 +512,8 @@ export function assistantMessage(run, active) {
   // the details under the steps.
   const requirements = requirementsCard(run);
   if (requirements) parts.push(requirements);
+  const brainstorm = brainstormCard(run);
+  if (brainstorm) parts.push(brainstorm);
   const showBrief = run.brief && !text && !TERMINAL_STATES.includes(run.state);
   const brief = run.brief ? planBriefCard(run.brief, showBrief ? run : null) : null;
   if (brief) {

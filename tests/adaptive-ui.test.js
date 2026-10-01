@@ -52,6 +52,16 @@ test('adaptive UI keeps execution approval and evidence boundaries visible', asy
   assert.match(js, /evidence/);
 });
 
+test('the chat workspace exposes server-owned, evidence-backed approach options', async () => {
+  const js = await client();
+  const css = await read('public/app.css');
+  assert.match(js, /function brainstormCard\(run\)/);
+  assert.match(js, /Options, trade-offs, and the evidence needed before changing course/);
+  assert.match(js, /selected from current evidence/);
+  assert.match(css, /\.brainstorm-card/);
+  assert.match(css, /\.brainstorm-option\[data-selected="true"\]/);
+});
+
 
 test('adaptive workspace presentation follows the same live run state', async () => {
   const html = await read('public/index.html');

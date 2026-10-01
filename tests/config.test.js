@@ -104,7 +104,7 @@ test('production runner endpoints must use HTTPS and a strong runner token', () 
       PGSSLROOTCERT: '/tmp/ca.pem',
       OBJECT_ENCRYPTION_KEY: Buffer.from('test-object-encryption-key-32byt').toString('base64'),
       SANDBOX_RUNNER_URL: 'http://runner.internal',
-      RUNNER_TOKEN: 'r'.repeat(32)
+      SANDBOX_RUNNER_TOKEN: 'r'.repeat(32)
     })),
     /Managed runner URLs must use HTTPS/
   );
@@ -121,7 +121,7 @@ test('production runner endpoints must use HTTPS and a strong runner token', () 
     BACKUP_DATABASE_URL: 'postgres://backup:secret@db.example/professor',
     RESTORE_DATABASE_URL: 'postgres://restore:secret@db.example/professor',
     SANDBOX_RUNNER_URL: 'https://runner.internal',
-    RUNNER_TOKEN: 'r'.repeat(32)
+    SANDBOX_RUNNER_TOKEN: 'r'.repeat(32)
   }));
   assert.equal(config.runners.sandbox, 'https://runner.internal/');
 });

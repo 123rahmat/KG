@@ -374,18 +374,56 @@ function buildMetaReasoning({ goal, analysis, complexity, coding, projectWork, u
   if (projectWork) hypotheses.push('the visible request may have hidden integration or regression requirements');
   if (unknown || analysis.investigationNeeded) hypotheses.push('the initial interpretation may be incomplete and should be updated from evidence');
 
+  // A brainstorm is a bounded decision aid, not a speculative to-do list.
+  // Each option names the evidence that would justify it, so the workflow can
+  // explore broadly without silently expanding implementation scope.
   const alternatives = [];
   if (coding) {
+    if (unknown || projectWork || currentState) {
+      alternatives.push({
+        id: 'observe-first',
+        strategy: 'read the affected code and tests, then reproduce or inspect the current behavior before editing',
+        whenBest: 'the failure, current behavior, or dependency boundary is not yet proven',
+        tradeOff: 'slower than editing immediately, but avoids fixing the symptom instead of the cause',
+        evidenceNeeded: ['reproduction or failing check', 'affected-file and dependency evidence']
+      });
+    }
     alternatives.push(
-      { id: 'minimal-change', strategy: 'make the smallest verified change that satisfies the goal' },
-      { id: 'structural-change', strategy: 'change the underlying structure when evidence shows the local fix would be fragile' }
+      {
+        id: 'minimal-change',
+        strategy: 'make the smallest verified change that satisfies the goal',
+        whenBest: 'the behavior and affected boundary are clear',
+        tradeOff: 'contains regression risk and review cost, but may preserve a fragile design',
+        evidenceNeeded: ['focused regression test', 'existing checks pass']
+      },
+      {
+        id: 'structural-change',
+        strategy: 'change the underlying structure when evidence shows the local fix would be fragile',
+        whenBest: 'the defect crosses modules, repeats, or violates an established boundary',
+        tradeOff: 'improves maintainability but has a larger review and regression surface',
+        evidenceNeeded: ['dependency impact', 'migration or compatibility plan', 'broader regression tests']
+      }
     );
   } else {
     alternatives.push(
-      { id: 'direct-answer', strategy: 'answer from established context and explicitly mark uncertainty' },
-      { id: 'investigate-first', strategy: 'retrieve or inspect evidence when uncertainty could materially change the answer' }
+      {
+        id: 'direct-answer',
+        strategy: 'answer from established context and explicitly mark uncertainty',
+        whenBest: 'the question is bounded and the available context is sufficient',
+        tradeOff: 'fastest path, but does not resolve material unknowns',
+        evidenceNeeded: ['available conversation and workspace context']
+      },
+      {
+        id: 'investigate-first',
+        strategy: 'retrieve or inspect evidence when uncertainty could materially change the answer',
+        whenBest: 'facts, constraints, or consequences are materially uncertain',
+        tradeOff: 'takes more time but reduces unsupported recommendations',
+        evidenceNeeded: ['source or artifact evidence that discriminates the leading assumptions']
+      }
     );
   }
+
+  const initial = alternatives.find(option => option.id === (coding && alternatives.some(item => item.id === 'observe-first') ? 'observe-first' : coding ? 'minimal-change' : unknown || analysis.investigationNeeded ? 'investigate-first' : 'direct-answer')) ?? alternatives[0];
 
   const missingRequirements = [];
   if (!explicitCriteria.length) missingRequirements.push('acceptance criteria');
@@ -423,12 +461,20 @@ function buildMetaReasoning({ goal, analysis, complexity, coding, projectWork, u
     },
     hypothesisSpace: hypotheses,
     alternatives,
+    brainstorm: {
+      enabled: alternatives.length > 1,
+      bounded: true,
+      candidateCount: alternatives.length,
+      principle: 'Explore alternatives only to select the smallest evidence-backed next action.',
+      selectedInitial: initial?.id ?? 'direct-answer',
+      selectionReason: initial?.whenBest ?? 'available evidence supports the minimum sufficient path'
+    },
     missingRequirements: uniq(missingRequirements),
     nextDecision: {
       ask,
       infer,
       investigate,
-      choose: alternatives.length ? alternatives[0].id : 'direct-answer'
+      choose: initial?.id ?? 'direct-answer'
     },
     challenge: {
       enabled: true,

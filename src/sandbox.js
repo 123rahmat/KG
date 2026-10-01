@@ -20,6 +20,7 @@ import { constants as fsConstants } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { isWorkspacePath } from './workspace-path.js';
 
 export const LANGUAGES = Object.freeze({
   python: {
@@ -157,7 +158,6 @@ const PIP_PACKAGE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}(\[[A-Za-z0-9,._-]{1,80}\])
 const NPM_PACKAGE = /^(@[a-z0-9~-][a-z0-9._~-]{0,100}\/)?[a-z0-9~-][a-z0-9._~-]{0,100}(@[A-Za-z0-9.^~<>=*|+ -]{1,60})?$/;
 // Relative paths of letters, digits, spaces and ._+@- ; no hidden, parent or
 // option-like parts.
-const FILE_NAME = /^(?![./ -])(?!.*\.\.)(?!.*\/[./ -])(?!.*[ /]$)[\p{L}\p{N}._/ +@-]{1,160}$/u;
 
 export class SandboxError extends Error {
   constructor(message, code = 'sandbox-invalid') {
@@ -188,7 +188,7 @@ export function validateJob(input = {}) {
   if (tests.trim() && spec.testFile) files.set(spec.testFile, Buffer.from(tests, 'utf8'));
   else if (tests.trim() && spec.appendTests && files.has(spec.file)) files.set(spec.file, Buffer.concat([files.get(spec.file), Buffer.from(spec.appendTests(tests), 'utf8')]));
   for (const [name, value] of Object.entries(input.files ?? {})) {
-    if (!FILE_NAME.test(name) || name.startsWith('/') || name.startsWith('.deps')) throw new SandboxError(`"${name}" is not an allowed file name.`, 'sandbox-file-name');
+    if (!isWorkspacePath(name) || name.startsWith('.deps')) throw new SandboxError(`"${name}" is not an allowed file name.`, 'sandbox-file-name');
     const bytes = typeof value === 'string' ? Buffer.from(value, 'utf8')
       : value?.base64 !== undefined ? Buffer.from(String(value.base64), 'base64') : Buffer.from(String(value?.text ?? ''), 'utf8');
     if (bytes.length > LIMITS.maxFileBytes) throw new SandboxError(`"${name}" is larger than ${LIMITS.maxFileBytes / 1024 / 1024} MB.`, 'sandbox-too-large');

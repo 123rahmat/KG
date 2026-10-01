@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import helmet from 'helmet';
-import { installIngressBoundary, installBrowserBoundary, securityProfile } from './security-boundary.js';
+import { installIngressBoundary, installApiRequestBoundary, installBrowserBoundary, securityProfile } from './security-boundary.js';
 import { CONTRACT } from './core.js';
 import { ADAPTIVE_CONTRACT_VERSION, ADAPTATION_INVARIANT } from './adaptive-contract.js';
 import { AuthError } from './identity.js';
@@ -53,6 +53,10 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
     { tags: { state: 'waiting' }, value: pool.waitingCount }
   ]);
   installIngressBoundary(app, { trustProxy: config.trustProxy });
+  // Fetch Metadata blocks browser cross-site writes before body parsing. The
+  // Stripe endpoint is intentionally exempt: it authenticates its raw body
+  // with Stripe's signature rather than browser state.
+  installApiRequestBoundary(app, { exemptPaths: [STRIPE_WEBHOOK_PATH] });
   installBrowserBoundary(app, { production: config.production });
   app.set('etag', false);
 
@@ -74,9 +78,13 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
         'connect-src': connectSrc,
         'font-src': ["'self'"],
         'object-src': ["'none'"],
+        'worker-src': ["'self'"],
+        'manifest-src': ["'self'"],
         'base-uri': ["'none'"],
         'frame-ancestors': ["'none'"],
-        'form-action': ["'self'"]
+        'form-action': ["'self'"],
+        'script-src-attr': ["'none'"],
+        'style-src-attr': ["'none'"]
       }
     },
     referrerPolicy: { policy: 'no-referrer' },

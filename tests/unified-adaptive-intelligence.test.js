@@ -141,6 +141,9 @@ test('advanced intelligence challenges assumptions and selects investigation onl
   assert.ok(uncertain.metaReasoning.evidenceState.unknowns.length > 0);
   assert.ok(uncertain.metaReasoning.missingRequirements.length >= 0);
   assert.ok(uncertain.metaReasoning.challenge.enabled);
+  assert.equal(uncertain.metaReasoning.brainstorm.bounded, true);
+  assert.equal(uncertain.metaReasoning.brainstorm.selectedInitial, 'observe-first');
+  assert.ok(uncertain.metaReasoning.alternatives.every(option => option.tradeOff && option.evidenceNeeded?.length));
 });
 
 test('advanced intelligence keeps simple chat focused while preserving the same control model', () => {
@@ -154,6 +157,7 @@ test('advanced intelligence keeps simple chat focused while preserving the same 
   assert.ok(intelligence.capabilities.includes('goal-understanding'));
   assert.ok(intelligence.capabilities.includes('alternative-evaluation'));
   assert.equal(intelligence.metaReasoning.nextDecision.investigate.length, 0);
+  assert.equal(intelligence.metaReasoning.brainstorm.selectedInitial, 'direct-answer');
 });
 
 test('advanced intelligence treats verification failure as a reason to reopen reasoning', () => {
