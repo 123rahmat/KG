@@ -10,20 +10,12 @@
 import crypto from 'node:crypto';
 import { workspacePath } from './workspace-path.js';
 
-/**
- * Mature project workspace primitives.
- *
- * The workspace is the source of truth for code work: revisions are immutable,
- * changes are explicit, paths are normalized, and task context is selected
- * from the smallest useful set of files. This module is deliberately pure so
- * it can be used by HTTP routes, background workers and tests without giving
- * the model direct ownership of project state.
- */
-import crypto from 'node:crypto';
-import { workspacePath } from './workspace-path.js';
-
-const PATH = /^(?![./ -])(?!.*\.\.)(?!.*\/[./ -])(?!.*[ /]$)[\p{L}\p{N}._/ +@-]{1,240}$/u;
 const text = value => String(value ?? '').trim();
+
+export function safeWorkspacePath(value) {
+  const raw = String(value ?? '').replaceAll('\\', '/').replace(/^\.\//, '');
+  return workspacePath(raw);
+}
 
 const CONVERSATION_ID = /^[A-Za-z0-9-]{8,64}$/;
 
