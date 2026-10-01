@@ -1377,9 +1377,13 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
           evidence: currentBoard.evidence,
           openQuestions: currentBoard.openQuestions
         };
-        await blackboard.merge(scope, currentRun.id, contribution, Math.max(0, Number(currentBoard.version) - 1)).catch(error => {
+        try {
+          await blackboard.merge(scope, currentRun.id, contribution, Math.max(0, Number(currentBoard.version) - 1));
+        } catch (error) {
           if (error?.code !== 'blackboard-conflict') throw error;
-        });
+          const latest = await blackboard.load(scope, currentRun.id);
+          await blackboard.merge(scope, currentRun.id, contribution, latest.version);
+        }
       }
     });
     if (multiAgent.brief) payload = { ...payload, multiAgent: multiAgent.brief };
