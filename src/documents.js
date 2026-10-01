@@ -217,11 +217,11 @@ export function formatOf({ name, contentType }) {
   if (type.includes('presentationml') || ext === 'pptx') return 'pptx';
   if (IMAGE_TYPES.has(type) || ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext)) return 'image';
   if (['text/csv', 'text/tab-separated-values'].includes(type) || ['csv', 'tsv'].includes(ext)) return 'csv';
+  if (type === 'application/vnd.kindgleam.workspace+json') return 'workspace-project';
   if (type.startsWith('text/') || /json|xml|yaml|javascript|x-sh|sql/.test(type)
       || ['txt', 'md', 'json', 'xml', 'yaml', 'yml', 'js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx', 'py', 'pyi', 'toml', 'cfg', 'ini', 'c', 'h', 'cc', 'cxx', 'cpp', 'hh', 'hpp', 'ino',
         'java', 'kt', 'kts', 'gradle', 'go', 'mod', 'sum', 'rs', 'lock', 'sql', 'html', 'css', 'sh', 'log'].includes(ext)) return 'text';
   if (['doc', 'xls', 'ppt'].includes(ext)) return 'legacy-office';
-  if (type === 'application/vnd.kindgleam.workspace+json') return 'workspace-project';
   if (['application/zip', 'application/x-zip-compressed'].includes(type) || ext === 'zip') return 'project';
   return 'unknown';
 }
