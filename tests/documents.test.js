@@ -42,6 +42,20 @@ test('broken and hostile files fail clearly instead of hurting the server', asyn
   assert.equal(readZip(declared).size, 0);
 });
 
+test('workspace snapshots preserve explicit source completeness metadata', async () => {
+  const snapshot = Buffer.from(JSON.stringify({
+    version: 1,
+    ingestion: { partial: true, skippedCount: 3, skippedBytes: 1234, skippedExamples: [{ path: 'dist/generated.js', reason: 'file-count-limit', bytes: 100 }] },
+    files: [{ path: 'src/app.js', content: 'export const ok = true;' }]
+  }));
+  const result = await readDocument(snapshot, { name: 'project.workspace', contentType: 'application/vnd.kindgleam.workspace+json' });
+  assert.equal(result.format, 'project');
+  assert.equal(result.ingestion.partial, true);
+  assert.equal(result.ingestion.skippedCount, 3);
+  assert.equal(result.ingestion.skippedExamples[0].reason, 'file-count-limit');
+  assert.deepEqual(result.files, [{ path: 'src/app.js', content: 'export const ok = true;' }]);
+});
+
 test('images are passed on for the model to look at; formats are recognised from type or name', async () => {
   const image = await readDocument(png, { name: 'wiring.png', contentType: 'image/png' });
   assert.equal(image.kind, 'image');
