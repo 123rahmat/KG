@@ -7,6 +7,27 @@ import { validateJob, containerArgs, SandboxError, testSummary } from '../src/sa
 import { readProject, formatOf } from '../src/documents.js';
 import { projectView, rankFiles, words } from '../src/project-view.js';
 
+const GOOGLE = { AI_PROVIDER: 'google', AI_API_KEY: 'test-key', AI_MODEL: 'gemini-3.8-flash' };
+
+const geminiReply = (textValue, { groundingMetadata = undefined, finishReason = 'STOP' } = {}) => jsonResponse({
+  candidates: [{
+    content: { parts: [{ text: textValue }] },
+    finishReason,
+    ...(groundingMetadata ? { groundingMetadata } : {})
+  }],
+  usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 2, totalTokenCount: 4 }
+});
+
+function modelRequest(options) {
+  const body = JSON.parse(options.body);
+  const contents = Array.isArray(body.contents) ? body.contents : [];
+  const user = [...contents].reverse().find(message => message.role === 'user');
+  const text = (user?.parts ?? []).filter(part => typeof part?.text === 'string').map(part => part.text).join('\n');
+  let request = {};
+  try { request = JSON.parse(text || '{}'); } catch { /* not a structured task */ }
+  return { body, request };
+}
+
 const project = {
   language: 'python',
   files: [
@@ -204,16 +225,13 @@ test('a project attached as a zip is changed by the files the AI returns, and th
     assert.deepEqual(Object.keys(payload.files).sort(), ['shop/__init__.py', 'shop/discount.py', 'shop/pricing.py', 'test_discount.py']);
     assert.match(payload.files['shop/pricing.py'], /sum\(items\)/, 'the unchanged file comes from the attached project');
   }, {
-    env: { AI_PROVIDER: 'anthropic', AI_MODEL: 'claude-opus-5-5', AI_API_KEY: 'test-key', SANDBOX_RUNNER_URL: 'http://sandbox.test', RUNNER_TOKEN: 'runner-' + 'x'.repeat(31) },
+    env: { AI_PROVIDER: 'google', AI_MODEL: 'gemini-3.8-flash', AI_API_KEY: 'test-key', SANDBOX_RUNNER_URL: 'http://sandbox.test', RUNNER_TOKEN: 'runner-' + 'x'.repeat(31) },
     fetchImpl: async (url, options) => {
       if (String(url).startsWith('http://sandbox.test')) {
         runnerRequests.push(JSON.parse(options.body));
         return jsonResponse({ executed: true, status: 'completed', output: { status: 'completed', exitCode: 0, stdout: '', stderr: 'Ran 2 tests in 0.001s\n\nOK', tested: true, testSummary: { total: 2, passed: 2, failed: 0, skipped: 0 } } });
       }
-      const body = JSON.parse(options.body);
-      const user = body.messages.find(message => message.role === 'user')?.content ?? '{}';
-      let request = {};
-      try { request = JSON.parse(typeof user === 'string' ? user : '{}'); } catch { /* not a task */ }
+      const { body, request } = modelRequest(options);
       seen.push(request);
       const text = request.task?.id === 'build-code' ? JSON.stringify({
         language: 'python',
@@ -224,7 +242,7 @@ test('a project attached as a zip is changed by the files the AI returns, and th
         packages: [],
         notes: 'Adds shop/discount.py.'
       }) : 'Done.';
-      return jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text }], usage: { input_tokens: 2, output_tokens: 2 } });
+      return geminiReply(text);
     }
   });
 });
@@ -257,17 +275,14 @@ test('in a run, the code step of a large attached project reads the files its re
     assert.match(project.text, /=== tests\/test_invoice\.py ===/);
     assert.match(project.text, /app\/module39\.py \(3000 chars\)/, 'every file is still listed');
   }, {
-    env: { AI_PROVIDER: 'anthropic', AI_MODEL: 'claude-opus-5-5', AI_API_KEY: 'test-key', SANDBOX_RUNNER_URL: 'http://sandbox.test', RUNNER_TOKEN: 'runner-' + 'x'.repeat(31), MAX_ATTACHMENT_CHARS: '20000' },
+    env: { AI_PROVIDER: 'google', AI_MODEL: 'gemini-3.8-flash', AI_API_KEY: 'test-key', SANDBOX_RUNNER_URL: 'http://sandbox.test', RUNNER_TOKEN: 'runner-' + 'x'.repeat(31), MAX_ATTACHMENT_CHARS: '20000' },
     fetchImpl: async (_url, options) => {
-      const body = JSON.parse(options.body);
-      const user = body.messages.find(message => message.role === 'user')?.content ?? '{}';
-      let request = {};
-      try { request = JSON.parse(typeof user === 'string' ? user : '{}'); } catch { /* not a task */ }
+      const { body, request } = modelRequest(options);
       seen.push(request);
       const text = request.task?.id === 'build-code'
         ? JSON.stringify({ language: 'python', files: [{ path: 'billing/invoice.py', content: 'def invoice_total(lines):\n    return round(sum(lines), 2)\n' }], notes: 'Rounds.' })
         : 'Done.';
-      return jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text }], usage: { input_tokens: 2, output_tokens: 2 } });
+      return geminiReply(text);
     }
   });
 });
@@ -305,22 +320,19 @@ test('code in a language the sandbox cannot run goes on untested, says why, and 
     const answerRules = seen.filter(request => request.adaptation?.codeNotRun);
     assert.ok(answerRules.length > 0, 'later steps are told the code was not run');
   }, {
-    env: { AI_PROVIDER: 'anthropic', AI_MODEL: 'claude-opus-5-5', AI_API_KEY: 'test-key', SANDBOX_RUNNER_URL: 'http://sandbox.test', RUNNER_TOKEN: 'runner-' + 'x'.repeat(31) },
+    env: { AI_PROVIDER: 'google', AI_MODEL: 'gemini-3.8-flash', AI_API_KEY: 'test-key', SANDBOX_RUNNER_URL: 'http://sandbox.test', RUNNER_TOKEN: 'runner-' + 'x'.repeat(31) },
     fetchImpl: async (url, options) => {
       if (String(url).startsWith('http://sandbox.test')) {
         return jsonResponse({ executed: false, status: 'language-unavailable', message: 'Running Go code is not turned on for this sandbox.', language: 'go' });
       }
-      const body = JSON.parse(options.body);
-      const user = body.messages.find(message => message.role === 'user')?.content ?? '{}';
-      let request = {};
-      try { request = JSON.parse(typeof user === 'string' ? user : '{}'); } catch { /* not a task */ }
+      const { body, request } = modelRequest(options);
       seen.push(request);
       const text = request.task?.id === 'build-code'
         ? JSON.stringify({ language: 'go', source: 'package main\n\nimport "fmt"\n\nfunc main() { fmt.Println(55) }\n', tests: 'package main\n\nimport "testing"\n\nfunc TestX(t *testing.T) {}\n' })
         : request.task?.type === 'verify'
           ? JSON.stringify({ verdict: 'pass', criteria: (request.situation?.successCriteria ?? []).map(criterion => ({ criterion, met: true })), problems: [] })
           : 'Done.';
-      return jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text }], usage: { input_tokens: 2, output_tokens: 2 } });
+      return geminiReply(text);
     }
   });
 });
@@ -372,7 +384,7 @@ test('a fixed version of the code is really run again, not replayed from the fir
     assert.notEqual(executions[0].id, executions[1].id, 'each version is its own execution');
     assert.equal(executions[1].replayed, false);
   }, {
-    env: { AI_PROVIDER: 'anthropic', AI_MODEL: 'claude-opus-5-5', AI_API_KEY: 'test-key', SANDBOX_RUNNER_URL: 'http://sandbox.test', RUNNER_TOKEN: 'runner-' + 'x'.repeat(31) },
+    env: { AI_PROVIDER: 'google', AI_MODEL: 'gemini-3.8-flash', AI_API_KEY: 'test-key', SANDBOX_RUNNER_URL: 'http://sandbox.test', RUNNER_TOKEN: 'runner-' + 'x'.repeat(31) },
     fetchImpl: (() => {
       // Like the real runner: an execution ID it has seen gets its stored receipt back.
       const receipts = new Map();
@@ -390,14 +402,11 @@ test('a fixed version of the code is really run again, not replayed from the fir
           executions.push({ id: body.executionId, replayed: false });
           return jsonResponse(receipt);
         }
-        const body = JSON.parse(options.body);
-        const user = body.messages.find(message => message.role === 'user')?.content ?? '{}';
-        let request = {};
-        try { request = JSON.parse(typeof user === 'string' ? user : '{}'); } catch { /* not a task */ }
+        const { body, request } = modelRequest(options);
         const text = request.task?.id === 'build-code'
           ? JSON.stringify({ language: 'python', source: request.codeRepair ? 'def is_prime(n):\n    if n < 2:\n        return False\n    return all(n % d for d in range(2, int(n ** 0.5) + 1))\n' : 'def is_prime(n):\n    return all(n % d for d in range(2, n))\n', tests: 'import unittest\nfrom main import is_prime\n' })
           : 'Done.';
-        return jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text }], usage: { input_tokens: 2, output_tokens: 2 } });
+        return geminiReply(text);
       };
     })()
   });
@@ -495,16 +504,13 @@ test('a follow-up in the same chat continues the project from the version the la
     assert.equal(later.adaptation.attachments?.[0]?.name, 'shop.zip');
     assert.deepEqual(later.adaptation.projectOverlay.map(item => item.path).sort(), ['shop/discount.py', 'shop/shipping.py', 'test_discount.py', 'test_shipping.py']);
   }, {
-    env: { AI_PROVIDER: 'anthropic', AI_MODEL: 'claude-opus-5-5', AI_API_KEY: 'test-key', SANDBOX_RUNNER_URL: 'http://sandbox.test', RUNNER_TOKEN: 'runner-' + 'x'.repeat(31) },
+    env: { AI_PROVIDER: 'google', AI_MODEL: 'gemini-3.8-flash', AI_API_KEY: 'test-key', SANDBOX_RUNNER_URL: 'http://sandbox.test', RUNNER_TOKEN: 'runner-' + 'x'.repeat(31) },
     fetchImpl: async (url, options) => {
       if (String(url).startsWith('http://sandbox.test')) {
         runnerRequests.push(JSON.parse(options.body));
         return jsonResponse({ executed: true, status: 'completed', output: { status: 'completed', exitCode: 0, stdout: '', stderr: 'Ran 2 tests in 0.001s\n\nOK', tested: true, testSummary: { total: 2, passed: 2, failed: 0, skipped: 0 } } });
       }
-      const body = JSON.parse(options.body);
-      const user = body.messages.find(message => message.role === 'user')?.content ?? '{}';
-      let request = {};
-      try { request = JSON.parse(typeof user === 'string' ? user : '{}'); } catch { /* not a task */ }
+      const { body, request } = modelRequest(options);
       seen.push(request);
       const shipping = /free shipping/.test(request.goal ?? '');
       const text = request.task?.id === 'build-code' ? JSON.stringify({
@@ -519,7 +525,7 @@ test('a follow-up in the same chat continues the project from the version the la
         packages: [],
         notes: 'Done.'
       }) : 'Done.';
-      return jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text }], usage: { input_tokens: 2, output_tokens: 2 } });
+      return geminiReply(text);
     }
   });
 });
