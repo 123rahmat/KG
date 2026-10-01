@@ -459,6 +459,56 @@ async function restartRun(run, mode = 'retry') {
   }, 'runNotice');
 }
 
+const FEEDBACK_REASONS = [
+  ['correct','Correct'],
+  ['incorrect','Incorrect or made up'],
+  ['incomplete','Incomplete'],
+  ['unsafe','Unsafe'],
+  ['too-slow','Too slow'],
+  ['too-expensive','Too expensive'],
+  ['other','Other']
+];
+
+async function submitFeedback(run, rating, reason = 'other', note = '') {
+  const result = await api('POST', '/api/runs/' + encodeURIComponent(run.id) + '/feedback', {
+    rating, reason, note
+  });
+  state.feedbackByRun.set(run.id, { rating, reason, note });
+  renderThread();
+  return result;
+}
+
+function feedbackControl(run) {
+  const saved = state.feedbackByRun.get(run.id);
+  if (saved) return element('span', { class: 'small muted', text: 'Thanks — feedback recorded for improvement checks.' });
+
+  const negativeForm = element('div', { class: 'feedback-form stack', hidden: true });
+  const reason = element('select', { 'aria-label': 'Why was this answer not useful?' },
+    FEEDBACK_REASONS.map(([value, label]) => element('option', { value, text: label })));
+  const note = element('textarea', { rows: '2', maxlength: '1000', placeholder: 'Optional details' });
+  negativeForm.append(reason, note, element('div', { class: 'row wrap' }, [
+    button('Send feedback', async event => {
+      event.currentTarget.disabled = true;
+      await guard(async () => {
+        await submitFeedback(run, 'negative', reason.value, note.value);
+      }, 'runNotice');
+      if (event.currentTarget.isConnected) event.currentTarget.disabled = false;
+    }, 'primary small'),
+    button('Cancel', () => { negativeForm.hidden = true; }, 'ghost small')
+  ]));
+
+  return element('div', { class: 'stack' }, [
+    element('div', { class: 'row wrap feedback-actions' }, [
+      button('Helpful', async event => {
+        event.currentTarget.disabled = true;
+        await guard(async () => { await submitFeedback(run, 'positive', 'correct', ''); }, 'runNotice');
+      }, 'ghost small'),
+      button('Not quite', () => { negativeForm.hidden = false; reason.focus(); }, 'ghost small')
+    ]),
+    negativeForm
+  ]);
+}
+
 function answerActions(run, text) {
   if (!text) return null;
   return element('div', { class: 'row msg-actions answer-actions' }, [
@@ -485,7 +535,8 @@ function answerActions(run, text) {
     canEdit() ? iconButton('download', 'Save answer to Files', () => guard(
       () => saveAnswer(text, run.id), 'runNotice'
     )) : null,
-    iconButton('flag', 'Report this answer', event => openReport(run, event.currentTarget.closest('.answer-actions')))
+    iconButton('flag', 'Report this answer', event => openReport(run, event.currentTarget.closest('.answer-actions'))),
+    feedbackControl(run)
   ].filter(Boolean));
 }
 
