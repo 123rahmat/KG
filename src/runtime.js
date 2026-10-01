@@ -9,7 +9,7 @@
 
 import { MODEL_CATALOG, resolveConfiguredModel } from './model-catalog.js';
 import { vertexAccessToken } from './vertex-auth.js';
-import { AdaptiveProviderGovernor, ProviderConcurrencyError } from './adaptive-provider-governor.js';
+import { AdaptiveProviderGovernor } from './adaptive-provider-governor.js';
 
 const text = value => String(value ?? '').trim();
 const providerGovernor = new AdaptiveProviderGovernor();
