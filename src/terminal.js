@@ -12,7 +12,7 @@ import path from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
 import * as pty from 'node-pty';
 import { parseCookies, sessionCookieName } from './http/context.js';
-import { assertSourceId, normalizeSourceFiles, sourceManifest, githubApplyChanges } from './workspace-sources.js';
+import { assertSourceId, normalizeSourceFiles, sourceManifest } from './workspace-sources.js';
 import { contentDigest } from './workspace-patch.js';
 
 const TERMINAL_PATH = '/terminal';
@@ -260,10 +260,14 @@ export function attachTerminalServer(server, {
       }
 
       const workdir = await fs.mkdtemp(path.join(os.tmpdir(), 'kindgleam-terminal-'));
-      await writeSnapshot(workdir, baseFiles);
+      try {
+        await writeSnapshot(workdir, baseFiles);
+      } catch (error) {
+        await fs.rm(workdir, { recursive: true, force: true }).catch(() => {});
+        throw error;
+      }
       const [, image] = terminalImagesForFiles(baseFiles, config);
       if (!image) throw Object.assign(new Error('No terminal image is configured'), { code: 'terminal-image-unavailable' });
-      const containerName = 'kg-terminal-' + crypto.randomBytes(10).toString('hex');
       const safeCols = Math.max(MIN_COLS, Math.min(MAX_COLS, Number(cols) || 100));
       const safeRows = Math.max(MIN_ROWS, Math.min(MAX_ROWS, Number(rows) || 30));
       const child = pty.spawn('docker', terminalArgs({ image, runtime: config.terminal.runtime, workdir }), {
