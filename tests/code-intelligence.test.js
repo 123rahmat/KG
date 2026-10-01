@@ -21,6 +21,17 @@ const files = [
   { path: 'package.json', content: '{"scripts":{"test":"node --test"}}' }
 ];
 
+test('project index records deterministic runtime and test commands', () => {
+  const index = buildProjectIndex([
+    { path: 'package.json', content: JSON.stringify({ engines: { node: '>=22' }, dependencies: { express: '^5' }, scripts: { test: 'node --test', lint: 'eslint .' } }) },
+    { path: 'package-lock.json', content: '{}' }
+  ]);
+  assert.equal(index.profile.packageManager, 'npm');
+  assert.equal(index.profile.runtime, 'node');
+  assert.ok(index.profile.frameworks.includes('express'));
+  assert.ok(index.profile.testCommands.includes('node --test'));
+});
+
 test('project index is deterministic and captures semantic structure', () => {
   const index = buildProjectIndex(files, { revisionId: 'r1' });
   const again = buildProjectIndex([...files].reverse(), { revisionId: 'r1' });
