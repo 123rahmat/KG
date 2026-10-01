@@ -146,14 +146,14 @@ export function registerWorkspaceSourcesRoutes(app, {
         sourceId, req.scope.workspaceId, req.principal.id, `${owner}/${repo}`,
         `github:${owner}/${repo}`, owner, repo, read.source.ref, object.id,
         encryptSourceCredentials(encryptionKey, token),
-        JSON.stringify({ read: true, write: false }),
+        JSON.stringify({ read: true, write: req.body?.write === true }),
         JSON.stringify({ url: read.source.url, private: read.source.private, commitSha: read.source.commitSha, treeSha: read.source.treeSha, contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files })
       ]
     );
     await audit?.record({
       principalId: req.principal.id, workspaceId: req.scope.workspaceId,
       action: 'workspace.source.connect', target: sourceId, outcome: 'allowed',
-      detail: { kind: 'github', owner, repo, ref: read.source.ref, write: false }, requestId: req.requestId
+      detail: { kind: 'github', owner, repo, ref: read.source.ref, write: req.body?.write === true }, requestId: req.requestId
     });
     res.status(201).json({ source: sourcePublic(row), manifest });
   }));
