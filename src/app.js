@@ -8,6 +8,7 @@
  */
 
 import crypto from 'node:crypto';
+import { createTraceContext, traceparentOf } from './observability.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -129,9 +130,11 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
   app.use((req, res, next) => {
     // Honour an upstream trace id when we trust the proxy that set it.
     req.requestId = req.requestId || (config.trustProxy && text(req.get('x-request-id'))) || crypto.randomUUID();
+    req.traceContext = createTraceContext(config.trustProxy ? req.get('traceparent') : null);
     req.startedAt = process.hrtime.bigint();
-    req.log = logger.child({ requestId: req.requestId });
+    req.log = logger.child({ requestId: req.requestId, traceId: req.traceContext.traceId, spanId: req.traceContext.spanId });
     res.set('x-request-id', req.requestId);
+    res.set('traceparent', traceparentOf(req.traceContext));
 
     res.on('finish', () => {
       const ms = Number(process.hrtime.bigint() - req.startedAt) / 1e6;
