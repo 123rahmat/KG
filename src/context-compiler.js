@@ -122,7 +122,12 @@ export function compileCodeContext({
   if (!normalized.length) return null;
   const defaults = CONTEXT_BUDGETS[scale] ?? CONTEXT_BUDGETS.standard;
   const charBudget = Math.max(4_000, Number(maxChars) || defaults.maxChars);
-  const fileBudget = Math.max(2, Number(maxFiles) || defaults.maxFiles);
+  const requestedFileBudget = Math.max(2, Number(maxFiles) || defaults.maxFiles);
+  const totalContentChars = normalized.reduce((sum, file) => sum + String(file.content ?? '').length, 0);
+  // Small projects stay whole; large projects stay bounded to the useful budget.
+  const fileBudget = totalContentChars <= charBudget
+    ? Math.max(requestedFileBudget, normalized.length)
+    : requestedFileBudget;
   const changed = new Set(changedPaths.map(safeWorkspacePath).filter(Boolean));
   const impacted = new Set(impactClosure(index, [...changed], { maxFiles: 180 }));
   const terms = taskTerms(goal, task, failure);
@@ -195,7 +200,7 @@ export function compileCodeContext({
     } : null,
     files:selected.map(({score,...file}) => file),
     budget:{ maxChars:charBudget, usedChars:chars, files:selected.length,
-      truncated:selected.length < Math.min(fileBudget,normalized.length) }
+      truncated: totalContentChars > charBudget || selected.length < normalized.length }
   });
   remember(cacheKey,pack);
   return pack;
