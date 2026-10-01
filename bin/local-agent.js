@@ -543,7 +543,7 @@ const server = createServer(async (req, res) => {
         attempt: Number(body.attempt),
         executionTarget: 'local'
       });
-      const result = await execute({ ...body, executionId });
+      const result = await execute(body);
       const receipt = {
         ...result,
         executionTarget: 'local',
@@ -560,7 +560,7 @@ const server = createServer(async (req, res) => {
             taskId: body.taskId,
             taskType: body.taskType,
             attempt: Number(body.attempt),
-            executionId: text(body.executionId),
+            executionId,
             challengeNonce: text(body.executionChallenge?.nonce),
             receipt
           })
