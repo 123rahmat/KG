@@ -81,7 +81,7 @@ export function builtinSkillDescriptors() {
     risk: item.name === 'security-review' ? 'high' : 'ordinary',
     dataClasses: [],
     tools: [],
-    directory: null,
+    directory: path.resolve(DEFAULT_SKILL_ROOT, item.name),
     progressiveDisclosure: true
   }));
 }
@@ -153,6 +153,37 @@ export async function loadSkill(descriptor, { maxBytes = MAX_SKILL_BYTES } = {})
     instructions: parsed.body.trim(),
     fingerprint: crypto.createHash('sha256').update(raw, 'utf8').digest('hex')
   };
+}
+
+export async function loadSelectedSkills(goal, {
+  taskType = '',
+  intent = '',
+  capabilities = [],
+  limit = 4,
+  maxInstructionChars = 6000
+} = {}) {
+  const selected = selectSkillDescriptors(goal, { taskType, intent, capabilities, limit });
+  const loaded = [];
+  for (const descriptor of selected) {
+    try {
+      const skill = await loadSkill(descriptor, { maxBytes: MAX_SKILL_BYTES });
+      loaded.push({
+        name: skill.name,
+        version: skill.version,
+        description: skill.description,
+        tags: skill.tags,
+        risk: skill.risk,
+        tools: skill.tools,
+        dataClasses: skill.dataClasses,
+        instructions: skill.instructions.slice(0, maxInstructionChars),
+        fingerprint: skill.fingerprint,
+        progressiveDisclosure: true
+      });
+    } catch {
+      loaded.push({ ...skillDisclosure(descriptor), fullInstructionsLoaded: false });
+    }
+  }
+  return loaded;
 }
 
 export function skillDisclosure(descriptor) {
