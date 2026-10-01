@@ -52,6 +52,18 @@ function updateSourceUI() {
     ? `${source.kind === 'github' ? 'GitHub' : 'Local'} · ${source.name || 'Project source'}`
     : 'No project connected';
   renderPanelState();
+  const local = $('sourceTabLocal');
+  const github = $('sourceTabGithub');
+  const localPanel = $('sourcePanelLocal');
+  const githubPanel = $('sourcePanelGithub');
+  if (source?.kind === 'github') {
+    local?.classList.remove('active');
+    github?.classList.add('active');
+    local?.setAttribute('aria-selected', 'false');
+    github?.setAttribute('aria-selected', 'true');
+    if (localPanel) localPanel.hidden = true;
+    if (githubPanel) githubPanel.hidden = false;
+  }
 }
 
 function renderPanelState() {
@@ -82,7 +94,8 @@ export async function openLocalFolder() {
     if (state.chat) state.chat.workspaceSourceId = result.source.id;
     updateSourceUI();
     renderPanelState();
-    notify('projectSourcesNotice', 'info', `Connected ${sourceName()} · ${result.manifest.fileCount} files`);
+    $('projectSourcesDialog')?.close();
+    notify('runNotice', 'info', `Connected ${sourceName()} · ${result.manifest.fileCount} files`);
     return result.source;
   } catch (error) {
     if (error?.name === 'AbortError') return null;
@@ -245,7 +258,7 @@ export async function initWorkspaceSources() {
     if (localPanel) { localPanel.hidden = !localActive; localPanel.classList.toggle('active', localActive); }
     if (githubPanel) { githubPanel.hidden = localActive; githubPanel.classList.toggle('active', !localActive); }
   };
-  open?.addEventListener('click', () => dialog?.showModal());
+  open?.addEventListener('click', () => { renderPanelState(); updateSourceUI(); dialog?.showModal(); });
   close?.addEventListener('click', () => dialog?.close());
   tabLocal?.addEventListener('click', () => selectSourceTab('local'));
   tabGithub?.addEventListener('click', () => selectSourceTab('github'));
