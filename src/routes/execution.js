@@ -34,6 +34,8 @@ import { adaptationFor, compact } from '../prompt-scope.js';
 import { codeFailure, codeRunOutput, repairDecision, repairCeiling, codeNotRunNow, repairsThisAttempt, repairContext, untestedCode, missingTests, compactCodeEvidence, TESTS_REQUIRED_PROMPT, isProject, sandboxPayload, hasCode, compactProject, mergeFix } from '../code-workflow.js';
 import { cleanCheckpoint } from '../checkpoint.js';
 import { buildUnifiedWorkContext } from '../unified-work-context.js';
+import { buildProjectIndex } from '../project-index.js';
+import { compileCodeContext, isCodeTask } from '../context-compiler.js';
 
 /** Which tasks execute where. Everything else needs a human decision. */
 const RUNNER_FOR = {
@@ -1041,6 +1043,29 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
    * reads: the request, this step, what the design steps concluded, and
    * the failure a fix is for.
    */
+  /** Build one deterministic semantic evidence pack for code-aware steps. */
+  async function codeIntelligenceForStep(run, task, scope) {
+    if (!isCodeTask(task)) return null;
+    const attachments = scopedAttachments(run, task);
+    if (!attachments.length) return null;
+    const files = await projectFiles(objects, scope ?? currentDbScope(), attachments, { overlay: run.adaptation?.projectOverlay });
+    if (!files.length) return null;
+    const workspace = run.adaptation?.unifiedWorkContext?.workspace ?? {};
+    const lastChange = run.adaptation?.unifiedWorkContext?.lastChange ?? null;
+    const changedPaths = [
+      ...(Array.isArray(lastChange?.files) ? lastChange.files : []),
+      ...(Array.isArray(lastChange?.deleted) ? lastChange.deleted : [])
+    ];
+    const failure = task.id === 'build-code' ? repairContext(run)?.failure : null;
+    const index = buildProjectIndex(files, { revisionId: workspace.revisionId ?? null });
+    const budget = run.adaptation?.resourcePlan?.budget?.maxAttachmentChars;
+    const maxChars = Number.isFinite(Number(budget)) ? Math.min(44_000, Math.max(12_000, Number(budget))) : null;
+    return compileCodeContext({
+      files, index, goal: run.goal, task, changedPaths, failure,
+      previousAttempts: previousAttempts(run), scale: run.adaptation?.scale ?? 'standard', maxChars
+    });
+  }
+
   function stepFocus(run, task) {
     const stepResults = (run.tasks ?? []).filter(item => item.type === 'step' && item.status === 'complete').map(item => `${item.metadata?.title ?? ''} ${item.summary ?? ''} ${item.evidence?.text ?? ''}`);
     const failure = task.id === 'build-code' ? repairContext(run)?.failure : null;
@@ -1164,6 +1189,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       : null;
     const verificationContext = grounding ? verificationBrief(run, grounding) : null;
     const attached = await attachmentTexts(scope, run, task, { focus: stepFocus(run, task) });
+    const codeIntelligence = await codeIntelligenceForStep(run, task, scope).catch(() => null);
     const remembered = await memoriesFor(memories, scope ?? currentDbScope(), run).catch(() => []);
     // Each step is sent only what it uses (prompt-scope.js), and only the
     // rules that apply to it (systemPromptFor): the server keeps its full
@@ -1192,6 +1218,9 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         multiAgent: { mode: config.agents?.multiAgent ?? 'auto', maxAgents: config.agents?.maxAgents ?? 5, adaptive: true, serverOrchestrated: true, advisoryOnly: true }
       },
       workspace: run.adaptation?.unifiedWorkContext?.workspace ?? null,
+      // Deterministic code intelligence: symbols, dependencies and tests are computed server-side,
+      // then only task-relevant source windows are sent to the reasoning layer.
+      codeIntelligence,
       // Earlier turns of the same chat, oldest first.
       conversation: (run.adaptation?.conversation ?? []).slice(-maxContextItems),
       attachments: attached.files,
