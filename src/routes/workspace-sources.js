@@ -4,6 +4,7 @@ import {
   decryptSourceCredentials,
   encryptSourceCredentials,
   githubListRepositories,
+  githubListBranches,
   githubReadRepository,
   normalizeSourceFiles,
   sourceManifest,
@@ -128,6 +129,32 @@ export function registerWorkspaceSourcesRoutes(app, {
       detail: { kind: 'github', owner, repo, ref: read.source.ref, write: false }, requestId: req.requestId
     });
     res.status(201).json({ source: sourcePublic(row), manifest });
+  }));
+
+  app.post('/api/workspace/sources/github/repositories', scoped('viewer'), route(async (req, res) => {
+    const token = text(req.body?.token);
+    if (!token) return res.status(400).json({ error: 'A GitHub credential is required.', code: 'github-credential-required' });
+    const repositories = await githubListRepositories({ fetchImpl: fetch, token, page: req.body?.page });
+    res.json({
+      repositories: (repositories ?? []).map(repo => ({
+        id: repo.id,
+        fullName: repo.full_name,
+        owner: repo.owner?.login ?? '',
+        name: repo.name,
+        private: repo.private === true,
+        defaultBranch: repo.default_branch ?? 'main'
+      }))
+    });
+  }));
+
+  app.post('/api/workspace/sources/github/branches', scoped('viewer'), route(async (req, res) => {
+    const token = text(req.body?.token);
+    const owner = text(req.body?.owner);
+    const repo = text(req.body?.repo);
+    if (!token) return res.status(400).json({ error: 'A GitHub credential is required.', code: 'github-credential-required' });
+    assertGitHubRepo(owner, repo);
+    const branches = await githubListBranches({ fetchImpl: fetch, token, owner, repo, page: req.body?.page });
+    res.json({ branches: (branches ?? []).map(branch => ({ name: branch.name, protected: branch.protected === true })) });
   }));
 
 
