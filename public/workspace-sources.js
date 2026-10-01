@@ -34,6 +34,15 @@ function sourceName() {
   return localDirectory?.name || 'Local folder';
 }
 
+function updateSourceUI() {
+  const sync = $('syncWorkspaceSource');
+  const source = state.workspaceSource;
+  if (sync) {
+    sync.hidden = !source;
+    sync.textContent = source?.kind === 'github' ? 'Sync GitHub' : 'Sync folder';
+  }
+}
+
 export async function openLocalFolder() {
   if (!window.showDirectoryPicker) {
     notify('runNotice', 'warn', 'This browser does not support direct folder access. Use the normal file attachment flow instead.');
@@ -49,6 +58,7 @@ export async function openLocalFolder() {
     });
     state.workspaceSourceId = result.source.id;
     state.workspaceSource = result.source;
+    updateSourceUI();
     notify('runNotice', 'info', `Connected ${sourceName()} · ${result.manifest.fileCount} files`);
     return result.source;
   } catch (error) {
@@ -83,6 +93,7 @@ export async function connectGitHub() {
     });
     state.workspaceSourceId = result.source.id;
     state.workspaceSource = result.source;
+    updateSourceUI();
     notify('runNotice', 'info', `Connected GitHub repository ${owner}/${repo}`);
     return result.source;
   } catch (error) {
@@ -97,11 +108,13 @@ export async function syncActiveWorkspaceSource() {
   return api('POST', `/api/workspace/sources/${encodeURIComponent(state.workspaceSourceId)}/sync`)
     .then(result => {
       state.workspaceSource = result.source;
+      updateSourceUI();
       return result;
     });
 }
 
 export async function initWorkspaceSources() {
+  updateSourceUI();
   const local = $('openLocalFolder');
   const github = $('connectGithub');
   const sync = $('syncWorkspaceSource');
