@@ -11,6 +11,7 @@ import {
   verifyExecutionReceipt,
   executionSucceeded,
   executionIdFor,
+  executionPayloadDigest,
   signExecutionChallenge,
   verifyExecutionChallenge
 } from '../src/execution.js';
