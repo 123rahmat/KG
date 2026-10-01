@@ -119,7 +119,7 @@ export function registerStripeWebhook(app, { config, pool, audit, logger, metric
       });
       await audit?.record({
         principalId: null, workspaceId, action: 'billing.subscription', target: state.subscriptionId || workspaceId,
-        outcome: 'allowed', detail: { event: event.type, status: state.status, plan: state.planId, eventId: event.id }
+        outcome: 'allowed', critical: true, detail: { event: event.type, status: state.status, plan: state.planId, eventId: event.id }
       }, client);
       return 'applied';
     })).catch(error => {
