@@ -162,13 +162,42 @@ export function registerWorkspaceSourcesRoutes(app, {
         expectedBaseHash: currentBaseHash || null
       });
     }
+    const baseFiles = await readSnapshotFiles(objects, req.scope, source.snapshot_object_id);
     let files;
     if (Array.isArray(req.body?.changedFiles) && req.body?.manifest) {
-      const baseFiles = await readSnapshotFiles(objects, req.scope, source.snapshot_object_id);
       files = mergeSourceDelta(baseFiles, req.body.changedFiles, req.body.deletedPaths);
     } else {
       files = normalizeSourceFiles(req.body?.files);
     }
+
+    // A reviewed local delta/full snapshot is bound to the exact server base
+    // and exact file transition. A mismatched review must never mutate the
+    // source, even though local sync itself stays browser-authorized.
+    if (text(req.body?.reviewDigest)) {
+      const base = new Map(baseFiles.map(file => [file.path, file.content]));
+      const next = new Map(files.map(file => [file.path, file.content]));
+      const reviewChanges = [];
+      for (const [path, content] of next) {
+        const before = base.get(path);
+        if (before === undefined) {
+          reviewChanges.push({ path, content });
+        } else if (before !== content) {
+          reviewChanges.push({ path, content, beforeDigest: contentDigest(before) });
+        }
+      }
+      for (const [path, content] of base) {
+        if (!next.has(path)) reviewChanges.push({ path, kind: 'delete', beforeDigest: contentDigest(content) });
+      }
+      const expectedReview = workspaceReviewDigest(source, reviewChanges);
+      if (text(req.body.reviewDigest) !== expectedReview) {
+        return res.status(409).json({
+          error: 'A fresh server review is required before these exact local changes can be synchronized.',
+          code: 'review-stale',
+          reviewDigest: expectedReview
+        });
+      }
+    }
+
     const manifest = sourceManifest(files);
     if (source.metadata?.contentHash === manifest.contentHash) return res.json({ source: sourcePublic(source), unchanged: true, manifest });
     const object = await snapshotObject(objects, req.scope, req.principal, files, `${source.name}.workspace`, {
