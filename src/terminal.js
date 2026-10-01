@@ -9,7 +9,6 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import { WebSocketServer, WebSocket } from 'ws';
 import * as pty from 'node-pty';
 import { parseCookies, sessionCookieName } from './http/context.js';
@@ -160,10 +159,6 @@ async function snapshotChanges(session) {
   return { current, changes, manifest: sourceManifest(current) };
 }
 
-async function terminatePty(process, signal = 'SIGTERM') {
-  try { process.kill(signal); } catch {}
-}
-
 class TerminalSession {
   constructor({ id, ws, principal, scope, source, baseFiles, workdir, ptyProcess, manager }) {
     this.id = id;
@@ -277,7 +272,7 @@ export function attachTerminalServer(server, {
         rows: safeRows,
         cwd: process.cwd(),
         env: {
-          PATH: text(process.env.PATH) || '/usr/local/bin:/usr/bin:/bin',
+          PATH: '/usr/local/bin:/usr/bin:/bin',
           LANG: 'C.UTF-8',
           LC_ALL: 'C.UTF-8'
         }
