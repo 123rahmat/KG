@@ -12,6 +12,7 @@ import { parseJsonObject } from './structured.js';
 import { callModel } from './runtime.js';
 import { clip } from './reasoning-context.js';
 import { mergeBlackboard } from './blackboard.js';
+import { adaptConcurrency } from './parallel-orchestrator.js';
 
 export const MULTI_AGENT_MODES = Object.freeze(['auto', 'always', 'off']);
 export const DEFAULT_MULTI_AGENT_MAX_AGENTS = 5;
@@ -625,6 +626,7 @@ export async function runAdaptiveAgentPanel({
   let lastAllocation = allocationResult.allocation;
   let allocationRounds = 0;
   let blackboard = await loadBlackboard({ run, task });
+  let effectiveMaxParallel = Math.max(1, Math.min(maxAgents, Number(allocationResult.decision.maxParallel) || 1));
 
   while (true) {
     allocationRounds += 1;
@@ -644,7 +646,7 @@ export async function runAdaptiveAgentPanel({
     );
     if (!pendingRoles.length) break;
 
-    const waveRoles = pendingRoles.slice(0, maxAgents);
+    const waveRoles = pendingRoles.slice(0, effectiveMaxParallel);
     const waveIndex = waves.length;
     const jobs = [];
 
@@ -679,6 +681,7 @@ export async function runAdaptiveAgentPanel({
     });
 
     const results = await Promise.all(jobs.map(async job => {
+      const startedAt = Date.now();
       const result = await modelCaller(agentMessages(job.role, { ...basePayload, harness, blackboard }), {
         config,
         fetchImpl,
@@ -692,7 +695,7 @@ export async function runAdaptiveAgentPanel({
       const parsed = result && !result.incomplete
         ? normalizedRoleFinding(parseJsonObject(result.text), job.role)
         : null;
-      return { ...job, result, parsed };
+      return { ...job, result, parsed, elapsedMs: Date.now() - startedAt };
     }));
 
     for (const item of results) {
@@ -725,6 +728,24 @@ export async function runAdaptiveAgentPanel({
     await recordWave({ run, task, wave: waveRecord });
     blackboard = mergeBlackboardForPanel(blackboard, results);
     await recordBlackboard({ run, task, blackboard });
+    const avgLatencyMs = results.length
+      ? results.reduce((sum, item) => sum + Number(item.elapsedMs || 0), 0) / results.length
+      : 0;
+    const errorRate = results.length
+      ? results.filter(item => !item.parsed).length / results.length
+      : 1;
+    const concurrency = adaptConcurrency({
+      current: effectiveMaxParallel,
+      min: 1,
+      max: maxAgents,
+      averageLatencyMs: avgLatencyMs,
+      errorRate,
+      remainingBudgetRatio: 1,
+      risk: run?.situation?.risk ?? 'ordinary',
+      benefit: Number(lastAllocation?.dimensions?.concurrencyOpportunity ?? 0)
+    });
+    effectiveMaxParallel = concurrency.next;
+    waveRecord.concurrency = concurrency;
     await Promise.all(results.map(item => recordAgent({
       run,
       task,
