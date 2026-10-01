@@ -22,6 +22,7 @@ import { CapabilityStore } from './src/capability-store.js';
 import { JobStore, createJobWorker } from './src/jobs.js';
 import { Scheduler } from './src/scheduling.js';
 import { createApp, VERSION } from './src/app.js';
+import { attachTerminalServer } from './src/terminal.js';
 
 /** Wire the object graph. Exported so tests build the same one. */
 export function build({ config, logger, metrics, fetchImpl }) {
@@ -51,6 +52,7 @@ export function build({ config, logger, metrics, fetchImpl }) {
   // Reminders and scheduled questions (src/scheduling.js).
   const scheduler = new Scheduler({ pool, runs, identity, logger, metrics });
   const app = createApp({ config, pool, identity, governance, capabilities, objects, runs, jobs, scheduler, audit, logger, metrics, fetchImpl });
+  app.locals.objects = objects;
   const worker = createJobWorker({
     jobs, identity, runs, logger, metrics, executeNext: app.locals.executeNext
   });
@@ -105,6 +107,7 @@ export async function start({ env = process.env } = {}) {
   }
 
   const server = createServer(app);
+  const terminalServer = attachTerminalServer(server, { config, identity, pool, objects: app.locals.objects, audit, logger, metrics });
   server.requestTimeout = config.limits.requestTimeoutMs;
   server.headersTimeout = 30_000;
   // Longer than a typical load balancer's idle timeout, so the balancer closes
@@ -154,6 +157,7 @@ export async function start({ env = process.env } = {}) {
     // cut off by the deadline. The job in hand finishes; an unfinished one is
     // reclaimed by another instance after its lease.
     const background = Promise.all([
+      terminalServer.close(),
       worker.stop().catch(error => logger.error('job worker shutdown failed', { error })),
       scheduler.stop().catch(error => logger.error('scheduler shutdown failed', { error }))
     ]);
@@ -183,7 +187,7 @@ export async function start({ env = process.env } = {}) {
     shutdown('uncaughtException');
   });
 
-  return { server, pool, config, logger };
+  return { server, pool, config, logger, terminalServer };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
