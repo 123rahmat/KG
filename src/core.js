@@ -21,6 +21,8 @@ import { workScale, BUILT_IN } from './work-scale.js';
 import { approvalReasons, verificationContract } from './capabilities.js';
 import { buildUnifiedAdaptiveIntelligence } from './unified-adaptive-intelligence.js';
 import { buildUnifiedWorkContext } from './unified-work-context.js';
+import { selectSkillDescriptors } from './skills.js';
+import { parallelDecision } from './parallel-orchestrator.js';
 
 export const CONTRACT = 'kindgleam-open-world-situation-adaptive-v9';
 export { CAPABILITIES, SURFACES };
@@ -618,6 +620,9 @@ export function planGoal(goal, {
     activeSurface,
     executionAvailable
   });
+  const skillTaskType = intent.kind === 'coding' ? 'build-code' : intent.kind === 'discovery' ? 'investigate' : intent.kind === 'chat' ? 'respond' : 'plan';
+  const selectedSkills = selectSkillDescriptors(value, { taskType: skillTaskType, intent: intent.kind, capabilities: granted, limit: 6 });
+
 
   const tasks = buildTasks(
     intent,
@@ -667,7 +672,7 @@ export function planGoal(goal, {
     tasks,
     next: blocked.length ? null : nextTask(tasks)?.id ?? null,
     principles: PRINCIPLES,
-    adaptation: { ...adaptive, scale, unifiedWorkContext, ...(notAvailableHere.length ? { notAvailableHere } : {}), ...(analysis.ownWork ? { ownWork: true } : {}) },
+    adaptation: { ...adaptive, scale, unifiedWorkContext, skills: selectedSkills.map(item => ({ name: item.name, version: item.version, description: item.description, progressiveDisclosure: true })), parallel: parallelDecision({ mode: adaptiveControl?.parallelMode ?? adaptiveControl?.parallel ?? 'auto', pressure: Number(unifiedIntelligence.complexity) || 0, concurrencyOpportunity: unifiedIntelligence.scale === 'large-project' ? 0.9 : unifiedIntelligence.scale === 'complex' ? 0.7 : unifiedIntelligence.scale === 'multi-file' ? 0.45 : 0, risk: analysis.situation?.risk ?? 'ordinary', maxParallel: adaptiveControl?.maxParallel ?? adaptiveControl?.multiAgentMaxAgents ?? 4, itemCount: Math.max(1, tasks.length), explicit: adaptiveControl?.parallelMode === 'always' }), ...(notAvailableHere.length ? { notAvailableHere } : {}), ...(analysis.ownWork ? { ownWork: true } : {}) },
     intelligence: unifiedIntelligence,
     execution: {
       targets: adaptive.execution?.targets ?? [],
