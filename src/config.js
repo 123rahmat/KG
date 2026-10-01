@@ -409,7 +409,9 @@ export function loadConfig(env = process.env) {
     },
 
     terminal: {
-      enabled: boolean(env.TERMINAL_ENABLED, true),
+      // Interactive terminal is opt-in in production. A deployment must
+      // explicitly enable it and provide the hardened runtime/image contract.
+      enabled: boolean(env.TERMINAL_ENABLED, !production),
       runtime: text(env.TERMINAL_RUNTIME) || null,
       maxSessionsPerPrincipal: integer(env.TERMINAL_MAX_SESSIONS_PER_PRINCIPAL, 2, { min: 1, max: 8, name: 'TERMINAL_MAX_SESSIONS_PER_PRINCIPAL', errors }),
       maxSessionsPerWorkspace: integer(env.TERMINAL_MAX_SESSIONS_PER_WORKSPACE, 4, { min: 1, max: 16, name: 'TERMINAL_MAX_SESSIONS_PER_WORKSPACE', errors }),
