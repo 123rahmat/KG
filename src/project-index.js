@@ -353,3 +353,41 @@ export function relatedTests(index, changedPaths = [], { max = 40 } = {}) {
     return path.startsWith(stem) || path.includes(stem.split('/').pop());
   })).slice(0, max);
 }
+
+
+/**
+ * Explain the breadth of a change before deciding how much verification is
+ * justified. This is advisory telemetry, not a permission or pass/fail rule.
+ */
+export function changeRiskSignals(index, changedPaths = []) {
+  const changed = new Set((Array.isArray(changedPaths) ? changedPaths : []).map(safeWorkspacePath).filter(Boolean));
+  const dependencies = Array.isArray(index?.dependencies) ? index.dependencies : [];
+  const dependents = new Map();
+
+  for (const edge of dependencies) {
+    if (!dependents.has(edge.to)) dependents.set(edge.to, new Set());
+    dependents.get(edge.to).add(edge.from);
+  }
+
+  const impacted = impactClosure(index, [...changed], { maxFiles: 500 });
+  const related = relatedTests(index, [...changed], { max: 200 });
+  const highFanIn = [...changed].filter(path => (dependents.get(path)?.size ?? 0) >= 4);
+  const configChanged = [...changed].some(path => classifyWorkspaceFile(path) === 'config');
+  const deleted = [...changed].filter(path => !(index?.files ?? []).some(file => file.path === path));
+
+  let scope = 'targeted';
+  if (configChanged || deleted.length || impacted.length > 40) scope = 'full';
+  else if (highFanIn.length || impacted.length > 15 || related.length > 12) scope = 'broad';
+
+  return {
+    version: 1,
+    changedFiles: changed.size,
+    impactedFiles: impacted.length,
+    relatedTests: related.length,
+    highFanInChangedFiles: highFanIn.slice(0, 30),
+    configChanged,
+    deletedFiles: deleted.length,
+    verificationScope: scope,
+    confidence: changed.size === 0 ? 0.5 : Math.max(0.2, Math.min(1, 1 - (impacted.length / 250)))
+  };
+}
