@@ -101,14 +101,18 @@ export class AdaptiveProviderGovernor {
     });
   }
 
-  release(state) {
-    state.active = Math.max(0, state.active - 1);
+  drain(state) {
     while (state.queued.length && state.active < state.concurrency) {
       const next = state.queued.shift();
       clearTimeout(next.timer);
       state.active += 1;
       next.resolve(() => this.release(state));
     }
+  }
+
+  release(state) {
+    state.active = Math.max(0, state.active - 1);
+    this.drain(state);
   }
 
   adapt(key, { ok, latencyMs = 0, code = null } = {}) {
@@ -125,7 +129,7 @@ export class AdaptiveProviderGovernor {
         state.successStreak = 0;
         state.lastChangeAt = this.now();
         this.onChange?.({ key: state.key, concurrency: state.concurrency, reason: 'healthy' });
-        this.release(state);
+        this.drain(state);
       }
       return this.stats(state.key)[0];
     }
@@ -141,7 +145,7 @@ export class AdaptiveProviderGovernor {
       state.concurrency = Math.max(state.minConcurrency, state.concurrency - 1);
       state.lastChangeAt = this.now();
       this.onChange?.({ key: state.key, concurrency: state.concurrency, reason: 'upstream-pressure' });
-      this.release(state);
+      this.drain(state);
     }
     return this.stats(state.key)[0];
   }
