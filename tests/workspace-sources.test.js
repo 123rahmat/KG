@@ -104,6 +104,63 @@ test('GitHub repository snapshots read the immutable resolved commit', async () 
   assert.deepEqual(result.files, [{ path: 'src/app.js', content: 'export const ok = true;\n' }]);
   assert.ok(calls.some(call => call.url.includes('/git/trees/base123?recursive=1')));
 });
+test('GitHub snapshots reject oversized trees before downloading blobs', async () => {
+  const fetchImpl = async (url, init = {}) => {
+    if (url.endsWith('/repos/demo/app')) {
+      return new Response(JSON.stringify({ default_branch: 'main', private: true, html_url: 'https://github.com/demo/app' }), {
+        status: 200, headers: { 'content-type': 'application/json' }
+      });
+    }
+    if (url.includes('/commits/main')) {
+      return new Response(JSON.stringify({ sha: 'base123', commit: { tree: { sha: 'tree123' } } }), {
+        status: 200, headers: { 'content-type': 'application/json' }
+      });
+    }
+    if (url.includes('/git/trees/base123?recursive=1')) {
+      return new Response(JSON.stringify({ truncated: false, tree: Array.from({ length: 20_001 }, (_, i) => ({ type: 'blob', path: `src/${i}.js`, size: 1, sha: `blob${i}` })) }), {
+        status: 200, headers: { 'content-type': 'application/json' }
+      });
+    }
+    throw new Error('blob download should not happen');
+  };
+  await assert.rejects(
+    () => githubReadRepository({ fetchImpl, token: 'secret', owner: 'demo', repo: 'app', ref: 'main' }),
+    /tree is too large/
+  );
+});
+
+test('GitHub snapshots reject invalid UTF-8 instead of replacing source bytes', async () => {
+  const fetchImpl = async (url, init = {}) => {
+    if (url.endsWith('/repos/demo/app')) {
+      return new Response(JSON.stringify({ default_branch: 'main', private: true, html_url: 'https://github.com/demo/app' }), {
+        status: 200, headers: { 'content-type': 'application/json' }
+      });
+    }
+    if (url.includes('/commits/main')) {
+      return new Response(JSON.stringify({ sha: 'base123', commit: { tree: { sha: 'tree123' } } }), {
+        status: 200, headers: { 'content-type': 'application/json' }
+      });
+    }
+    if (url.includes('/git/trees/base123?recursive=1')) {
+      return new Response(JSON.stringify({
+        truncated: false,
+        tree: [{ type: 'blob', path: 'src/bad.js', size: 2, sha: 'badblob' }]
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    if (url.includes('/git/blobs/badblob')) {
+      return new Response(JSON.stringify({
+        encoding: 'base64',
+        content: Buffer.from([0xc3, 0x28]).toString('base64')
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    throw new Error('unexpected GitHub call');
+  };
+  await assert.rejects(
+    () => githubReadRepository({ fetchImpl, token: 'secret', owner: 'demo', repo: 'app', ref: 'main' }),
+    /invalid UTF-8/
+  );
+});
+
 test('workspace deletion paths use the same canonical traversal boundary', () => {
   assert.equal(workspacePath('src/file.js'), 'src/file.js');
   assert.equal(workspacePath('src/../file.js'), null);

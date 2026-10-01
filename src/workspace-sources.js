@@ -18,6 +18,7 @@ const GITHUB_REPO = /^[A-Za-z0-9_.-]{1,100}$/;
 const MAX_FILES = 250;
 const MAX_FILE_BYTES = 256 * 1024;
 const MAX_TOTAL_BYTES = 4 * 1024 * 1024;
+const MAX_TREE_ENTRIES = 20_000;
 
 const SOURCE_EXTENSIONS = new Set(['py','pyi','js','mjs','cjs','jsx','ts','tsx','json','toml','cfg','ini','yaml','yml','md','txt','rst','html','css','scss','sql','sh','c','h','cc','cxx','cpp','hh','hpp','java','kt','kts','gradle','go','mod','sum','rs','rb','php','cs','swift','proto','cmake','csv','xml']);
 const SOURCE_NAMES = new Set(['Makefile','Dockerfile','requirements.txt','package.json','pyproject.toml','setup.cfg','README','LICENSE','go.mod','go.sum','Cargo.toml','Cargo.lock','CMakeLists.txt','build.gradle','settings.gradle','pom.xml']);
@@ -141,6 +142,9 @@ export async function githubReadRepository({
     token
   );
   if (tree?.truncated === true) throw new Error('GitHub repository tree is truncated; narrow the source to a subdirectory or ref.');
+  if (!Array.isArray(tree?.tree) || tree.tree.length > MAX_TREE_ENTRIES) {
+    throw new Error('GitHub repository tree is too large for a safe workspace snapshot; narrow the source to a subdirectory or ref.');
+  }
   const files = [];
   let total = 0;
   for (const entry of tree?.tree ?? []) {
@@ -155,7 +159,13 @@ export async function githubReadRepository({
       token
     );
     if (blob?.encoding !== 'base64') continue;
-    const content = Buffer.from(String(blob.content ?? '').replaceAll('\\n', ''), 'base64').toString('utf8');
+    let content;
+    try {
+      const bytesValue = Buffer.from(String(blob.content ?? '').replaceAll('\\n', ''), 'base64');
+      content = new TextDecoder('utf-8', { fatal: true }).decode(bytesValue);
+    } catch {
+      throw new Error('GitHub source contains invalid UTF-8 data: ' + path);
+    }
     const bytes = Buffer.byteLength(content, 'utf8');
     if (bytes > MAX_FILE_BYTES || total + bytes > maxBytes) continue;
     files.push({ path, content });
