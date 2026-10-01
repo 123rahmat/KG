@@ -12,6 +12,7 @@ import { assertTermsAccepted } from '../terms.js';
 import { configuredExecutionTargets, planPolicyAllows, dataPolicyAllows, modelPolicyAllows } from '../http/policy.js';
 import { resolveModelSelection } from '../model-routing.js';
 import { FeedbackStore } from '../feedback.js';
+import { EvolutionStore } from '../evolution.js';
 
 // Files the AI reads for itself: text and code, CSV, PDF, Word, Excel and
 // PowerPoint become text; images are shown to the model. Anything else stays
@@ -25,6 +26,9 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
   /** What this deployment can really run, so plans never wait on a missing runner. */
   const feedback = config.security?.personalDataEncryptionKey
     ? new FeedbackStore(pool, { encryptionKey: config.security.personalDataEncryptionKey })
+    : null;
+  const evolution = config.security?.personalDataEncryptionKey
+    ? new EvolutionStore(pool, { encryptionKey: config.security.personalDataEncryptionKey })
     : null;
 
   function executionAvailable() {
@@ -266,12 +270,34 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
     if (run.principalId !== req.principal.id) return res.status(403).json({ error: 'Only the run owner can rate this result.', code: 'feedback-owner-only' });
     if (!feedback) return res.status(503).json({ error: 'Feedback storage is not configured.', code: 'feedback-unavailable' });
     const saved = await feedback.add(req.scope, req.principal, run.id, req.body ?? {});
+    await evolution?.captureFeedback(req.scope, {
+      feedbackId: saved.id, runId: run.id, reason: saved.reason, note: req.body?.note
+    }).catch(error => audit?.record({
+      principalId: req.principal.id, workspaceId: req.scope.workspaceId,
+      action: 'evolution.capture.failed', target: run.id, outcome: 'warning',
+      detail: { code: error.code ?? 'capture-failed' }, requestId: req.requestId
+    }));
     await audit?.record({
       principalId: req.principal.id, workspaceId: req.scope.workspaceId,
       action: 'run.feedback', target: run.id, outcome: 'allowed',
       detail: { rating: saved.rating, reason: saved.reason }, requestId: req.requestId
     });
     res.status(201).json({ feedback: saved });
+  }));
+
+  app.get('/api/evolution/proposals', scoped('admin'), route(async (req, res) => {
+    res.json({ proposals: evolution ? await evolution.list(req.scope, { status: req.query.status, limit: req.query.limit }) : [] });
+  }));
+
+  app.post('/api/evolution/proposals/:id/status', scoped('admin'), route(async (req, res) => {
+    if (!evolution) return res.status(503).json({ error: 'Evolution storage is not configured.', code: 'evolution-unavailable' });
+    const saved = await evolution.setStatus(req.scope, req.principal, req.params.id, req.body?.status);
+    await audit?.record({
+      principalId: req.principal.id, workspaceId: req.scope.workspaceId,
+      action: 'evolution.proposal.status', target: saved.id, outcome: 'allowed',
+      detail: { status: saved.status, target: saved.target }, requestId: req.requestId
+    });
+    res.json({ proposal: saved });
   }));
 
   // Record a real outcome for one task. The client names the task and supplies
