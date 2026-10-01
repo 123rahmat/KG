@@ -346,7 +346,8 @@ export function rolesFor(run, task, {
   // than silently under-allocating because of a utility floor.
   if (disagreement && roles.length < targetCount) {
     for (const candidate of candidates) {
-      if (roles.length >= targetCount || roles.includes(candidate.role)) break;
+      if (roles.length >= targetCount) break;
+      if (roles.includes(candidate.role)) continue;
       roles.push(candidate.role);
       utilities[candidate.role] = Number(candidate.utility.toFixed(3));
     }
