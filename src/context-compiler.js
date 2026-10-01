@@ -54,12 +54,17 @@ function taskTerms(goal, task, failure = null) {
 
 function scoreFile(file, { changed, impacted, queryTerms, tests, config }) {
   const lower = file.path.toLowerCase();
+  const pathParts = new Set(lower.split(/[\\/._-]+/).filter(Boolean));
   let score = 0;
   if (changed.has(file.path)) score += 5000;
   if (impacted.has(file.path)) score += 1600;
   if (tests.has(file.path)) score += 900;
   if (config.has(file.path)) score += 600;
-  for (const term of queryTerms) if (lower.includes(term)) score += 45;
+  for (const term of queryTerms) {
+    if (lower.includes(term)) score += 45;
+    const parts = term.split(/[_-]+/).filter(part => part.length >= 3);
+    score += parts.reduce((sum, part) => sum + (pathParts.has(part) ? 90 : 0), 0);
+  }
   score += file.kind === 'code' ? 30 : file.kind === 'test' ? 20 : 0;
   if (file.path.split('/').length <= 2) score += 10;
   return score;
