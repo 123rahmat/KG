@@ -16,7 +16,9 @@ export function normalizeMcpServer(server = {}) {
     resources: Array.isArray(server.resources) ? server.resources.slice(0, 100) : [],
     prompts: Array.isArray(server.prompts) ? server.prompts.slice(0, 100) : [],
     transport: text(server.transport) || 'managed',
-    supportedFeatures: ['resources', 'prompts', 'tools', 'progress', 'cancellation'],
+    supportedFeatures: Array.isArray(server.supportedFeatures)
+      ? server.supportedFeatures.slice(0, 30).map(text).filter(Boolean)
+      : [],
     trust: 'untrusted-until-authorized',
     authorization: 'server-gateway-required' };
 }
