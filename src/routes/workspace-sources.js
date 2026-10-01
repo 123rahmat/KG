@@ -7,6 +7,7 @@ import {
   githubListBranches,
   githubReadRepository,
   githubResolveRevision,
+  githubApplyChanges,
   normalizeSourceFiles,
   sourceManifest,
   sourcePublic
@@ -236,7 +237,6 @@ export function registerWorkspaceSourcesRoutes(app, {
     if (!changes.length) return res.status(400).json({ error: 'No changes supplied.', code: 'changes-required' });
     const token = decryptSourceCredentials(encryptionKey, source.credentials_enc);
     if (!token) return res.status(409).json({ error: 'GitHub credentials are unavailable. Reconnect the repository.', code: 'source-credentials-missing' });
-    const { githubApplyChanges } = await import('../workspace-sources.js');
     const result = await githubApplyChanges({
       fetchImpl, token,
       owner: source.repo_owner,
@@ -246,13 +246,25 @@ export function registerWorkspaceSourcesRoutes(app, {
       changes,
       message: text(req.body?.message) || 'workspace: apply reviewed changes'
     });
+    const { rows: [updated] } = await pool.query(
+      `UPDATE workspace_sources
+          SET repo_ref = $4,
+              metadata = metadata || $5::jsonb,
+              updated_at = now()
+        WHERE id = $1 AND workspace_id = $2 AND principal_id = $3
+        RETURNING *`,
+      [
+        source.id, req.scope.workspaceId, req.principal.id, result.ref,
+        JSON.stringify({ commitSha: result.commitSha, staleSnapshot: true, writeAt: new Date().toISOString() })
+      ]
+    );
     await audit?.record({
       principalId: req.principal.id, workspaceId: req.scope.workspaceId,
       action: 'workspace.source.write', target: source.id, outcome: 'allowed',
-      detail: { kind: 'github', ref: source.repo_ref, changedFiles: result.changedFiles ?? [] },
+      detail: { kind: 'github', ref: source.repo_ref, changedFiles: result.changedFiles ?? [], commitSha: result.commitSha },
       requestId: req.requestId
     });
-    res.json({ source: sourcePublic(source), result });
+    res.json({ source: sourcePublic(updated), result });
   }));
 
   app.post('/api/workspace/sources/:id/revoke', scoped('editor'), route(async (req, res) => {
