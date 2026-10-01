@@ -11,6 +11,7 @@
 import { parseJsonObject } from './structured.js';
 import { callModel } from './runtime.js';
 import { clip } from './reasoning-context.js';
+import { mergeBlackboard } from './blackboard.js';
 
 export const MULTI_AGENT_MODES = Object.freeze(['auto', 'always', 'off']);
 export const DEFAULT_MULTI_AGENT_MAX_AGENTS = 5;
@@ -431,6 +432,7 @@ export function agentMessages(role, basePayload) {
         workPlan: basePayload?.workPlan ?? null,
         previousAttempts: basePayload?.previousAttempts ?? [],
         evidenceSoFar: basePayload?.evidenceSoFar ?? [],
+        blackboard: basePayload?.blackboard ?? null,
         // Every workspace chat uses the same server-selected chat context as
         // the primary model: local memory, recent turns and the current
         // workspace state. Peer findings remain excluded to prevent herding.
@@ -518,6 +520,22 @@ function disagreementProfile(findings) {
   };
 }
 
+function mergeBlackboardForPanel(current, results) {
+  let board = current ?? null;
+  for (const item of results) {
+    if (!item.parsed) continue;
+    board = mergeBlackboard(board ?? {}, {
+      facts: item.parsed.evidence,
+      hypotheses: item.parsed.unknowns,
+      findings: [item.parsed.summary],
+      blockers: item.parsed.risks,
+      openQuestions: item.parsed.unknowns,
+      decisions: item.parsed.actions
+    }, board?.runId ?? null);
+  }
+  return board;
+}
+
 function buildBrief(findings, arbiter, decision, states = [], allocation = null) {
   const recommendations = [...new Set(findings.map(item => item.recommendation).filter(Boolean))];
   const risks = [...new Set(findings.flatMap(item => item.risks ?? []))].slice(0, 10);
@@ -584,7 +602,9 @@ export async function runAdaptiveAgentPanel({
   recordUsage = async () => {},
   modelCaller = callModel,
   recordWave = async () => {},
-  recordAgent = async () => {}
+  recordAgent = async () => {},
+  loadBlackboard = async () => null,
+  recordBlackboard = async () => {}
 } = {}) {
   const { buildHarnessContext } = await import('./agent-harness.js');
   const mode = config?.agents?.multiAgent ?? 'auto';
@@ -600,6 +620,7 @@ export async function runAdaptiveAgentPanel({
   const waves = [];
   let lastAllocation = allocationResult.allocation;
   let allocationRounds = 0;
+  let blackboard = await loadBlackboard({ run, task });
 
   while (true) {
     allocationRounds += 1;
@@ -654,7 +675,7 @@ export async function runAdaptiveAgentPanel({
     });
 
     const results = await Promise.all(jobs.map(async job => {
-      const result = await modelCaller(agentMessages(job.role, { ...basePayload, harness }), {
+      const result = await modelCaller(agentMessages(job.role, { ...basePayload, harness, blackboard }), {
         config,
         fetchImpl,
         modelId: job.modelId,
@@ -698,6 +719,8 @@ export async function runAdaptiveAgentPanel({
     };
     waves.push(waveRecord);
     await recordWave({ run, task, wave: waveRecord });
+    blackboard = mergeBlackboardForPanel(blackboard, results);
+    await recordBlackboard({ run, task, blackboard });
     await Promise.all(results.map(item => recordAgent({
       run,
       task,
