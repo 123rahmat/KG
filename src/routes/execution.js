@@ -1335,6 +1335,9 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         firstPackage = materializeCodePackage(firstPackage, { baseFiles: baseFilesForPackage });
       }
     }
+    if (task.id === 'build-code' && firstPackage && hasCode(firstPackage)) {
+      answer = { ...answer, text: JSON.stringify(firstPackage) };
+    }
     const hadTests = firstPackage && isProject(firstPackage)
       ? { previous: repairsThisAttempt(run).at(-1)?.code ?? null, baseFiles: baseFilesForPackage }
       : {};
