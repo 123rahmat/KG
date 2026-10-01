@@ -400,7 +400,7 @@ test('a fixed version of the code is really run again, not replayed from the fir
           executions.push({ id: body.executionId, replayed: false });
           return jsonResponse(receipt);
         }
-        const { body, request } = modelRequest(options);
+        const { request } = modelRequest(options);
         const text = request.task?.id === 'build-code'
           ? JSON.stringify({ language: 'python', source: request.codeRepair ? 'def is_prime(n):\n    if n < 2:\n        return False\n    return all(n % d for d in range(2, int(n ** 0.5) + 1))\n' : 'def is_prime(n):\n    return all(n % d for d in range(2, n))\n', tests: 'import unittest\nfrom main import is_prime\n' })
           : 'Done.';
