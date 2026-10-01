@@ -39,7 +39,7 @@ const CONFIG_NAMES = new Set([
 const IDENT = '[A-Za-z_$][A-Za-z0-9_$-]*';
 
 function languageOf(path) {
-  const match = /\.([^.\/]+)$/.exec(path.toLowerCase());
+  const match = /\.([^./]+)$/.exec(path.toLowerCase());
   return match ? EXTENSIONS[match[1]] ?? null : null;
 }
 
