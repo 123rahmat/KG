@@ -312,7 +312,12 @@ export function rolesFor(run, task, {
   if (!decision.enabled) return { decision, roles: [], agentCount: 0, allocation: null };
 
   const maximum = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
-  const targetCount = Math.min(maximum, targetAgentCount(decision.pressure, maximum));
+  let targetCount = Math.min(maximum, targetAgentCount(decision.pressure, maximum));
+  // A normal build-code step uses a focused pair; explicit build planning can
+  // justify more specialists when decomposition or risk actually warrants it.
+  if (task?.id === 'build-code' && task?.metadata?.buildPlan !== true) {
+    targetCount = Math.min(targetCount, 2);
+  }
   const candidates = roleCandidates(run, task, progress);
   const roles = [];
   const utilities = {};
