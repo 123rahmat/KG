@@ -58,6 +58,8 @@ export async function openLocalFolder() {
     });
     state.workspaceSourceId = result.source.id;
     state.workspaceSource = result.source;
+    if (state.chat) state.chat.workspaceSourceId = result.source.id;
+    if (state.chat) state.chat.workspaceSourceId = result.source.id;
     updateSourceUI();
     notify('runNotice', 'info', `Connected ${sourceName()} · ${result.manifest.fileCount} files`);
     return result.source;
@@ -69,9 +71,10 @@ export async function openLocalFolder() {
 }
 
 export async function syncLocalFolder() {
-  if (!localDirectory || !state.workspaceSourceId) return null;
+  const sourceId = state.chat?.workspaceSourceId ?? state.workspaceSourceId;
+  if (!localDirectory || !sourceId) return null;
   const files = await folderFiles();
-  const result = await api('POST', `/api/workspace/sources/local/${encodeURIComponent(state.workspaceSourceId)}/sync`, { files });
+  const result = await api('POST', `/api/workspace/sources/local/${encodeURIComponent(sourceId)}/sync`, { files });
   state.workspaceSource = result.source;
   return result;
 }
@@ -103,9 +106,10 @@ export async function connectGitHub() {
 }
 
 export async function syncActiveWorkspaceSource() {
-  if (!state.workspaceSourceId) return null;
+  const sourceId = state.chat?.workspaceSourceId ?? state.workspaceSourceId;
+  if (!sourceId) return null;
   if (state.workspaceSource?.kind === 'local-folder') return syncLocalFolder();
-  return api('POST', `/api/workspace/sources/${encodeURIComponent(state.workspaceSourceId)}/sync`)
+  return api('POST', `/api/workspace/sources/${encodeURIComponent(sourceId)}/sync`)
     .then(result => {
       state.workspaceSource = result.source;
       updateSourceUI();
@@ -113,20 +117,7 @@ export async function syncActiveWorkspaceSource() {
     });
 }
 
-async function loadWorkspaceSources() {
-  try {
-    const result = await api('GET', '/api/workspace/sources');
-    const github = (result.sources ?? []).find(source => source.kind === 'github');
-    if (github) {
-      state.workspaceSourceId = github.id;
-      state.workspaceSource = github;
-    }
-    updateSourceUI();
-  } catch {}
-}
-
 export async function initWorkspaceSources() {
-  await loadWorkspaceSources();
   updateSourceUI();
   const local = $('openLocalFolder');
   const github = $('connectGithub');
