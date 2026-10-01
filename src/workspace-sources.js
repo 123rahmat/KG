@@ -41,6 +41,13 @@ function safePath(value) {
   return workspacePath(path);
 }
 
+function repositoryPath(prefix, relative) {
+  const base = safePath(prefix);
+  const child = safePath(relative);
+  if (!child) return null;
+  return base ? safePath(base + '/' + child) : child;
+}
+
 export function normalizeSourceFiles(files = []) {
   const list = Array.isArray(files) ? files : [];
   const map = new Map();
@@ -135,9 +142,11 @@ export async function githubListBranches({ fetchImpl = fetch, token, owner, repo
 }
 
 export async function githubReadRepository({
-  fetchImpl = fetch, token, owner, repo, ref = null, maxBytes = MAX_TOTAL_BYTES
+  fetchImpl = fetch, token, owner, repo, ref = null, repoPath = null, maxBytes = MAX_TOTAL_BYTES
 } = {}) {
   assertGitHubRepo(owner, repo);
+  const prefix = text(repoPath) ? safePath(repoPath) : null;
+  if (text(repoPath) && !prefix) throw new Error('GitHub repository subdirectory is invalid');
   const root = await githubJson(
     fetchImpl,
     `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
@@ -165,8 +174,12 @@ export async function githubReadRepository({
   let total = 0;
   for (const entry of tree?.tree ?? []) {
     if (entry?.type !== 'blob') continue;
-    const path = safePath(entry.path);
-    if (!path || !isUsefulSourcePath(path)) continue;
+    const remotePath = safePath(entry.path);
+    if (!remotePath || !isUsefulSourcePath(remotePath)) continue;
+    const path = prefix
+      ? (remotePath === prefix ? '' : remotePath.startsWith(prefix + '/') ? remotePath.slice(prefix.length + 1) : null)
+      : remotePath;
+    if (!path || !safePath(path) || !isUsefulSourcePath(path)) continue;
     const size = Number(entry.size) || 0;
     if (size > MAX_FILE_BYTES) {
       skippedCount += 1;
@@ -215,7 +228,7 @@ export async function githubReadRepository({
     }
   }
   return {
-    source: { owner, repo, ref: resolvedRef, defaultBranch: root.default_branch, private: root.private === true, url: root.html_url, commitSha: revision.sha, treeSha: revision.treeSha },
+    source: { owner, repo, ref: resolvedRef, repoPath: prefix, defaultBranch: root.default_branch, private: root.private === true, url: root.html_url, commitSha: revision.sha, treeSha: revision.treeSha },
     files: normalizeSourceFiles(files),
     ingestion: {
       partial: skippedCount > 0,
@@ -244,9 +257,11 @@ export async function githubResolveRevision({ fetchImpl = fetch, token, owner, r
 }
 
 export async function githubApplyChanges({
-  fetchImpl = fetch, token, owner, repo, ref, expectedCommitSha, changes = [], message = 'workspace: apply changes'
+  fetchImpl = fetch, token, owner, repo, ref, repoPath = null, expectedCommitSha, changes = [], message = 'workspace: apply changes'
 } = {}) {
   assertGitHubRepo(owner, repo);
+  const prefix = text(repoPath) ? safePath(repoPath) : null;
+  if (text(repoPath) && !prefix) throw new Error('GitHub repository subdirectory is invalid');
   const revision = await githubResolveRevision({ fetchImpl, token, owner, repo, ref });
   if (text(expectedCommitSha) && revision.sha !== text(expectedCommitSha)) {
     const error = new Error('GitHub branch changed since this workspace revision was loaded.');
@@ -261,13 +276,15 @@ export async function githubApplyChanges({
   for (const change of list) {
     const path = safePath(change?.path);
     if (!path) throw new Error('GitHub change path is invalid');
+    const remotePath = prefix ? repositoryPath(prefix, path) : path;
+    if (!remotePath) throw new Error('GitHub repository subdirectory path is invalid: ' + path);
     if (seenPaths.has(path)) throw new Error('GitHub change set contains duplicate paths: ' + path);
     seenPaths.add(path);
     if (change?.kind && change.kind !== 'delete' && change.kind !== 'upsert') {
       throw new Error('GitHub write-back accepts only full-file upserts and deletes.');
     }
     if (change?.kind === 'delete' || change?.delete === true) {
-      elements.push({ path, mode: '100644', type: 'blob', sha: null });
+      elements.push({ path: remotePath, mode: '100644', type: 'blob', sha: null });
       continue;
     }
     const content = String(change?.content ?? '');
@@ -287,7 +304,7 @@ export async function githubApplyChanges({
       }
     );
     if (!text(blob?.sha)) throw new Error('GitHub did not return a blob for ' + path);
-    elements.push({ path, mode: '100644', type: 'blob', sha: blob.sha });
+    elements.push({ path: remotePath, mode: '100644', type: 'blob', sha: blob.sha });
   }
   if (!elements.length) return { unchanged: true, commitSha: revision.sha, ref: revision.ref };
 
@@ -311,7 +328,8 @@ export async function githubApplyChanges({
   );
   for (const change of list) {
     const path = safePath(change?.path);
-    if (!path || !upstreamPaths.has(path)) continue;
+    const remotePath = prefix ? repositoryPath(prefix, path) : path;
+    if (!path || !remotePath || !upstreamPaths.has(remotePath)) continue;
     if (!text(change?.beforeDigest)) {
       const error = new Error('An explicit pre-image digest is required before overwriting an existing GitHub file: ' + path);
       error.code = 'github-preimage-required';
