@@ -558,7 +558,7 @@ function requirementsCard(run) {
 
 function workDetailsCard(run) {
   const situation = run?.situation ?? {};
-  const intelligence = run?.adaptation?.unifiedIntelligence ?? run?.adaptation?.unifiedIntelligence;
+  const intelligence = run?.adaptation?.unifiedIntelligence ?? {};
   const meta = intelligence?.metaReasoning ?? run?.adaptation?.metaReasoning ?? {};
   const resource = run?.adaptation?.resourceDecision ?? meta?.resourceDecision ?? intelligence?.resourceDecision ?? {};
   const next = Array.isArray(run?.tasks) ? run.tasks.find(task => task.id === run.next) : null;
