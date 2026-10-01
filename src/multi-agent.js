@@ -54,7 +54,7 @@ const ROLE_CATALOG = Object.freeze({
     purpose: 'For failed, inconsistent, or retried work, separate symptoms from causes, compare competing hypotheses, and identify the next discriminating test or corrective change.',
     bestFor: ['build-code', 'prototype', 'respond', 'deliver', 'reassess', 'step', 'plan', 'investigate'],
   }  },
-  debugger: {
+  'debugger': {
     purpose: 'Trace a software failure from observed symptoms to the smallest likely root cause, distinguish evidence from hypotheses, and propose the most discriminating repair or diagnostic check.',
     bestFor: ['build-code', 'test-code', 'debug-code', 'code', 'prototype', 'reassess'],
   },
