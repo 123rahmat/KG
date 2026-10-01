@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { githubApplyChanges, githubHeaders, githubListBranches, githubListRepositories, normalizeSourceFiles, sourceManifest } from '../src/workspace-sources.js';
+import { githubApplyChanges, githubHeaders, githubListBranches, githubListRepositories, githubReadRepository, normalizeSourceFiles, sourceManifest } from '../src/workspace-sources.js';
 
 test('workspace source files normalize safely and deterministically', () => {
   const files = normalizeSourceFiles([
@@ -64,6 +64,45 @@ test('GitHub repository and branch discovery uses POST-safe server-side helpers'
 });
 
 
+test('GitHub repository snapshots read the immutable resolved commit', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init = {}) => {
+    calls.push({ url, init });
+    if (url.endsWith('/repos/demo/app')) {
+      return new Response(JSON.stringify({ default_branch: 'main', private: true, html_url: 'https://github.com/demo/app' }), {
+        status: 200, headers: { 'content-type': 'application/json' }
+      });
+    }
+    if (url.includes('/commits/main')) {
+      return new Response(JSON.stringify({ sha: 'base123', commit: { tree: { sha: 'tree123' } } }), {
+        status: 200, headers: { 'content-type': 'application/json' }
+      });
+    }
+    if (url.includes('/git/trees/main')) {
+      throw new Error('moving ref was used instead of the resolved commit');
+    }
+    if (url.includes('/git/trees/base123?recursive=1')) {
+      return new Response(JSON.stringify({
+        truncated: false,
+        tree: [{ type: 'blob', path: 'src/app.js', size: 23, sha: 'blob123' }]
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    if (url.includes('/git/blobs/blob123')) {
+      return new Response(JSON.stringify({
+        encoding: 'base64',
+        content: Buffer.from('export const ok = true;\n').toString('base64')
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    return new Response('{}', { status: 404, headers: { 'content-type': 'application/json' } });
+  };
+  const result = await githubReadRepository({
+    fetchImpl, token: 'secret', owner: 'demo', repo: 'app', ref: 'main'
+  });
+  assert.equal(result.source.commitSha, 'base123');
+  assert.equal(result.source.treeSha, 'tree123');
+  assert.deepEqual(result.files, [{ path: 'src/app.js', content: 'export const ok = true;\n' }]);
+  assert.ok(calls.some(call => call.url.includes('/git/trees/base123?recursive=1')));
+});
 test('GitHub write-back builds one revision and rejects stale bases', async () => {
   const calls = [];
   const fetchImpl = async (url, init = {}) => {

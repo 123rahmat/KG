@@ -131,9 +131,13 @@ export async function githubReadRepository({
   );
   const resolvedRef = text(ref) || text(root.default_branch) || 'main';
   const revision = await githubResolveRevision({ fetchImpl, token, owner, repo, ref: resolvedRef });
+  if (!revision.sha) throw new Error('GitHub repository revision could not be resolved');
+  // Resolve the ref once, then read the tree from that immutable commit SHA.
+  // Using the moving branch/tag name here creates a TOCTOU race where the
+  // snapshot metadata and file contents can come from different revisions.
   const tree = await githubJson(
     fetchImpl,
-    `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodeURIComponent(resolvedRef)}?recursive=1`,
+    `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodeURIComponent(revision.sha)}?recursive=1`,
     token
   );
   if (tree?.truncated === true) throw new Error('GitHub repository tree is truncated; narrow the source to a subdirectory or ref.');

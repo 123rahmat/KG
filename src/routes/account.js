@@ -234,7 +234,7 @@ export function registerAccountRoutes(app, { config, pool, identity, audit, rout
   app.post('/api/runs/:id/report', scoped('viewer'), route(async (req, res) => {
     const reason = String(req.body?.reason ?? '');
     if (!REPORT_REASONS.includes(reason)) return res.status(400).json({ error: `Choose a reason: ${REPORT_REASONS.join(', ')}.`, code: 'report-reason' });
-    const { rows: [run] } = await pool.query('SELECT id FROM runs WHERE id = $1', [req.params.id]);
+    const { rows: [run] } = await pool.query('SELECT id FROM runs WHERE id = $1 AND workspace_id = $2', [req.params.id, req.scope.workspaceId]);
     if (!run) return res.status(404).json({ error: 'Chat not found', code: 'no-run' });
     const { rows: tasks } = await pool.query(
       "SELECT evidence->>'text' AS text FROM run_tasks WHERE run_id = $1 AND type IN ('respond', 'deliver', 'prototype', 'investigate', 'tool') AND evidence ? 'text' ORDER BY position DESC LIMIT 1",
