@@ -247,11 +247,10 @@ function decisionPressure(run, task, progress = {}) {
 
 function targetAgentCount(pressure, maxAgents) {
   const maximum = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
-  const desired = pressure >= 0.99 ? 5
-    : pressure >= 0.80 ? 4
-      : pressure >= 0.65 ? 3
-        : pressure >= 0.41 ? 2
-          : 1;
+  const desired = pressure >= 0.80 ? 4
+    : pressure >= 0.65 ? 3
+      : pressure >= 0.41 ? 2
+        : 1;
   return Math.min(maximum, desired);
 }
 
@@ -323,11 +322,18 @@ export function rolesFor(run, task, {
     new Set(progress.findings.map(item => text(item?.recommendation).toLowerCase()).filter(Boolean)).size > 1;
   const disagreement = observed.disagreement || explicitDisagreement;
   const highStakeBuild = task?.id === 'build-code' && HIGH_STAKES.has(text(run?.situation?.risk).toLowerCase());
+  const advancedBuildPlan = task?.id === 'build-code'
+    && task?.metadata?.buildPlan === true
+    && text(run?.adaptation?.scale).toLowerCase() === 'advanced';
   if (task?.id === 'build-code' && task?.metadata?.buildPlan !== true && !highStakeBuild) {
     targetCount = Math.min(targetCount, 2);
   }
-  if (disagreement) {
-    targetCount = Math.max(targetCount, Math.min(maximum, 4));
+  if (advancedBuildPlan && highStakeBuild) {
+    targetCount = maximum;
+  } else if (disagreement) {
+    // Four independent perspectives is the disagreement ceiling. A fifth
+    // specialist is reserved for explicitly advanced/high-stakes build plans.
+    targetCount = Math.min(maximum, Math.max(targetCount, 4));
   }
   const candidates = roleCandidates(run, task, progress);
   const roles = [];
