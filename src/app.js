@@ -353,6 +353,16 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
 
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Unknown endpoint', code: 'no-route' }));
 
+  // Self-host the terminal emulator assets so CSP remains same-origin; no CDN is required at runtime.
+  app.use('/vendor/xterm', express.static(path.join(PUBLIC_DIR, '..', 'node_modules', '@xterm', 'xterm'), {
+    immutable: true,
+    maxAge: '1 year'
+  }));
+  app.use('/vendor/xterm-fit', express.static(path.join(PUBLIC_DIR, '..', 'node_modules', '@xterm', 'addon-fit'), {
+    immutable: true,
+    maxAge: '1 year'
+  }));
+
   app.use(express.static(PUBLIC_DIR, {
     extensions: ['html'],
     setHeaders: res => res.set('cache-control', 'no-cache')
