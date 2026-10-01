@@ -110,6 +110,34 @@ test('workspace deletion paths use the same canonical traversal boundary', () =>
   assert.equal(workspacePath('../file.js'), null);
 });
 
+test('GitHub write-back rejects ambiguous change sets', async () => {
+  const fetchImpl = async (url, init = {}) => {
+    if (url.includes('/commits/main')) {
+      return new Response(JSON.stringify({ sha: 'base123', commit: { tree: { sha: 'tree123' } } }), {
+        status: 200, headers: { 'content-type': 'application/json' }
+      });
+    }
+    return new Response('{}', { status: 404, headers: { 'content-type': 'application/json' } });
+  };
+  await assert.rejects(
+    () => githubApplyChanges({
+      fetchImpl, token: 'secret', owner: 'demo', repo: 'app', ref: 'main', expectedCommitSha: 'base123',
+      changes: [
+        { path: 'src/app.js', content: 'a' },
+        { path: 'src/app.js', content: 'b' }
+      ]
+    }),
+    /duplicate paths/
+  );
+  await assert.rejects(
+    () => githubApplyChanges({
+      fetchImpl, token: 'secret', owner: 'demo', repo: 'app', ref: 'main', expectedCommitSha: 'base123',
+      changes: [{ path: 'src/app.js', kind: 'range', content: 'bad' }]
+    }),
+    /only full-file upserts and deletes/
+  );
+});
+
 test('GitHub write-back builds one revision and rejects stale bases', async () => {
   const calls = [];
   const fetchImpl = async (url, init = {}) => {

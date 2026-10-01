@@ -12,6 +12,7 @@ import {
   sourceManifest,
   sourcePublic
 } from '../workspace-sources.js';
+import crypto from 'node:crypto';
 import { workspacePath } from '../workspace-path.js';
 
 const text = value => String(value ?? '').trim();
@@ -45,6 +46,57 @@ function mergeSourceDelta(baseFiles, changedFiles, deletedPaths) {
   }
   for (const file of normalizeSourceFiles(changedFiles)) map.set(file.path, file.content);
   return normalizeSourceFiles([...map].map(([path, content]) => ({ path, content })));
+}
+
+function contentDigest(content) {
+  return crypto.createHash('sha256').update(String(content ?? ''), 'utf8').digest('hex');
+}
+
+function effectiveGithubChanges(baseFiles, changes) {
+  const base = new Map(normalizeSourceFiles(baseFiles).map(file => [file.path, file.content]));
+  const seen = new Set();
+  const effective = [];
+  for (const change of Array.isArray(changes) ? changes : []) {
+    const path = workspacePath(String(change?.path ?? '').trim().replaceAll('\\', '/').replace(/^\.\//, ''));
+    if (!path) throw new Error('GitHub change path is invalid');
+    if (seen.has(path)) throw new Error('GitHub change set contains duplicate paths: ' + path);
+    seen.add(path);
+
+    const isDelete = change?.kind === 'delete' || change?.delete === true;
+    if (!isDelete && change?.kind && change.kind !== 'upsert') {
+      throw new Error('GitHub write-back accepts only full-file upserts and deletes.');
+    }
+
+    const current = base.get(path);
+    const expected = text(change?.beforeDigest);
+    if (current !== undefined) {
+      if (!expected) {
+        const error = new Error('A pre-image digest is required for an existing GitHub file: ' + path);
+        error.code = 'github-preimage-required';
+        throw error;
+      }
+      if (contentDigest(current) !== expected) {
+        const error = new Error('The proposed GitHub change is based on an older workspace file: ' + path);
+        error.code = 'stale-github-file';
+        throw error;
+      }
+    } else if (expected) {
+      const error = new Error('The proposed GitHub change references a file that is no longer in the workspace snapshot: ' + path);
+      error.code = 'stale-github-file';
+      throw error;
+    }
+
+    if (isDelete) {
+      if (current === undefined) continue;
+      effective.push({ path, kind: 'delete', beforeDigest: expected });
+      continue;
+    }
+
+    const content = String(change?.content ?? '');
+    if (current === content) continue;
+    effective.push({ path, content, ...(current !== undefined ? { beforeDigest: expected } : {}) });
+  }
+  return effective;
 }
 
 export function registerWorkspaceSourcesRoutes(app, {
@@ -246,21 +298,31 @@ export function registerWorkspaceSourcesRoutes(app, {
     if (source.permissions?.write !== true) return res.status(403).json({ error: 'This GitHub source is read-only. Reconnect it with explicit write permission to enable write-back.', code: 'source-read-only' });
     const changes = Array.isArray(req.body?.changes) ? req.body.changes : [];
     if (!changes.length) return res.status(400).json({ error: 'No changes supplied.', code: 'changes-required' });
+    const storedCommitSha = text(source.metadata?.commitSha);
+    const requestedCommitSha = text(req.body?.expectedCommitSha) || storedCommitSha;
+    if (!storedCommitSha || requestedCommitSha !== storedCommitSha) {
+      return res.status(409).json({
+        error: 'The proposed changes are based on a different GitHub revision. Sync the repository before applying them.',
+        code: 'stale-github-revision'
+      });
+    }
     const token = decryptSourceCredentials(encryptionKey, source.credentials_enc);
     if (!token) return res.status(409).json({ error: 'GitHub credentials are unavailable. Reconnect the repository.', code: 'source-credentials-missing' });
+    const baseFiles = await readSnapshotFiles(objects, req.scope, source.snapshot_object_id);
+    const effective = effectiveGithubChanges(baseFiles, changes);
+    if (!effective.length) return res.json({ source: sourcePublic(source), unchanged: true, result: { unchanged: true, commitSha: storedCommitSha, ref: source.repo_ref, changedFiles: [] } });
     const result = await githubApplyChanges({
       fetchImpl, token,
       owner: source.repo_owner,
       repo: source.repo_name,
       ref: source.repo_ref,
-      expectedCommitSha: text(req.body?.expectedCommitSha) || text(source.metadata?.commitSha),
-      changes,
+      expectedCommitSha: storedCommitSha,
+      changes: effective,
       message: text(req.body?.message) || 'workspace: apply reviewed changes'
     });
-    const baseFiles = await readSnapshotFiles(objects, req.scope, source.snapshot_object_id);
     const baseMap = new Map(baseFiles.map(file => [file.path, file.content]));
-    for (const change of changes) {
-      const path = String(change?.path ?? '').trim();
+    for (const change of effective) {
+      const path = workspacePath(String(change?.path ?? '').trim().replaceAll('\\', '/').replace(/^\.\//, ''));
       if (!path) continue;
       if (change?.kind === 'delete' || change?.delete === true) baseMap.delete(path);
       else baseMap.set(path, String(change?.content ?? ''));

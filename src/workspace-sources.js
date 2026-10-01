@@ -199,9 +199,15 @@ export async function githubApplyChanges({
   const list = Array.isArray(changes) ? changes : [];
   if (list.length > 500) throw new Error('Too many GitHub changes in one operation');
   const elements = [];
+  const seenPaths = new Set();
   for (const change of list) {
     const path = safePath(change?.path);
     if (!path) throw new Error('GitHub change path is invalid');
+    if (seenPaths.has(path)) throw new Error('GitHub change set contains duplicate paths: ' + path);
+    seenPaths.add(path);
+    if (change?.kind && change.kind !== 'delete' && change.kind !== 'upsert') {
+      throw new Error('GitHub write-back accepts only full-file upserts and deletes.');
+    }
     if (change?.kind === 'delete' || change?.delete === true) {
       elements.push({ path, mode: '100644', type: 'blob', sha: null });
       continue;
