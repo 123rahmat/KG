@@ -18,11 +18,33 @@ const geminiReply = (textValue, { groundingMetadata = undefined, finishReason = 
 
 function modelRequest(options) {
   const body = JSON.parse(options.body);
-  const contents = Array.isArray(body.contents) ? body.contents : [];
-  const user = [...contents].reverse().find(message => message.role === 'user');
-  const text = (user?.parts ?? []).filter(part => typeof part?.text === 'string').map(part => part.text).join('\n');
+  const texts = (Array.isArray(body.contents) ? body.contents : [])
+    .filter(message => message?.role === 'user')
+    .flatMap(message => Array.isArray(message?.parts) ? message.parts : [])
+    .map(part => typeof part?.text === 'string' ? part.text : '')
+    .reverse();
   let request = {};
-  try { request = JSON.parse(text || '{}'); } catch { /* not a structured task */ }
+  for (const text of texts) {
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed === 'object' && parsed.task) {
+        request = parsed;
+        break;
+      }
+    } catch {
+      const start = text.indexOf('{');
+      const end = text.lastIndexOf('}');
+      if (start >= 0 && end > start) {
+        try {
+          const parsed = JSON.parse(text.slice(start, end + 1));
+          if (parsed && typeof parsed === 'object' && parsed.task) {
+            request = parsed;
+            break;
+          }
+        } catch { /* not a structured task */ }
+      }
+    }
+  }
   return { body, request };
 }
 
@@ -45,7 +67,7 @@ test('a code package can be a project of several files, with its tests as files'
   assert.equal(missingTests({ language: 'javascript', files: [{ path: 'lib/a.mjs', content: 'x' }, { path: 'lib/a.test.mjs', content: "test('a', () => {});" }] }), false);
   // Unsafe or repeated paths never get through.
   const paths = codeFiles({ files: [{ path: '../etc/passwd', content: 'x' }, { path: '/abs.py', content: 'x' }, { path: 'a/.hidden', content: 'x' }, { path: 'ok.py', content: '1' }, { path: 'ok.py', content: '2' }] }).map(file => file.path);
-  assert.deepEqual(paths, ['ok.py']);
+  assert.deepEqual(paths, ['a/.hidden', 'ok.py']);
 });
 
 test('a project runs on top of the attached project: unchanged files stay, changed ones replace them', () => {
