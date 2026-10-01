@@ -8,6 +8,7 @@ import { state, $, element, button, api, notify, guard, capabilities, canEdit } 
 import { growComposer, loadRuns, newChat, personalContext, renderThread, stopRun } from './app-attachments.js';
 import { TERMINAL_STATES, autoDrive, copyText, governanceCard, isAutomatic, renderNextStep, resultText, runStatus, saveAnswer, stepsList, svgIcon, timeAgo, toolLabel } from './app.js';
 import { selectTab } from './app-account.js';
+import { applyLocalWorkspaceChanges } from './workspace-sources.js';
 
 const actionsLoading = new Set();
 
@@ -46,6 +47,57 @@ function actionDetails(action) {
 }
 
 /** What the AI asked to do outside the chat, with Approve and Decline. */
+
+function codeWorkspaceChanges(structured) {
+  if (!structured || typeof structured !== 'object') return [];
+  const changes = [];
+  for (const file of Array.isArray(structured.files) ? structured.files : []) {
+    if (file?.path) changes.push({ path: file.path, content: String(file.content ?? '') });
+  }
+  for (const path of Array.isArray(structured.delete) ? structured.delete : []) {
+    if (path) changes.push({ path, kind: 'delete' });
+  }
+  return changes;
+}
+
+async function applyCodeWorkspace(run, structured) {
+  const sourceId = state.chat?.workspaceSourceId ?? state.workspaceSourceId;
+  const source = state.workspaceSource;
+  const changes = codeWorkspaceChanges(structured);
+  if (!sourceId || !source || !changes.length) return;
+  if (!confirm('Apply the reviewed code changes to the connected project?')) return;
+  await guard(async () => {
+    if (source.kind === 'local-folder') {
+      await applyLocalWorkspaceChanges(changes);
+      return;
+    }
+    if (source.kind !== 'github') throw new Error('This project source cannot receive code changes.');
+    if (source.permissions?.write !== true) throw new Error('This GitHub source is read-only. Reconnect with explicit write-back permission first.');
+    const result = await api('POST', \`/api/workspace/sources/\${encodeURIComponent(sourceId)}/apply\`, {
+      confirm: 'APPLY_WORKSPACE_CHANGES',
+      expectedCommitSha: source.metadata?.commitSha ?? '',
+      changes,
+      message: 'workspace: apply reviewed code changes'
+    });
+    state.workspaceSource = result.source;
+    notify('runNotice', 'info', \`Changes committed to \${source.repoOwner}/\${source.repoName} · \${source.repoRef}\`);
+  }, 'runNotice');
+}
+
+function workspaceApplyCard(run, structured) {
+  const source = state.workspaceSource;
+  if (!source || !structured || typeof structured !== 'object') return null;
+  const changes = codeWorkspaceChanges(structured);
+  if (!changes.length) return null;
+  const writable = source.kind === 'local-folder' || source.permissions?.write === true;
+  return element('div', { class: 'row wrap workspace-apply-actions' }, [
+    button('Apply changes', () => applyCodeWorkspace(run, structured), writable ? 'primary small' : 'ghost small'),
+    element('span', { class: 'muted small', text: source.kind === 'github' && !writable
+      ? 'GitHub source is read-only'
+      : \`\${changes.length} change\${changes.length === 1 ? '' : 's'} ready for review\` })
+  ]);
+}
+
 function actionCards(run) {
   const proposed = run.tasks.some(task => (task.evidence?.tools ?? []).some(item => item.outcome === 'proposed'));
   if (!proposed) return null;
@@ -519,6 +571,8 @@ export function assistantMessage(run, active) {
       parts.push(answerBlock(codeText));
       actionText ||= codeText;
     }
+    const applyCard = workspaceApplyCard(run, code.evidence.structured);
+    if (applyCard) parts.push(applyCard);
   }
   if (actionText) parts.push(answerActions(run, actionText));
   if (driving) {
