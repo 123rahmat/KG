@@ -2126,3 +2126,75 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
   .terminal-foot{align-items:flex-start;flex-direction:column}
   .terminal-change-status{width:100%;white-space:normal}
 }
+
+
+/* ---------------------------------------------------------- live work status */
+.work-status-card{
+  margin:10px 0 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--softer);
+  overflow:hidden;
+}
+.work-status-card.ok{border-color:color-mix(in srgb,var(--ok) 32%,var(--line))}
+.work-status-card.bad{border-color:color-mix(in srgb,var(--danger) 32%,var(--line))}
+.work-status-card.warn{border-color:color-mix(in srgb,var(--warn) 34%,var(--line))}
+.work-status-card summary{list-style:none;cursor:pointer}
+.work-status-card summary::-webkit-details-marker{display:none}
+.work-status-summary{
+  display:grid;
+  grid-template-columns:auto minmax(150px,1fr) minmax(0,1.7fr);
+  align-items:center;
+  gap:10px;
+  padding:11px 13px;
+}
+.work-status-mark{
+  width:9px;height:9px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 0 4px var(--accent-soft);
+}
+.work-status-card.ok .work-status-mark{background:var(--ok)}
+.work-status-card.bad .work-status-mark{background:var(--danger)}
+.work-status-card.warn .work-status-mark{background:var(--warn)}
+.work-status-head{display:grid;gap:2px;min-width:0}
+.work-status-now{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.work-status-progress{height:3px;background:var(--line);margin:0 13px;overflow:hidden;border-radius:99px}
+.work-status-progress i{display:block;height:100%;background:var(--accent);border-radius:inherit;transition:width .25s ease}
+.work-status-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(145px,1fr));
+  gap:8px;
+  padding:12px 13px 6px;
+}
+.work-status-item{
+  display:grid;gap:3px;min-width:0;
+  padding:8px 9px;border:1px solid var(--line);border-radius:9px;background:var(--panel);
+}
+.work-status-item strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.work-status-warning{margin:8px 13px 12px;padding:8px 10px;border-radius:8px;background:var(--panel)}
+.work-timeline{padding:8px 13px 12px}
+.work-timeline-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:7px}
+.work-timeline-head>*{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.work-timeline-list{display:grid;gap:4px}
+.work-timeline-item{
+  display:grid;
+  grid-template-columns:10px minmax(0,1fr) auto;
+  align-items:center;
+  gap:8px;
+  padding:6px 0;
+}
+.work-timeline-dot{
+  width:7px;height:7px;border-radius:50%;background:var(--muted);
+  box-shadow:0 0 0 3px var(--line);
+}
+.work-timeline-item.active .work-timeline-dot{background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.work-timeline-item.ok .work-timeline-dot{background:var(--ok)}
+.work-timeline-item.bad .work-timeline-dot{background:var(--danger)}
+.work-timeline-item.warn .work-timeline-dot{background:var(--warn)}
+.work-timeline-copy{display:grid;gap:1px;min-width:0}
+.work-timeline-copy strong,.work-timeline-copy span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.work-timeline-flag{color:var(--danger)}
+@media (max-width:700px){
+  .work-status-summary{grid-template-columns:auto minmax(0,1fr)}
+  .work-status-now{grid-column:2}
+  .work-status-grid{grid-template-columns:1fr 1fr}
+}
