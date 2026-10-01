@@ -2096,3 +2096,33 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
 @media (max-width: 760px) {
   .project-source-switch { grid-template-columns: 1fr; }
 }
+
+
+/* ----------------------------------------------------------- interactive terminal */
+.terminal-dialog{
+  width:min(1180px,calc(100% - 28px));
+  height:min(820px,calc(100vh - 28px));
+  max-width:none;
+  max-height:none;
+  padding:0;
+  border:1px solid var(--line-strong);
+  border-radius:var(--radius-lg);
+  background:var(--panel);
+  color:var(--ink);
+  box-shadow:var(--shadow-lg);
+  overflow:hidden;
+}
+.terminal-dialog::backdrop{background:var(--scrim);backdrop-filter:blur(6px)}
+.terminal-shell{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-height:0}
+.terminal-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border-bottom:1px solid var(--line)}
+.terminal-head h2{margin:2px 0 0;font-size:1.05rem}
+.terminal-surface{min-height:0;padding:10px;background:#0b0e13}
+.terminal-surface .xterm{height:100%;width:100%}
+.terminal-surface .xterm-viewport{overflow-y:auto}
+.terminal-foot{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 14px;border-top:1px solid var(--line);background:var(--panel)}
+.terminal-change-status{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem;color:var(--muted)}
+@media (max-width:700px){
+  .terminal-dialog{width:100%;height:100%;border-radius:0}
+  .terminal-foot{align-items:flex-start;flex-direction:column}
+  .terminal-change-status{width:100%;white-space:normal}
+}
