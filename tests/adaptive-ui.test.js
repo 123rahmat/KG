@@ -44,6 +44,16 @@ test('the client asks for decisions inline, not in browser pop-ups', async () =>
   assert.match(js, /modelConsent: true/);
 });
 
+test('the chat workspace exposes server-owned, evidence-backed approach options', async () => {
+  const js = await client();
+  const css = await read('public/app.css');
+  assert.match(js, /function brainstormCard\(run\)/);
+  assert.match(js, /Options, trade-offs, and the evidence needed before changing course/);
+  assert.match(js, /selected from current evidence/);
+  assert.match(css, /\.brainstorm-card/);
+  assert.match(css, /\.brainstorm-option\[data-selected="true"\]/);
+});
+
 test('adaptive UI keeps execution approval and evidence boundaries visible', async () => {
   const js = await client();
   assert.match(js, /approved/);
