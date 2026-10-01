@@ -75,6 +75,30 @@ test('code task detection stays conservative', () => {
 });
 
 
+test('context selection with sensitive files never exposes obvious secrets', () => {
+  const sensitiveFiles = [
+    { path: '.env', content: 'PAYMENT_API_KEY="super-secret-payment-key-value"' },
+    { path: 'src/auth.js', content: 'export const apiKey = "ordinary-secret-looking-value";' }
+  ];
+  const index = buildProjectIndex(sensitiveFiles);
+  const pack = compileCodeContext({
+    files: sensitiveFiles,
+    index,
+    goal: 'review authentication security',
+    task: { id: 'build-code', type: 'code', purpose: 'review auth', metadata: { buildPlan: true } },
+    scale: 'small',
+    maxChars: 5000,
+    maxFiles: 4
+  });
+  const env = pack.files.find(item => item.path === '.env');
+  assert.ok(env);
+  assert.match(env.content, /sensitive file withheld/i);
+  const auth = pack.files.find(item => item.path === 'src/auth.js');
+  assert.ok(auth);
+  assert.doesNotMatch(auth.content, /ordinary-secret-looking-value/);
+  assert.match(auth.content, /\[REDACTED\]/);
+});
+
 test('adaptive code specialists recruit the right engineering perspectives', () => {
   const security = rolesFor(
     {
