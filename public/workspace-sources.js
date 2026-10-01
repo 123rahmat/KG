@@ -78,9 +78,15 @@ function updateSourceUI() {
     sync.hidden = !source;
     sync.textContent = source?.kind === 'github' ? 'Sync GitHub' : 'Sync folder';
   }
-  if (status) status.textContent = source
-    ? `${source.kind === 'github' ? 'GitHub' : 'Local'} · ${source.name || 'Project source'}`
-    : 'No project connected';
+  if (status) {
+    const base = source
+      ? `${source.kind === 'github' ? 'GitHub' : 'Local'} · ${source.name || 'Project source'}`
+      : 'No project connected';
+    const ingestion = source?.metadata?.ingestion;
+    status.textContent = ingestion?.partial
+      ? base + ' · incomplete (' + (Number(ingestion.skippedCount) || 0) + ' files omitted)'
+      : base;
+  }
   renderPanelState();
   const local = $('sourceTabLocal');
   const github = $('sourceTabGithub');
