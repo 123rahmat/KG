@@ -186,7 +186,7 @@ function resolveLocalImport(filePath, target, files) {
   const raw = trim(target).replace(/\\/g, '/');
   const relative = raw.startsWith('./') || raw.startsWith('../');
   if (!raw || (!relative && !raw.startsWith('/'))) return null;
-  const clean = raw.replace(/^\\.\\//, '');
+  const clean = raw.startsWith('./') ? raw.slice(2) : raw;
   const base = filePath.includes('/') ? filePath.slice(0, filePath.lastIndexOf('/') + 1) : '';
   const candidate = safeWorkspacePath((relative ? base : '') + clean) || null;
   if (!candidate) return null;
