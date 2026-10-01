@@ -246,16 +246,35 @@ export function registerWorkspaceSourcesRoutes(app, {
       changes,
       message: text(req.body?.message) || 'workspace: apply reviewed changes'
     });
+    const baseFiles = await readSnapshotFiles(objects, req.scope, source.snapshot_object_id);
+    const baseMap = new Map(baseFiles.map(file => [file.path, file.content]));
+    for (const change of changes) {
+      const path = String(change?.path ?? '').trim();
+      if (!path) continue;
+      if (change?.kind === 'delete' || change?.delete === true) baseMap.delete(path);
+      else baseMap.set(path, String(change?.content ?? ''));
+    }
+    const refreshedFiles = normalizeSourceFiles([...baseMap].map(([path, content]) => ({ path, content })));
+    const refreshedManifest = sourceManifest(refreshedFiles);
+    const refreshedObject = await snapshotObject(objects, req.scope, req.principal, refreshedFiles, `${source.name}.workspace`, {
+      kind: 'github', sourceId: source.id, owner: source.repo_owner, repo: source.repo_name,
+      ref: result.ref, commitSha: result.commitSha, contentHash: refreshedManifest.contentHash, fileCount: refreshedManifest.fileCount
+    });
     const { rows: [updated] } = await pool.query(
       `UPDATE workspace_sources
           SET repo_ref = $4,
-              metadata = metadata || $5::jsonb,
+              snapshot_object_id = $5,
+              metadata = metadata || $6::jsonb,
               updated_at = now()
         WHERE id = $1 AND workspace_id = $2 AND principal_id = $3
         RETURNING *`,
       [
-        source.id, req.scope.workspaceId, req.principal.id, result.ref,
-        JSON.stringify({ commitSha: result.commitSha, staleSnapshot: true, writeAt: new Date().toISOString() })
+        source.id, req.scope.workspaceId, req.principal.id, result.ref, refreshedObject.id,
+        JSON.stringify({
+          commitSha: result.commitSha, treeSha: result.treeSha, staleSnapshot: false,
+          contentHash: refreshedManifest.contentHash, fileCount: refreshedManifest.fileCount,
+          manifest: refreshedManifest.files, writeAt: new Date().toISOString()
+        })
       ]
     );
     await audit?.record({
