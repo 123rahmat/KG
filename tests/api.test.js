@@ -5,14 +5,26 @@ import { withServer, jsonResponse, advanceTo, codeWritten } from './helpers.js';
 // Runners configured, so plans include real code steps.
 const RUNNERS = { SANDBOX_RUNNER_URL: 'https://code-runner.test', RUNNER_TOKEN: 'r'.repeat(40) };
 
-const modelReply = (textValue, usage = { input_tokens: 10, output_tokens: 5 }) =>
+const modelReply = (textValue, usage = { inputTokens: 10, outputTokens: 5 }) =>
   jsonResponse({
-    stop_reason: 'end_turn',
-    content: [{ type: 'text', text: textValue }],
-    usage
+    candidates: [{ content: { parts: [{ text: textValue }] }, finishReason: 'STOP' }],
+    usageMetadata: {
+      promptTokenCount: Number(usage.inputTokens ?? usage.input_tokens ?? 0),
+      candidatesTokenCount: Number(usage.outputTokens ?? usage.output_tokens ?? 0),
+      totalTokenCount: Number(usage.inputTokens ?? usage.input_tokens ?? 0) + Number(usage.outputTokens ?? usage.output_tokens ?? 0)
+    }
   });
 
-const ANTHROPIC = { AI_PROVIDER: 'anthropic', AI_API_KEY: 'test-key', AI_MODEL: 'claude-opus-5-5' };
+const GOOGLE = { AI_PROVIDER: 'google', AI_API_KEY: 'test-key', AI_MODEL: 'gemini-3.8-flash' };
+const requestFrom = body => {
+  const system = body.systemInstruction?.parts?.filter(part => typeof part?.text === 'string').map(part => part.text).join('\n') ?? '';
+  const contents = Array.isArray(body.contents) ? body.contents : [];
+  const users = [...contents].filter(item => item?.role === 'user');
+  const text = users.at(-1)?.parts?.filter(part => typeof part?.text === 'string').map(part => part.text).join('\n') ?? '';
+  let request = {};
+  try { request = JSON.parse(text || '{}'); } catch { /* plain-text model turn */ }
+  return { system, contents, request };
+};
 const CHAT_CLASSIFICATION = {
   actions: ['answer'],
   signals: {
@@ -23,7 +35,7 @@ const CHAT_CLASSIFICATION = {
   confidence: 0.9
 };
 // The classifier's instructions are Claude's system prompt; the goal is the user message.
-const isClassification = options => String(JSON.parse(options.body).system ?? '').startsWith('Classify the goal');
+const isClassification = options => requestFrom(JSON.parse(options.body)).system.startsWith('Classify the goal');
 
 /** A passing verdict that checks every success criterion the run currently has. */
 async function passingVerdict(call, auth, runId) {
@@ -196,7 +208,7 @@ test('execution drives the model and records what it returned', () =>
     assert.equal(run.adaptation.classification.source, 'model');
     assert.equal(executed.body.run.tokensUsed, 4 + 15);
   }, {
-    env: ANTHROPIC,
+    env: GOOGLE,
     fetchImpl: async (_url, options) => isClassification(options)
       ? modelReply(JSON.stringify(CHAT_CLASSIFICATION), { input_tokens: 3, output_tokens: 1 })
       : modelReply('a real answer')
@@ -214,7 +226,7 @@ test('a configured model does not receive run content without consent', () =>
     assert.equal(executed.body.execution.status, 'consent-required');
     assert.equal(executed.body.run.tasks.find(task => task.id === 'respond').status, 'pending');
   }, {
-    env: ANTHROPIC,
+    env: GOOGLE,
     fetchImpl: async () => { throw new Error('the provider must not be called without consent'); }
   }));
 
@@ -282,7 +294,7 @@ test('research searches the web with the AI provider, reads what it found, and k
     // Only the search itself used the provider's web search tool.
     assert.deepEqual(calls.map(body => Boolean(body.tools)), [false, true, false]);
   }, {
-    env: ANTHROPIC,
+    env: GOOGLE,
     fetchImpl: async (_url, options) => {
       const body = JSON.parse(options.body);
       calls.push(body);
@@ -326,7 +338,7 @@ test('verifying researched work checks its facts on the web, and an unsupported 
     // The verifier searched the web itself and was told which sources the work rests on.
     assert.equal(verifyCalls.length, 1);
     assert.ok(verifyCalls[0].tools?.length, 'the verifier searches the web');
-    const brief = JSON.parse(verifyCalls[0].messages[0].content).verification;
+    const brief = JSON.parse(requestFrom(verifyCalls[0]).system).verification;
     assert.equal(brief.groundedCheck, true);
     assert.deepEqual(brief.sources.map(item => item.url), ['https://example.com/source']);
     assert.deepEqual(brief.unretrievedLinks, ['https://invented.example/paper']);
@@ -340,10 +352,10 @@ test('verifying researched work checks its facts on the web, and an unsupported 
     assert.equal(verdict.grounding.checkedAgainstWeb, true);
     assert.deepEqual(verdict.grounding.sources.map(item => item.url), ['https://example.com/source', 'https://journal.example/study']);
   }, {
-    env: ANTHROPIC,
+    env: GOOGLE,
     fetchImpl: async (_url, options) => {
       const body = JSON.parse(options.body);
-      const request = (() => { try { return JSON.parse(body.messages?.[0]?.content ?? '{}'); } catch { return {}; } })();
+      const { system, contents, request } = requestFrom(body);
       if (request.task?.type === 'verify') {
         verifyCalls.push(body);
         return jsonResponse({
@@ -368,7 +380,7 @@ test('verifying researched work checks its facts on the web, and an unsupported 
           usage: { input_tokens: 5, output_tokens: 5 }
         });
       }
-      if (request.task?.type === 'investigate' && !body.messages.some(message => message.role === 'assistant')) {
+      if (request.task?.type === 'investigate' && !contents.some(message => message.role === 'model')) {
         return modelReply('{"tool":"web.search","input":{"query":"latest evidence"}}');
       }
       return modelReply('The study found a 90% effect (https://invented.example/paper).');
@@ -895,9 +907,9 @@ test('understand can discover hidden novelty and expand the server-owned graph',
     assert.equal(afterApproval.body.tasks.find(task => task.id === afterApproval.body.next).type, 'investigate');
   }, {
     env: {
-      AI_PROVIDER: 'anthropic',
+      AI_PROVIDER: 'google',
       AI_API_KEY: 'test-key',
-      AI_MODEL: 'claude-opus-5-5'
+      AI_MODEL: 'gemini-3.8-flash'
     },
     fetchImpl: async () => modelReply(JSON.stringify({
       needsInvestigation: true,
@@ -1082,7 +1094,7 @@ test('a declared data-class allow-list still fails closed for model reasoning', 
     assert.equal(executed.body.code, 'situation-governance-blocked');
     assert.match(executed.body.error, /does not allow a required data class/);
   }, {
-    env: ANTHROPIC,
+    env: GOOGLE,
     fetchImpl: async () => { throw new Error('the provider must not be called when policy denies the data'); }
   }));
 
@@ -1100,7 +1112,7 @@ test('a declined model answer leaves the task pending and records nothing', () =
     assert.equal(answered.status, 'pending');
     assert.equal(answered.evidence, null);
   }, {
-    env: { AI_PROVIDER: 'anthropic', AI_API_KEY: 'test-key' },
+    env: { AI_PROVIDER: 'google', AI_API_KEY: 'test-key' },
     fetchImpl: async () => jsonResponse({ stop_reason: 'refusal', content: [], usage: { input_tokens: 3, output_tokens: 0 } })
   }));
 
@@ -1125,7 +1137,7 @@ test('with consent, the model classification replaces misleading keywords', () =
     assert.ok(!modelPlan.body.capabilities.required.includes('capability-discovery'));
     assert.deepEqual(modelPlan.body.adaptation.surfaces, ['chat']);
   }, {
-    env: ANTHROPIC,
+    env: GOOGLE,
     fetchImpl: async (_url, options) => {
       assert.ok(isClassification(options), 'only the classifier may be called while planning');
       return modelReply(JSON.stringify(CHAT_CLASSIFICATION));
@@ -1143,7 +1155,7 @@ test('the model cannot lower a risk the keyword rules detected', () =>
     assert.equal(plan.body.adaptation.highImpactContext, true);
     assert.equal(plan.body.execution.approvalRequired, true);
   }, {
-    env: ANTHROPIC,
+    env: GOOGLE,
     fetchImpl: async () => modelReply(JSON.stringify(CHAT_CLASSIFICATION))
   }));
 
@@ -1157,7 +1169,7 @@ test('malformed or partial classifier output falls back to keywords', () =>
     assert.equal(plan.body.adaptation.classification.reason, 'model-output-invalid');
     assert.equal(plan.body.intent.kind, 'chat');
   }, {
-    env: ANTHROPIC,
+    env: GOOGLE,
     // Unknown action and a missing signal: rejected as a whole, not trusted in part.
     fetchImpl: async () => modelReply(JSON.stringify({ ...CHAT_CLASSIFICATION, actions: ['answer', 'launch-missiles'] }))
   }));
@@ -1173,7 +1185,7 @@ test('governance that denies the model keeps classification on keywords', () =>
     assert.equal(plan.body.adaptation.classification.source, 'keywords');
     assert.equal(plan.body.adaptation.classification.reason, 'model-processing-not-permitted');
   }, {
-    env: ANTHROPIC,
+    env: GOOGLE,
     fetchImpl: async () => { throw new Error('a denied model must not be called'); }
   }));
 
@@ -1191,7 +1203,7 @@ test('a direct question is answered and verified in two steps, then completes', 
     assert.equal(verified.body.run.state, 'complete');
     assert.equal(verified.body.run.tasks.find(task => task.id === 'respond').evidence.text, 'A function that calls itself.');
   }, {
-    env: ANTHROPIC,
+    env: GOOGLE,
     fetchImpl: async (_url, options) => {
       if (isClassification(options)) return modelReply(JSON.stringify(CHAT_CLASSIFICATION));
       const request = JSON.parse(JSON.parse(options.body).messages[0].content);
