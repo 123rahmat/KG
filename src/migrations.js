@@ -2148,7 +2148,8 @@ export const MIGRATIONS = [
             OR current_setting('app.role', true) IN ('admin', 'service')
           )
         );
-    `  },
+    `
+  },
   {
     version: 52,
     name: 'secure-audit-chain-head-lookup',
@@ -2172,8 +2173,7 @@ export const MIGRATIONS = [
 
       REVOKE ALL ON FUNCTION kg_audit_previous_hash(TEXT) FROM PUBLIC;
     `
-
-  }  },
+  },
   {
     version: 53,
     name: 'remove-legacy-simulation-schedules',
