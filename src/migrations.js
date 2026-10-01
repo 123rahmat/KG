@@ -1671,7 +1671,6 @@ export const MIGRATIONS = [
         ADD COLUMN IF NOT EXISTS detail_encryption_version INTEGER NOT NULL DEFAULT 0;
     `
   }
-];
   ,{
     version: 41,
     name: 'workspace-project-sources',
@@ -1716,3 +1715,4 @@ export const MIGRATIONS = [
       REVOKE ALL ON workspace_sources FROM PUBLIC;
     `
   }
+];
