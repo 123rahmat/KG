@@ -317,11 +317,14 @@ export function rolesFor(run, task, {
   // A normal build-code step uses a focused pair; explicit build planning can
   // justify more specialists when decomposition or risk actually warrants it.
   const observed = observedPanelSignals(progress);
+  const explicitDisagreement = Array.isArray(progress?.findings) &&
+    new Set(progress.findings.map(item => text(item?.recommendation).toLowerCase()).filter(Boolean)).size > 1;
+  const disagreement = observed.disagreement || explicitDisagreement;
   const highStakeBuild = task?.id === 'build-code' && HIGH_STAKES.has(text(run?.situation?.risk).toLowerCase());
   if (task?.id === 'build-code' && task?.metadata?.buildPlan !== true && !highStakeBuild) {
     targetCount = Math.min(targetCount, 2);
   }
-  if (observed.disagreement) {
+  if (disagreement) {
     targetCount = Math.max(targetCount, Math.min(maximum, 4));
   }
   const candidates = roleCandidates(run, task, progress);
@@ -331,7 +334,7 @@ export function rolesFor(run, task, {
     if (roles.length >= targetCount) break;
     const marginal = candidate.utility - roles.length * ROLE_REDUNDANCY_PENALTY;
     utilities[candidate.role] = Number(marginal.toFixed(3));
-    if (marginal < MIN_ROLE_UTILITY && roles.length > 0 && !observed.disagreement) continue;
+    if (marginal < MIN_ROLE_UTILITY && roles.length > 0 && !disagreement) continue;
     roles.push(candidate.role);
   }
   if (!roles.length && candidates[0]) {
@@ -341,7 +344,7 @@ export function rolesFor(run, task, {
   // When evidence explicitly shows disagreement, the target is a deliberate
   // request for additional independent perspectives. Fill the panel rather
   // than silently under-allocating because of a utility floor.
-  if (observed.disagreement && roles.length < targetCount) {
+  if (disagreement && roles.length < targetCount) {
     for (const candidate of candidates) {
       if (roles.length >= targetCount || roles.includes(candidate.role)) break;
       roles.push(candidate.role);
@@ -375,7 +378,7 @@ export function rolesFor(run, task, {
       observedFindings: observedPanelSignals(progress).count,
       observedConfidence: Number(observedPanelSignals(progress).confidence.toFixed(3)),
       observedConfidenceSpread: Number(observedPanelSignals(progress).confidenceSpread.toFixed(3)),
-      observedDisagreement: observedPanelSignals(progress).disagreement,
+      observedDisagreement: disagreement,
       observedResolution: Number(observedPanelSignals(progress).resolution.toFixed(3))
     },
     utilities,
