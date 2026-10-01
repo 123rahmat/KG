@@ -311,4 +311,4 @@ Negative user feedback can produce an encrypted, reviewable evolution proposal. 
 
 
 ## Validation note
-- Latest runtime-hardened main validation includes the provider-governor queue lifecycle fix.
+- Latest runtime-hardened main validation includes the provider-governor queue lifecycle fix; clean CI revalidation is tracked after the prior runner-startup interruption.
