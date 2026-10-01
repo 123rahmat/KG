@@ -85,7 +85,7 @@ export class EvolutionStore {
     });
   }
 
-  async setStatus(scope, principal, id, status) {
+  async setStatus(scope, _principal, id, status) {
     const allowed = new Set(['candidate','approved','rejected','implemented']);
     if (!allowed.has(text(status))) {
       const error = new Error('Invalid evolution proposal status'); error.status = 400; error.code = 'evolution-status-invalid'; throw error;
@@ -95,7 +95,7 @@ export class EvolutionStore {
           SET status = $3, updated_at = now()
         WHERE id = $1 AND workspace_id = $2
         RETURNING id, target, status, updated_at AS "updatedAt"`,
-      [text(id), scope.workspaceId, text(principal?.id)]
+      [text(id), scope.workspaceId]
     );
     if (!row) {
       const error = new Error('Evolution proposal not found'); error.status = 404; error.code = 'evolution-proposal-not-found'; throw error;
