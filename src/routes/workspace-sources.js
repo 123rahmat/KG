@@ -6,6 +6,7 @@ import {
   githubListRepositories,
   githubListBranches,
   githubReadRepository,
+  githubResolveRevision,
   normalizeSourceFiles,
   sourceManifest,
   sourcePublic
@@ -22,6 +23,25 @@ async function snapshotObject(objects, scope, principal, files, name, provenance
     content: JSON.stringify({ version: 1, files: normalized }),
     provenance
   });
+}
+
+
+async function readSnapshotFiles(objects, scope, objectId) {
+  const object = await objects.read(scope, objectId);
+  if (!object?.content) return [];
+  const raw = Buffer.isBuffer(object.content) ? object.content.toString('utf8') : String(object.content);
+  const parsed = JSON.parse(raw);
+  return normalizeSourceFiles(parsed?.files ?? []);
+}
+
+function mergeSourceDelta(baseFiles, changedFiles, deletedPaths) {
+  const map = new Map(normalizeSourceFiles(baseFiles).map(file => [file.path, file.content]));
+  for (const path of Array.isArray(deletedPaths) ? deletedPaths : []) {
+    const safe = String(path ?? '').trim().replaceAll('\\\\', '/').replace(/^\\.\\//, '');
+    if (safe) map.delete(safe);
+  }
+  for (const file of normalizeSourceFiles(changedFiles)) map.set(file.path, file.content);
+  return normalizeSourceFiles([...map].map(([path, content]) => ({ path, content })));
 }
 
 export function registerWorkspaceSourcesRoutes(app, {
@@ -57,7 +77,7 @@ export function registerWorkspaceSourcesRoutes(app, {
         sourceId, req.scope.workspaceId, req.principal.id, name,
         `local:${manifest.contentHash.slice(0, 20)}`, object.id,
         JSON.stringify({ read: true, write: req.body?.write !== false, source: 'browser-folder-permission' }),
-        JSON.stringify({ contentHash: manifest.contentHash, fileCount: manifest.fileCount, browserGranted: true })
+        JSON.stringify({ contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files, browserGranted: true })
       ]
     );
     await audit?.record({
@@ -77,7 +97,13 @@ export function registerWorkspaceSourcesRoutes(app, {
       [text(req.params.id), req.scope.workspaceId, req.principal.id]
     );
     if (!source) return res.status(404).json({ error: 'Local folder source not found', code: 'no-source' });
-    const files = normalizeSourceFiles(req.body?.files);
+    let files;
+    if (Array.isArray(req.body?.changedFiles) && req.body?.manifest) {
+      const baseFiles = await readSnapshotFiles(objects, req.scope, source.snapshot_object_id);
+      files = mergeSourceDelta(baseFiles, req.body.changedFiles, req.body.deletedPaths);
+    } else {
+      files = normalizeSourceFiles(req.body?.files);
+    }
     const manifest = sourceManifest(files);
     if (source.metadata?.contentHash === manifest.contentHash) return res.json({ source: sourcePublic(source), unchanged: true, manifest });
     const object = await snapshotObject(objects, req.scope, req.principal, files, `${source.name}.workspace`, {
@@ -91,7 +117,7 @@ export function registerWorkspaceSourcesRoutes(app, {
         RETURNING *`,
       [
         source.id, req.scope.workspaceId, req.principal.id, object.id,
-        JSON.stringify({ contentHash: manifest.contentHash, fileCount: manifest.fileCount, syncedAt: new Date().toISOString() })
+        JSON.stringify({ contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files, syncedAt: new Date().toISOString() })
       ]
     );
     res.json({ source: sourcePublic(updated), manifest, unchanged: false });
@@ -120,7 +146,7 @@ export function registerWorkspaceSourcesRoutes(app, {
         `github:${owner}/${repo}`, owner, repo, read.source.ref, object.id,
         encryptSourceCredentials(encryptionKey, token),
         JSON.stringify({ read: true, write: false }),
-        JSON.stringify({ url: read.source.url, private: read.source.private, contentHash: manifest.contentHash, fileCount: manifest.fileCount })
+        JSON.stringify({ url: read.source.url, private: read.source.private, commitSha: read.source.commitSha, treeSha: read.source.treeSha, contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files })
       ]
     );
     await audit?.record({
@@ -170,9 +196,11 @@ export function registerWorkspaceSourcesRoutes(app, {
     if (source.kind !== 'github') return res.status(400).json({ error: 'Use the local folder sync endpoint.', code: 'wrong-source-kind' });
     const token = decryptSourceCredentials(encryptionKey, source.credentials_enc);
     if (!token) return res.status(409).json({ error: 'GitHub credentials are unavailable. Reconnect the repository.', code: 'source-credentials-missing' });
-    const read = await githubReadRepository({
-      fetchImpl, token, owner: source.repo_owner, repo: source.repo_name, ref: source.repo_ref
-    });
+    const revision = await githubResolveRevision({ fetchImpl, token, owner: source.repo_owner, repo: source.repo_name, ref: source.repo_ref });
+    if (source.metadata?.commitSha && revision.sha === source.metadata.commitSha) {
+      return res.json({ source: sourcePublic(source), unchanged: true, revision: revision.sha, manifest: { contentHash: source.metadata?.contentHash ?? null, fileCount: source.metadata?.fileCount ?? 0, files: source.metadata?.manifest ?? [] } });
+    }
+    const read = await githubReadRepository({ fetchImpl, token, owner: source.repo_owner, repo: source.repo_name, ref: source.repo_ref });
     const manifest = sourceManifest(read.files);
     if (source.metadata?.contentHash === manifest.contentHash) return res.json({ source: sourcePublic(source), unchanged: true, manifest });
     const object = await snapshotObject(objects, req.scope, req.principal, read.files, `${source.name}.workspace`, {
@@ -185,7 +213,7 @@ export function registerWorkspaceSourcesRoutes(app, {
         WHERE id = $1 AND workspace_id = $2 AND principal_id = $3 RETURNING *`,
       [
         source.id, req.scope.workspaceId, req.principal.id, object.id, read.source.ref,
-        JSON.stringify({ url: read.source.url, private: read.source.private, contentHash: manifest.contentHash, fileCount: manifest.fileCount, syncedAt: new Date().toISOString() })
+        JSON.stringify({ url: read.source.url, private: read.source.private, commitSha: read.source.commitSha, treeSha: read.source.treeSha, contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files, syncedAt: new Date().toISOString() })
       ]
     );
     res.json({ source: sourcePublic(updated), manifest, unchanged: false });
