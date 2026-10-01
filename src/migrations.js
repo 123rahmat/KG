@@ -1783,9 +1783,9 @@ export const MIGRATIONS = [
         source_id       TEXT NOT NULL,
         chunk_index     INTEGER NOT NULL,
         title           TEXT,
-        content         TEXT NOT NULL,
+        content_enc     TEXT NOT NULL,
+        search_terms    JSONB NOT NULL DEFAULT '[]'::jsonb,
         metadata        JSONB NOT NULL DEFAULT '{}'::jsonb,
-        embedding_json  JSONB,
         content_digest  TEXT,
         created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -1793,10 +1793,8 @@ export const MIGRATIONS = [
       );
       CREATE INDEX IF NOT EXISTS rag_documents_scope_idx
         ON rag_documents(workspace_id, principal_id, source_type, source_id);
-      CREATE INDEX IF NOT EXISTS rag_documents_fts_idx
-        ON rag_documents USING GIN (
-          to_tsvector('simple', coalesce(title,'') || ' ' || content)
-        );
+      CREATE INDEX IF NOT EXISTS rag_documents_terms_idx
+        ON rag_documents USING GIN (search_terms);
 
       ALTER TABLE run_agents ENABLE ROW LEVEL SECURITY;
       ALTER TABLE run_agents FORCE ROW LEVEL SECURITY;
