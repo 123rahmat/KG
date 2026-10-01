@@ -48,6 +48,13 @@ function actionDetails(action) {
 
 /** What the AI asked to do outside the chat, with Approve and Decline. */
 
+const WRITE_BLOCKED_WORKSPACE_FILE = path => {
+  const base = String(path ?? '').split('/').at(-1)?.toLowerCase() || '';
+  if (base === '.npmrc' || base === '.netrc' || base === '.pypirc' || /^id_rsa(?:\.|$)/.test(base)) return true;
+  if (/^\.env(?:$|\.)/.test(base) && !/^\.env\.(?:example|sample|template)$/.test(base)) return true;
+  return /\.(?:pem|key|p12|pfx)$/.test(base);
+};
+
 function codeWorkspaceChanges(structured) {
   if (!structured || typeof structured !== 'object') return [];
   const changes = [];
@@ -57,14 +64,14 @@ function codeWorkspaceChanges(structured) {
       : []
   );
   for (const file of Array.isArray(structured.files) ? structured.files : []) {
-    if (file?.path) changes.push({
+    if (file?.path && !WRITE_BLOCKED_WORKSPACE_FILE(file.path)) changes.push({
       path: file.path,
       content: String(file.content ?? ''),
       ...(manifest.has(file.path) ? { beforeDigest: manifest.get(file.path) } : {})
     });
   }
   for (const path of Array.isArray(structured.delete) ? structured.delete : []) {
-    if (path) changes.push({
+    if (path && !WRITE_BLOCKED_WORKSPACE_FILE(path)) changes.push({
       path,
       kind: 'delete',
       ...(manifest.has(path) ? { beforeDigest: manifest.get(path) } : {})
