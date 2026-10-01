@@ -471,13 +471,18 @@ async function execute(body) {
   if (body?.executionTarget !== 'local') {
     return { executed: false, status: 'invalid-execution-target' };
   }
+  const runId = safeRunId(body.runId);
+  const taskId = safeTaskId(body.taskId);
+  const executionId = safeTaskId(text(body.executionId) || executionIdFor({
+    runId, taskId, attempt: Number(body.attempt), executionTarget: 'local'
+  }));
   const challenge = body?.executionChallenge;
   if (!challenge || !verifyExecutionChallenge(SHARED_SECRET, {
-    runId: body.runId,
-    taskId: body.taskId,
+    runId,
+    taskId,
     taskType: body.taskType,
     attempt: Number(body.attempt),
-    executionId: text(body.executionId),
+    executionId,
     executionTarget: body.executionTarget,
     expiresAt: challenge.expiresAt,
     nonce: challenge.nonce,
@@ -489,7 +494,21 @@ async function execute(body) {
   if (!claimNonce(challenge.nonce, challenge.expiresAt)) {
     return { executed: false, status: 'execution-challenge-replayed' };
   }
-  if (body?.taskType === 'code') return executeCode(body);
+  if (body?.taskType === 'code') {
+    try {
+      const result = await executeCode({ ...body, runId, taskId, executionId });
+      return result;
+    } catch (error) {
+      // A validly authenticated request can still fail validation before any
+      // process runs. Keep that as an execution attempt result rather than
+      // turning a domain failure into a transport-level 400.
+      return {
+        executed: false,
+        status: 'failed',
+        message: error?.message || 'local execution validation failed'
+      };
+    }
+  }
   return { executed: false, status: 'unsupported-task' };
 }
 
@@ -538,7 +557,8 @@ const server = createServer(async (req, res) => {
             receipt
           })
         : null;
-      return json(res, result.executed ? 200 : 409, {
+      const responseStatus = result.executed || result.status === 'failed' ? 200 : 409;
+      return json(res, responseStatus, {
         ...result,
         receipt: signature ? { ...receipt, signature } : receipt
       });
