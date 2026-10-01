@@ -2184,6 +2184,14 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
 }
 .work-status-item strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .work-status-warning{margin:8px 13px 12px;padding:8px 10px;border-radius:8px;background:var(--panel)}
+.work-details-card{margin:0 13px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel)}
+.work-details-card>summary{padding:8px 10px;cursor:pointer}
+.work-details-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
+.work-details-head>*{min-width:0}
+.work-details-grid{display:grid;grid-template-columns:minmax(90px,.35fr) minmax(0,1fr);gap:5px 12px;margin:0;padding:10px;border-top:1px solid var(--line)}
+.work-details-grid dt,.work-details-grid dd{margin:0;overflow-wrap:anywhere}
+.work-details-grid dd{color:var(--ink)}
+.work-details-card>p{margin:0;padding:0 10px 10px}
 .work-timeline{padding:8px 13px 12px}
 .work-timeline-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:7px}
 .work-timeline-head>*{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
