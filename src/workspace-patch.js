@@ -11,6 +11,8 @@ import { normalizeWorkspaceFiles, safeWorkspacePath, WORKSPACE_LIMITS } from './
 const text = value => String(value ?? '');
 const sha256 = value => crypto.createHash('sha256').update(text(value), 'utf8').digest('hex');
 
+const WRITE_BLOCKED_PATH = /(?:^|\/)(?:\.env(?:\.(?!example$|sample$|template$)[^/]*)?|\.npmrc|\.netrc|\.pypirc|id_rsa(?:\.[^/]*)?|[^/]+\.(?:pem|key|p12|pfx))$/i;
+
 export function contentDigest(content) {
   return sha256(content);
 }
@@ -42,6 +44,7 @@ export function normalizeChangeSet(changes = []) {
   return list.map(change => {
     const path = safeWorkspacePath(change?.path);
     if (!path) throw new Error('Workspace change-set contains an invalid path');
+    if (WRITE_BLOCKED_PATH.test(path)) throw new Error('Workspace changes may not write credential or private-key files');
     const kind = change?.kind === 'delete' || change?.delete === true
       ? 'delete'
       : change?.kind === 'range'
