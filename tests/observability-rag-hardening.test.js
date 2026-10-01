@@ -42,3 +42,18 @@ test('provider governor bounds queue wait', async () => {
   await assert.rejects(governor.acquire('sat'), error => error instanceof ProviderConcurrencyError);
   release();
 });
+
+test('provider governor never exceeds configured in-flight concurrency', async () => {
+  const governor = new AdaptiveProviderGovernor({ min: 1, max: 2, initial: 2, queueTimeoutMs: 1000 });
+  let active = 0;
+  let peak = 0;
+  const hold = ms => new Promise(resolve => setTimeout(resolve, ms));
+  await Promise.all(Array.from({ length: 6 }, async () => governor.run('cap', async () => {
+    active += 1;
+    peak = Math.max(peak, active);
+    await hold(10);
+    active -= 1;
+  })));
+  assert.equal(peak, 2);
+  assert.equal(governor.stats('cap')[0].active, 0);
+});
