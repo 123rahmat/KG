@@ -243,7 +243,7 @@ export class RunStore {
       conversationId: conversation || null,
       multiAgent: {
         mode: adaptiveControl?.multiAgentMode ?? adaptiveControl?.multiAgent ?? 'auto',
-        maxAgents: adaptiveControl?.maxAgents ?? adaptiveControl?.multiAgentMaxAgents ?? 5
+        maxAgents: adaptiveControl?.maxAgents ?? adaptiveControl?.multiAgentMaxAgents ?? 11
       }
     });
     if (previousState) {
