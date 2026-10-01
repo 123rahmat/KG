@@ -443,21 +443,6 @@ export async function sendMessage(text) {
   const goal = String(text ?? '').trim()
     || (files.length ? `Please look at the attached file${files.length > 1 ? 's' : ''}.` : '');
   if (!goal || state.sendWaiting) return;
-  if (state.driving) {
-    // The last answer is still being checked: this message is sent the
-    // moment that finishes, never dropped.
-    state.sendWaiting = true;
-    $('goal').value = '';
-    notify('runNotice', 'info', 'Your message will be sent as soon as the current step finishes.');
-    try {
-      const until = Date.now() + 15 * 60_000;
-      while (state.driving && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 250));
-    } finally {
-      state.sendWaiting = false;
-    }
-    clearNotice('runNotice');
-    if (state.driving) { $('goal').value = goal; return; }
-  }
   state.chat.consent ||= state.settings.consent;
   if (aiConnected() && !state.chat.consent) {
     // A second message while the consent question is open joins the first,
