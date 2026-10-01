@@ -2271,7 +2271,8 @@ export const MIGRATIONS = [
 
       CREATE INDEX IF NOT EXISTS skill_observations_context_idx
         ON skill_observations(workspace_id, principal_id, context_signature, skill_name, task_type, created_at DESC);
-    `,
+    `
+  },
   {
     version: 56,
     name: 'skill-pattern-intelligence',
