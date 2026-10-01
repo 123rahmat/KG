@@ -125,6 +125,40 @@ export function parallelDecision({
   };
 }
 
+export function adaptConcurrency({
+  current = DEFAULT_MAX_PARALLEL,
+  min = 1,
+  max = DEFAULT_MAX_PARALLEL,
+  averageLatencyMs = 0,
+  errorRate = 0,
+  remainingBudgetRatio = 1,
+  risk = 'ordinary',
+  benefit = 0
+} = {}) {
+  let next = Math.max(Number(min) || 1, Math.min(Number(max) || DEFAULT_MAX_PARALLEL, Number(current) || DEFAULT_MAX_PARALLEL));
+  const latency = Math.max(0, Number(averageLatencyMs) || 0);
+  const errors = Math.max(0, Math.min(1, Number(errorRate) || 0));
+  const budget = Math.max(0, Math.min(1, Number(remainingBudgetRatio) || 0));
+  const highRisk = HIGH_STAKES.has(text(risk).toLowerCase());
+
+  if (errors >= 0.25 || latency >= 8000 || budget < 0.25) next -= 1;
+  else if (errors <= 0.05 && latency > 0 && latency <= 2500 && benefit >= 0.6 && budget >= 0.5) next += 1;
+
+  if (highRisk) next = Math.min(next, 2);
+  next = Math.max(Number(min) || 1, Math.min(Number(max) || DEFAULT_MAX_PARALLEL, next));
+  return {
+    current: Math.max(1, Math.min(ABSOLUTE_MAX_PARALLEL, Number(current) || DEFAULT_MAX_PARALLEL)),
+    next,
+    averageLatencyMs: Math.round(latency),
+    errorRate: Number(errors.toFixed(3)),
+    remainingBudgetRatio: Number(budget.toFixed(3)),
+    risk: text(risk) || 'ordinary',
+    reason: next < current ? 'reduce-concurrency-on-load-or-failure'
+      : next > current ? 'increase-concurrency-when-healthy-and-beneficial'
+      : 'hold-concurrency'
+  };
+}
+
 export function buildParallelExecutionPlan({
   mode = 'auto',
   maxParallel = DEFAULT_MAX_PARALLEL,
