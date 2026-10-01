@@ -7,6 +7,7 @@
  */
 import crypto from 'node:crypto';
 import { encryptJson, decryptField, keyedDigest } from './data-protection.js';
+import { transaction } from './db.js';
 
 const text = value => String(value ?? '').trim();
 const TARGET_BY_REASON = Object.freeze({
@@ -86,34 +87,37 @@ export class EvolutionStore {
   }
 
   async setStatus(scope, _principal, id, status) {
-    const allowed = new Set(['candidate','approved','rejected','implemented']);
-    if (!allowed.has(text(status))) {
+    const next = text(status);
+    const allowed = new Set(['candidate', 'approved', 'rejected', 'implemented']);
+    if (!allowed.has(next)) {
       const error = new Error('Invalid evolution proposal status'); error.status = 400; error.code = 'evolution-status-invalid'; throw error;
     }
-    const { rows: [current] } = await this.pool.query(
-      'SELECT id, status FROM evolution_proposals WHERE id = $1 AND workspace_id = $2 FOR UPDATE',
-      [text(id), scope.workspaceId]
-    );
-    if (!current) {
-      const error = new Error('Evolution proposal not found'); error.status = 404; error.code = 'evolution-proposal-not-found'; throw error;
-    }
-    const allowedTransitions = {
-      candidate: new Set(['approved', 'rejected']),
-      approved: new Set(['implemented', 'rejected']),
-      rejected: new Set(['candidate']),
-      implemented: new Set([])
-    };
-    if (!allowedTransitions[current.status]?.has(text(status)) && current.status !== text(status)) {
-      const error = new Error('That evolution proposal cannot move from ' + current.status + ' to ' + text(status));
-      error.status = 409; error.code = 'evolution-transition-invalid'; throw error;
-    }
-    const { rows: [row] } = await this.pool.query(
-      `UPDATE evolution_proposals
-          SET status = $3, updated_at = now()
-        WHERE id = $1 AND workspace_id = $2
-        RETURNING id, target, status, updated_at AS "updatedAt"`,
-      [text(id), scope.workspaceId, text(status)]
-    );
-    return row;
+    return transaction(this.pool, async client => {
+      const { rows: [current] } = await client.query(
+        'SELECT id, status FROM evolution_proposals WHERE id = $1 AND workspace_id = $2 FOR UPDATE',
+        [text(id), scope.workspaceId]
+      );
+      if (!current) {
+        const error = new Error('Evolution proposal not found'); error.status = 404; error.code = 'evolution-proposal-not-found'; throw error;
+      }
+      const allowedTransitions = {
+        candidate: new Set(['approved', 'rejected']),
+        approved: new Set(['implemented', 'rejected']),
+        rejected: new Set(['candidate']),
+        implemented: new Set([])
+      };
+      if (!allowedTransitions[current.status]?.has(next) && current.status !== next) {
+        const error = new Error('That evolution proposal cannot move from ' + current.status + ' to ' + next);
+        error.status = 409; error.code = 'evolution-transition-invalid'; throw error;
+      }
+      const { rows: [row] } = await client.query(
+        `UPDATE evolution_proposals
+            SET status = $3, updated_at = now()
+          WHERE id = $1 AND workspace_id = $2
+          RETURNING id, target, status, updated_at AS "updatedAt"`,
+        [text(id), scope.workspaceId, next]
+      );
+      return row;
+    });
   }
 }
