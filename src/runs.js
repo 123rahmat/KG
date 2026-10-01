@@ -225,6 +225,7 @@ export class RunStore {
     const projectKey = requestedProjectKey
       || text(previousState?.adaptation?.projectContext?.key)
       || (attachments.length ? projectContextKey(null, attachments) : null);
+    const workspaceSourceId = text(attachments.find(item => item?.sourceId)?.sourceId) || null;
     plan.adaptation.projectContext = {
       key: projectKey,
       explicit: Boolean(project),
@@ -257,6 +258,7 @@ export class RunStore {
       };
     }
     if (attachments.length) plan.adaptation.attachments = attachments;
+    if (workspaceSourceId) plan.adaptation.workspaceSourceId = workspaceSourceId;
     if (projectOverlay?.length) plan.adaptation.projectOverlay = projectOverlay;
     // Later stages (understanding) may add work only this deployment can run.
     if (executionAvailable) plan.adaptation.executionAvailable = executionAvailable;
