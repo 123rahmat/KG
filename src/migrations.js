@@ -1878,5 +1878,38 @@ export const MIGRATIONS = [
       ALTER TABLE memories ADD CONSTRAINT memories_kind_check
         CHECK (kind IN ('about', 'preference', 'project', 'fact', 'episodic', 'semantic'));
     `
+  }  ,{
+    version: 45,
+    name: 'encrypted-adaptive-context-cache',
+    sql: `
+      CREATE TABLE IF NOT EXISTS adaptive_cache (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+        namespace TEXT NOT NULL,
+        cache_key TEXT NOT NULL,
+        value_enc TEXT NOT NULL,
+        source_fingerprint TEXT,
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE(workspace_id, principal_id, namespace, cache_key)
+      );
+      CREATE INDEX IF NOT EXISTS adaptive_cache_expiry_idx ON adaptive_cache(expires_at);
+      CREATE INDEX IF NOT EXISTS adaptive_cache_scope_idx ON adaptive_cache(workspace_id, principal_id, namespace, updated_at DESC);
+      ALTER TABLE adaptive_cache ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE adaptive_cache FORCE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS adaptive_cache_scope_policy ON adaptive_cache;
+      CREATE POLICY adaptive_cache_scope_policy ON adaptive_cache
+        USING (
+          adaptive_cache.workspace_id = current_setting('app.workspace_id', true)
+          AND adaptive_cache.principal_id = current_setting('app.principal_id', true)
+        )
+        WITH CHECK (
+          adaptive_cache.workspace_id = current_setting('app.workspace_id', true)
+          AND adaptive_cache.principal_id = current_setting('app.principal_id', true)
+        );
+      REVOKE ALL ON adaptive_cache FROM PUBLIC;
+    `
   }
 ];
