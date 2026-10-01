@@ -743,16 +743,13 @@ export async function runAdaptiveAgentPanel({
     const errorRate = results.length
       ? results.filter(item => !item.parsed).length / results.length
       : 1;
-    const remainingBudgetRatio = run?.maxTokens === null || run?.maxTokens === undefined
-      ? 1
-      : Math.max(0, Math.min(1, (Number(run.maxTokens) - Number(run.tokensUsed ?? 0)) / Math.max(1, Number(run.maxTokens))));
     const concurrency = adaptConcurrency({
       current: effectiveMaxParallel,
       min: 1,
       max: maxAgents,
       averageLatencyMs: avgLatencyMs,
       errorRate,
-      remainingBudgetRatio: waveBudgetRatio,
+      remainingBudgetRatio: remainingBudgetRatio(),
       risk: run?.situation?.risk ?? 'ordinary',
       benefit: Number(lastAllocation?.dimensions?.concurrencyOpportunity ?? 0)
     });
