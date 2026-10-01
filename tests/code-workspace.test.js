@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyWorkspacePatch, classifyWorkspaceFile, createWorkspaceState, selectWorkspaceContext, workspaceDiff, workspaceImpact, workspaceRevision } from '../src/code-workspace.js';
+import { applyWorkspacePatch, classifyWorkspaceFile, createWorkspaceState, createWorkspaceChatContext, selectWorkspaceContext, workspaceDiff, workspaceImpact, workspaceRevision } from '../src/code-workspace.js';
 
 test('workspace revisions are deterministic for the same project state', () => {
   const files = [{ path: 'src/app.js', content: 'export const x = 1;' }];
@@ -57,4 +57,29 @@ test('workspace state is compact and content-addressed', () => {
   assert.equal(classifyWorkspaceFile('tests/foo.test.js'), 'test');
   assert.equal(classifyWorkspaceFile('package.json'), 'config');
   assert.equal(classifyWorkspaceFile('src/foo.js'), 'code');
+});
+
+
+test('every code workspace chat has an explicit isolated memory scope and adaptive multi-agent policy', () => {
+  const chat = createWorkspaceChatContext({
+    conversationId: 'chat-12345678',
+    multiAgentMode: 'auto',
+    maxAgents: 8
+  });
+  assert.equal(chat.conversationId, 'chat-12345678');
+  assert.deepEqual(chat.memory, {
+    scope: 'conversation',
+    alwaysOn: true,
+    crossChat: 'user-controlled',
+    note: 'Chat-local memory is isolated to this conversation; cross-chat recall never happens implicitly.'
+  });
+  assert.equal(chat.multiAgent.mode, 'auto');
+  assert.equal(chat.multiAgent.maxAgents, 5);
+  assert.equal(chat.multiAgent.adaptive, true);
+  assert.equal(chat.multiAgent.serverOrchestrated, true);
+  assert.equal(chat.multiAgent.advisoryOnly, true);
+});
+
+test('workspace chat rejects an invalid conversation scope instead of silently sharing memory', () => {
+  assert.throws(() => createWorkspaceChatContext({ conversationId: '../other-chat' }), /conversationId/);
 });
