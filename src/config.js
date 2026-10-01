@@ -456,6 +456,12 @@ export function loadConfig(env = process.env) {
       webAccess: text(env.TOOLS_WEB_ACCESS).toLowerCase() !== 'false'
     },
 
+    providerConcurrency: {
+      max: integer(env.AI_MAX_CONCURRENCY, production ? 4 : 6, { min: 1, max: 16, name: 'AI_MAX_CONCURRENCY', errors }),
+      min: integer(env.AI_MIN_CONCURRENCY, 1, { min: 1, max: 16, name: 'AI_MIN_CONCURRENCY', errors }),
+      queueTimeoutMs: integer(env.AI_CONCURRENCY_QUEUE_TIMEOUT_MS, 5_000, { min: 100, max: 60_000, name: 'AI_CONCURRENCY_QUEUE_TIMEOUT_MS', errors })
+    },
+
     usage: {
       // AI tokens per person in a rolling 4-hour window and a rolling week.
       // 0 means no limit. The context size overrides the provider's usual one.
@@ -546,6 +552,10 @@ export function loadConfig(env = process.env) {
 
   if (production && config.execution.localAgentUrl && config.execution.localAgentIsolation === 'none') {
     errors.push('LOCAL_AGENT_ISOLATION must be container or vm when LOCAL_AGENT_URL is configured in production');
+  }
+
+  if (config.providerConcurrency.min > config.providerConcurrency.max) {
+    errors.push('AI_MIN_CONCURRENCY cannot exceed AI_MAX_CONCURRENCY');
   }
 
   if (production && !config.database.backupUrl) {
