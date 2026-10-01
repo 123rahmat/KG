@@ -23,10 +23,33 @@ const GOOGLE = { AI_PROVIDER: 'google', AI_API_KEY: 'test-key', AI_MODEL: 'gemin
 const requestFrom = body => {
   const system = body.systemInstruction?.parts?.filter(part => typeof part?.text === 'string').map(part => part.text).join('\n') ?? '';
   const contents = Array.isArray(body.contents) ? body.contents : [];
-  const users = [...contents].filter(item => item?.role === 'user');
-  const text = users.at(-1)?.parts?.filter(part => typeof part?.text === 'string').map(part => part.text).join('\n') ?? '';
+  const users = contents
+    .filter(item => item?.role === 'user')
+    .flatMap(item => Array.isArray(item?.parts) ? item.parts : [])
+    .map(part => typeof part?.text === 'string' ? part.text : '')
+    .reverse();
   let request = {};
-  try { request = JSON.parse(text || '{}'); } catch { /* plain-text model turn */ }
+  for (const text of users) {
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed === 'object' && parsed.task) {
+        request = parsed;
+        break;
+      }
+    } catch {
+      const start = text.indexOf('{');
+      const end = text.lastIndexOf('}');
+      if (start >= 0 && end > start) {
+        try {
+          const parsed = JSON.parse(text.slice(start, end + 1));
+          if (parsed && typeof parsed === 'object' && parsed.task) {
+            request = parsed;
+            break;
+          }
+        } catch { /* plain-text model turn */ }
+      }
+    }
+  }
   return { system, contents, request };
 };
 const CHAT_CLASSIFICATION = {
@@ -338,7 +361,7 @@ test('verifying researched work checks its facts on the web, and an unsupported 
     // The verifier searched the web itself and was told which sources the work rests on.
     assert.equal(verifyCalls.length, 1);
     assert.ok(verifyCalls[0].tools?.length, 'the verifier searches the web');
-    const brief = JSON.parse(requestFrom(verifyCalls[0]).system).verification;
+    const brief = requestFrom(verifyCalls[0]).request.verification;
     assert.equal(brief.groundedCheck, true);
     assert.deepEqual(brief.sources.map(item => item.url), ['https://example.com/source']);
     assert.deepEqual(brief.unretrievedLinks, ['https://invented.example/paper']);
@@ -1206,7 +1229,7 @@ test('a direct question is answered and verified in two steps, then completes', 
     env: GOOGLE,
     fetchImpl: async (_url, options) => {
       if (isClassification(options)) return modelReply(JSON.stringify(CHAT_CLASSIFICATION));
-      const request = JSON.parse(JSON.parse(options.body).messages[0].content);
+      const request = requestFrom(JSON.parse(options.body)).request;
       return modelReply(request.task.id === 'respond'
         ? 'A function that calls itself.'
         : JSON.stringify({
