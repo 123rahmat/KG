@@ -24,10 +24,9 @@ export const CONTEXT_BUDGETS = Object.freeze({
 
 const CODE_TASKS = new Set(['build-code','test-code','code','prototype','verify-code','review-code','refactor-code','debug-code']);
 
-const SENSITIVE_PATH = /(?:^|\\/)(?:\\.env(?:\\..*)?|.*(?:secret|credential|password|passwd|private[-_ ]?key|token).*)$/i;
-const INLINE_SECRET = new RegExp('(\\\\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|secret)\\\\b\\\\s*[:=]\\\\s*["\\\'][^"\\\']{8,}["\\\'])|(authorization\\\\s*[:=]\\\\s*["\\\']bearer\\\\s+[A-Za-z0-9._~+\\\\/-]{12,}["\\\'])', 'gi');
-const SECRET_VALUE = /([:=]\\s*["'])([^"']+)(["'])/;
-
+const SENSITIVE_PATH = /(?:^|\/)(?:\.env(?:\..*)?|.*(?:secret|credential|password|passwd|private[-_ ]?key|token).*)$/i;
+const INLINE_SECRET = /(\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|secret)\b\s*[:=]\s*["'][^"']{8,}["'])|(authorization\s*[:=]\s*["']bearer\s+[A-Za-z0-9._~+\/-]{12,}["'])/gi;
+const SECRET_VALUE = /([:=]\s*["'])([^"']+)(["'])/;
 function contextSafeContent(path, content) {
   if (SENSITIVE_PATH.test(path)) return '[sensitive file withheld from model context; use approved workspace tools only when exact contents are required]';
   return text(content).replace(INLINE_SECRET, match => match.replace(SECRET_VALUE, '$1[REDACTED]$3'));
