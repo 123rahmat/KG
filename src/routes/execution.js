@@ -504,6 +504,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         }
 
         if (executionDecision.target === 'local') {
+          const localPayload = await runnerPayload(run, task, req.body, req.scope);
           const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString();
           const nonce = crypto.randomBytes(16).toString('base64url');
           const executionId = executionIdFor({
@@ -513,7 +514,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
             executionTarget: 'local',
             round: repairsThisAttempt(run).length
           });
-          const payloadDigest = executionPayloadDigest(req.body?.payload ?? {});
+          const payloadDigest = executionPayloadDigest(localPayload);
           const signature = signExecutionChallenge(config.execution.localAgentSharedSecret, {
             runId: run.id,
             taskId: task.id,
@@ -523,7 +524,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
             executionTarget: 'local',
             expiresAt,
             nonce,
-            payloadDigest: executionPayloadDigest(req.body?.payload ?? {})
+            payloadDigest
           });
           const issued = await runs.issueExecutionChallenge(
             req.scope,
@@ -559,7 +560,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
                   purpose: task.purpose,
                   metadata: task.metadata ?? {}
                 },
-                payload: req.body?.payload ?? {},
+                payload: localPayload,
                 preflight: executionDecision.local?.preflight ?? req.body?.preflight ?? null,
                 receiptAlgorithm: RECEIPT_ALGORITHM,
                 executionChallenge: {
