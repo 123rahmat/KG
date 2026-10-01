@@ -191,6 +191,42 @@ export function registerWorkspaceSourcesRoutes(app, {
     res.json({ source: sourcePublic(updated), manifest, unchanged: false });
   }));
 
+  app.post('/api/workspace/sources/:id/apply', scoped('editor'), idempotent, route(async (req, res) => {
+    if (req.body?.confirm !== 'APPLY_WORKSPACE_CHANGES') {
+      return res.status(400).json({ error: 'Explicit confirmation is required before repository writes.', code: 'write-confirmation-required' });
+    }
+    const { rows: [source] } = await pool.query(
+      \`SELECT * FROM workspace_sources
+         WHERE id = $1 AND workspace_id = $2 AND principal_id = $3 AND revoked_at IS NULL
+       FOR UPDATE\`,
+      [text(req.params.id), req.scope.workspaceId, req.principal.id]
+    );
+    if (!source) return res.status(404).json({ error: 'Workspace source not found', code: 'no-source' });
+    if (source.kind !== 'github') return res.status(400).json({ error: 'Local folder changes are written by the browser after explicit approval.', code: 'local-write-client-side' });
+    if (source.permissions?.write !== true) return res.status(403).json({ error: 'This GitHub source is read-only. Reconnect it with explicit write permission to enable write-back.', code: 'source-read-only' });
+    const changes = Array.isArray(req.body?.changes) ? req.body.changes : [];
+    if (!changes.length) return res.status(400).json({ error: 'No changes supplied.', code: 'changes-required' });
+    const token = decryptSourceCredentials(encryptionKey, source.credentials_enc);
+    if (!token) return res.status(409).json({ error: 'GitHub credentials are unavailable. Reconnect the repository.', code: 'source-credentials-missing' });
+    const { githubApplyChanges } = await import('../workspace-sources.js');
+    const result = await githubApplyChanges({
+      fetchImpl, token,
+      owner: source.repo_owner,
+      repo: source.repo_name,
+      ref: source.repo_ref,
+      expectedCommitSha: text(req.body?.expectedCommitSha) || text(source.metadata?.commitSha),
+      changes,
+      message: text(req.body?.message) || 'workspace: apply reviewed changes'
+    });
+    await audit?.record({
+      principalId: req.principal.id, workspaceId: req.scope.workspaceId,
+      action: 'workspace.source.write', target: source.id, outcome: 'allowed',
+      detail: { kind: 'github', ref: source.repo_ref, changedFiles: result.changedFiles ?? [] },
+      requestId: req.requestId
+    });
+    res.json({ source: sourcePublic(source), result });
+  }));
+
   app.post('/api/workspace/sources/:id/revoke', scoped('editor'), route(async (req, res) => {
     const { rows: [row] } = await pool.query(
       `UPDATE workspace_sources
