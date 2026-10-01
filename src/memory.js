@@ -12,7 +12,7 @@ import { registerTools } from './toolbox.js';
 import { encryptJson, decryptField, keyedDigest } from './data-protection.js';
 
 const text = value => String(value ?? '').trim();
-export const MEMORY_KINDS = Object.freeze(['about', 'preference', 'project', 'fact']);
+export const MEMORY_KINDS = Object.freeze(['about', 'preference', 'project', 'fact', 'episodic', 'semantic']);
 export const MAX_MEMORY_CHARS = 500;
 export const MAX_MEMORIES = 300;
 const RECALL_LIMIT = 15;
