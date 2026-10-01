@@ -11,6 +11,7 @@ import { screenRequest, combineDecisions, recordRefusal, inCooldown, careNote, b
 import { assertTermsAccepted } from '../terms.js';
 import { configuredExecutionTargets, planPolicyAllows, dataPolicyAllows, modelPolicyAllows } from '../http/policy.js';
 import { resolveModelSelection } from '../model-routing.js';
+import { FeedbackStore } from '../feedback.js';
 
 // Files the AI reads for itself: text and code, CSV, PDF, Word, Excel and
 // PowerPoint become text; images are shown to the model. Anything else stays
@@ -22,6 +23,10 @@ const MAX_ATTACHMENTS = 10;
 
 export function registerRunsRoutes(app, { config, governance, runs, objects, fetchImpl, scoped, idempotent, route, pool, audit, memories = null }) {
   /** What this deployment can really run, so plans never wait on a missing runner. */
+  const feedback = config.security?.personalDataEncryptionKey
+    ? new FeedbackStore(pool, { encryptionKey: config.security.personalDataEncryptionKey })
+    : null;
+
   function executionAvailable() {
     return {
       code: configuredExecutionTargets(config, 'code').length > 0
@@ -246,6 +251,27 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
     const run = await runs.get(req.scope, req.params.id);
     if (!run) return res.status(404).json({ error: 'Run not found', code: 'no-run' });
     res.json(run);
+  }));
+
+  app.get('/api/runs/:id/feedback', scoped('viewer'), route(async (req, res) => {
+    const run = await runs.get(req.scope, req.params.id);
+    if (!run) return res.status(404).json({ error: 'Run not found', code: 'no-run' });
+    if (run.principalId !== req.principal.id) return res.status(404).json({ error: 'Run not found', code: 'no-run' });
+    res.json({ feedback: feedback ? await feedback.list(req.scope, req.params.id) : [] });
+  }));
+
+  app.post('/api/runs/:id/feedback', scoped('editor'), route(async (req, res) => {
+    const run = await runs.get(req.scope, req.params.id);
+    if (!run) return res.status(404).json({ error: 'Run not found', code: 'no-run' });
+    if (run.principalId !== req.principal.id) return res.status(403).json({ error: 'Only the run owner can rate this result.', code: 'feedback-owner-only' });
+    if (!feedback) return res.status(503).json({ error: 'Feedback storage is not configured.', code: 'feedback-unavailable' });
+    const saved = await feedback.add(req.scope, req.principal, run.id, req.body ?? {});
+    await audit?.record({
+      principalId: req.principal.id, workspaceId: req.scope.workspaceId,
+      action: 'run.feedback', target: run.id, outcome: 'allowed',
+      detail: { rating: saved.rating, reason: saved.reason }, requestId: req.requestId
+    });
+    res.status(201).json({ feedback: saved });
   }));
 
   // Record a real outcome for one task. The client names the task and supplies
