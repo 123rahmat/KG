@@ -59,6 +59,10 @@ export function mergeBlackboard(current, contribution = {}, runId = null) {
   const base = normalizeBoard(current, runId);
   const next = {
     ...base,
+    // A pure in-memory merge advances an already-existing board; the first
+    // materialization remains version 0 so BlackboardStore can assign version 1
+    // atomically when it creates the persisted row.
+    version: current && typeof current === 'object' ? base.version + 1 : 0,
     objective: text(contribution.objective) || base.objective,
     facts: mergeUnique(base.facts, contribution.facts),
     hypotheses: mergeUnique(base.hypotheses, contribution.hypotheses),
@@ -104,7 +108,7 @@ export class BlackboardStore {
         throw error;
       }
       const next = mergeBlackboard(current, contribution, runId);
-      next.version = current.version + 1;
+      next.version = Math.max(current.version + 1, next.version);
       const packed = JSON.stringify(next);
       if (Buffer.byteLength(packed, 'utf8') > MAX_BYTES) {
         const error = new Error('Run blackboard is full; summarize before adding more state.');
