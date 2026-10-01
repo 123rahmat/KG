@@ -90,6 +90,23 @@ export class EvolutionStore {
     if (!allowed.has(text(status))) {
       const error = new Error('Invalid evolution proposal status'); error.status = 400; error.code = 'evolution-status-invalid'; throw error;
     }
+    const { rows: [current] } = await this.pool.query(
+      'SELECT id, status FROM evolution_proposals WHERE id = $1 AND workspace_id = $2 FOR UPDATE',
+      [text(id), scope.workspaceId]
+    );
+    if (!current) {
+      const error = new Error('Evolution proposal not found'); error.status = 404; error.code = 'evolution-proposal-not-found'; throw error;
+    }
+    const allowedTransitions = {
+      candidate: new Set(['approved', 'rejected']),
+      approved: new Set(['implemented', 'rejected']),
+      rejected: new Set(['candidate']),
+      implemented: new Set([])
+    };
+    if (!allowedTransitions[current.status]?.has(text(status)) && current.status !== text(status)) {
+      const error = new Error('That evolution proposal cannot move from ' + current.status + ' to ' + text(status));
+      error.status = 409; error.code = 'evolution-transition-invalid'; throw error;
+    }
     const { rows: [row] } = await this.pool.query(
       `UPDATE evolution_proposals
           SET status = $3, updated_at = now()
@@ -97,9 +114,6 @@ export class EvolutionStore {
         RETURNING id, target, status, updated_at AS "updatedAt"`,
       [text(id), scope.workspaceId, text(status)]
     );
-    if (!row) {
-      const error = new Error('Evolution proposal not found'); error.status = 404; error.code = 'evolution-proposal-not-found'; throw error;
-    }
     return row;
   }
 }
