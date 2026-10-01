@@ -241,7 +241,7 @@ test('a project attached as a zip is changed by the files the AI returns, and th
     const buildRequest = buildRequests.find(request => request.codeIntelligence.project.fileCount === 2)
       ?? buildRequests[0];
     assert.equal(buildRequest.codeIntelligence.project.fileCount, 2);
-    assert.ok(buildRequests.some(request => request.codeIntelligence.files.some(file => file.path === 'shop/shop/pricing.py')));
+    assert.ok(buildRequests.some(request => request.codeIntelligence.files.some(file => file.path === 'shop/pricing.py')));
     const tested = await call('POST', `/api/runs/${run.id}/execute`, { ...auth, body: { approved: true } });
     assert.equal(tested.status, 200, JSON.stringify(tested.body).slice(0, 400));
     const payload = runnerRequests.at(-1).payload;
