@@ -86,7 +86,6 @@ async function applyCodeWorkspace(run, structured) {
   const source = state.workspaceSource;
   const changes = codeWorkspaceChanges(structured);
   if (!sourceId || !source || !changes.length) return;
-  if (!confirm('Apply the reviewed code changes to the connected project?')) return;
   await guard(async () => {
     if (source.kind === 'local-folder') {
       await applyLocalWorkspaceChanges(changes);
@@ -111,12 +110,42 @@ function workspaceApplyCard(run, structured) {
   const changes = codeWorkspaceChanges(structured);
   if (!changes.length) return null;
   const writable = source.kind === 'local-folder' || source.permissions?.write === true;
-  return element('div', { class: 'row wrap workspace-apply-actions' }, [
-    button('Apply changes', () => applyCodeWorkspace(run, structured), writable ? 'primary small' : 'ghost small'),
-    element('span', { class: 'muted small', text: source.kind === 'github' && !writable
-      ? 'GitHub source is read-only'
-      : `${changes.length} change${changes.length === 1 ? '' : 's'} ready for review` })
+  if (!writable) {
+    return element('div', { class: 'row wrap workspace-apply-actions' }, [
+      element('span', { class: 'muted small', text: 'GitHub source is read-only' }),
+      element('span', { class: 'muted small', text: changes.length + ' change' + (changes.length === 1 ? '' : 's') + ' ready for review' })
+    ]);
+  }
+
+  const holder = element('div', { class: 'stack workspace-apply-card' });
+  const confirmation = element('div', { class: 'workspace-apply-confirm stack small', hidden: true }, [
+    element('strong', { text: 'Apply these reviewed changes?' }),
+    element('span', { class: 'muted', text: 'The server will re-check the workspace revision before writing. Credential and private-key files remain blocked.' })
   ]);
+  const review = button('Review changes', () => {
+    confirmation.hidden = false;
+    review.disabled = true;
+    apply.focus({ preventScroll: true });
+  }, 'primary small');
+  const apply = button('Apply now', async event => {
+    event.currentTarget.disabled = true;
+    await applyCodeWorkspace(run, structured);
+    holder.remove();
+  }, 'primary small');
+  const cancel = button('Cancel', () => {
+    confirmation.hidden = true;
+    review.disabled = false;
+    review.focus({ preventScroll: true });
+  }, 'ghost small');
+  confirmation.append(element('div', { class: 'row wrap' }, [apply, cancel]));
+  holder.append(
+    element('div', { class: 'row wrap workspace-apply-actions' }, [
+      review,
+      element('span', { class: 'muted small', text: changes.length + ' change' + (changes.length === 1 ? '' : 's') + ' ready for review' })
+    ]),
+    confirmation
+  );
+  return holder;
 }
 
 function actionCards(run) {
