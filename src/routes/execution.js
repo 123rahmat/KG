@@ -139,7 +139,9 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
   function scopedAttachments(run, task = null) {
     const attachments = Array.isArray(run.adaptation?.attachments) ? run.adaptation.attachments : [];
     const selected = selectedAttachmentNames(run);
-    const base = selected ? attachments.filter(file => selected.has(text(file.name).toLowerCase())) : attachments;
+    const base = selected
+      ? attachments.filter(file => file.sourceId || selected.has(text(file.name).toLowerCase()))
+      : attachments;
     if (!task) return base;
     // Files attached to the message are what the person is asking about: every
     // step sees them. A step's scope narrows them only when it names the files
@@ -147,7 +149,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     const step = adaptiveStepScope(run.adaptation?.resourcePlan, task, { need: run.situation?.need ?? null });
     const stepNames = new Set((step.artifacts ?? []).map(text).filter(Boolean).map(name => name.toLowerCase()));
     if (!stepNames.size) return base;
-    const named = base.filter(file => stepNames.has(text(file.name).toLowerCase()));
+    const named = base.filter(file => file.sourceId || stepNames.has(text(file.name).toLowerCase()));
     return named.length ? named : base;
   }
 
