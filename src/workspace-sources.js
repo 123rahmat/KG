@@ -250,7 +250,7 @@ export async function githubApplyChanges({
       body: JSON.stringify({ sha: newSha, force: false })
     }
   );
-  return { unchanged: false, commitSha: newSha, parentSha: revision.sha, ref: revision.ref, changedFiles: list.map(item => safePath(item?.path)).filter(Boolean) };
+  return { unchanged: false, commitSha: newSha, treeSha: text(tree?.sha) || null, parentSha: revision.sha, ref: revision.ref, changedFiles: list.map(item => safePath(item?.path)).filter(Boolean) };
 }
 
 export async function githubWriteFile({
