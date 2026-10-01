@@ -262,6 +262,56 @@ export async function connectGitHub() {
   }
 }
 
+export async function applyLocalWorkspaceChanges(changes = []) {
+  if (!localDirectory) throw new Error('Choose the local project folder again before applying changes.');
+  const permission = await localDirectory.queryPermission?.({ mode: 'readwrite' });
+  if (permission !== 'granted') {
+    const requested = await localDirectory.requestPermission?.({ mode: 'readwrite' });
+    if (requested !== 'granted') throw new Error('Write permission was not granted for the local folder.');
+  }
+  const safePath = value => {
+    const path = String(value ?? '').trim().replaceAll('\\', '/').replace(/^\\.\\//, '');
+    if (!path || path.startsWith('/') || path.includes('..') || path.split('/').some(part => !part || part === '.' || part === '..')) {
+      throw new Error('Invalid local workspace path.');
+    }
+    return path;
+  };
+  const getParent = async path => {
+    const parts = path.split('/');
+    parts.pop();
+    let dir = localDirectory;
+    for (const part of parts) dir = await dir.getDirectoryHandle(part, { create: true });
+    return { dir, name: path.split('/').at(-1) };
+  };
+  for (const change of Array.isArray(changes) ? changes : []) {
+    const path = safePath(change?.path);
+    const { dir, name } = await getParent(path);
+    if (change?.kind === 'delete' || change?.delete === true) {
+      await dir.removeEntry(name).catch(error => {
+        if (error?.name !== 'NotFoundError') throw error;
+      });
+      continue;
+    }
+    const handle = await dir.getFileHandle(name, { create: true });
+    if (change?.beforeDigest) {
+      const current = await handle.getFile().catch(() => null);
+      if (!current) throw new Error('Local workspace changed before applying ' + path);
+      const currentDigest = await contentDigest(await current.text());
+      if (currentDigest !== change.beforeDigest) throw new Error('Local file changed before applying ' + path);
+    }
+    const writable = await handle.createWritable();
+    try {
+      await writable.write(String(change?.content ?? ''));
+    } finally {
+      await writable.close();
+    }
+  }
+  const result = await syncLocalFolder();
+  notify('runNotice', 'info', result?.unchanged ? 'Local folder already contained these changes.' : 'Changes applied to the local project.');
+  return result;
+}
+
+
 export async function syncActiveWorkspaceSource() {
   const sourceId = state.chat?.workspaceSourceId ?? state.workspaceSourceId;
   if (!sourceId) return null;
