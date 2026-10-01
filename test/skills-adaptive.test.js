@@ -216,3 +216,24 @@ test('evaluation summary exposes quality and efficiency metrics', async () => {
   }, { minPassRate: 0.5, maxFailed: 1, maxPassRateDrop: 0.4 });
   assert.equal(gate.pass, false);
 });
+
+
+test('project change-risk signals widen verification for broad-impact changes', async () => {
+  const { buildProjectIndex, changeRiskSignals } = await import('../src/project-index.js');
+  const files = [
+    { path: 'src/core.js', content: 'import { helper } from "./helper.js"; export function core(){ return helper(); }' },
+    { path: 'src/helper.js', content: 'export function helper(){ return 1; }' },
+    { path: 'src/a.js', content: 'import { helper } from "./helper.js";' },
+    { path: 'src/b.js', content: 'import { helper } from "./helper.js";' },
+    { path: 'src/c.js', content: 'import { helper } from "./helper.js";' },
+    { path: 'src/d.js', content: 'import { helper } from "./helper.js";' },
+    { path: 'test/helper.test.js', content: 'test("helper", () => assert.equal(1, 1));' }
+  ];
+  const index = buildProjectIndex(files, { revisionId: 'test-revision' });
+  const signals = changeRiskSignals(index, ['src/helper.js']);
+  assert.equal(signals.changedFiles, 1);
+  assert.ok(signals.impactedFiles >= 5);
+  assert.ok(signals.relatedTests >= 1);
+  assert.equal(signals.verificationScope, 'broad');
+  assert.ok(signals.highFanInChangedFiles.includes('src/helper.js'));
+});
