@@ -568,7 +568,7 @@ function buildBrief(findings, arbiter, decision, states = [], allocation = null)
   };
 }
 
-/** Run the adaptive panel and, only on disagreement, a separate arbiter. */
+/** Run adaptive specialist waves in parallel; re-plan between waves. */
 export async function runAdaptiveAgentPanel({
   run,
   task,
@@ -584,94 +584,117 @@ export async function runAdaptiveAgentPanel({
   recordUsage = async () => {},
   modelCaller = callModel
 } = {}) {
-
+  const { buildHarnessContext } = await import('./agent-harness.js');
   const mode = config?.agents?.multiAgent ?? 'auto';
-  const maxAgents = config?.agents?.maxAgents ?? DEFAULT_MULTI_AGENT_MAX_AGENTS;
+  const maxAgents = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(config?.agents?.maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
   let allocationResult = rolesFor(run, task, { maxAgents, mode });
-  if (!allocationResult.decision.enabled) return { enabled: false, decision: allocationResult.decision, brief: null, agents: [], arbiter: null };
+  if (!allocationResult.decision.enabled) return { enabled: false, decision: allocationResult.decision, brief: null, agents: [], findings: [], arbiter: null };
 
   const usedModels = [];
   const findings = [];
   const agentStates = [];
   const completedRoles = [];
   const failedRoles = [];
+  const waves = [];
   let lastAllocation = allocationResult.allocation;
   let allocationRounds = 0;
 
   while (true) {
     allocationRounds += 1;
-    const nextAllocation = rolesFor(run, task, {
-      maxAgents,
-      mode,
-      progress: {
-        completedRoles,
-        failedRoles,
-        goal: basePayload?.goal,
-        workPlan: basePayload?.workPlan,
-        evidenceSoFar: basePayload?.evidenceSoFar,
-        findings
-      }
-    });
-    allocationResult = nextAllocation;
-    lastAllocation = nextAllocation.allocation ?? lastAllocation;
+    const progress = {
+      completedRoles,
+      failedRoles,
+      goal: basePayload?.goal,
+      workPlan: basePayload?.workPlan,
+      evidenceSoFar: basePayload?.evidenceSoFar,
+      findings
+    };
+    allocationResult = rolesFor(run, task, { maxAgents, mode, progress });
+    lastAllocation = allocationResult.allocation ?? lastAllocation;
 
-    const nextRole = nextAllocation.roles.find(role =>
+    const pendingRoles = allocationResult.roles.filter(role =>
       !completedRoles.includes(role) && !failedRoles.includes(role)
     );
-    if (!nextRole) break;
-    if (completedRoles.length + failedRoles.length >= Math.min(
-      MAX_MULTI_AGENT_SPECIALISTS,
-      Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS))
-    )) break;
+    if (!pendingRoles.length) break;
 
-    if (!(await canSpend())) {
-      agentStates.push({ role: nextRole, status: 'budget-blocked' });
-      break;
-    }
-    if (!dataAllowed) {
-      agentStates.push({ role: nextRole, status: 'data-policy-blocked' });
-      failedRoles.push(nextRole);
-      continue;
-    }
+    const waveRoles = pendingRoles.slice(0, maxAgents);
+    const waveIndex = waves.length;
+    const jobs = [];
 
-    const modelId = agentModelFor(selection, primaryModelId, nextRole, {
-      used: usedModels,
-      allows: allowsModel
-    });
-    usedModels.push(modelId);
-    const result = await modelCaller(agentMessages(nextRole, basePayload), {
-      config,
-      fetchImpl,
-      modelId,
-      allowBackup,
-      effort: lastAllocation?.pressure >= 0.72 ? 'high' : 'medium',
-      json: true,
-      maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS
-    }).catch(() => null);
-    if (result?.usage) await recordUsage(result.usage, result.provider, result.model);
-
-    const parsed = result && !result.incomplete
-      ? normalizedRoleFinding(parseJsonObject(result.text), nextRole)
-      : null;
-    if (!parsed) {
-      failedRoles.push(nextRole);
-      agentStates.push({ role: nextRole, model: result?.model ?? modelId, status: 'unavailable' });
-      continue;
+    for (const role of waveRoles) {
+      if (!dataAllowed) {
+        failedRoles.push(role);
+        agentStates.push({ role, status: 'data-policy-blocked', wave: waveIndex });
+        continue;
+      }
+      if (!(await canSpend())) {
+        agentStates.push({ role, status: 'budget-blocked', wave: waveIndex });
+        continue;
+      }
+      const modelId = agentModelFor(selection, primaryModelId, role, {
+        used: usedModels,
+        allows: allowsModel
+      });
+      usedModels.push(modelId);
+      jobs.push({ role, modelId, wave: waveIndex });
     }
 
-    findings.push(parsed);
-    completedRoles.push(nextRole);
-    agentStates.push({
-      role: nextRole,
-      model: result.model,
-      status: 'complete',
-      recommendation: parsed.recommendation,
-      summary: parsed.summary,
-      confidence: parsed.confidence
+    if (!jobs.length) break;
+
+    const harness = buildHarnessContext({
+      run,
+      task,
+      goal: basePayload?.goal,
+      capabilities: run?.capabilities?.granted ?? [],
+      evidence: basePayload?.evidenceSoFar ?? [],
+      projectPaths: basePayload?.workspace?.paths ?? [],
+      priorTopics: basePayload?.conversation?.map(item => item?.user) ?? []
     });
 
-    // Re-evaluate after every completed/failed specialist using server state
-    // plus role completion state. Peer findings never enter specialist prompts.
+    const results = await Promise.all(jobs.map(async job => {
+      const result = await modelCaller(agentMessages(job.role, { ...basePayload, harness }), {
+        config,
+        fetchImpl,
+        modelId: job.modelId,
+        allowBackup,
+        effort: lastAllocation?.pressure >= 0.72 ? 'high' : 'medium',
+        json: true,
+        maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS
+      }).catch(() => null);
+      if (result?.usage) await recordUsage(result.usage, result.provider, result.model);
+      const parsed = result && !result.incomplete
+        ? normalizedRoleFinding(parseJsonObject(result.text), job.role)
+        : null;
+      return { ...job, result, parsed };
+    }));
+
+    for (const item of results) {
+      if (!item.parsed) {
+        failedRoles.push(item.role);
+        agentStates.push({ role: item.role, model: item.result?.model ?? item.modelId, status: 'unavailable', wave: item.wave });
+        continue;
+      }
+      findings.push(item.parsed);
+      completedRoles.push(item.role);
+      agentStates.push({
+        role: item.role,
+        model: item.result.model,
+        status: 'complete',
+        recommendation: item.parsed.recommendation,
+        summary: item.parsed.summary,
+        confidence: item.parsed.confidence,
+        wave: item.wave
+      });
+    }
+
+    waves.push({
+      index: waveIndex,
+      roles: waveRoles,
+      parallel: jobs.length > 1,
+      completed: results.filter(item => item.parsed).map(item => item.role),
+      failed: results.filter(item => !item.parsed).map(item => item.role)
+    });
+
     allocationResult = rolesFor(run, task, {
       maxAgents,
       mode,
@@ -700,10 +723,12 @@ export async function runAdaptiveAgentPanel({
       maxOutputTokens: ARBITER_MAX_OUTPUT_TOKENS
     }).catch(() => null);
     if (result?.usage) await recordUsage(result.usage, result.provider, result.model);
-    const parsed = result && !result.incomplete ? normalizedRoleFinding(parseJsonObject(result.text), 'arbiter') : null;
+    const parsed = result && !result.incomplete
+      ? normalizedRoleFinding(parseJsonObject(result.text), 'arbiter')
+      : null;
     if (parsed) {
       arbiter = { ...parsed, model: result.model };
-      agentStates.push({ role: 'arbiter', model: result.model, status: 'complete', recommendation: parsed.recommendation, summary: parsed.summary });
+      agentStates.push({ role: 'arbiter', model: result.model, status: 'complete' });
     } else {
       agentStates.push({ role: 'arbiter', model: result?.model ?? modelId, status: 'unavailable' });
     }
@@ -713,6 +738,9 @@ export async function runAdaptiveAgentPanel({
   const finalAllocation = {
     ...lastAllocation,
     allocationRounds,
+    waves,
+    waveCount: waves.length,
+    parallel: waves.some(wave => wave.parallel),
     completedRoles,
     failedRoles
   };
@@ -721,6 +749,7 @@ export async function runAdaptiveAgentPanel({
     enabled: true,
     decision: finalDecision,
     allocation: finalAllocation,
+    waves,
     agents: agentStates,
     findings,
     arbiter,
