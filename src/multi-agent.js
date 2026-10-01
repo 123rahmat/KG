@@ -391,7 +391,10 @@ export function agentMessages(role, basePayload) {
           : [],
         workspace: basePayload?.workspace ?? basePayload?.unifiedWorkContext?.workspace ?? null,
         chat: basePayload?.chat ?? basePayload?.unifiedWorkContext?.chat ?? null,
-        attachments: Array.isArray(basePayload?.attachments) ? basePayload.attachments.slice(0, 12) : [],
+        codeContext: basePayload?.codeIntelligence ?? null,
+        attachments: basePayload?.codeIntelligence
+          ? (Array.isArray(basePayload?.attachments) ? basePayload.attachments.slice(0, 12).map(item => ({ name: item?.name, readable: item?.readable, format: item?.format, kind: item?.kind })) : [])
+          : (Array.isArray(basePayload?.attachments) ? basePayload.attachments.slice(0, 12) : []),
         // Specialists are intentionally independent. The arbiter is the only
         // stage that receives peer findings, preventing herding/anchoring.
         advisoryFindings: []
@@ -431,7 +434,10 @@ function arbiterMessages(basePayload, findings) {
           : [],
         workspace: basePayload?.workspace ?? basePayload?.unifiedWorkContext?.workspace ?? null,
         chat: basePayload?.chat ?? basePayload?.unifiedWorkContext?.chat ?? null,
-        attachments: Array.isArray(basePayload?.attachments) ? basePayload.attachments.slice(0, 12) : [],
+        codeContext: basePayload?.codeIntelligence ?? null,
+        attachments: basePayload?.codeIntelligence
+          ? (Array.isArray(basePayload?.attachments) ? basePayload.attachments.slice(0, 12).map(item => ({ name: item?.name, readable: item?.readable, format: item?.format, kind: item?.kind })) : [])
+          : (Array.isArray(basePayload?.attachments) ? basePayload.attachments.slice(0, 12) : []),
         findings: findings.map(item => ({ role: item.role, recommendation: item.recommendation, summary: item.summary, confidence: item.confidence, risks: item.risks, unknowns: item.unknowns, actions: item.actions, evidence: item.evidence, assumptions: item.assumptions }))
       })
     }
