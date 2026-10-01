@@ -8,7 +8,7 @@ import { transaction } from './db.js';
 
 const text = value => String(value ?? '').trim() || null;
 const SEP = '\x1f';
-const AUDIT_LOCK = 0x4b474155;
+const AUDIT_LOCK_PURPOSE = 'kindgleam:audit-chain';
 
 function canonicalAudit({ id, at, principalId, workspaceId, action, target, outcome, detailEnc, detailEncryptionVersion, requestId, ip, prevHash }) {
   return [
@@ -44,7 +44,7 @@ export class Audit {
     };
 
     const write = async db => {
-      await db.query('SELECT pg_advisory_xact_lock($1)', [AUDIT_LOCK]);
+      await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [AUDIT_LOCK_PURPOSE + ':' + (row.workspaceId ?? '__global__')]);
       const { rows: [sequence] } = await db.query(
         `SELECT nextval(pg_get_serial_sequence('audit_log', 'id')) AS id, now() AS at`
       );
@@ -119,8 +119,8 @@ export class Audit {
     if (!ordered.length) return { ok: true, checked: 0 };
     if (ordered[0].prev_hash) {
       const { rows: [previous] } = await this.pool.query(
-        'SELECT entry_hash FROM audit_log WHERE id < $1 ORDER BY id DESC LIMIT 1',
-        [ordered[0].id]
+        'SELECT entry_hash FROM audit_log WHERE id < $1 AND workspace_id IS NOT DISTINCT FROM $2 ORDER BY id DESC LIMIT 1',
+        [ordered[0].id, scope]
       );
       if ((previous?.entry_hash ?? null) !== ordered[0].prev_hash) {
         return { ok: false, checked: 1, brokenAt: ordered[0].id, reason: 'previous-hash-mismatch' };
