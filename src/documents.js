@@ -221,6 +221,7 @@ export function formatOf({ name, contentType }) {
       || ['txt', 'md', 'json', 'xml', 'yaml', 'yml', 'js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx', 'py', 'pyi', 'toml', 'cfg', 'ini', 'c', 'h', 'cc', 'cxx', 'cpp', 'hh', 'hpp', 'ino',
         'java', 'kt', 'kts', 'gradle', 'go', 'mod', 'sum', 'rs', 'lock', 'sql', 'html', 'css', 'sh', 'log'].includes(ext)) return 'text';
   if (['doc', 'xls', 'ppt'].includes(ext)) return 'legacy-office';
+  if (type === 'application/vnd.kindgleam.workspace+json') return 'workspace-project';
   if (['application/zip', 'application/x-zip-compressed'].includes(type) || ext === 'zip') return 'project';
   return 'unknown';
 }
@@ -245,6 +246,35 @@ const MAX_PROJECT_BYTES = 4 * 1024 * 1024;
  * one top folder most archives have taken off, and a text view (the file
  * tree, then the files) for the model.
  */
+export function readWorkspaceSnapshot(buffer) {
+  let parsed;
+  try { parsed = JSON.parse(Buffer.from(buffer).toString('utf8')); }
+  catch { throw new DocumentError('This workspace snapshot is invalid.', 'document-format-unsupported'); }
+  if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.files)) {
+    throw new DocumentError('This workspace snapshot has an invalid format.', 'document-format-unsupported');
+  }
+  const files = [];
+  const skipped = [];
+  let total = 0;
+  for (const item of parsed.files.slice(0, MAX_PROJECT_FILES)) {
+    const path = String(item?.path ?? '').replaceAll('\\', '/');
+    if (!path || path.includes('..') || path.startsWith('/') || path.startsWith('.')) { skipped.push(path); continue; }
+    const content = String(item?.content ?? '');
+    const bytes = Buffer.byteLength(content, 'utf8');
+    if (bytes > MAX_PROJECT_FILE_BYTES || total + bytes > MAX_PROJECT_BYTES || content.includes('\\0')) { skipped.push(path); continue; }
+    total += bytes;
+    files.push({ path, content });
+  }
+  if (!files.length) throw new DocumentError('This workspace snapshot contains no readable source files.', 'document-format-unsupported');
+  const tree = files.map(file => `${file.path} (${file.content.length} chars)`).join('\\n');
+  const text = [
+    `Code workspace: ${files.length} files.`,
+    'Files:', tree, '',
+    ...files.map(file => `=== ${file.path} ===\\n${file.content}`)
+  ].join('\\n');
+  return { kind: 'project', format: 'project', files, skipped: skipped.slice(0, 50), text };
+}
+
 export function readProject(buffer) {
   const zip = readZip(buffer);
   // Archives made on Windows may separate folders with backslashes.
@@ -287,6 +317,7 @@ export async function readDocument(buffer, meta = {}) {
   else if (format === 'xlsx') result = readXlsx(buffer);
   else if (format === 'pptx') result = readPptx(buffer);
   else if (format === 'project') result = readProject(buffer);
+  else if (format === 'workspace-project') result = readWorkspaceSnapshot(buffer);
   else if (format === 'csv') {
     const textValue = buffer.toString('utf8').replace(/^\uFEFF/, '');
     const rows = parseDelimited(textValue);
