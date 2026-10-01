@@ -9,6 +9,7 @@
 import crypto from 'node:crypto';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+const DISALLOWED_METHODS = new Set(['CONNECT', 'TRACE', 'TRACK']);
 const BLOCKED_PROXY_HEADERS = new Set([
   'x-forwarded-host',
   'x-forwarded-server',
@@ -22,6 +23,10 @@ function validRequestId(value) {
 
 export function installIngressBoundary(app, { trustProxy = false } = {}) {
   app.use((req, res, next) => {
+    if (DISALLOWED_METHODS.has(req.method)) {
+      res.set('allow', 'GET, HEAD, OPTIONS, POST, PUT, PATCH, DELETE');
+      return res.status(405).json({ error: 'HTTP method is not allowed', code: 'method-not-allowed' });
+    }
     if (trustProxy && req.headers['x-forwarded-host']) {
       return res.status(400).json({ error: 'Invalid request metadata', code: 'invalid-proxy-metadata' });
     }
@@ -66,12 +71,34 @@ export function installIngressBoundary(app, { trustProxy = false } = {}) {
   });
 }
 
+/**
+ * Apply browser-only request signals as a second CSRF boundary. Fetch
+ * Metadata headers are not authentication (a client can forge them), but a
+ * real browser supplies them and they let us reject cross-site state changes
+ * before parsing a body or consulting credentials. Cookie CSRF validation in
+ * app.js remains the authority when a session is used.
+ */
+export function installApiRequestBoundary(app, { exemptPaths = [] } = {}) {
+  const exempt = new Set(exemptPaths);
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/api/') || SAFE_METHODS.has(req.method) || exempt.has(req.path)) return next();
+    const site = String(req.get('sec-fetch-site') ?? '').trim().toLowerCase();
+    if (site === 'cross-site') {
+      return res.status(403).json({
+        error: 'Cross-site state-changing requests are not allowed',
+        code: 'cross-site-request'
+      });
+    }
+    next();
+  });
+}
+
 export function installBrowserBoundary(app, { production = false } = {}) {
   app.use((req, res, next) => {
     res.set('x-content-type-options', 'nosniff');
     res.set('x-frame-options', 'DENY');
     res.set('referrer-policy', 'no-referrer');
-    res.set('permissions-policy', 'camera=(self), microphone=(self), geolocation=(), payment=(self)');
+    res.set('permissions-policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()');
     res.set('cross-origin-opener-policy', 'same-origin');
     res.set('cross-origin-resource-policy', 'same-origin');
     res.set('x-dns-prefetch-control', 'off');
