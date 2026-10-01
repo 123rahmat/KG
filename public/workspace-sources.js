@@ -270,7 +270,7 @@ export async function applyLocalWorkspaceChanges(changes = []) {
     if (requested !== 'granted') throw new Error('Write permission was not granted for the local folder.');
   }
   const safePath = value => {
-    const path = String(value ?? '').trim().replaceAll('\\', '/').replace(/^\\.\\//, '');
+    const path = String(value ?? '').trim().replaceAll('\\', '/').replace(/^\.\//, '');
     if (!path || path.startsWith('/') || path.includes('..') || path.split('/').some(part => !part || part === '.' || part === '..')) {
       throw new Error('Invalid local workspace path.');
     }
