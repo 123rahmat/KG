@@ -183,10 +183,12 @@ function isConfig(path) {
 }
 
 function resolveLocalImport(filePath, target, files) {
-  const clean = trim(target).replace(new RegExp('^\\./'), '').replace(/\\/g, '/');
-  if (!clean || (!clean.startsWith('.') && !clean.startsWith('/'))) return null;
+  const raw = trim(target).replace(/\\/g, '/');
+  const relative = raw.startsWith('./') || raw.startsWith('../');
+  if (!raw || (!relative && !raw.startsWith('/'))) return null;
+  const clean = raw.replace(/^\\.\\//, '');
   const base = filePath.includes('/') ? filePath.slice(0, filePath.lastIndexOf('/') + 1) : '';
-  const candidate = safeWorkspacePath((target.startsWith('.') ? base : '') + clean) || null;
+  const candidate = safeWorkspacePath((relative ? base : '') + clean) || null;
   if (!candidate) return null;
   const options = [
     candidate,
