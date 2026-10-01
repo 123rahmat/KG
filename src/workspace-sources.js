@@ -69,7 +69,8 @@ export function sourceManifest(files = []) {
     fileCount: normalized.length,
     files: normalized.map(file => ({
       path: file.path,
-      bytes: Buffer.byteLength(file.content, 'utf8')
+      bytes: Buffer.byteLength(file.content, 'utf8'),
+      digest: crypto.createHash('sha256').update(file.content, 'utf8').digest('hex')
     }))
   };
 }
@@ -160,6 +161,95 @@ export async function githubReadRepository({
     source: { owner, repo, ref: resolvedRef, defaultBranch: root.default_branch, private: root.private === true, url: root.html_url },
     files: normalizeSourceFiles(files)
   };
+}
+
+
+export async function githubResolveRevision({ fetchImpl = fetch, token, owner, repo, ref } = {}) {
+  assertGitHubRepo(owner, repo);
+  const name = text(ref);
+  if (!name) throw new Error('GitHub ref is required');
+  const commit = await githubJson(
+    fetchImpl,
+    'https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/commits/' + encodeURIComponent(name),
+    token
+  );
+  return {
+    ref: name,
+    sha: text(commit?.sha) || null,
+    treeSha: text(commit?.commit?.tree?.sha) || null
+  };
+}
+
+export async function githubApplyChanges({
+  fetchImpl = fetch, token, owner, repo, ref, expectedCommitSha, changes = [], message = 'workspace: apply changes'
+} = {}) {
+  assertGitHubRepo(owner, repo);
+  const revision = await githubResolveRevision({ fetchImpl, token, owner, repo, ref });
+  if (text(expectedCommitSha) && revision.sha !== text(expectedCommitSha)) {
+    const error = new Error('GitHub branch changed since this workspace revision was loaded.');
+    error.code = 'stale-github-revision';
+    throw error;
+  }
+  if (!revision.sha || !revision.treeSha) throw new Error('GitHub repository revision could not be resolved');
+  const list = Array.isArray(changes) ? changes : [];
+  if (list.length > 500) throw new Error('Too many GitHub changes in one operation');
+  const elements = [];
+  for (const change of list) {
+    const path = safePath(change?.path);
+    if (!path) throw new Error('GitHub change path is invalid');
+    if (change?.kind === 'delete' || change?.delete === true) {
+      elements.push({ path, mode: '100644', type: 'blob', sha: null });
+      continue;
+    }
+    const content = String(change?.content ?? '');
+    if (Buffer.byteLength(content, 'utf8') > MAX_FILE_BYTES) throw new Error('GitHub changed file is too large: ' + path);
+    const blob = await githubJson(
+      fetchImpl,
+      'https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/git/blobs',
+      token,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ content, encoding: 'utf-8' })
+      }
+    );
+    if (!text(blob?.sha)) throw new Error('GitHub did not return a blob for ' + path);
+    elements.push({ path, mode: '100644', type: 'blob', sha: blob.sha });
+  }
+  if (!elements.length) return { unchanged: true, commitSha: revision.sha, ref: revision.ref };
+  const tree = await githubJson(
+    fetchImpl,
+    'https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/git/trees',
+    token,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ base_tree: revision.treeSha, tree: elements })
+    }
+  );
+  const commit = await githubJson(
+    fetchImpl,
+    'https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/git/commits',
+    token,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: text(message) || 'workspace: apply changes', tree: tree.sha, parents: [revision.sha] })
+    }
+  );
+  const newSha = text(commit?.sha);
+  if (!newSha) throw new Error('GitHub did not return the new commit SHA');
+  await githubJson(
+    fetchImpl,
+    'https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/git/refs/heads/' + encodeURIComponent(revision.ref),
+    token,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sha: newSha, force: false })
+    }
+  );
+  return { unchanged: false, commitSha: newSha, parentSha: revision.sha, ref: revision.ref, changedFiles: list.map(item => safePath(item?.path)).filter(Boolean) };
 }
 
 export async function githubWriteFile({
