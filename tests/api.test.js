@@ -289,6 +289,60 @@ test('code goals go to the code runner, and an unreachable runner records nothin
     fetchImpl: async () => { throw new Error('ECONNREFUSED'); }
   }));
 
+test('coding workspace review is revision-bound and returns safe before/after previews', () =>
+  withServer(async ({ call, seed }) => {
+    const { token, workspace } = await seed();
+    const auth = { token, workspace };
+
+    const connected = await call('POST', '/api/workspace/sources/local', {
+      ...auth,
+      body: {
+        name: 'review-project',
+        files: [
+          { path: 'src/app.js', content: 'export const value = 1;\\n' },
+          { path: 'README.md', content: '# Review\\n' }
+        ],
+        write: true
+      }
+    });
+    assert.equal(connected.status, 201);
+
+    const source = connected.body.source;
+    const fileDigest = connected.body.manifest.files.find(item => item.path === 'src/app.js').digest;
+    const reviewed = await call('POST', `/api/workspace/sources/${source.id}/review`, {
+      ...auth,
+      body: {
+        baseContentHash: source.metadata.contentHash,
+        changes: [{
+          path: 'src/app.js',
+          content: 'export const value = 2;\\n',
+          beforeDigest: fileDigest
+        }]
+      }
+    });
+    assert.equal(reviewed.status, 200);
+    assert.equal(reviewed.body.review.counts.modified, 1);
+    assert.equal(reviewed.body.review.changes[0].path, 'src/app.js');
+    assert.equal(reviewed.body.review.changes[0].kind, 'modified');
+    assert.equal(reviewed.body.review.changes[0].before.content, 'export const value = 1;\\n');
+    assert.equal(reviewed.body.review.changes[0].after.content, 'export const value = 2;\\n');
+    assert.equal(reviewed.body.review.changes[0].beforeDigest, fileDigest);
+
+    const stale = await call('POST', `/api/workspace/sources/${source.id}/review`, {
+      ...auth,
+      body: {
+        baseContentHash: 'stale',
+        changes: [{
+          path: 'src/app.js',
+          content: 'export const value = 3;\\n',
+          beforeDigest: fileDigest
+        }]
+      }
+    });
+    assert.equal(stale.status, 409);
+    assert.equal(stale.body.code, 'stale-local-source');
+  }));
+
 test('research searches the web with the AI provider, reads what it found, and keeps the sources', () => {
   const calls = [];
   return withServer(async ({ call, seed }) => {

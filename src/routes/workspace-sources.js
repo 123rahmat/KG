@@ -283,6 +283,109 @@ export function registerWorkspaceSourcesRoutes(app, {
     res.json({ source: sourcePublic(updated), manifest, unchanged: false });
   }));
 
+  app.post('/api/workspace/sources/:id/review', scoped('editor'), route(async (req, res) => {
+    const { rows: [source] } = await pool.query(
+      `SELECT * FROM workspace_sources
+         WHERE id = $1 AND workspace_id = $2 AND principal_id = $3 AND revoked_at IS NULL
+       FOR UPDATE`,
+      [text(req.params.id), req.scope.workspaceId, req.principal.id]
+    );
+    if (!source) return res.status(404).json({ error: 'Workspace source not found', code: 'no-source' });
+
+    const changes = Array.isArray(req.body?.changes) ? req.body.changes : [];
+    if (!changes.length) return res.status(400).json({ error: 'No changes supplied.', code: 'changes-required' });
+
+    if (source.kind === 'github') {
+      const storedCommitSha = text(source.metadata?.commitSha);
+      const requestedCommitSha = text(req.body?.expectedCommitSha) || storedCommitSha;
+      if (!storedCommitSha || requestedCommitSha !== storedCommitSha) {
+        return res.status(409).json({
+          error: 'The proposed review is based on a different GitHub revision. Sync the repository first.',
+          code: 'stale-github-revision'
+        });
+      }
+    } else if (source.kind === 'local-folder') {
+      const expectedBaseHash = text(req.body?.baseContentHash);
+      const currentBaseHash = text(source.metadata?.contentHash);
+      if (!expectedBaseHash || !currentBaseHash || expectedBaseHash !== currentBaseHash) {
+        return res.status(409).json({
+          error: 'The local project changed on the server since this review was prepared. Sync the folder first.',
+          code: 'stale-local-source',
+          expectedBaseHash: currentBaseHash || null
+        });
+      }
+    }
+
+    const baseFiles = await readSnapshotFiles(objects, req.scope, source.snapshot_object_id);
+    let effective;
+    try {
+      effective = effectiveGithubChanges(baseFiles, changes);
+    } catch (error) {
+      if (error?.code === 'github-preimage-required' || error?.code === 'stale-github-file') {
+        return res.status(409).json({ error: error.message, code: error.code });
+      }
+      throw error;
+    }
+
+    const base = new Map(baseFiles.map(file => [file.path, file.content]));
+    let reviewChars = 0;
+    const clip = value => {
+      const raw = value === null ? null : String(value);
+      const limit = 24_000;
+      if (raw === null || raw.length <= limit) return { content: raw, truncated: false };
+      const head = Math.floor(limit * 0.75);
+      const tail = limit - head;
+      return {
+        content: raw.slice(0, head) + `\\n…[preview clipped; ${raw.length - limit} characters omitted]…\\n` + raw.slice(-tail),
+        truncated: true
+      };
+    };
+
+    const preview = effective.map(change => {
+      const before = base.get(change.path);
+      const after = change.kind === 'delete' ? null : String(change.content ?? '');
+      const beforePreview = clip(before);
+      const afterPreview = clip(after);
+      const contribution = (beforePreview.content?.length ?? 0) + (afterPreview.content?.length ?? 0);
+      reviewChars += contribution;
+
+      return {
+        path: change.path,
+        kind: change.kind === 'delete' ? 'deleted' : before === undefined ? 'added' : 'modified',
+        before: reviewChars > 240_000
+          ? { content: null, truncated: true }
+          : beforePreview,
+        after: reviewChars > 240_000
+          ? { content: null, truncated: true }
+          : afterPreview,
+        beforeDigest: before === undefined ? null : contentDigest(before),
+        afterDigest: after === null ? null : contentDigest(after),
+        previewOmitted: reviewChars > 240_000
+      };
+    });
+
+    const reviewBasis = JSON.stringify({
+      sourceId: source.id,
+      sourceRevision: source.metadata?.commitSha ?? source.metadata?.contentHash ?? null,
+      changes: effective
+    });
+    const reviewDigest = crypto.createHash('sha256').update(reviewBasis, 'utf8').digest('hex');
+
+    res.json({
+      source: sourcePublic(source),
+      review: {
+        digest: reviewDigest,
+        sourceRevision: source.metadata?.commitSha ?? source.metadata?.contentHash ?? null,
+        changes: preview,
+        counts: {
+          added: preview.filter(item => item.kind === 'added').length,
+          modified: preview.filter(item => item.kind === 'modified').length,
+          deleted: preview.filter(item => item.kind === 'deleted').length
+        }
+      }
+    });
+  }));
+
   app.post('/api/workspace/sources/:id/apply', scoped('editor'), idempotent, route(async (req, res) => {
     if (req.body?.confirm !== 'APPLY_WORKSPACE_CHANGES') {
       return res.status(400).json({ error: 'Explicit confirmation is required before repository writes.', code: 'write-confirmation-required' });
