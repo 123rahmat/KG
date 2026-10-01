@@ -752,7 +752,7 @@ export async function runAdaptiveAgentPanel({
       max: maxAgents,
       averageLatencyMs: avgLatencyMs,
       errorRate,
-      remainingBudgetRatio: remainingBudgetRatio(),
+      remainingBudgetRatio: waveBudgetRatio,
       risk: run?.situation?.risk ?? 'ordinary',
       benefit: Number(lastAllocation?.dimensions?.concurrencyOpportunity ?? 0)
     });
