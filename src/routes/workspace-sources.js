@@ -197,7 +197,7 @@ export function registerWorkspaceSourcesRoutes(app, {
     const read = await githubReadRepository({ fetchImpl, token, owner, repo, ref: text(req.body?.ref) || null });
     const manifest = sourceManifest(read.files);
     const object = await snapshotObject(objects, req.scope, req.principal, read.files, `${owner}-${repo}.workspace`, {
-      kind: 'github', owner, repo, ref: read.source.ref, contentHash: manifest.contentHash, fileCount: manifest.fileCount
+      kind: 'github', owner, repo, ref: read.source.ref, contentHash: manifest.contentHash, fileCount: manifest.fileCount, ingestion: read.ingestion
     });
     const sourceId = createSourceId();
     const { rows: [row] } = await pool.query(
@@ -211,7 +211,7 @@ export function registerWorkspaceSourcesRoutes(app, {
         `github:${owner}/${repo}`, owner, repo, read.source.ref, object.id,
         encryptSourceCredentials(encryptionKey, token),
         JSON.stringify({ read: true, write: req.body?.write === true }),
-        JSON.stringify({ url: read.source.url, private: read.source.private, commitSha: read.source.commitSha, treeSha: read.source.treeSha, contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files })
+        JSON.stringify({ url: read.source.url, private: read.source.private, commitSha: read.source.commitSha, treeSha: read.source.treeSha, contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files, ingestion: read.ingestion })
       ]
     );
     await audit?.record({
