@@ -42,6 +42,9 @@ export class AdaptiveProviderGovernor {
     if (!state) {
       state = {
         key: id,
+        minConcurrency: this.min,
+        maxConcurrency: this.max,
+        queueTimeoutMs: this.queueTimeoutMs,
         concurrency: this.initial,
         active: 0,
         queued: [],
@@ -53,6 +56,15 @@ export class AdaptiveProviderGovernor {
       };
       this.states.set(id, state);
     }
+    return state;
+  }
+
+  configure(key, { min = this.min, max = this.max, queueTimeoutMs = this.queueTimeoutMs } = {}) {
+    const state = this.state(key);
+    state.minConcurrency = Math.max(1, Math.min(32, Math.floor(Number(min) || this.min)));
+    state.maxConcurrency = Math.max(state.minConcurrency, Math.min(32, Math.floor(Number(max) || this.max)));
+    state.queueTimeoutMs = Math.max(100, Math.min(60_000, Number(queueTimeoutMs) || this.queueTimeoutMs));
+    state.concurrency = Math.max(state.minConcurrency, Math.min(state.maxConcurrency, state.concurrency));
     return state;
   }
 
@@ -78,17 +90,13 @@ export class AdaptiveProviderGovernor {
     }
 
     return new Promise((resolve, reject) => {
-      const entry = {
-        resolve,
-        reject,
-        expiresAt: this.now() + this.queueTimeoutMs
-      };
+      const entry = { resolve, reject, expiresAt: this.now() + state.queueTimeoutMs };
       state.queued.push(entry);
       entry.timer = setTimeout(() => {
         const index = state.queued.indexOf(entry);
         if (index >= 0) state.queued.splice(index, 1);
         reject(new ProviderConcurrencyError(state.key));
-      }, this.queueTimeoutMs);
+      }, state.queueTimeoutMs);
       entry.timer.unref?.();
     });
   }
@@ -112,8 +120,8 @@ export class AdaptiveProviderGovernor {
       state.lastFailureCode = null;
       // Grow slowly: concurrency is increased only after several healthy calls
       // with no evidence of saturation.
-      if (state.successStreak >= 6 && state.lastLatencyMs <= 3_000 && state.concurrency < this.max) {
-        state.concurrency += 1;
+      if (state.successStreak >= 6 && state.lastLatencyMs <= 3_000 && state.concurrency < state.maxConcurrency) {
+        state.concurrency = Math.min(state.maxConcurrency, state.concurrency + 1);
         state.successStreak = 0;
         state.lastChangeAt = this.now();
         this.onChange?.({ key: state.key, concurrency: state.concurrency, reason: 'healthy' });
@@ -129,8 +137,8 @@ export class AdaptiveProviderGovernor {
       || code === 'model-unavailable'
       || code === 'provider-concurrency-saturated'
       || (code === 'timeout');
-    if (pressureFailure && state.failureStreak >= 1 && state.concurrency > this.min) {
-      state.concurrency -= 1;
+    if (pressureFailure && state.failureStreak >= 1 && state.concurrency > state.minConcurrency) {
+      state.concurrency = Math.max(state.minConcurrency, state.concurrency - 1);
       state.lastChangeAt = this.now();
       this.onChange?.({ key: state.key, concurrency: state.concurrency, reason: 'upstream-pressure' });
       this.release(state);
