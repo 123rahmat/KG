@@ -82,12 +82,12 @@ export async function openLocalFolder() {
     return null;
   }
   try {
-    localDirectory = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'desktop' });
+    localDirectory = await window.showDirectoryPicker({ mode: 'read', startIn: 'desktop' });
     const files = await folderFiles();
     const result = await api('POST', '/api/workspace/sources/local', {
       name: sourceName(),
       files,
-      write: true
+      write: false
     });
     state.workspaceSourceId = result.source.id;
     state.workspaceSource = result.source;
