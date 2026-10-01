@@ -45,6 +45,23 @@ test('valid local-agent pairing configuration loads', () => {
 });
 
 
+test('production disables the interactive terminal unless explicitly enabled', () => {
+  const production = env({
+    NODE_ENV: 'production',
+    COOKIE_SECURE: 'true',
+    PGSSLMODE: 'verify',
+    PGSSLROOTCERT: '/tmp/ca.pem',
+    OBJECT_ENCRYPTION_KEY: Buffer.from('test-object-encryption-key-32byt').toString('base64'),
+    DATABASE_URL: 'postgres://runtime:secret@db.example/professor',
+    DATABASE_MIGRATION_URL: 'postgres://migrate:secret@db.example/professor',
+    BACKUP_DATABASE_URL: 'postgres://backup:secret@db.example/professor',
+    RESTORE_DATABASE_URL: 'postgres://restore:secret@db.example/professor',
+    ...ALL_AI
+  });
+  assert.equal(loadConfig(production).terminal.enabled, false);
+  assert.equal(loadConfig({ ...production, TERMINAL_ENABLED: 'false' }).terminal.enabled, false);
+});
+
 test('production requires dedicated encryption keys for billing and personal data', () => {
   const base = env({
     NODE_ENV: 'production',
