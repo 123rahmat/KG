@@ -10,6 +10,8 @@
 
 import { clip } from './reasoning-context.js';
 import { LANGUAGES, languageName } from './sandbox.js';
+import { applySurgicalChanges } from './workspace-patch.js';
+import { workspaceContentHash } from './code-workspace.js';
 
 export const MAX_CODE_REPAIRS = 3;
 // Enough for the largest repair ceiling (complex work) plus earlier attempts.
@@ -132,6 +134,29 @@ export function mergeFix(previous, fix) {
     ...(deleted.size ? { delete: [...deleted] } : { delete: undefined }),
     ...(!text(fix.entry) && text(previous.entry) ? { entry: previous.entry } : {}),
     ...(!Array.isArray(fix.packages) && Array.isArray(previous.packages) ? { packages: previous.packages } : {})
+  };
+}
+
+
+/**
+ * Turn an optional surgical patch into the complete project that the sandbox
+ * and verification layers already understand. The patch can only apply to
+ * the exact base workspace supplied by the caller.
+ */
+export function materializeCodePackage(structured, { baseFiles = [], baseContentHash = null } = {}) {
+  if (!structured || typeof structured !== 'object' || !Array.isArray(structured.patches) || !structured.patches.length) return structured;
+  const baseHash = text(baseContentHash) || workspaceContentHash(baseFiles);
+  const result = applySurgicalChanges(baseFiles, structured.patches, {
+    expectedContentHash: text(structured.baseContentHash) || baseHash
+  });
+  const current = new Set(result.files.map(file => file.path));
+  const deleted = baseFiles.map(file => file.path).filter(path => !current.has(path));
+  return {
+    ...structured,
+    files: result.files,
+    ...(deleted.length ? { delete: deleted } : {}),
+    patches: undefined,
+    baseContentHash: baseHash
   };
 }
 
