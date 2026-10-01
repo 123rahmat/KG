@@ -7,8 +7,6 @@ import { validateJob, containerArgs, SandboxError, testSummary } from '../src/sa
 import { readProject, formatOf } from '../src/documents.js';
 import { projectView, rankFiles, words } from '../src/project-view.js';
 
-const GOOGLE = { AI_PROVIDER: 'google', AI_API_KEY: 'test-key', AI_MODEL: 'gemini-3.8-flash' };
-
 const geminiReply = (textValue, { groundingMetadata = undefined, finishReason = 'STOP' } = {}) => jsonResponse({
   candidates: [{
     content: { parts: [{ text: textValue }] },
@@ -231,7 +229,7 @@ test('a project attached as a zip is changed by the files the AI returns, and th
         runnerRequests.push(JSON.parse(options.body));
         return jsonResponse({ executed: true, status: 'completed', output: { status: 'completed', exitCode: 0, stdout: '', stderr: 'Ran 2 tests in 0.001s\n\nOK', tested: true, testSummary: { total: 2, passed: 2, failed: 0, skipped: 0 } } });
       }
-      const { body, request } = modelRequest(options);
+      const { request } = modelRequest(options);
       seen.push(request);
       const text = request.task?.id === 'build-code' ? JSON.stringify({
         language: 'python',
@@ -277,7 +275,7 @@ test('in a run, the code step of a large attached project reads the files its re
   }, {
     env: { AI_PROVIDER: 'google', AI_MODEL: 'gemini-3.8-flash', AI_API_KEY: 'test-key', SANDBOX_RUNNER_URL: 'http://sandbox.test', RUNNER_TOKEN: 'runner-' + 'x'.repeat(31), MAX_ATTACHMENT_CHARS: '20000' },
     fetchImpl: async (_url, options) => {
-      const { body, request } = modelRequest(options);
+      const { request } = modelRequest(options);
       seen.push(request);
       const text = request.task?.id === 'build-code'
         ? JSON.stringify({ language: 'python', files: [{ path: 'billing/invoice.py', content: 'def invoice_total(lines):\n    return round(sum(lines), 2)\n' }], notes: 'Rounds.' })
@@ -325,7 +323,7 @@ test('code in a language the sandbox cannot run goes on untested, says why, and 
       if (String(url).startsWith('http://sandbox.test')) {
         return jsonResponse({ executed: false, status: 'language-unavailable', message: 'Running Go code is not turned on for this sandbox.', language: 'go' });
       }
-      const { body, request } = modelRequest(options);
+      const { request } = modelRequest(options);
       seen.push(request);
       const text = request.task?.id === 'build-code'
         ? JSON.stringify({ language: 'go', source: 'package main\n\nimport "fmt"\n\nfunc main() { fmt.Println(55) }\n', tests: 'package main\n\nimport "testing"\n\nfunc TestX(t *testing.T) {}\n' })
@@ -510,7 +508,7 @@ test('a follow-up in the same chat continues the project from the version the la
         runnerRequests.push(JSON.parse(options.body));
         return jsonResponse({ executed: true, status: 'completed', output: { status: 'completed', exitCode: 0, stdout: '', stderr: 'Ran 2 tests in 0.001s\n\nOK', tested: true, testSummary: { total: 2, passed: 2, failed: 0, skipped: 0 } } });
       }
-      const { body, request } = modelRequest(options);
+      const { request } = modelRequest(options);
       seen.push(request);
       const shipping = /free shipping/.test(request.goal ?? '');
       const text = request.task?.id === 'build-code' ? JSON.stringify({
