@@ -308,3 +308,7 @@ This is a local process guard, not a replacement for a distributed rate limiter 
 Audit detail remains encrypted. The audit ledger additionally maintains a per-workspace SHA-256 chain, so administrators can verify recent integrity without exposing another tenant's events.
 
 Negative user feedback can produce an encrypted, reviewable evolution proposal. Approval and implementation remain explicit control-plane operations; the feedback path never rewrites model prompts, Skills, routing or policy automatically.
+
+
+## Validation note
+- Latest runtime-hardened main validation includes the provider-governor queue lifecycle fix.
