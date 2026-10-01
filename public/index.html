@@ -407,6 +407,11 @@
           <span>Branch / tag</span>
           <select id="githubBranch" disabled><option value="">Select a repository first</option></select>
         </label>
+        <label class="project-source-field">
+          <span>Repository subdirectory (optional)</span>
+          <input id="githubRepoPath" type="text" autocomplete="off" spellcheck="false" placeholder="apps/my-service" />
+          <small>For monorepos, limit the coding workspace to this folder. Leave blank for the repository root.</small>
+        </label>
       </div>
 
       <label class="project-source-field project-source-checkbox">
