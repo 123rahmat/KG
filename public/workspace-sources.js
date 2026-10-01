@@ -59,7 +59,6 @@ export async function openLocalFolder() {
     state.workspaceSourceId = result.source.id;
     state.workspaceSource = result.source;
     if (state.chat) state.chat.workspaceSourceId = result.source.id;
-    if (state.chat) state.chat.workspaceSourceId = result.source.id;
     updateSourceUI();
     notify('runNotice', 'info', `Connected ${sourceName()} · ${result.manifest.fileCount} files`);
     return result.source;
@@ -96,6 +95,7 @@ export async function connectGitHub() {
     });
     state.workspaceSourceId = result.source.id;
     state.workspaceSource = result.source;
+    if (state.chat) state.chat.workspaceSourceId = result.source.id;
     updateSourceUI();
     notify('runNotice', 'info', `Connected GitHub repository ${owner}/${repo}`);
     return result.source;
