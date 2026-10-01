@@ -355,8 +355,7 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
 
   // Self-host the terminal emulator assets so CSP remains same-origin; no CDN is required at runtime.
   app.use('/vendor/xterm', express.static(path.join(PUBLIC_DIR, '..', 'node_modules', '@xterm', 'xterm'), {
-    immutable: true,
-    maxAge: '1 year'
+    maxAge: '1 day'
   }));
   app.use('/vendor/xterm-fit', express.static(path.join(PUBLIC_DIR, '..', 'node_modules', '@xterm', 'addon-fit'), {
     immutable: true,
