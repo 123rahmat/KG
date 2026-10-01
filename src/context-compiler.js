@@ -176,7 +176,8 @@ export function compileCodeContext({
       revisionId:index?.revisionId ?? null, contentHash:index?.contentHash ?? null,
       fileCount:index?.fileCount ?? normalized.length,
       languages:[...new Set((index?.files ?? []).map(file => file.language).filter(Boolean))].sort(),
-      entryPoints:(index?.entryPoints ?? []).slice(0,30)
+      entryPoints:(index?.entryPoints ?? []).slice(0,30),
+      profile:index?.profile ?? null
     },
     task:{ id:clean(task?.id), type:clean(task?.type), goal:clean(goal).slice(0,2000) },
     focus:{
