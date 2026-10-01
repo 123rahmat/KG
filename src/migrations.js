@@ -2045,7 +2045,7 @@ export const MIGRATIONS = [
             FROM audit_log
            ORDER BY id
         LOOP
-          scope_key := COALESCE(item.workspace_id, '__global__');
+          scope_key := CASE WHEN item.workspace_id IS NULL THEN 'G:NULL' ELSE 'W:' || item.workspace_id END;
           previous_hash := NULLIF(previous_by_scope ->> scope_key, '');
           canonical :=
             COALESCE(item.id::text, '') || E'\\x1f' ||
