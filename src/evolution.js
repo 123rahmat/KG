@@ -95,7 +95,7 @@ export class EvolutionStore {
           SET status = $3, updated_at = now()
         WHERE id = $1 AND workspace_id = $2
         RETURNING id, target, status, updated_at AS "updatedAt"`,
-      [text(id), scope.workspaceId]
+      [text(id), scope.workspaceId, text(status)]
     );
     if (!row) {
       const error = new Error('Evolution proposal not found'); error.status = 404; error.code = 'evolution-proposal-not-found'; throw error;
