@@ -264,64 +264,123 @@ export async function connectGitHub() {
 
 export async function applyLocalWorkspaceChanges(changes = []) {
   if (!localDirectory) throw new Error('Choose the local project folder again before applying changes.');
-  const permission = await localDirectory.queryPermission?.({ mode: 'readwrite' });
-  if (permission !== 'granted') {
+  const ensurePermission = async () => {
+    const permission = await localDirectory.queryPermission?.({ mode: 'readwrite' });
+    if (permission === 'granted') return;
     const requested = await localDirectory.requestPermission?.({ mode: 'readwrite' });
     if (requested !== 'granted') throw new Error('Write permission was not granted for the local folder.');
-  }
+  };
+
   const safePath = value => {
     const path = String(value ?? '').trim().replaceAll('\\', '/').replace(/^\.\//, '');
-    if (!path || path.startsWith('/') || path.includes('..') || path.split('/').some(part => !part || part === '.' || part === '..')) {
+    if (!path || path.startsWith('/') || path.includes('..') ||
+        path.split('/').some(part => !part || part === '.' || part === '..') ||
+        path.includes('\0') || /[\r\n]/.test(path)) {
       throw new Error('Invalid local workspace path.');
     }
     return path;
   };
-  const getParent = async path => {
+
+  const blocked = path => {
+    const base = path.split('/').at(-1)?.toLowerCase() || '';
+    return base === '.npmrc' || base === '.netrc' || base === '.pypirc'
+      || (/^\.env(?:$|\.)/.test(base) && !/^\.env\.(?:example|sample|template)$/.test(base))
+      || /^id_rsa(?:\.|$)/.test(base)
+      || /\.(?:pem|key|p12|pfx)$/.test(base);
+  };
+
+  const getParent = async (path, { create = false } = {}) => {
     const parts = path.split('/');
     parts.pop();
     let dir = localDirectory;
-    for (const part of parts) dir = await dir.getDirectoryHandle(part, { create: true });
+    for (const part of parts) dir = await dir.getDirectoryHandle(part, { create });
     return { dir, name: path.split('/').at(-1) };
   };
+
   const list = Array.isArray(changes) ? changes : [];
+  if (!list.length) return syncLocalFolder();
+  await ensurePermission();
+
+  // Full preflight: validate every path, protection rule, and expected digest
+  // before creating directories or touching file contents.
   const descriptors = [];
   for (const change of list) {
     const path = safePath(change?.path);
-    const { dir, name } = await getParent(path);
-    descriptors.push({ change, path, dir, name });
-  }
-  for (const { change, path, dir, name } of descriptors) {
-    const base = path.split('/').at(-1).toLowerCase();
-    if (
-      base === '.npmrc' || base === '.netrc' || base === '.pypirc' ||
-      /^\.env(?:$|\.)/.test(base) && !/^\.env\.(?:example|sample|template)$/.test(base) ||
-      /^id_rsa(?:\.|$)/.test(base) || /\.(?:pem|key|p12|pfx)$/.test(base)
-    ) throw new Error('Local write-back may not modify credential or private-key files.');
-    if (change?.kind === 'delete' || change?.delete === true) {
-      await dir.removeEntry(name).catch(error => {
-        if (error?.name !== 'NotFoundError') throw error;
+    if (blocked(path)) throw new Error('Local write-back may not modify credential or private-key files.');
+    const { dir, name } = await getParent(path, { create: false }).catch(error => {
+      if (error?.name === 'NotFoundError') return { dir: null, name };
+      throw error;
+    });
+    const isDelete = change?.kind === 'delete' || change?.delete === true;
+    let existing = null;
+    if (dir) {
+      const handle = await dir.getFileHandle(name, { create: false }).catch(error => {
+        if (error?.name === 'NotFoundError') return null;
+        throw error;
       });
-      continue;
+      if (handle) {
+        existing = await handle.getFile();
+        const digest = await contentDigest(await existing.text());
+        if (change?.beforeDigest && digest !== change.beforeDigest) {
+          throw new Error('Local file changed before applying ' + path);
+        }
+      }
     }
-    const handle = await dir.getFileHandle(name, { create: true });
-    if (change?.beforeDigest) {
-      const current = await handle.getFile().catch(() => null);
-      if (!current) throw new Error('Local workspace changed before applying ' + path);
-      const currentDigest = await contentDigest(await current.text());
-      if (currentDigest !== change.beforeDigest) throw new Error('Local file changed before applying ' + path);
-    }
-    const writable = await handle.createWritable();
-    try {
-      await writable.write(String(change?.content ?? ''));
-    } finally {
-      await writable.close();
+    if (isDelete && !existing) {
+      // Deleting an already-missing file is idempotent.
+      descriptors.push({ change, path, isDelete, existed: false, original: null });
+    } else {
+      descriptors.push({ change, path, isDelete, existed: Boolean(existing), original: existing ? await existing.text() : null });
     }
   }
+
+  // Apply only after the complete preflight has succeeded.
+  const applied = [];
+  try {
+    for (const descriptor of descriptors) {
+      const { change, path, isDelete } = descriptor;
+      const { dir, name } = await getParent(path, { create: true });
+      const handle = await dir.getFileHandle(name, { create: !descriptor.existed });
+      if (isDelete) {
+        await dir.removeEntry(name);
+      } else {
+        const writable = await handle.createWritable();
+        try {
+          await writable.write(String(change?.content ?? ''));
+        } finally {
+          await writable.close();
+        }
+      }
+      applied.push(descriptor);
+    }
+  } catch (error) {
+    // Best-effort rollback: restore originals and remove files that did not
+    // exist before this apply. The server-side revision guard remains the
+    // authoritative protection against concurrent workspace changes.
+    for (const descriptor of applied.reverse()) {
+      try {
+        const { dir, name } = await getParent(descriptor.path, { create: false });
+        if (descriptor.isDelete) {
+          if (!descriptor.existed) continue;
+          const handle = await dir.getFileHandle(name, { create: true });
+          const writable = await handle.createWritable();
+          try { await writable.write(descriptor.original ?? ''); } finally { await writable.close(); }
+        } else if (descriptor.existed) {
+          const handle = await dir.getFileHandle(name, { create: false });
+          const writable = await handle.createWritable();
+          try { await writable.write(descriptor.original ?? ''); } finally { await writable.close(); }
+        } else {
+          await dir.removeEntry(name).catch(() => {});
+        }
+      } catch { /* rollback is best-effort; surface the original failure */ }
+    }
+    throw error;
+  }
+
   const result = await syncLocalFolder();
   notify('runNotice', 'info', result?.unchanged ? 'Local folder already contained these changes.' : 'Changes applied to the local project.');
   return result;
 }
-
 
 export async function syncActiveWorkspaceSource() {
   const sourceId = state.chat?.workspaceSourceId ?? state.workspaceSourceId;
