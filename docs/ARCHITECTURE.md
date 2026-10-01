@@ -71,6 +71,15 @@ user and world
 Ordinary requests take a short path (answer, then check); crisis and
 emergency situations get an immediate, caring answer before any workflow.
 
+## Interactive terminal
+
+The Code Workspace includes an interactive terminal surface backed by a real PTY, but the PTY is attached only to a disposable sandbox container, never to the application host shell. The browser uses xterm for terminal emulation and a WebSocket for bidirectional input/output. Sessions require an authenticated browser session and editor access to the selected workspace.
+
+A terminal session starts from the current workspace-source snapshot in /work. The container has no network, no Linux capabilities, no privilege escalation, a read-only system filesystem, an unprivileged UID, CPU/memory/process/file limits, and a bounded idle/lifetime window. Host environment variables and the Docker socket are not passed into the container. Terminal output and input are bounded to prevent an interactive session from becoming an unbounded resource sink.
+
+Terminal changes are not automatically pushed. The session can capture a text-file delta against its original snapshot. Local-folder changes require a browser read/write permission grant and per-file pre-image checks. GitHub changes require an explicitly write-enabled source and an exact branch commit SHA; the server then creates an atomic Git tree/commit update without force-pushing. A stale workspace or branch is rejected rather than overwritten.
+
+The terminal is therefore another governed workspace surface: interactive enough for shells and terminal applications, but still subordinate to authentication, workspace tenancy, execution policy, resource limits, verification, and explicit write-back.
 ## Adaptive multi-agent review
 
 The server stays the only orchestrator; agents propose and it decides. One
