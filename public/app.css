@@ -2008,3 +2008,91 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
   .project-source-grid { grid-template-columns: 1fr; }
   .project-source-fields { grid-template-columns: 1fr; }
 }
+
+
+/* Project source selector */
+.project-source-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 5px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border, #d7dbe2);
+  border-radius: 12px;
+  background: var(--surface-2, #f3f5f8);
+}
+.project-source-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 9px;
+  padding: 10px 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.project-source-tab.active {
+  background: var(--surface, #fff);
+  box-shadow: 0 1px 4px rgba(0,0,0,.08);
+}
+.project-source-tab-icon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  font-size: .72rem;
+  font-weight: 750;
+  background: var(--surface-2, #f3f5f8);
+}
+.project-source-panel {
+  border: 1px solid var(--border, #d7dbe2);
+  border-radius: 14px;
+  padding: 18px;
+}
+.project-source-panel-copy h3 { margin: 0 0 5px; }
+.project-source-panel-copy p { margin: 0 0 16px; }
+.project-source-local-row {
+  display: grid;
+  gap: 12px;
+}
+.project-source-meta.large {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.project-source-security {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  margin-top: 15px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: var(--surface-2, #f3f5f8);
+  font-size: .76rem;
+  line-height: 1.45;
+}
+.project-source-security strong {
+  flex: 0 0 auto;
+}
+.project-source-field small {
+  font-size: .72rem;
+  font-weight: 400;
+  opacity: .7;
+}
+.project-source-load {
+  margin-top: -2px;
+  margin-bottom: 13px;
+}
+.project-source-panel select,
+.project-source-panel input {
+  box-sizing: border-box;
+}
+@media (max-width: 760px) {
+  .project-source-switch { grid-template-columns: 1fr; }
+}
