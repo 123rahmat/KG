@@ -24,6 +24,14 @@ export const CONTEXT_BUDGETS = Object.freeze({
 
 const CODE_TASKS = new Set(['build-code','test-code','code','prototype','verify-code','review-code','refactor-code','debug-code']);
 
+const SENSITIVE_PATH = /(?:^|\/)(?:\.env(?:\..*)?|.*(?:secret|credential|password|passwd|private[-_ ]?key|token).*)$/i;
+const INLINE_SECRET = /(\\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|secret)\\b\\s*[:=]\\s*["'][^"']{8,}["'])|(authorization\\s*:\\s*["']bearer\\s+[A-Za-z0-9._~+\/-]{12,}["'])/gi;
+
+function contextSafeContent(path, content) {
+  if (SENSITIVE_PATH.test(path)) return '[sensitive file withheld from model context; use approved workspace tools only when exact contents are required]';
+  return text(content).replace(INLINE_SECRET, match => match.replace(/([:=]\\s*["'])([^"']+)(["'])/, '$1[REDACTED]$3'));
+}
+
 const cache = new Map();
 const CACHE_LIMIT = 96;
 
@@ -136,7 +144,7 @@ export function compileCodeContext({
         ? Math.min(4_000, Math.floor(charBudget * 0.18))
         : 3_500;
     const symbolLines = fileSymbols(index, candidate.file.path).map(item => item.line);
-    const content = boundedWindows(candidate.file.content, symbolLines, defaults.snippetLines, perFile);
+    const content = boundedWindows(contextSafeContent(candidate.file.path, candidate.file.content), symbolLines, defaults.snippetLines, perFile);
     if (!content) continue;
     const cost = content.length + candidate.file.path.length + 80;
     if (chars + cost > charBudget && selected.length) continue;
