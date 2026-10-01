@@ -4,6 +4,7 @@
  * fingerprints so the database never needs plaintext RAG text.
  */
 import { encryptJson, decryptField, keyedDigest } from './data-protection.js';
+import { AdaptiveCache } from './adaptive-cache.js';
 
 const text = value => String(value ?? '').trim();
 const terms = value => [...new Set(text(value).toLowerCase()
@@ -37,6 +38,7 @@ export class RagStore {
     this.encryptionKey = encryptionKey;
     if (!this.encryptionKey) throw new Error('RAG encryption key is required');
     this.maxChunkChars = Math.max(1000, Math.min(50000, Number(maxChunkChars) || 12000));
+    this.cache = new AdaptiveCache(pool, { encryptionKey, namespace: 'rag-search-v1', ttlSeconds: 45 });
   }
 
   async index(scope, { sourceType, sourceId, title = '', text: content, metadata = {} } = {}) {
@@ -47,6 +49,7 @@ export class RagStore {
     const chunks = [];
     for (let i = 0; i < body.length; i += this.maxChunkChars) chunks.push(body.slice(i, i + this.maxChunkChars));
 
+    await this.cache.purge(scope).catch(() => {});
     await this.pool.query(
       'DELETE FROM rag_documents WHERE workspace_id = $1 AND principal_id = $2 AND source_id = $3',
       [scope.workspaceId, scope.principalId, source]
@@ -73,6 +76,9 @@ export class RagStore {
     const value = text(query);
     if (!value) return [];
     const cap = Math.max(1, Math.min(30, Number(limit) || 8));
+    const cacheFingerprint = keyedDigest(this.encryptionKey, 'rag-query-fingerprint-v1', JSON.stringify(buildRetrievalQuery(value)));
+    const cached = await this.cache.get(scope, value, cacheFingerprint).catch(() => null);
+    if (Array.isArray(cached)) return cached.slice(0, cap);
     const hashes = terms(value).map(term => keyedDigest(this.encryptionKey, 'rag-term-v1', term));
     if (!hashes.length) return [];
 
@@ -92,7 +98,9 @@ export class RagStore {
       }
       return { ...row, content };
     });
-    return rankLexical(value, decoded, cap)
+    const results = rankLexical(value, decoded, cap)
       .map(({ content_enc, search_terms, ...item }) => item);
+    await this.cache.set(scope, value, results, cacheFingerprint).catch(() => {});
+    return results;
   }
 }
