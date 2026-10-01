@@ -22,3 +22,23 @@ test('retrieval favors repeated matches and title matches', () => {
   assert.equal(ranked[0].id, 'b');
   assert.equal(ranked[0].matchedTerms, 2);
 });
+
+import { AdaptiveProviderGovernor, ProviderConcurrencyError } from '../src/adaptive-provider-governor.js';
+
+test('provider governor adapts down on upstream pressure and up after sustained health', async () => {
+  const governor = new AdaptiveProviderGovernor({ min: 1, max: 3, initial: 3, queueTimeoutMs: 100 });
+  governor.adapt('google:model', { ok: false, code: 'model-rate-limited', latencyMs: 100 });
+  governor.adapt('google:model', { ok: false, code: 'model-rate-limited', latencyMs: 100 });
+  assert.equal(governor.stats('google:model')[0].concurrency, 1);
+
+  await Promise.all(Array.from({ length: 3 }, async () => governor.run('healthy', async () => null)));
+  for (let i = 0; i < 12; i += 1) governor.adapt('healthy', { ok: true, latencyMs: 10 });
+  assert.ok(governor.stats('healthy')[0].concurrency >= 2);
+});
+
+test('provider governor bounds queue wait', async () => {
+  const governor = new AdaptiveProviderGovernor({ min: 1, max: 1, initial: 1, queueTimeoutMs: 25 });
+  const release = await governor.acquire('sat');
+  await assert.rejects(governor.acquire('sat'), error => error instanceof ProviderConcurrencyError);
+  release();
+});
