@@ -4,6 +4,7 @@
  * fingerprints so the database never needs plaintext RAG text.
  */
 import { encryptJson, decryptField, keyedDigest } from './data-protection.js';
+import { transaction } from './db.js';
 import { AdaptiveCache } from './adaptive-cache.js';
 
 const text = value => String(value ?? '').trim();
@@ -35,14 +36,27 @@ export function buildRetrievalQuery(goal, { projectPaths = [], skillNames = [], 
 }
 
 export function rankLexical(query, rows = [], limit = 12) {
-  const wanted = new Set(terms(query));
+  const wanted = terms(query);
+  const wantedSet = new Set(wanted);
   return rows.map(row => {
-    const value = text(row.content || row.text || row.title);
-    const have = new Set(terms(value));
-    const score = [...wanted].reduce((sum, term) => sum + (have.has(term) ? 1 : 0), 0);
-    return { ...row, score };
+    const body = text(row.content || row.text || row.title);
+    const bodyTerms = terms(body);
+    const counts = new Map();
+    for (const term of bodyTerms) counts.set(term, (counts.get(term) ?? 0) + 1);
+    const matched = wanted.reduce((sum, term) => sum + (counts.get(term) ? 1 : 0), 0);
+    const frequency = wanted.reduce((sum, term) => sum + Math.min(counts.get(term) ?? 0, 4) * 0.15, 0);
+    const coverage = wantedSet.size ? matched / wantedSet.size : 0;
+    const title = text(row.title).toLowerCase();
+    const titleTerms = new Set(terms(title));
+    const titleBoost = wanted.reduce((sum, term) => sum + (titleTerms.has(term) ? 0.5 : 0), 0);
+    const sourceBoost = row.sourceType === 'run-evidence' ? 0.1 : 0;
+    const score = matched + frequency + coverage + titleBoost + sourceBoost;
+    return { ...row, score: Number(score.toFixed(4)), matchedTerms: matched, coverage };
   }).filter(row => row.score > 0)
-    .sort((a, b) => b.score - a.score || String(a.id).localeCompare(String(b.id)))
+    .sort((a, b) => b.score - a.score
+      || b.coverage - a.coverage
+      || String(a.sourceId ?? '').localeCompare(String(b.sourceId ?? ''))
+      || String(a.id).localeCompare(String(b.id)))
     .slice(0, Math.max(1, Math.min(50, Number(limit) || 12)));
 }
 
@@ -64,25 +78,26 @@ export class RagStore {
     for (let i = 0; i < body.length; i += this.maxChunkChars) chunks.push(body.slice(i, i + this.maxChunkChars));
 
     await this.cache.purge(scope).catch(() => {});
-    await this.pool.query(
-      'DELETE FROM rag_documents WHERE workspace_id = $1 AND principal_id = $2 AND source_id = $3',
-      [scope.workspaceId, scope.principalId, source]
-    );
-
-    for (let index = 0; index < chunks.length; index += 1) {
-      const chunk = chunks[index];
-      const chunkTerms = terms(chunk);
-      const searchTerms = chunkTerms.map(term => keyedDigest(this.encryptionKey, 'rag-term-v1', term));
-      const contentDigest = keyedDigest(this.encryptionKey, 'rag-content-v1', chunk);
-      await this.pool.query(
-        'INSERT INTO rag_documents (id, workspace_id, principal_id, source_type, source_id, chunk_index, title, content_enc, search_terms, metadata, content_digest) VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10)',
-        [
-          scope.workspaceId, scope.principalId, text(sourceType) || 'unknown', source, index,
-          text(title), encryptJson(this.encryptionKey, 'rag-content-v1', { content: chunk }),
-          JSON.stringify([...new Set(searchTerms)]), JSON.stringify(metadata), contentDigest
-        ]
+    await transaction(this.pool, async client => {
+      await client.query(
+        'DELETE FROM rag_documents WHERE workspace_id = $1 AND principal_id = $2 AND source_id = $3',
+        [scope.workspaceId, scope.principalId, source]
       );
-    }
+      for (let index = 0; index < chunks.length; index += 1) {
+        const chunk = chunks[index];
+        const chunkTerms = terms(chunk);
+        const searchTerms = chunkTerms.map(term => keyedDigest(this.encryptionKey, 'rag-term-v1', term));
+        const contentDigest = keyedDigest(this.encryptionKey, 'rag-content-v1', chunk);
+        await client.query(
+          'INSERT INTO rag_documents (id, workspace_id, principal_id, source_type, source_id, chunk_index, title, content_enc, search_terms, metadata, content_digest) VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10)',
+          [
+            scope.workspaceId, scope.principalId, text(sourceType) || 'unknown', source, index,
+            text(title), encryptJson(this.encryptionKey, 'rag-content-v1', { content: chunk }),
+            JSON.stringify([...new Set(searchTerms)]), JSON.stringify(metadata), contentDigest
+          ]
+        );
+      }
+    });
     return { chunks: chunks.length };
   }
 
