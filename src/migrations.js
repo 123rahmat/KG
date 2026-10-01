@@ -2187,5 +2187,5 @@ export const MIGRATIONS = [
         ADD CONSTRAINT schedules_kind_check
         CHECK (kind IN ('reminder', 'ask'));
     `
-
+  }
 ];
