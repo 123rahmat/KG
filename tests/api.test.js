@@ -343,6 +343,35 @@ test('coding workspace review is revision-bound and returns safe before/after pr
     assert.equal(stale.body.code, 'stale-local-source');
   }));
 
+test('local folder full-snapshot syncs require the current server revision', () =>
+  withServer(async ({ call, seed }) => {
+    const { token, workspace } = await seed();
+    const auth = { token, workspace };
+    const connected = await call('POST', '/api/workspace/sources/local', {
+      ...auth,
+      body: { name: 'sync-project', files: [{ path: 'src/app.js', content: 'one' }], write: true }
+    });
+    assert.equal(connected.status, 201);
+
+    const source = connected.body.source;
+    const stale = await call('POST', `/api/workspace/sources/local/${source.id}/sync`, {
+      ...auth,
+      body: { files: [{ path: 'src/app.js', content: 'two' }] }
+    });
+    assert.equal(stale.status, 409);
+    assert.equal(stale.body.code, 'stale-local-source');
+
+    const current = await call('POST', `/api/workspace/sources/local/${source.id}/sync`, {
+      ...auth,
+      body: {
+        baseContentHash: source.metadata.contentHash,
+        files: [{ path: 'src/app.js', content: 'two' }]
+      }
+    });
+    assert.equal(current.status, 200);
+    assert.equal(current.body.unchanged, false);
+  }));
+
 test('research searches the web with the AI provider, reads what it found, and keeps the sources', () => {
   const calls = [];
   return withServer(async ({ call, seed }) => {

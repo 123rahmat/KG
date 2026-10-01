@@ -152,17 +152,17 @@ export function registerWorkspaceSourcesRoutes(app, {
       [text(req.params.id), req.scope.workspaceId, req.principal.id]
     );
     if (!source) return res.status(404).json({ error: 'Local folder source not found', code: 'no-source' });
+    const expectedBaseHash = text(req.body?.baseContentHash);
+    const currentBaseHash = text(source.metadata?.contentHash);
+    if (!expectedBaseHash || !currentBaseHash || expectedBaseHash !== currentBaseHash) {
+      return res.status(409).json({
+        error: 'The local project changed on the server since this folder was last synchronized. Sync the folder before uploading a full snapshot or delta.',
+        code: 'stale-local-source',
+        expectedBaseHash: currentBaseHash || null
+      });
+    }
     let files;
     if (Array.isArray(req.body?.changedFiles) && req.body?.manifest) {
-      const expectedBaseHash = text(req.body?.baseContentHash);
-      const currentBaseHash = text(source.metadata?.contentHash);
-      if (!expectedBaseHash || !currentBaseHash || expectedBaseHash !== currentBaseHash) {
-        return res.status(409).json({
-          error: 'The local project changed on the server since this folder was last synchronized. Sync or reconnect the folder before applying this delta.',
-          code: 'stale-local-source',
-          expectedBaseHash: currentBaseHash || null
-        });
-      }
       const baseFiles = await readSnapshotFiles(objects, req.scope, source.snapshot_object_id);
       files = mergeSourceDelta(baseFiles, req.body.changedFiles, req.body.deletedPaths);
     } else {

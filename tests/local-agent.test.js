@@ -116,6 +116,29 @@ test('the local agent executes a complete multi-file JavaScript workspace', () =
     assert.equal(body.receipt.payloadDigest, executionPayloadDigest(payload));
   }));
 
+test('the local agent rejects duplicate project file paths', () =>
+  withAgent(async base => {
+    const payload = {
+      project: true,
+      language: 'javascript',
+      files: [
+        { path: 'main.mjs', content: 'console.log(1)' },
+        { path: 'main.mjs', content: 'console.log(2)' }
+      ],
+      entry: 'main.mjs'
+    };
+    const request = {
+      runId: 'run-dup', taskId: 'test-code', taskType: 'code', executionTarget: 'local', attempt: 1,
+      executionChallenge: challengeFor('run-dup', 'test-code', 1, payload),
+      payload
+    };
+    const response = await post(base, request);
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.status, 'failed');
+    assert.match(body.message ?? body.error ?? '', /duplicate workspace file path/);
+  }));
+
 test('a challenge for another task or with a forged signature is refused', () =>
   withAgent(async base => {
     const moved = await post(base, {

@@ -301,11 +301,14 @@ async function payloadFiles(payload, runtime) {
     ? raw.map(item => [item?.path ?? item?.name, item])
     : Object.entries(raw);
 
+  const seenPaths = new Set(files.keys());
   for (const [rawPath, value] of entries) {
     const filePath = String(rawPath ?? '').replaceAll('\\', '/');
     if (!isWorkspacePath(filePath) || filePath.startsWith('.deps/')) {
       throw new Error('invalid workspace file path: ' + filePath);
     }
+    if (seenPaths.has(filePath)) throw new Error('duplicate workspace file path: ' + filePath);
+    seenPaths.add(filePath);
     const bytes = await decodePayloadFile(value, filePath);
     if (bytes.length > MAX_FILE_BYTES) throw new Error('workspace file is too large: ' + filePath);
     files.set(filePath, bytes);
