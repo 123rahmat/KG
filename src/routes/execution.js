@@ -37,7 +37,7 @@ import { buildUnifiedWorkContext } from '../unified-work-context.js';
 import { buildProjectIndex } from '../project-index.js';
 import { compileCodeContext, isCodeTask } from '../context-compiler.js';
 import { RagStore } from '../rag.js';
-import { loadSelectedSkills, SkillLearningStore, skillContextSignature } from '../skills.js';
+import { loadSelectedSkills, SkillLearningStore, skillContextSignature, skillPlanForSelectedSkills } from '../skills.js';
 import { BlackboardStore } from '../blackboard.js';
 
 /** Which tasks execute where. Everything else needs a human decision. */
@@ -1322,8 +1322,10 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       learnedSkills: skillProfiles,
       skillLevel: run.adaptation?.skillLevel ?? '',
       preferences: run.adaptation?.preferences ?? [],
-      situation: run.situation ?? null
+      situation: run.situation ?? null,
+      maxSkillCost: Number(run.adaptation?.adaptiveControl?.budget?.maxSkillCost ?? run.adaptation?.resourcePlan?.control?.budget?.maxSkillCost ?? 12)
     });
+    const skillPlan = skillPlanForSelectedSkills(selectedSkills, { taskType: task.id === 'build-code' ? 'build-code' : task.type, maxSkills: 8, maxCost: Number(run.adaptation?.adaptiveControl?.budget?.maxSkillCost ?? run.adaptation?.resourcePlan?.control?.budget?.maxSkillCost ?? 12) });
     // The server's stand-in criterion is for the check only: do not show
     // it to ordinary answer steps, where it only pads short answers with
     // "evidence" sections. Verifiers receive the real planned criteria above.
@@ -1353,6 +1355,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         selected: selectedSkills.map(skill => skill.learning ?? null).filter(Boolean),
         contextSignature: taskSkillContext
       },
+      skillPlan,
       adaptiveContext: {
         memory: {
           recalledItems: remembered.length,
@@ -1366,6 +1369,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
           selected: selectedSkills.map(skill => ({ name: skill.name, learning: skill.learning ?? null })),
           contextSignature: taskSkillContext
         },
+        skillPlan,
         workspaceState: run.adaptation?.unifiedWorkContext?.workspace ?? null,
         blackboardPresent: Boolean(blackboard),
         codeIntelligencePresent: Boolean(codeIntelligence),

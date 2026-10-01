@@ -2271,6 +2271,35 @@ export const MIGRATIONS = [
 
       CREATE INDEX IF NOT EXISTS skill_observations_context_idx
         ON skill_observations(workspace_id, principal_id, context_signature, skill_name, task_type, created_at DESC);
+    `,
+  {
+    version: 56,
+    name: 'skill-pattern-intelligence',
+    sql: `
+      CREATE TABLE IF NOT EXISTS skill_patterns (
+        workspace_id       TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        principal_id      TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+        skill_name        TEXT NOT NULL,
+        task_type         TEXT NOT NULL DEFAULT '',
+        context_signature TEXT NOT NULL DEFAULT '',
+        pattern_kind      TEXT NOT NULL CHECK (pattern_kind IN ('context-outcome','failure')),
+        pattern_key       TEXT NOT NULL,
+        success_count     INTEGER NOT NULL DEFAULT 0 CHECK (success_count >= 0),
+        failure_count     INTEGER NOT NULL DEFAULT 0 CHECK (failure_count >= 0),
+        uncertain_count   INTEGER NOT NULL DEFAULT 0 CHECK (uncertain_count >= 0),
+        utility_ema       DOUBLE PRECISION NOT NULL DEFAULT 0 CHECK (utility_ema >= -1 AND utility_ema <= 1),
+        last_observed_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (workspace_id, principal_id, skill_name, task_type, context_signature, pattern_kind, pattern_key)
+      );
+      CREATE INDEX IF NOT EXISTS skill_patterns_lookup_idx ON skill_patterns(workspace_id, principal_id, skill_name, task_type, context_signature, last_observed_at DESC);
+      CREATE INDEX IF NOT EXISTS skill_patterns_failure_idx ON skill_patterns(workspace_id, principal_id, context_signature, pattern_kind, last_observed_at DESC);
+      ALTER TABLE skill_patterns ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE skill_patterns FORCE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS skill_patterns_scope_policy ON skill_patterns;
+      CREATE POLICY skill_patterns_scope_policy ON skill_patterns
+        USING (skill_patterns.workspace_id = current_setting('app.workspace_id', true) AND skill_patterns.principal_id = current_setting('app.principal_id', true))
+        WITH CHECK (skill_patterns.workspace_id = current_setting('app.workspace_id', true) AND skill_patterns.principal_id = current_setting('app.principal_id', true));
+      REVOKE ALL ON skill_patterns FROM PUBLIC;
     `
   }
 ];

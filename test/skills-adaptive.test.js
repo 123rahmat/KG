@@ -5,7 +5,11 @@ import {
   builtinSkillDescriptors,
   selectSkillDescriptors,
   skillLearningAdjustment,
-  skillContextSignature
+  skillContextSignature,
+  composeSkillPlan,
+  evaluateSkillRegistry,
+  validateSkillDescriptor,
+  classifySkillFailure
 } from '../src/skills.js';
 
 test('learned skill evidence is conservative for one-shot observations', () => {
@@ -122,4 +126,33 @@ test('learned selection marks low-reliability experience as adaptive evidence', 
   assert.ok(debugging);
   assert.ok(debugging.learning.adaptive);
   assert.ok(debugging.learning.confidence < 0.5);
+});
+
+test('skill contracts validate and composition resolves dependencies in execution order', () => {
+  const registry = evaluateSkillRegistry();
+  assert.equal(registry.valid, true);
+  const selected = builtinSkillDescriptors().filter(skill => skill.name === 'deployment');
+  const plan = composeSkillPlan(selected, { taskType: 'deliver', maxSkills: 8, maxCost: 12 });
+  assert.deepEqual(plan.skills.map(skill => skill.name), ['testing', 'security-review', 'deployment']);
+  assert.ok(plan.skills.every(skill => skill.contract?.evidence?.length));
+  assert.equal(plan.skipped.length, 0);
+});
+
+test('skill composition stays inside its cost budget', () => {
+  const selected = builtinSkillDescriptors().filter(skill => skill.name === 'deployment');
+  const plan = composeSkillPlan(selected, { taskType: 'deliver', maxSkills: 8, maxCost: 5 });
+  assert.ok(plan.totalCost <= 5);
+  assert.ok(plan.skipped.some(item => item.name === 'deployment'));
+});
+
+test('failure patterns are reduced to deterministic bounded categories', () => {
+  assert.equal(classifySkillFailure('verification failed: unsupported evidence'), 'verification');
+  assert.equal(classifySkillFailure('stale workspace revision conflict'), 'stale-state');
+  assert.equal(classifySkillFailure('test assertion failed'), 'tests');
+  assert.equal(classifySkillFailure('permission denied'), 'authorization');
+});
+
+test('custom skill descriptors use the same contract validation', () => {
+  const custom = { name: 'example', description: 'A test skill', version: '1', taskTypes: ['respond'], requiresSkills: [], evidence: ['answer'], phases: ['execute'], costClass: 'light' };
+  assert.equal(validateSkillDescriptor(custom, { registry: builtinSkillDescriptors().concat(custom) }).valid, true);
 });

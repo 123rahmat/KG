@@ -21,7 +21,7 @@ import { workScale, BUILT_IN } from './work-scale.js';
 import { approvalReasons, verificationContract } from './capabilities.js';
 import { buildUnifiedAdaptiveIntelligence } from './unified-adaptive-intelligence.js';
 import { buildUnifiedWorkContext } from './unified-work-context.js';
-import { selectSkillDescriptors, summarizeSkillLearning, skillContextSignature } from './skills.js';
+import { selectSkillDescriptors, summarizeSkillLearning, skillContextSignature, skillPlanForSelectedSkills } from './skills.js';
 import { parallelDecision } from './parallel-orchestrator.js';
 
 export const CONTRACT = 'kindgleam-open-world-situation-adaptive-v9';
@@ -636,6 +636,7 @@ export function planGoal(goal, {
     situation
   });
 
+  const skillPlan = skillPlanForSelectedSkills(selectedSkills, { taskType: skillTaskType, maxSkills: 8, maxCost: Number(adaptiveControl?.budget?.maxSkillCost ?? 12) });
   const skillLearning = summarizeSkillLearning(selectedSkills);
   const skillPatternContext = skillContextSignature({
     goal: value,
@@ -733,6 +734,7 @@ export function planGoal(goal, {
          ...skillLearning,
          patternContext: skillPatternContext
        },
+       skillPlan,
        skills: selectedSkills.map(item => ({
          name: item.name,
          version: item.version,

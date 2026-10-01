@@ -16,7 +16,7 @@
     "local-agent": "node bin/local-agent.js",
     "test": "node --test",
     "lint": "eslint .",
-    "verify": "npm run check && npm run lint && npm test",
+    "verify": "npm run check && npm run eval:skills && npm run lint && npm test",
     "check": "node bin/check-source.js",
     "backup": "node bin/backup.js",
     "restore": "node bin/restore.js",
@@ -25,6 +25,7 @@
     "sandbox-runner": "node bin/sandbox-runner.js",
     "smoke:providers": "node bin/provider-smoke.js",
     "eval:live": "node bin/live-eval.js",
+    "eval:skills": "node bin/skill-eval.js",
     "smoke:deploy": "node bin/deploy-smoke.js",
     "load-test": "node bin/workflow-load.js"
   },

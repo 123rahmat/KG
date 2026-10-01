@@ -321,3 +321,8 @@ of silently changing the meaning of an earlier decision.
 
 Operational requirements, release gates and deployment steps are in
 `docs/PRODUCTION_READINESS.md`.
+
+
+## Skill intelligence compiler
+
+Skills are compiled as contracts rather than instruction snippets. Each selected skill exposes prerequisites, phases, evidence requirements and bounded cost. The server composes required dependencies into an ordered skill plan before execution. Learning combines contextual and general evidence conservatively; observed outcomes also create bounded pattern records and deterministic failure classes. Skill intelligence can improve selection, ordering, effort and verification, but remains subordinate to server governance, capability availability, execution boundaries and verification.

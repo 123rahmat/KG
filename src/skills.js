@@ -14,7 +14,10 @@ import { transaction } from './db.js';
 export const SKILL_REGISTRY_VERSION = '1';
 export const DEFAULT_SKILL_ROOT = path.join(fileURLToPath(new URL('../skills/', import.meta.url)));
 export const MAX_SKILL_BYTES = 100_000;
-export const SKILL_LEARNING_VERSION = '2';
+export const SKILL_LEARNING_VERSION = '3';
+export const SKILL_INTELLIGENCE_VERSION = '1';
+const SKILL_COST = Object.freeze({ light: 1, standard: 2, heavy: 4 });
+const SKILL_PHASE_SET = new Set(['inspect','discover','compare','synthesize','plan','diagnose','repair','implement','change','design','execute','transform','validate','baseline','optimize','benchmark','preflight','release','health-check','diff','writeback','regress','verify','analyze','test']);
 const SKILL_OUTCOMES = new Set(['success', 'failure', 'uncertain']);
 const SKILL_SOURCES = new Set(['execution', 'feedback', 'verification', 'repair']);
 
@@ -22,15 +25,15 @@ const text = value => String(value ?? '').trim();
 const slug = value => text(value).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
 
 const BUILTIN = Object.freeze([
-  { name: 'coding', description: 'Repository-aware software implementation and change planning.', tags: ['code','build','implement','refactor'], taskTypes: ['code','build-code','prototype'] },
-  { name: 'debugging', description: 'Evidence-driven diagnosis, minimal repair and regression analysis.', tags: ['debug','bug','failure','diagnose'], taskTypes: ['code','build-code','reassess'] },
-  { name: 'testing', description: 'Regression design, edge cases, failure tests and verification strategy.', tags: ['test','quality','regression'], taskTypes: ['code','verify-code','build-code'] },
-  { name: 'security-review', description: 'Trust-boundary, authorization, secret, injection and data-flow review.', tags: ['security','privacy','auth','encryption'], taskTypes: ['code','verify-code','review-code'] },
-  { name: 'research', description: 'Evidence gathering, source comparison, uncertainty tracking and synthesis.', tags: ['research','investigate','sources'], taskTypes: ['investigate','discover','respond'] },
-  { name: 'data', description: 'Structured data analysis, validation, transformation and lineage.', tags: ['data','sql','analytics'], taskTypes: ['data','investigate','code'] },
-  { name: 'github', description: 'Safe repository, branch, diff and review workflows with explicit write-back.', tags: ['github','git','repository','pull-request'], taskTypes: ['code','build-code','deliver'] },
-  { name: 'performance', description: 'Measured latency, resource, query and concurrency optimization.', tags: ['performance','latency','scale','cache'], taskTypes: ['code','review-code','prototype'] },
-  { name: 'deployment', description: 'Release, rollback, environment and production verification procedures.', tags: ['deploy','release','rollback','production'], taskTypes: ['execute','deliver','code'] }
+  { name: 'coding', description: 'Repository-aware software implementation and change planning.', tags: ['code','build','implement','refactor'], taskTypes: ['code','build-code','prototype'], requiresSkills: ['testing'], evidence: ['workspace-state','changed-files','test-results','verification'], phases: ['inspect','plan','implement','test','verify'], costClass: 'standard' },
+  { name: 'debugging', description: 'Evidence-driven diagnosis, minimal repair and regression analysis.', tags: ['debug','bug','failure','diagnose'], taskTypes: ['code','build-code','reassess'], requiresSkills: ['testing'], evidence: ['failure-evidence','repair-record','regression-results'], phases: ['diagnose','repair','regress','verify'], costClass: 'standard' },
+  { name: 'testing', description: 'Regression design, edge cases, failure tests and verification strategy.', tags: ['test','quality','regression'], taskTypes: ['code','verify-code','build-code'], requiresSkills: [], evidence: ['test-results','coverage-or-case-summary'], phases: ['design','execute','verify'], costClass: 'light' },
+  { name: 'security-review', description: 'Trust-boundary, authorization, secret, injection and data-flow review.', tags: ['security','privacy','auth','encryption'], taskTypes: ['code','verify-code','review-code'], requiresSkills: ['testing'], evidence: ['security-findings','verification'], phases: ['inspect','analyze','verify'], costClass: 'heavy' },
+  { name: 'research', description: 'Evidence gathering, source comparison, uncertainty tracking and synthesis.', tags: ['research','investigate','sources'], taskTypes: ['investigate','discover','respond'], requiresSkills: [], evidence: ['sources','provenance','claim-check'], phases: ['discover','compare','synthesize','verify'], costClass: 'standard' },
+  { name: 'data', description: 'Structured data analysis, validation, transformation and lineage.', tags: ['data','sql','analytics'], taskTypes: ['data','investigate','code'], requiresSkills: ['testing'], evidence: ['input-lineage','validation-results'], phases: ['inspect','transform','validate','verify'], costClass: 'standard' },
+  { name: 'github', description: 'Safe repository, branch, diff and review workflows with explicit write-back.', tags: ['github','git','repository','pull-request'], taskTypes: ['code','build-code','deliver'], requiresSkills: [], evidence: ['exact-revision','diff','writeback-receipt'], phases: ['inspect','change','diff','writeback','verify'], costClass: 'standard' },
+  { name: 'performance', description: 'Measured latency, resource, query and concurrency optimization.', tags: ['performance','latency','scale','cache'], taskTypes: ['code','review-code','prototype'], requiresSkills: ['testing'], evidence: ['baseline','benchmark','regression-results'], phases: ['baseline','optimize','benchmark','verify'], costClass: 'heavy' },
+  { name: 'deployment', description: 'Release, rollback, environment and production verification procedures.', tags: ['deploy','release','rollback','production'], taskTypes: ['execute','deliver','code'], requiresSkills: ['testing','security-review'], evidence: ['deployment-receipt','health-check','rollback-plan'], phases: ['preflight','release','health-check','verify'], costClass: 'heavy' }
 ]);
 
 const parseScalar = value => {
@@ -74,6 +77,10 @@ function descriptorFromMeta(meta, directory) {
     tools: Array.isArray(meta.tools) ? meta.tools.slice(0, 40) : [],
     tags: Array.isArray(meta.tags) ? meta.tags.slice(0, 30) : [],
     taskTypes: Array.isArray(meta.taskTypes) ? meta.taskTypes.slice(0, 30) : [],
+    requiresSkills: Array.isArray(meta.requiresSkills) ? [...new Set(meta.requiresSkills.map(slug).filter(Boolean))].slice(0, 16) : [],
+    evidence: Array.isArray(meta.evidence) ? [...new Set(meta.evidence.map(text).filter(Boolean))].slice(0, 24) : [],
+    phases: Array.isArray(meta.phases) ? [...new Set(meta.phases.map(value => text(value).toLowerCase()).filter(Boolean))].slice(0, 16) : [],
+    costClass: Object.hasOwn(SKILL_COST, text(meta.costClass).toLowerCase()) ? text(meta.costClass).toLowerCase() : 'standard',
     directory,
     progressiveDisclosure: true
   };
@@ -86,6 +93,10 @@ export function builtinSkillDescriptors() {
     risk: item.name === 'security-review' ? 'high' : 'ordinary',
     dataClasses: [],
     tools: [],
+    requiresSkills: item.requiresSkills ?? [],
+    evidence: item.evidence ?? [],
+    phases: item.phases ?? [],
+    costClass: item.costClass ?? 'standard',
     directory: path.resolve(DEFAULT_SKILL_ROOT, item.name),
     progressiveDisclosure: true
   }));
@@ -152,10 +163,116 @@ function normalizedSkillProfile(profile) {
     lastObservedAt: profile?.lastObservedAt ?? profile?.last_observed_at ?? null,
     contextSuccess: Math.max(0, Number(profile?.contextSuccess ?? profile?.context_success ?? 0)),
     contextFailure: Math.max(0, Number(profile?.contextFailure ?? profile?.context_failure ?? 0)),
-    contextUncertain: Math.max(0, Number(profile?.contextUncertain ?? profile?.context_uncertain ?? 0))
+    contextUncertain: Math.max(0, Number(profile?.contextUncertain ?? profile?.context_uncertain ?? 0)),
+    failurePattern: text(profile?.failurePattern ?? profile?.failure_pattern) || null
   };
 }
 
+export function validateSkillDescriptor(skill, { registry = builtinSkillDescriptors() } = {}) {
+  const errors = [];
+  const name = slug(skill?.name);
+  if (!name) errors.push('missing-name');
+  if (!text(skill?.description)) errors.push('missing-description');
+  if (!text(skill?.version)) errors.push('missing-version');
+  if (!Array.isArray(skill?.taskTypes)) errors.push('task-types-not-array');
+  const phases = Array.isArray(skill?.phases) ? skill.phases : [];
+  const invalidPhases = phases.filter(phase => !SKILL_PHASE_SET.has(text(phase).toLowerCase()));
+  if (invalidPhases.length) errors.push('invalid-phases:' + invalidPhases.join(','));
+  const cost = text(skill?.costClass).toLowerCase() || 'standard';
+  if (!Object.hasOwn(SKILL_COST, cost)) errors.push('invalid-cost-class');
+  const dependencies = Array.isArray(skill?.requiresSkills) ? skill.requiresSkills.map(slug).filter(Boolean) : [];
+  if (dependencies.includes(name)) errors.push('self-dependency');
+  const known = new Set(registry.map(item => slug(item.name)));
+  const unknownDeps = dependencies.filter(item => !known.has(item));
+  if (unknownDeps.length) errors.push('unknown-dependencies:' + unknownDeps.join(','));
+  return { valid: errors.length === 0, errors };
+}
+
+export function evaluateSkillRegistry(descriptors = builtinSkillDescriptors()) {
+  const items = Array.isArray(descriptors) ? descriptors : [];
+  const errors = [];
+  const names = new Set();
+  for (const skill of items) {
+    const name = slug(skill?.name);
+    if (names.has(name)) errors.push('duplicate:' + name);
+    names.add(name);
+    const check = validateSkillDescriptor(skill, { registry: items });
+    if (!check.valid) errors.push(...check.errors.map(error => name + ':' + error));
+  }
+  return { valid: errors.length === 0, skillCount: items.length, errors };
+}
+
+function hierarchicalSkillEvidence(profiles, skillName, taskType) {
+  const relevant = (Array.isArray(profiles) ? profiles : []).map(normalizedSkillProfile).filter(profile => profile.skillName === skillName);
+  if (!relevant.length) return null;
+  const wantedTask = text(taskType).toLowerCase();
+  const exact = relevant.find(profile => profile.taskType === wantedTask);
+  const general = relevant.find(profile => !profile.taskType);
+  if (!exact) return general ?? relevant[0];
+  if (!general) return exact;
+  const exactWeight = Math.max(1, exact.attempts);
+  const generalWeight = Math.max(1, general.attempts) * 0.35;
+  const totalWeight = exactWeight + generalWeight;
+  return { ...exact, attempts: Math.round(exactWeight + generalWeight), success: Math.round(exact.success + general.success * 0.35), failure: Math.round(exact.failure + general.failure * 0.35), uncertain: Math.round(exact.uncertain + general.uncertain * 0.35), confidence: (exact.confidence * exactWeight + general.confidence * generalWeight) / totalWeight, utility: (exact.utility * exactWeight + general.utility * generalWeight) / totalWeight, lastObservedAt: exact.lastObservedAt ?? general.lastObservedAt, failurePattern: exact.failurePattern ?? general.failurePattern };
+}
+
+export function classifySkillFailure(reason = '') {
+  const value = text(reason).toLowerCase();
+  if (!value) return 'unknown';
+  if (/syntax|parse/.test(value)) return 'syntax';
+  if (/test|assert|regression/.test(value)) return 'tests';
+  if (/timeout|timed.?out|slow/.test(value)) return 'timeout';
+  if (/permission|forbidden|unauthori[sz]ed|approval/.test(value)) return 'authorization';
+  if (/stale|revision|conflict|concurrency/.test(value)) return 'stale-state';
+  if (/security|secret|injection|privacy/.test(value)) return 'security';
+  if (/provider|model|network|connector/.test(value)) return 'dependency';
+  if (/verification|evidence|unsupported/.test(value)) return 'verification';
+  return 'other';
+}
+
+export function skillContract(skill) {
+  const source = skill && typeof skill === 'object' ? skill : {};
+  const costClass = Object.hasOwn(SKILL_COST, text(source.costClass).toLowerCase()) ? text(source.costClass).toLowerCase() : 'standard';
+  return { phases: Array.isArray(source.phases) && source.phases.length ? [...source.phases] : ['execute'], requiresSkills: Array.isArray(source.requiresSkills) ? [...new Set(source.requiresSkills.map(slug).filter(Boolean))] : [], evidence: Array.isArray(source.evidence) ? [...new Set(source.evidence.map(text).filter(Boolean))] : [], costClass, cost: SKILL_COST[costClass], intelligenceVersion: SKILL_INTELLIGENCE_VERSION };
+}
+
+export function composeSkillPlan(skills = [], { taskType = '', maxSkills = 8, maxCost = 12 } = {}) {
+  const registry = builtinSkillDescriptors();
+  const byName = new Map(registry.map(skill => [skill.name, skill]));
+  const seed = (Array.isArray(skills) ? skills : []).map(item => byName.get(slug(item?.name)) ?? item).filter(item => item?.name);
+  const selected = new Map();
+  const visiting = new Set();
+  const add = descriptor => {
+    const name = slug(descriptor?.name);
+    if (!name || selected.has(name) || visiting.has(name)) return;
+    visiting.add(name);
+    for (const dependency of skillContract(descriptor).requiresSkills) { const required = byName.get(dependency); if (required) add(required); }
+    visiting.delete(name);
+    if (selected.size < Math.max(1, Math.min(12, Number(maxSkills) || 8))) selected.set(name, descriptor);
+  };
+  for (const skill of seed) add(skill);
+  const ordered = [];
+  const visited = new Set();
+  const visit = descriptor => {
+    const name = slug(descriptor?.name);
+    if (!name || visited.has(name)) return;
+    visited.add(name);
+    for (const dependency of skillContract(descriptor).requiresSkills) { const dep = selected.get(dependency); if (dep) visit(dep); }
+    ordered.push(descriptor);
+  };
+  for (const descriptor of selected.values()) visit(descriptor);
+  let cost = 0;
+  const final = [];
+  const skipped = [];
+  const seeded = new Set(seed.map(item => slug(item?.name)));
+  for (const descriptor of ordered) {
+    const contract = skillContract(descriptor);
+    if (cost + contract.cost > Math.max(1, Number(maxCost) || 12)) { skipped.push({ name: descriptor.name, reason: 'skill-cost-budget' }); continue; }
+    cost += contract.cost;
+    final.push({ ...descriptor, contract, order: final.length + 1, implicit: !seeded.has(slug(descriptor.name)), taskType: text(taskType).toLowerCase() });
+  }
+  return { version: SKILL_INTELLIGENCE_VERSION, taskType: text(taskType).toLowerCase(), skills: final, addedDependencies: final.filter(item => item.implicit).map(item => item.name), skipped, totalCost: cost, evidence: [...new Set(final.flatMap(item => item.contract.evidence))], phases: [...new Set(final.flatMap(item => item.contract.phases))] };
+}
 export function skillLearningAdjustment(profile, { minimumEvidence = 2 } = {}) {
   const normalized = normalizedSkillProfile(profile);
   if (!normalized.skillName || normalized.attempts < 1) return 0;
@@ -327,7 +444,8 @@ export class SkillLearningStore {
               p.last_observed_at AS "lastObservedAt",
               COALESCE(c.context_success, 0) AS "contextSuccess",
               COALESCE(c.context_failure, 0) AS "contextFailure",
-              COALESCE(c.context_uncertain, 0) AS "contextUncertain"
+              COALESCE(c.context_uncertain, 0) AS "contextUncertain",
+              COALESCE(pp.failure_pattern, '') AS "failurePattern"
          FROM skill_profiles p
          LEFT JOIN (
            SELECT skill_name, task_type,
@@ -342,6 +460,17 @@ export class SkillLearningStore {
          ) c
            ON c.skill_name = p.skill_name
           AND c.task_type = p.task_type
+        LEFT JOIN (
+          SELECT skill_name, task_type, MAX(pattern_key) AS failure_pattern
+            FROM skill_patterns
+           WHERE workspace_id = $1
+             AND principal_id = $2
+             AND pattern_kind = 'failure'
+             AND ($4::text <> '' AND context_signature = $4)
+           GROUP BY skill_name, task_type
+        ) pp
+          ON pp.skill_name = p.skill_name
+         AND pp.task_type = p.task_type
         WHERE p.workspace_id = $1
           AND p.principal_id = $2
           AND ($3::text = '' OR p.task_type = $3)
@@ -359,12 +488,17 @@ export class SkillLearningStore {
         'DELETE FROM skill_observations WHERE workspace_id = $1 AND principal_id = $2',
         [scope.workspaceId, scope.principalId]
       );
+      const removedPatterns = await client.query(
+        'DELETE FROM skill_patterns WHERE workspace_id = $1 AND principal_id = $2',
+        [scope.workspaceId, scope.principalId]
+      );
       const removedProfiles = await client.query(
         'DELETE FROM skill_profiles WHERE workspace_id = $1 AND principal_id = $2',
         [scope.workspaceId, scope.principalId]
       );
       return {
         observations: removedObservations.rowCount ?? 0,
+        patterns: removedPatterns.rowCount ?? 0,
         profiles: removedProfiles.rowCount ?? 0
       };
     });
@@ -418,6 +552,31 @@ export class SkillLearningStore {
           ]
         );
         if (!inserted.rows.length) continue;
+        if (text(contextSignature)) {
+          const patternKind = normalizedOutcome === 'failure' ? 'failure' : 'context-outcome';
+          const patternKey = normalizedOutcome === 'failure' ? classifySkillFailure(reason) : normalizedOutcome;
+          await client.query(
+            `INSERT INTO skill_patterns
+              (workspace_id, principal_id, skill_name, task_type, context_signature, pattern_kind, pattern_key,
+               success_count, failure_count, uncertain_count, utility_ema, last_observed_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now())
+             ON CONFLICT (workspace_id, principal_id, skill_name, task_type, context_signature, pattern_kind, pattern_key)
+             DO UPDATE SET
+               success_count = skill_patterns.success_count + EXCLUDED.success_count,
+               failure_count = skill_patterns.failure_count + EXCLUDED.failure_count,
+               uncertain_count = skill_patterns.uncertain_count + EXCLUDED.uncertain_count,
+               utility_ema = LEAST(1, GREATEST(-1, skill_patterns.utility_ema * 0.8 + EXCLUDED.utility_ema * 0.2)),
+               last_observed_at = now()`,
+            [
+              scope.workspaceId, scope.principalId, skillName, text(taskType).toLowerCase(), text(contextSignature),
+              patternKind, patternKey,
+              normalizedOutcome === 'success' ? 1 : 0,
+              normalizedOutcome === 'failure' ? 1 : 0,
+              normalizedOutcome === 'uncertain' ? 1 : 0,
+              utility
+            ]
+          );
+        }
         await client.query(
           `INSERT INTO skill_profiles
             (workspace_id, principal_id, skill_name, task_type,
@@ -458,6 +617,10 @@ export class SkillLearningStore {
       return { observed };
     });
   }
+}
+
+export function skillPlanForSelectedSkills(skills, { taskType = '', maxSkills = 8, maxCost = 12 } = {}) {
+  return composeSkillPlan(skills, { taskType, maxSkills, maxCost });
 }
 
 async function walk(directory, depth, output) {
@@ -509,6 +672,7 @@ export async function loadSelectedSkills(goal, {
   capabilities = [],
   limit = 4,
   maxInstructionChars = 6000,
+  maxSkillCost = 12,
   learnedSkills = [],
   skillLevel = '',
   preferences = [],
