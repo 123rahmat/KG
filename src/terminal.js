@@ -168,7 +168,7 @@ async function snapshotChanges(session) {
 }
 
 class TerminalSession {
-  constructor({ id, ws, principal, scope, source, baseFiles, workdir, ptyProcess, manager }) {
+  constructor({ id, ws, principal, scope, source, baseFiles, workdir, ptyProcess, manager, image, runtime }) {
     this.id = id;
     this.ws = ws;
     this.principal = principal;
@@ -177,6 +177,8 @@ class TerminalSession {
     this.baseFiles = baseFiles;
     this.workdir = workdir;
     this.pty = ptyProcess;
+    this.image = image;
+    this.runtime = runtime;
     this.manager = manager;
     this.createdAt = Date.now();
     this.lastInputAt = this.createdAt;
@@ -303,7 +305,7 @@ export function attachTerminalServer(server, {
 
       const session = new TerminalSession({
         id: crypto.randomUUID(), ws, principal, scope, source,
-        baseFiles, workdir, ptyProcess: child, manager
+        baseFiles, workdir, ptyProcess: child, manager, image, runtime: config.terminal.runtime
       });
       sessions.set(session.id, session);
       child.onData(data => {
@@ -444,7 +446,8 @@ export function attachTerminalServer(server, {
               type: 'ready',
               sessionId: session.id,
               workspaceId: scope.workspaceId,
-              sourceId: sourceId || null
+              sourceId: sourceId || null,
+              sandbox: { runtime: session.runtime || 'docker', image: session.image, network: 'none', user: '65534:65534', workspace: '/work' }
             }));
             ws.on('message', data => void manager.handleMessage(session, data));
             ws.on('close', () => session.close('socket-close'));
