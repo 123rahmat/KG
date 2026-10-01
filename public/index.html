@@ -358,7 +358,12 @@
       </button>
     </div>
 
-    <div class="project-source-grid">
+    <div class="project-source-switch" role="tablist" aria-label="Project source type">
+      <button type="button" class="project-source-tab active" id="sourceTabLocal" role="tab" aria-selected="true" aria-controls="sourcePanelLocal"><span class="project-source-tab-icon">⌂</span><span>Local folder</span></button>
+      <button type="button" class="project-source-tab" id="sourceTabGithub" role="tab" aria-selected="false" aria-controls="sourcePanelGithub"><span class="project-source-tab-icon">GH</span><span>GitHub repository</span></button>
+    </div>
+
+    <div class="project-source-panel active" id="sourcePanelLocal" role="tabpanel" aria-labelledby="sourceTabLocal">
       <section class="project-source-card">
         <div class="project-source-icon" aria-hidden="true">⌂</div>
         <div class="project-source-copy">
@@ -371,9 +376,9 @@
           </div>
           <p class="hint">Generated folders and dependency directories such as <code>.git</code> and <code>node_modules</code> are skipped from the project snapshot.</p>
         </div>
-      </section>
+      </div>
 
-      <section class="project-source-card">
+    <div class="project-source-panel" id="sourcePanelGithub" role="tabpanel" aria-labelledby="sourceTabGithub" hidden>
         <div class="project-source-icon" aria-hidden="true">GH</div>
         <div class="project-source-copy">
           <h3>GitHub repository</h3>
@@ -405,7 +410,6 @@
           </div>
         </div>
       </section>
-    </div>
 
     <div id="projectSourcesNotice" class="project-sources-notice" hidden></div>
   </div>
