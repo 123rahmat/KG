@@ -234,7 +234,10 @@ export function registerAccountRoutes(app, { config, pool, identity, audit, rout
   app.post('/api/runs/:id/report', scoped('viewer'), route(async (req, res) => {
     const reason = String(req.body?.reason ?? '');
     if (!REPORT_REASONS.includes(reason)) return res.status(400).json({ error: `Choose a reason: ${REPORT_REASONS.join(', ')}.`, code: 'report-reason' });
-    const { rows: [run] } = await pool.query('SELECT id FROM runs WHERE id = $1 AND workspace_id = $2', [req.params.id, req.scope.workspaceId]);
+    const { rows: [run] } = await pool.query(
+      'SELECT id FROM runs WHERE id = $1 AND workspace_id = $2 AND (visibility = \'workspace\' OR principal_id = $3)',
+      [req.params.id, req.scope.workspaceId, req.principal.id]
+    );
     if (!run) return res.status(404).json({ error: 'Chat not found', code: 'no-run' });
     const { rows: tasks } = await pool.query(
       "SELECT evidence->>'text' AS text FROM run_tasks WHERE run_id = $1 AND type IN ('respond', 'deliver', 'prototype', 'investigate', 'tool') AND evidence ? 'text' ORDER BY position DESC LIMIT 1",
@@ -256,7 +259,12 @@ export function registerAccountRoutes(app, { config, pool, identity, audit, rout
 
   // Admins see every report in the workspace; others see their own.
   app.get('/api/reports', scoped('viewer'), route(async (req, res) => {
-    const { rows } = await pool.query('SELECT * FROM safety_reports WHERE workspace_id = $1 ORDER BY status = \'open\' DESC, created_at DESC LIMIT 200', [req.scope.workspaceId]);
+    const { rows } = await pool.query(
+      `SELECT * FROM safety_reports
+         WHERE workspace_id = $1 AND (principal_id = $2 OR $3 = true)
+         ORDER BY status = 'open' DESC, created_at DESC LIMIT 200`,
+      [req.scope.workspaceId, req.principal.id, req.scope.role === 'admin']
+    );
     let declined = null;
     if (req.scope.role === 'admin') {
       const { rows: counts } = await pool.query(

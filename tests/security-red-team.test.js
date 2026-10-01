@@ -184,6 +184,49 @@ test('audit detail is encrypted at rest while event metadata remains queryable',
     assert.equal(row.detail_encryption_version, 1);
   }));
 
+test('private answer reports cannot be used to read another member\'s answer or reports', () =>
+  withServer(async ({ call, seed }) => {
+    const owner = await seed({ workspace: 'report-ws', role: 'editor', name: 'Owner' });
+    const other = await seed({ workspace: 'report-ws', role: 'viewer', name: 'Other' });
+
+    const created = await call('POST', '/api/runs', {
+      token: owner.token,
+      workspace: owner.workspace,
+      body: { goal: 'Private answer that another member must not inspect.' }
+    });
+    assert.equal(created.status, 201);
+
+    const blocked = await call('POST', `/api/runs/${created.body.id}/report`, {
+      token: other.token,
+      workspace: other.workspace,
+      body: { reason: 'privacy', note: 'probe' }
+    });
+    assert.equal(blocked.status, 404);
+    assert.equal(blocked.body.code, 'no-run');
+
+    const ownerReport = await call('POST', `/api/runs/${created.body.id}/report`, {
+      token: owner.token,
+      workspace: owner.workspace,
+      body: { reason: 'wrong', note: 'owner report' }
+    });
+    assert.equal(ownerReport.status, 201);
+
+    const otherReports = await call('GET', '/api/reports', {
+      token: other.token,
+      workspace: other.workspace
+    });
+    assert.equal(otherReports.status, 200);
+    assert.equal(otherReports.body.reports.length, 0);
+
+    const ownerReports = await call('GET', '/api/reports', {
+      token: owner.token,
+      workspace: owner.workspace
+    });
+    assert.equal(ownerReports.status, 200);
+    assert.equal(ownerReports.body.reports.length, 1);
+    assert.equal(ownerReports.body.reports[0].note, 'owner report');
+  }));
+
 test('invalid bearer credentials hit an IP admission ceiling before key lookup', async () => {
   await withServer(async ({ call }) => {
     let last = null;
