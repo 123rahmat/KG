@@ -19,6 +19,25 @@ test('workspace source files normalize safely and deterministically', () => {
   assert.equal(a.fileCount, 2);
 });
 
+test('source normalization keeps legitimate dotfiles and rejects binary content', () => {
+  assert.deepEqual(
+    normalizeSourceFiles([
+      { path: '.gitignore', content: 'node_modules/' },
+      { path: '.github/workflows/ci.yml', content: 'name: CI' },
+      { path: 'src\\app.js', content: 'ok' },
+      { path: './README.md', content: 'readme' },
+      { path: 'src/../secret.txt', content: 'blocked' }
+    ]),
+    [
+      { path: '.github/workflows/ci.yml', content: 'name: CI' },
+      { path: '.gitignore', content: 'node_modules/' },
+      { path: 'README.md', content: 'readme' },
+      { path: 'src/app.js', content: 'ok' }
+    ]
+  );
+  assert.throws(() => normalizeSourceFiles([{ path: 'src/app.js', content: 'bad\0binary' }]), /invalid binary data/);
+});
+
 test('GitHub requests carry the intended API headers', () => {
   const headers = githubHeaders('example');
   assert.equal(headers.authorization, 'Bearer example');
