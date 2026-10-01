@@ -278,7 +278,7 @@ export function registerWorkspaceSourcesRoutes(app, {
         WHERE id = $1 AND workspace_id = $2 AND principal_id = $3 RETURNING *`,
       [
         source.id, req.scope.workspaceId, req.principal.id, object.id, read.source.ref,
-        JSON.stringify({ url: read.source.url, private: read.source.private, commitSha: read.source.commitSha, treeSha: read.source.treeSha, contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files, syncedAt: new Date().toISOString() })
+        JSON.stringify({ url: read.source.url, private: read.source.private, commitSha: read.source.commitSha, treeSha: read.source.treeSha, contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files, ingestion: read.ingestion, syncedAt: new Date().toISOString() })
       ]
     );
     res.json({ source: sourcePublic(updated), manifest, unchanged: false });

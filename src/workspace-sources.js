@@ -19,6 +19,7 @@ const MAX_FILES = 250;
 const MAX_FILE_BYTES = 256 * 1024;
 const MAX_TOTAL_BYTES = 4 * 1024 * 1024;
 const MAX_TREE_ENTRIES = 20_000;
+const MAX_SKIPPED_EXAMPLES = 40;
 
 const SOURCE_EXTENSIONS = new Set(['py','pyi','js','mjs','cjs','jsx','ts','tsx','json','toml','cfg','ini','yaml','yml','md','txt','rst','html','css','scss','sql','sh','c','h','cc','cxx','cpp','hh','hpp','java','kt','kts','gradle','go','mod','sum','rs','rb','php','cs','swift','proto','cmake','csv','xml']);
 const SOURCE_NAMES = new Set(['Makefile','Dockerfile','requirements.txt','package.json','pyproject.toml','setup.cfg','README','LICENSE','go.mod','go.sum','Cargo.toml','Cargo.lock','CMakeLists.txt','build.gradle','settings.gradle','pom.xml']);
@@ -158,13 +159,27 @@ export async function githubReadRepository({
     throw new Error('GitHub repository tree is too large for a safe workspace snapshot; narrow the source to a subdirectory or ref.');
   }
   const files = [];
+  const skipped = [];
+  let skippedCount = 0;
+  let skippedBytes = 0;
   let total = 0;
   for (const entry of tree?.tree ?? []) {
     if (entry?.type !== 'blob') continue;
     const path = safePath(entry.path);
     if (!path || !isUsefulSourcePath(path)) continue;
     const size = Number(entry.size) || 0;
-    if (size > MAX_FILE_BYTES || total + size > maxBytes) continue;
+    if (size > MAX_FILE_BYTES) {
+      skippedCount += 1;
+      skippedBytes += size;
+      if (skipped.length < MAX_SKIPPED_EXAMPLES) skipped.push({ path: entry.path, reason: 'file-too-large', bytes: size });
+      continue;
+    }
+    if (total + size > maxBytes) {
+      skippedCount += 1;
+      skippedBytes += size;
+      if (skipped.length < MAX_SKIPPED_EXAMPLES) skipped.push({ path: entry.path, reason: 'snapshot-size-limit', bytes: size });
+      continue;
+    }
     const blob = await githubJson(
       fetchImpl,
       `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/blobs/${encodeURIComponent(entry.sha)}`,
@@ -179,14 +194,35 @@ export async function githubReadRepository({
       throw new Error('GitHub source contains invalid UTF-8 data: ' + path);
     }
     const bytes = Buffer.byteLength(content, 'utf8');
-    if (bytes > MAX_FILE_BYTES || total + bytes > maxBytes) continue;
+    if (bytes > MAX_FILE_BYTES || total + bytes > maxBytes) {
+      skippedCount += 1;
+      skippedBytes += bytes;
+      if (skipped.length < MAX_SKIPPED_EXAMPLES) skipped.push({ path, reason: 'decoded-size-limit', bytes });
+      continue;
+    }
     files.push({ path, content });
     total += bytes;
-    if (files.length >= MAX_FILES) break;
+    if (files.length >= MAX_FILES) {
+      for (const remaining of (tree?.tree ?? []).slice((tree?.tree ?? []).indexOf(entry) + 1)) {
+        if (remaining?.type !== 'blob') continue;
+        const remainingPath = safePath(remaining.path);
+        if (!remainingPath || !isUsefulSourcePath(remainingPath)) continue;
+        skippedCount += 1;
+        skippedBytes += Number(remaining.size) || 0;
+        if (skipped.length < MAX_SKIPPED_EXAMPLES) skipped.push({ path: remaining.path, reason: 'file-count-limit', bytes: Number(remaining.size) || 0 });
+      }
+      break;
+    }
   }
   return {
     source: { owner, repo, ref: resolvedRef, defaultBranch: root.default_branch, private: root.private === true, url: root.html_url, commitSha: revision.sha, treeSha: revision.treeSha },
-    files: normalizeSourceFiles(files)
+    files: normalizeSourceFiles(files),
+    ingestion: {
+      partial: skippedCount > 0,
+      skippedCount,
+      skippedBytes,
+      skippedExamples: skipped
+    }
   };
 }
 

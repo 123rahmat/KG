@@ -65,6 +65,36 @@ test('GitHub repository and branch discovery uses POST-safe server-side helpers'
 });
 
 
+test('GitHub snapshots report importer omissions instead of pretending the project is complete', async () => {
+  const huge = 'x'.repeat(256 * 1024 + 1);
+  const fetchImpl = async (url, init = {}) => {
+    if (url.endsWith('/repos/demo/app')) {
+      return new Response(JSON.stringify({ default_branch: 'main', private: true, html_url: 'https://github.com/demo/app' }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    if (url.includes('/commits/main')) {
+      return new Response(JSON.stringify({ sha: 'base123', commit: { tree: { sha: 'tree123' } } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    if (url.includes('/git/trees/base123?recursive=1')) {
+      return new Response(JSON.stringify({
+        truncated: false,
+        tree: [
+          { type: 'blob', path: 'src/huge.js', size: huge.length, sha: 'huge' },
+          { type: 'blob', path: 'src/app.js', size: 1, sha: 'app' }
+        ]
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    if (url.includes('/git/blobs/app')) {
+      return new Response(JSON.stringify({ encoding: 'base64', content: Buffer.from('a').toString('base64') }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    throw new Error('omitted blob should not be downloaded');
+  };
+  const result = await githubReadRepository({ fetchImpl, token: 'secret', owner: 'demo', repo: 'app', ref: 'main' });
+  assert.equal(result.ingestion.partial, true);
+  assert.equal(result.ingestion.skippedCount, 1);
+  assert.equal(result.ingestion.skippedExamples[0].reason, 'file-too-large');
+  assert.deepEqual(result.files, [{ path: 'src/app.js', content: 'a' }]);
+});
+
 test('GitHub repository snapshots read the immutable resolved commit', async () => {
   const calls = [];
   const fetchImpl = async (url, init = {}) => {
