@@ -25,3 +25,23 @@ Versioned Evals can execute concurrently and return a deterministic promotion ga
 
 ## Multiple chats and code spaces
 Each conversation is an independent concurrency lane. Multiple code workspace sessions can exist simultaneously over separate project, branch and revision contexts, while the underlying project source remains a server-owned shared truth.
+
+## Adaptive control
+
+The orchestrator is feedback-controlled. Each specialist wave measures latency and failures and can narrow or widen the next wave within hard concurrency and risk limits. High-risk work is kept conservative even when parallelism is available.
+
+## Blackboard
+
+The Run has one encrypted, versioned Blackboard for shared working state. Agents contribute findings; optimistic concurrency prevents silent overwrites. The Blackboard is not durable personal memory and never grants authority.
+
+## Retrieval
+
+RAG content is encrypted at rest, retrieved within tenant scope, and short-lived retrieval results may be reused through an encrypted cache. Indexing purges the relevant cache namespace.
+
+## Learning loop
+
+User feedback is stored as a Run outcome signal. Evaluation systems can use those signals to identify regressions and candidate improvements. No model output or feedback automatically rewrites Skills, prompts or policy.
+
+## Production standards
+
+The deployment path can map workload identity to SPIFFE/SPIRE and telemetry to OpenTelemetry semantic conventions. MCP is treated as a consented tool/context protocol, and A2A as a delegated-agent protocol; neither replaces server-side authorization. Current MCP guidance explicitly calls for user consent and authorization around data access and tools, while A2A 1.0 defines independent agent discovery and collaboration without sharing internal state.
