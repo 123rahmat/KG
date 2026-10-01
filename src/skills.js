@@ -192,14 +192,44 @@ export function evaluateSkillRegistry(descriptors = builtinSkillDescriptors()) {
   const items = Array.isArray(descriptors) ? descriptors : [];
   const errors = [];
   const names = new Set();
+  const graph = new Map();
+
   for (const skill of items) {
     const name = slug(skill?.name);
     if (names.has(name)) errors.push('duplicate:' + name);
     names.add(name);
+    const dependencies = Array.isArray(skill?.requiresSkills)
+      ? [...new Set(skill.requiresSkills.map(slug).filter(Boolean))]
+      : [];
+    graph.set(name, dependencies);
     const check = validateSkillDescriptor(skill, { registry: items });
     if (!check.valid) errors.push(...check.errors.map(error => name + ':' + error));
   }
-  return { valid: errors.length === 0, skillCount: items.length, errors };
+
+  // A cyclic dependency graph is invalid: composition must never silently
+  // drop an edge and then execute a skill without its declared prerequisite.
+  const visiting = new Set();
+  const visited = new Set();
+  const walk = name => {
+    if (visited.has(name)) return;
+    if (visiting.has(name)) {
+      errors.push('dependency-cycle:' + name);
+      return;
+    }
+    visiting.add(name);
+    for (const dependency of graph.get(name) ?? []) {
+      if (graph.has(dependency)) walk(dependency);
+    }
+    visiting.delete(name);
+    visited.add(name);
+  };
+  for (const name of graph.keys()) walk(name);
+
+  return {
+    valid: errors.length === 0,
+    skillCount: items.length,
+    errors: [...new Set(errors)]
+  };
 }
 
 function hierarchicalSkillEvidence(profiles, skillName, taskType) {
@@ -266,13 +296,64 @@ export function composeSkillPlan(skills = [], { taskType = '', maxSkills = 8, ma
   const final = [];
   const skipped = [];
   const seeded = new Set(seed.map(item => slug(item?.name)));
+  const included = new Set();
+
   for (const descriptor of ordered) {
+    const name = slug(descriptor.name);
     const contract = skillContract(descriptor);
-    if (cost + contract.cost > Math.max(1, Number(maxCost) || 12)) { skipped.push({ name: descriptor.name, reason: 'skill-cost-budget' }); continue; }
+    const missingDependency = contract.requiresSkills.find(dependency => !included.has(dependency));
+    if (missingDependency) {
+      skipped.push({ name: descriptor.name, reason: 'required-dependency-unavailable', dependency: missingDependency });
+      continue;
+    }
+    if (cost + contract.cost > Math.max(1, Number(maxCost) || 12)) {
+      skipped.push({ name: descriptor.name, reason: 'skill-cost-budget' });
+      continue;
+    }
     cost += contract.cost;
-    final.push({ ...descriptor, contract, order: final.length + 1, implicit: !seeded.has(slug(descriptor.name)), taskType: text(taskType).toLowerCase() });
+    included.add(name);
+    final.push({
+      ...descriptor,
+      contract,
+      order: final.length + 1,
+      implicit: !seeded.has(name),
+      taskType: text(taskType).toLowerCase()
+    });
   }
-  return { version: SKILL_INTELLIGENCE_VERSION, taskType: text(taskType).toLowerCase(), skills: final, addedDependencies: final.filter(item => item.implicit).map(item => item.name), skipped, totalCost: cost, evidence: [...new Set(final.flatMap(item => item.contract.evidence))], phases: [...new Set(final.flatMap(item => item.contract.phases))] };
+
+  const selectedNames = new Set(final.map(item => slug(item.name)));
+  // A selected skill can never survive composition if one of its declared
+  // prerequisites was excluded by the cost/skill budget.
+  const invariantViolations = final
+    .filter(item => skillContract(item).requiresSkills.some(dependency => !selectedNames.has(dependency)))
+    .map(item => item.name);
+  if (invariantViolations.length) {
+    for (const name of invariantViolations) {
+      skipped.push({ name, reason: 'composition-invariant-violation' });
+    }
+    const kept = final.filter(item => !invariantViolations.includes(item.name));
+    return {
+      version: SKILL_INTELLIGENCE_VERSION,
+      taskType: text(taskType).toLowerCase(),
+      skills: kept.map((item, index) => ({ ...item, order: index + 1 })),
+      addedDependencies: kept.filter(item => item.implicit).map(item => item.name),
+      skipped,
+      totalCost: kept.reduce((sum, item) => sum + item.contract.cost, 0),
+      evidence: [...new Set(kept.flatMap(item => item.contract.evidence))],
+      phases: [...new Set(kept.flatMap(item => item.contract.phases))]
+    };
+  }
+
+  return {
+    version: SKILL_INTELLIGENCE_VERSION,
+    taskType: text(taskType).toLowerCase(),
+    skills: final,
+    addedDependencies: final.filter(item => item.implicit).map(item => item.name),
+    skipped,
+    totalCost: cost,
+    evidence: [...new Set(final.flatMap(item => item.contract.evidence))],
+    phases: [...new Set(final.flatMap(item => item.contract.phases))]
+  };
 }
 export function skillLearningAdjustment(profile, { minimumEvidence = 2 } = {}) {
   const normalized = normalizedSkillProfile(profile);
