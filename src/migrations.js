@@ -2019,5 +2019,70 @@ export const MIGRATIONS = [
       FOR EACH ROW
       EXECUTE FUNCTION prevent_audit_log_mutation();
     `
+  },
+  {
+    version: 49,
+    name: 'scope-audit-chain-to-tenant',
+    sql: `
+      -- A runtime tenant can only read its own audit rows under FORCE RLS.
+      -- Rebuild the chain per workspace (and one separate global chain for
+      -- workspace-less authentication events) so verification remains possible
+      -- without crossing tenant boundaries.
+      DROP TRIGGER IF EXISTS audit_log_no_update_delete ON audit_log;
+
+      DO $audit$
+      DECLARE
+        previous_by_scope JSONB := '{}'::jsonb;
+        item RECORD;
+        scope_key TEXT;
+        previous_hash TEXT;
+        canonical TEXT;
+        current_hash TEXT;
+      BEGIN
+        FOR item IN
+          SELECT id, at, principal_id, workspace_id, action, target, outcome,
+                 detail_enc, detail_encryption_version, request_id, ip
+            FROM audit_log
+           ORDER BY id
+        LOOP
+          scope_key := COALESCE(item.workspace_id, '__global__');
+          previous_hash := NULLIF(previous_by_scope ->> scope_key, '');
+          canonical :=
+            COALESCE(item.id::text, '') || E'\\x1f' ||
+            COALESCE(item.at::text, '') || E'\\x1f' ||
+            COALESCE(item.principal_id, '') || E'\\x1f' ||
+            COALESCE(item.workspace_id, '') || E'\\x1f' ||
+            COALESCE(item.action, '') || E'\\x1f' ||
+            COALESCE(item.target, '') || E'\\x1f' ||
+            COALESCE(item.outcome, '') || E'\\x1f' ||
+            COALESCE(item.detail_enc, '') || E'\\x1f' ||
+            COALESCE(item.detail_encryption_version::text, '') || E'\\x1f' ||
+            COALESCE(item.request_id, '') || E'\\x1f' ||
+            COALESCE(item.ip, '') || E'\\x1f' ||
+            COALESCE(previous_hash, '');
+          current_hash := encode(digest(canonical, 'sha256'), 'hex');
+          UPDATE audit_log
+             SET prev_hash = previous_hash, entry_hash = current_hash
+           WHERE id = item.id;
+          previous_by_scope := jsonb_set(previous_by_scope, ARRAY[scope_key], to_jsonb(current_hash), true);
+        END LOOP;
+      END
+      $audit$;
+
+      CREATE OR REPLACE FUNCTION prevent_audit_log_mutation()
+      RETURNS trigger
+      LANGUAGE plpgsql
+      AS $$
+      BEGIN
+        RAISE EXCEPTION 'audit_log is append-only';
+      END;
+      $$;
+
+      DROP TRIGGER IF EXISTS audit_log_no_update_delete ON audit_log;
+      CREATE TRIGGER audit_log_no_update_delete
+      BEFORE UPDATE OR DELETE ON audit_log
+      FOR EACH ROW
+      EXECUTE FUNCTION prevent_audit_log_mutation();
+    `
   }
 ];
