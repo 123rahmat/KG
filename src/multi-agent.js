@@ -247,7 +247,7 @@ function targetAgentCount(pressure, maxAgents) {
   const maximum = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
   const desired = pressure >= 0.86 ? 5
     : pressure >= 0.72 ? 4
-      : pressure >= 0.64 ? 3
+      : pressure >= 0.55 ? 3
         : pressure >= 0.41 ? 2
           : 1;
   return Math.min(maximum, desired);
