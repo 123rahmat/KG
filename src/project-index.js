@@ -285,22 +285,22 @@ export function impactClosure(index, changedPaths = [], { maxFiles = 80 } = {}) 
 }
 
 export function relatedSymbols(index, query = '', changedPaths = [], { max = 60 } = {}) {
-  const needle = trim(query).toLowerCase();
+  const queryTerms = [...new Set(trim(query).toLowerCase().match(/[a-zA-Z_$][a-zA-Z0-9_$-]{2,}/g) ?? [])];
   const changed = new Set(changedPaths ?? []);
   return (index?.symbols ?? [])
     .map(symbol => {
-      const exact = needle && symbol.name.toLowerCase() === needle ? 1000 : 0;
-      const partial = needle && symbol.name.toLowerCase().includes(needle) ? 300 : 0;
+      const lower = symbol.name.toLowerCase();
+      const exact = queryTerms.includes(lower) ? 1000 : 0;
+      const partial = queryTerms.reduce((score, term) => score + (lower.includes(term) ? 140 : 0), 0);
       const changedScore = changed.has(symbol.path) ? 500 : 0;
       const fileScore = changed.has(symbol.path) ? 100 : 0;
       return { ...symbol, score: exact + partial + changedScore + fileScore };
     })
-    .filter(item => item.score > 0 || !needle)
+    .filter(item => item.score > 0 || !queryTerms.length)
     .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path) || a.line - b.line)
     .slice(0, max)
     .map(({ score, ...symbol }) => symbol);
 }
-
 export function relatedTests(index, changedPaths = [], { max = 40 } = {}) {
   const impacted = new Set(impactClosure(index, changedPaths, { maxFiles: 300 }));
   return (index?.tests ?? []).filter(path => impacted.has(path) || changedPaths.some(changed => {
