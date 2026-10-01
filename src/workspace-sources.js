@@ -36,7 +36,7 @@ export const SOURCE_KINDS = Object.freeze(['local-folder', 'github']);
 
 function safePath(value) {
   const path = text(value).replaceAll('\\', '/').replace(/^\.\//, '');
-  return SAFE_PATH.test(path) ? path : null;
+  return workspacePath(path);
 }
 
 export function normalizeSourceFiles(files = []) {
