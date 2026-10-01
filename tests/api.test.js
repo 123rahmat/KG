@@ -355,7 +355,7 @@ test('verifying researched work checks its facts on the web, and an unsupported 
     env: GOOGLE,
     fetchImpl: async (_url, options) => {
       const body = JSON.parse(options.body);
-      const { system, contents, request } = requestFrom(body);
+      const { contents, request } = requestFrom(body);
       if (request.task?.type === 'verify') {
         verifyCalls.push(body);
         return modelReply(
