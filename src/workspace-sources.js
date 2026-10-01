@@ -93,6 +93,16 @@ export async function githubListRepositories({ fetchImpl = fetch, token, page = 
   return githubJson(fetchImpl, `https://api.github.com/user/repos?per_page=100&page=${safePage}&sort=updated`, token);
 }
 
+export async function githubListBranches({ fetchImpl = fetch, token, owner, repo, page = 1 } = {}) {
+  assertGitHubRepo(owner, repo);
+  const safePage = Math.max(1, Math.min(100, Number(page) || 1));
+  return githubJson(
+    fetchImpl,
+    `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches?per_page=100&page=${safePage}`,
+    token
+  );
+}
+
 export async function githubReadRepository({
   fetchImpl = fetch, token, owner, repo, ref = null, maxBytes = MAX_TOTAL_BYTES
 } = {}) {
