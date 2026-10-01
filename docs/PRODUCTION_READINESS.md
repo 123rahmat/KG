@@ -19,7 +19,7 @@ Privacy failures are release-blocking. This follows least-privilege, secure-by-d
 
 # Production readiness
 
-This branch is the production-readiness track for Kindgleam's situation-adaptive,
+`main` is the active production-readiness track for Kindgleam's situation-adaptive,
 open-world workflow. "Production ready" means the application refuses unsafe or
 unverifiable states and the release pipeline proves the repository can build and
 test; it does not mean that infrastructure, credentials, runners, backups, or
@@ -61,7 +61,7 @@ A release candidate must pass all of these gates:
    - ownership comes from the authenticated principal, not request JSON
    - governance is server-owned and layered
    - sensitive object content is encrypted at rest when configured
-   - audit records are append-only
+   - audit records are append-only and cryptographically chained per workspace
    - session writes require CSRF protection
    - production requires TLS database verification, secure cookies, a reasoning
      provider, separate migration credentials, and a durable PostgreSQL rate-limit store
@@ -291,3 +291,20 @@ Fixed in that pass:
   "5-hour", so paid plans showed "No 5-hour limit". All layers now say 4 hours.
 - Lint failures from dead code left after model discovery was disabled; a test harness and tests that still
   targeted the retired Gemini Developer API instead of Vertex request shapes.
+
+
+## Current adaptive-control additions
+
+The unified runtime now also applies explicit control to the model-provider boundary:
+
+- each configured provider/model has a bounded in-process concurrency window;
+- sustained healthy calls may widen the window gradually;
+- rate limits, upstream unavailability and timeouts narrow it;
+- queued calls have a hard wait ceiling and are never silently executed after the ceiling;
+- fallback model selection remains separate from concurrency control.
+
+This is a local process guard, not a replacement for a distributed rate limiter or provider quota. Multi-instance deployments still require provider-side quotas and load-aware horizontal scaling.
+
+Audit detail remains encrypted. The audit ledger additionally maintains a per-workspace SHA-256 chain, so administrators can verify recent integrity without exposing another tenant's events.
+
+Negative user feedback can produce an encrypted, reviewable evolution proposal. Approval and implementation remain explicit control-plane operations; the feedback path never rewrites model prompts, Skills, routing or policy automatically.
