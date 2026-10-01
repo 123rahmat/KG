@@ -1715,4 +1715,126 @@ export const MIGRATIONS = [
       REVOKE ALL ON workspace_sources FROM PUBLIC;
     `
   }
+  ,{
+    version: 42,
+    name: 'unified-agent-workspace-rag-state',
+    sql: \`
+      CREATE TABLE IF NOT EXISTS run_agents (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        task_id TEXT,
+        role TEXT NOT NULL,
+        model_id TEXT,
+        state TEXT NOT NULL DEFAULT 'pending',
+        wave_index INTEGER NOT NULL DEFAULT 0,
+        finding JSONB,
+        error_code TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        started_at TIMESTAMPTZ,
+        completed_at TIMESTAMPTZ,
+        UNIQUE(run_id, role, wave_index)
+      );
+      CREATE INDEX IF NOT EXISTS run_agents_run_idx ON run_agents(run_id, wave_index, state);
+
+      CREATE TABLE IF NOT EXISTS run_waves (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        wave_index INTEGER NOT NULL,
+        state TEXT NOT NULL DEFAULT 'pending',
+        agent_count INTEGER NOT NULL DEFAULT 0,
+        started_at TIMESTAMPTZ,
+        completed_at TIMESTAMPTZ,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        UNIQUE(run_id, wave_index)
+      );
+      CREATE INDEX IF NOT EXISTS run_waves_run_idx ON run_waves(run_id, wave_index);
+
+      CREATE TABLE IF NOT EXISTS code_workspace_sessions (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+        project_id TEXT,
+        source_id TEXT REFERENCES workspace_sources(id) ON DELETE SET NULL,
+        conversation_id TEXT,
+        branch TEXT,
+        base_revision TEXT,
+        state TEXT NOT NULL DEFAULT 'active',
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        closed_at TIMESTAMPTZ
+      );
+      CREATE INDEX IF NOT EXISTS code_workspace_sessions_scope_idx ON code_workspace_sessions(workspace_id, principal_id, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS code_workspace_sessions_project_idx ON code_workspace_sessions(workspace_id, project_id, branch, updated_at DESC);
+
+      CREATE TABLE IF NOT EXISTS rag_documents (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+        source_type TEXT NOT NULL,
+        source_id TEXT NOT NULL,
+        chunk_index INTEGER NOT NULL,
+        title TEXT,
+        content_enc TEXT NOT NULL,
+        search_terms JSONB NOT NULL DEFAULT '[]'::jsonb,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        content_digest TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE(workspace_id, source_id, chunk_index)
+      );
+      CREATE INDEX IF NOT EXISTS rag_documents_scope_idx ON rag_documents(workspace_id, principal_id, source_type, source_id);
+      CREATE INDEX IF NOT EXISTS rag_documents_terms_idx ON rag_documents USING GIN(search_terms);
+
+      ALTER TABLE run_agents ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE run_agents FORCE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS run_agents_scope_policy ON run_agents;
+      CREATE POLICY run_agents_scope_policy ON run_agents USING (
+        EXISTS (SELECT 1 FROM runs r WHERE r.id = run_agents.run_id
+          AND r.workspace_id = current_setting('app.workspace_id', true)
+          AND (r.visibility = 'workspace' OR r.principal_id = current_setting('app.principal_id', true)))
+      ) WITH CHECK (
+        EXISTS (SELECT 1 FROM runs r WHERE r.id = run_agents.run_id
+          AND r.workspace_id = current_setting('app.workspace_id', true)
+          AND (r.visibility = 'workspace' OR r.principal_id = current_setting('app.principal_id', true)))
+      );
+
+      ALTER TABLE run_waves ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE run_waves FORCE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS run_waves_scope_policy ON run_waves;
+      CREATE POLICY run_waves_scope_policy ON run_waves USING (
+        EXISTS (SELECT 1 FROM runs r WHERE r.id = run_waves.run_id
+          AND r.workspace_id = current_setting('app.workspace_id', true)
+          AND (r.visibility = 'workspace' OR r.principal_id = current_setting('app.principal_id', true)))
+      ) WITH CHECK (
+        EXISTS (SELECT 1 FROM runs r WHERE r.id = run_waves.run_id
+          AND r.workspace_id = current_setting('app.workspace_id', true)
+          AND (r.visibility = 'workspace' OR r.principal_id = current_setting('app.principal_id', true)))
+      );
+
+      ALTER TABLE code_workspace_sessions ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE code_workspace_sessions FORCE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS code_workspace_sessions_scope_policy ON code_workspace_sessions;
+      CREATE POLICY code_workspace_sessions_scope_policy ON code_workspace_sessions USING (
+        code_workspace_sessions.workspace_id = current_setting('app.workspace_id', true)
+        AND code_workspace_sessions.principal_id = current_setting('app.principal_id', true)
+      ) WITH CHECK (
+        code_workspace_sessions.workspace_id = current_setting('app.workspace_id', true)
+        AND code_workspace_sessions.principal_id = current_setting('app.principal_id', true)
+      );
+
+      ALTER TABLE rag_documents ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE rag_documents FORCE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS rag_documents_scope_policy ON rag_documents;
+      CREATE POLICY rag_documents_scope_policy ON rag_documents USING (
+        rag_documents.workspace_id = current_setting('app.workspace_id', true)
+        AND rag_documents.principal_id = current_setting('app.principal_id', true)
+      ) WITH CHECK (
+        rag_documents.workspace_id = current_setting('app.workspace_id', true)
+        AND rag_documents.principal_id = current_setting('app.principal_id', true)
+      );
+
+      REVOKE ALL ON run_agents, run_waves, code_workspace_sessions, rag_documents FROM PUBLIC;
+    \`
+  }
 ];
