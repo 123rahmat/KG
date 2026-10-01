@@ -225,9 +225,9 @@ export function registerWorkspaceSourcesRoutes(app, {
       return res.status(400).json({ error: 'Explicit confirmation is required before repository writes.', code: 'write-confirmation-required' });
     }
     const { rows: [source] } = await pool.query(
-      \`SELECT * FROM workspace_sources
+      `SELECT * FROM workspace_sources
          WHERE id = $1 AND workspace_id = $2 AND principal_id = $3 AND revoked_at IS NULL
-       FOR UPDATE\`,
+       FOR UPDATE`,
       [text(req.params.id), req.scope.workspaceId, req.principal.id]
     );
     if (!source) return res.status(404).json({ error: 'Workspace source not found', code: 'no-source' });
