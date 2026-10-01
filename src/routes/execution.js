@@ -824,6 +824,34 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         externalExecution: Boolean(managedReceipt)
       });
 
+      if (rag && (task.type === 'investigate'
+        || task.type === 'plan'
+        || task.type === 'code'
+        || task.type === 'verify'
+        || task.type === 'step'
+        || run.adaptation?.scale === 'large-project')) {
+        const evidenceText = [
+          execution.text,
+          execution.structured ? JSON.stringify(execution.structured) : '',
+          execution.result && typeof execution.result === 'object' ? JSON.stringify(execution.result) : ''
+        ].filter(Boolean).join('\n').slice(0, 30000);
+        if (evidenceText.trim()) {
+          await rag.index(req.scope, {
+            sourceType: 'run-evidence',
+            sourceId: run.id + ':' + task.id + ':' + String(run.attempt),
+            title: task.metadata?.title || task.id,
+            text: evidenceText,
+            metadata: {
+              runId: run.id,
+              taskId: task.id,
+              attempt: run.attempt,
+              conversationId: run.conversationId ?? null,
+              source: 'verified-workflow-evidence'
+            }
+          }).catch(() => {});
+        }
+      }
+
       res.json({ run: advanced, execution });
     })();
     return res.reply ?? { status: 500, body: { error: 'Execution produced no response', code: 'internal' } };
