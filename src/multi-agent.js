@@ -377,6 +377,21 @@ export function agentMessages(role, basePayload) {
         workPlan: basePayload?.workPlan ?? null,
         previousAttempts: basePayload?.previousAttempts ?? [],
         evidenceSoFar: basePayload?.evidenceSoFar ?? [],
+        // Every workspace chat uses the same server-selected chat context as
+        // the primary model: local memory, recent turns and the current
+        // workspace state. Peer findings remain excluded to prevent herding.
+        remembered: Array.isArray(basePayload?.remembered)
+          ? basePayload.remembered.slice(-15).map(item => clip(String(item ?? ''), 600))
+          : [],
+        conversation: Array.isArray(basePayload?.conversation)
+          ? basePayload.conversation.slice(-6).map(turn => ({
+              user: clip(String(turn?.user ?? ''), 1600),
+              assistant: clip(String(turn?.assistant ?? ''), 1600)
+            }))
+          : [],
+        workspace: basePayload?.workspace ?? basePayload?.unifiedWorkContext?.workspace ?? null,
+        chat: basePayload?.chat ?? basePayload?.unifiedWorkContext?.chat ?? null,
+        attachments: Array.isArray(basePayload?.attachments) ? basePayload.attachments.slice(0, 12) : [],
         // Specialists are intentionally independent. The arbiter is the only
         // stage that receives peer findings, preventing herding/anchoring.
         advisoryFindings: []
@@ -405,6 +420,18 @@ function arbiterMessages(basePayload, findings) {
         situation: basePayload?.situation ?? null,
         successCriteria: basePayload?.situation?.successCriteria ?? [],
         evidenceSoFar: basePayload?.evidenceSoFar ?? [],
+        remembered: Array.isArray(basePayload?.remembered)
+          ? basePayload.remembered.slice(-15).map(item => clip(String(item ?? ''), 600))
+          : [],
+        conversation: Array.isArray(basePayload?.conversation)
+          ? basePayload.conversation.slice(-6).map(turn => ({
+              user: clip(String(turn?.user ?? ''), 1600),
+              assistant: clip(String(turn?.assistant ?? ''), 1600)
+            }))
+          : [],
+        workspace: basePayload?.workspace ?? basePayload?.unifiedWorkContext?.workspace ?? null,
+        chat: basePayload?.chat ?? basePayload?.unifiedWorkContext?.chat ?? null,
+        attachments: Array.isArray(basePayload?.attachments) ? basePayload.attachments.slice(0, 12) : [],
         findings: findings.map(item => ({ role: item.role, recommendation: item.recommendation, summary: item.summary, confidence: item.confidence, risks: item.risks, unknowns: item.unknowns, actions: item.actions, evidence: item.evidence, assumptions: item.assumptions }))
       })
     }
