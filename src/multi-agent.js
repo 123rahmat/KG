@@ -53,6 +53,22 @@ const ROLE_CATALOG = Object.freeze({
   diagnostician: {
     purpose: 'For failed, inconsistent, or retried work, separate symptoms from causes, compare competing hypotheses, and identify the next discriminating test or corrective change.',
     bestFor: ['build-code', 'prototype', 'respond', 'deliver', 'reassess', 'step', 'plan', 'investigate'],
+  }  },
+  debugger: {
+    purpose: 'Trace a software failure from observed symptoms to the smallest likely root cause, distinguish evidence from hypotheses, and propose the most discriminating repair or diagnostic check.',
+    bestFor: ['build-code', 'test-code', 'debug-code', 'code', 'prototype', 'reassess'],
+  },
+  'test-engineer': {
+    purpose: 'Design the smallest high-value regression and verification set for the affected code, identify missing cases and contracts, and prevent fixes that merely move the failure elsewhere.',
+    bestFor: ['build-code', 'test-code', 'verify-code', 'code', 'prototype', 'refactor-code'],
+  },
+  'security-reviewer': {
+    purpose: 'Review code changes for trust-boundary violations, authentication and authorization flaws, secret exposure, injection, unsafe data flow, and least-privilege failures. Require concrete evidence.',
+    bestFor: ['build-code', 'code', 'refactor-code', 'review-code', 'verify-code'],
+  },
+  'performance-reviewer': {
+    purpose: 'Look for measurable performance and resource risks in the affected code: hot paths, repeated work, database/network amplification, memory growth, concurrency hazards, and unnecessary computation.',
+    bestFor: ['build-code', 'code', 'refactor-code', 'review-code', 'prototype'],
   }
 });
 
@@ -104,6 +120,9 @@ function taskSignals(run, task, progress = {}) {
   const scale = text(adaptation.scale).toLowerCase();
   const goal = text(progress?.goal ?? run?.goal);
   const flags = goalFlags(goal);
+  const goalLower = goal.toLowerCase();
+  const securityFocus = /\b(?:security|secure|auth|authentication|authorization|permission|credential|secret|token|password|privacy|encrypt|encryption|payment|billing)\b/.test(goalLower);
+  const performanceFocus = /\b(?:performance|latency|slow|optimi[sz]|memory|cpu|throughput|scale|scaling|query|queries|cache|caching)\b/.test(goalLower);
   const retrying = Number(run?.attempt ?? 1) > 1 || Boolean(situation.failure || situation.error);
   const failedRoleCount = Array.isArray(progress?.failedRoles) ? progress.failedRoles.length : 0;
   const requirements = Array.isArray(task?.metadata?.requirementIds) ? task.metadata.requirementIds.length : 0;
@@ -173,7 +192,7 @@ function taskSignals(run, task, progress = {}) {
     ? Math.min(0.18, (flags.communication ? 0.08 : 0.04) + (outputs >= 1 ? 0.04 : 0) + (constraints >= 2 ? 0.04 : 0))
     : 0;
   return {
-    executable, investigative, communication, flags,
+    executable, investigative, communication, flags, securityFocus, performanceFocus,
     scaleComplexity, implementationComplexity, decomposition, unknowns,
     evidenceDiversity, evidenceGap, stakes, recovery, depth, taskCoordinationBonus,
     concurrencyOpportunity, comparisonComplexity, communicationComplexity,
@@ -269,7 +288,11 @@ function roleUtility(role, run, task, progress = {}) {
     communicator: signals.communication
       ? 0.38 + signals.communicationComplexity * 1.6 + (signals.flags.communication ? 0.12 : 0) + typeMatch
       : 0.06,
-    diagnostician: signals.retrying ? 0.82 + signals.recovery * 0.5 + signals.unknowns * 0.35 : 0.1
+    diagnostician: signals.retrying ? 0.82 + signals.recovery * 0.5 + signals.unknowns * 0.35 : 0.1,
+    debugger: signals.executable ? (signals.retrying ? 0.95 : 0.42) + signals.recovery * 0.4 : 0.05,
+    'test-engineer': signals.executable ? 0.48 + (signals.successCriteria > 0 ? 0.12 : 0) + (signals.retrying ? 0.16 : 0) : 0.07,
+    'security-reviewer': signals.securityFocus ? 0.92 + signals.stakes * 0.3 : (signals.executable ? 0.16 : 0.04),
+    'performance-reviewer': signals.performanceFocus ? 0.88 + signals.scaleComplexity * 0.4 : 0.05
   }[role] ?? 0;
   return Math.max(0, Math.min(1.2, base + disagreementBoost - resolutionPenalty - (completed.has(role) ? 1 : 0)));
 }
@@ -312,6 +335,8 @@ export function rolesFor(run, task, {
     pressure: Number(decision.pressure.toFixed(3)),
     dimensions: {
       executable: signals.executable,
+      securityFocus: signals.securityFocus,
+      performanceFocus: signals.performanceFocus,
       communication: signals.communication,
       complexity: Number((signals.scaleComplexity + signals.implementationComplexity).toFixed(3)),
       uncertainty: Number((signals.unknowns + signals.evidenceDiversity).toFixed(3)),
