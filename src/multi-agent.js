@@ -626,7 +626,17 @@ export async function runAdaptiveAgentPanel({
   let lastAllocation = allocationResult.allocation;
   let allocationRounds = 0;
   let blackboard = await loadBlackboard({ run, task });
-  let effectiveMaxParallel = Math.max(1, Math.min(maxAgents, Number(allocationResult.decision.maxParallel) || 1));
+  let tokensSpent = 0;
+  const remainingBudgetRatio = () => run?.maxTokens === null || run?.maxTokens === undefined
+    ? 1
+    : Math.max(0, Math.min(1, (Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent) / Math.max(1, Number(run.maxTokens))));
+  const budgetParallelLimit = () => run?.maxTokens === null || run?.maxTokens === undefined
+    ? maxAgents
+    : Math.max(1, Math.min(maxAgents, Math.floor(Math.max(1, Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent) / (AGENT_MAX_OUTPUT_TOKENS * 2))));
+  let effectiveMaxParallel = Math.max(
+    1,
+    Math.min(maxAgents, Number(allocationResult.decision.maxParallel) || 1, budgetParallelLimit())
+  );
 
   while (true) {
     allocationRounds += 1;
@@ -691,7 +701,10 @@ export async function runAdaptiveAgentPanel({
         json: true,
         maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS
       }).catch(() => null);
-      if (result?.usage) await recordUsage(result.usage, result.provider, result.model);
+      if (result?.usage) {
+        tokensSpent += Number(result.usage.inputTokens ?? 0) + Number(result.usage.outputTokens ?? 0);
+        await recordUsage(result.usage, result.provider, result.model);
+      }
       const parsed = result && !result.incomplete
         ? normalizedRoleFinding(parseJsonObject(result.text), job.role)
         : null;
@@ -739,7 +752,7 @@ export async function runAdaptiveAgentPanel({
       max: maxAgents,
       averageLatencyMs: avgLatencyMs,
       errorRate,
-      remainingBudgetRatio,
+      remainingBudgetRatio: remainingBudgetRatio(),
       risk: run?.situation?.risk ?? 'ordinary',
       benefit: Number(lastAllocation?.dimensions?.concurrencyOpportunity ?? 0)
     });
