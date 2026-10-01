@@ -244,16 +244,20 @@ export async function openChat(id) {
   if ($('tab-runs').hidden) selectTab('runs');
   await guard(async () => {
     const { runs } = await api('GET', `/api/conversations/${encodeURIComponent(id)}`);
+    const latestSource = runs.at(-1)?.adaptation?.attachments?.find(item => item?.sourceId)
+      ?? runs.at(-1)?.adaptation?.attachments?.find(item => item?.sourceKind);
     state.chat = {
       id,
       runs,
       pending: null,
-      workspaceSourceId: runs.at(-1)?.adaptation?.workspaceSourceId ?? null,
+      workspaceSourceId: runs.at(-1)?.adaptation?.workspaceSourceId ?? latestSource?.sourceId ?? null,
       consent: runs.some(run => run.adaptation?.privacy?.consent?.modelProvider === true)
     };
     if (state.chat.workspaceSourceId) {
       state.workspaceSourceId = state.chat.workspaceSourceId;
-      state.workspaceSource = null;
+      state.workspaceSource = latestSource
+        ? { id: state.chat.workspaceSourceId, kind: latestSource.sourceKind ?? 'github', name: latestSource.sourceName ?? latestSource.name }
+        : null;
     }
     for (const run of runs) if (state.chat.consent) state.consented.add(run.id);
     state.run = runs.at(-1) ?? null;
