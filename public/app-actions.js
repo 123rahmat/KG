@@ -634,6 +634,115 @@ function brainstormCard(run) {
 }
 
 
+export function assistantMessage(run, active) {
+  const parts = [];
+  const text = resultText(run);
+  const driving = state.driving === run.id;
+  if (run.workflow !== 'direct' || !text) {
+    const done = run.tasks.filter(task => task.status === 'complete' || task.status === 'skipped').length;
+    const heading = TERMINAL_STATES.includes(run.state)
+      ? 'Worked through ' + done + ' created step' + (done === 1 ? '' : 's')
+      : run.tasks.length + ' step' + (run.tasks.length === 1 ? '' : 's') + ' created · ' + done + ' done · next adapts from evidence';
+    parts.push(section(run, 'steps', {
+      className: 'plan', open: false, label: `${heading}. Show or hide the steps`,
+      summary: element('span', { class: 'small', text: heading })
+    }, stepsList(run)));
+  }
+  // The plan, told before the work: what is brought in and why, what is
+  // left out and why. Shown openly until the result arrives, then kept in
+  // the details under the steps.
+  const requirements = requirementsCard(run);
+  if (requirements) parts.push(requirements);
+  const brainstorm = brainstormCard(run);
+  if (brainstorm) parts.push(brainstorm);
+  const showBrief = run.brief && !text && !TERMINAL_STATES.includes(run.state);
+  const brief = run.brief ? planBriefCard(run.brief, showBrief ? run : null) : null;
+  if (brief) {
+    const plan = parts.find(part => part?.classList?.contains('plan'));
+    if (showBrief) parts.splice(plan ? parts.indexOf(plan) + 1 : parts.length, 0, brief);
+    else if (plan) plan.append(brief);
+  }
+  // A capability the situation needs but nothing here provides.
+  const investment = (run.adaptation?.adaptiveSnapshot?.resourcePlan ?? run.adaptation?.resourcePlan)?.implementation?.investment;
+  if (investment?.decision === 'user-choice-required' && investment.capabilities?.length) {
+    const plan = parts.find(part => part?.classList?.contains('plan'));
+    const holder = plan ?? section(run, 'situation', { className: 'plan', open: false, label: 'Situation details', summary: element('span', { class: 'small', text: 'Situation details' }) }, []);
+    if (!plan) parts.push(holder);
+    holder.append(element('div', { class: 'adaptive-scope-note small muted' }, [
+      element('strong', { text: 'Missing capability: ' }),
+      element('span', { text: investment.capabilities.join(', ') + '. No new capability is being built automatically.' })
+    ]));
+  }
+  // Governance shows in the details when it asks for something: extra care,
+  // a review, or a block. A plain "ready" stays out of the way.
+  const governance = run?.situationGovernance ?? run?.adaptation?.governance;
+  if (governance && governance.status !== 'ready' && !run.adaptation?.safetyAdaptive) {
+    const plan = parts.find(part => part?.classList?.contains('plan'));
+    const holder = plan ?? section(run, 'situation', { className: 'plan', open: false, label: 'Situation details', summary: element('span', { class: 'small', text: 'Situation details' }) }, []);
+    if (!plan) parts.push(holder);
+    const card = governanceCard(run);
+    if (card) holder.append(card);
+  }
+  const notHere = run.adaptation?.notAvailableHere ?? [];
+  if (notHere.length) {
+    parts.push(element('p', { class: 'limit-note', text: 'Running code is not set up here, so you will get the code and steps to run it yourself.' }));
+  }
+  parts.push(workStatusCard(run));
+  if (text) parts.push(answerBlock(text));
+  const trail = toolTrail(run, text);
+  if (trail) parts.push(trail);
+  const proposals = actionCards(run);
+  if (proposals) parts.push(proposals);
+  // Code written along the way is part of the answer, not a hidden step.
+  const code = [...run.tasks].reverse().find(task => task.id === 'build-code' && hasCode(task.evidence?.structured));
+  let actionText = text;
+  if (code) {
+    const codeText = codeMarkdown(code.evidence.structured);
+    if (codeText !== text) {
+      parts.push(answerBlock(codeText));
+      actionText ||= codeText;
+    }
+    const applyCard = workspaceApplyCard(run, code.evidence.structured);
+    if (applyCard) parts.push(applyCard);
+  }
+  if (actionText) parts.push(answerActions(run, actionText));
+  if (driving) {
+    parts.push(element('div', { class: 'thinking' }, [
+      element('span', { class: 'pulse' }),
+      element('span', { text: `${state.drivingLabel || 'Working'}…` })
+    ]));
+  } else if (run.state === 'complete') {
+    if (!text) parts.push(element('p', { class: 'muted small', text: 'Finished.' }));
+  } else if (TERMINAL_STATES.includes(run.state)) {
+    const [status] = runStatus(run);
+    parts.push(element('p', { class: 'muted small', text: run.state === 'blocked'
+      ? `Not allowed by your organisation’s policy: ${run.capabilities.blocked.join(', ')}.`
+      : `${status}.` }));
+  } else if (active) {
+    if (isAutomatic(run)) {
+      parts.push(button('Continue', () => autoDrive(run), 'primary'));
+    } else {
+      const card = renderNextStep(run);
+      if (card) parts.push(card);
+    }
+    if (canEdit()) {
+      parts.push(element('div', { class: 'row msg-actions' }, [
+        button('Stop this', () => { if (confirm('Stop this work? This cannot be undone.')) stopRun('stopped by user'); }, 'ghost small danger-text')
+      ]));
+    }
+  } else {
+    const delivered = run.state === 'iterate' && !run.tasks.some(task => task.status === 'failed');
+    parts.push(element('div', { class: 'row wrap' }, [
+      element('span', { class: 'muted small', text: delivered ? 'Result delivered.' : 'Left unfinished.' }),
+      button('Resume', () => { state.run = run; renderThread(); }, 'small')
+    ]));
+  }
+  return element('div', { class: 'msg assistant' }, [
+    svgIcon('logo', 'avatar'),
+    element('div', { class: 'bubble stack' }, parts)
+  ]);
+}
+
 
 // Everyday suggestions. `needs` names what must be connected for it to work.
 const SUGGESTIONS = [
