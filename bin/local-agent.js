@@ -535,12 +535,18 @@ const server = createServer(async (req, res) => {
     if (req.url === '/v1/execute' && req.method === 'POST') {
       if (!authorizedOrigin(req)) return json(res, 403, { error: 'Origin not allowed' });
       const body = await readBody(req);
-      const result = await execute(body);
+      const executionId = text(body.executionId) || executionIdFor({
+        runId: safeRunId(body.runId),
+        taskId: safeTaskId(body.taskId),
+        attempt: Number(body.attempt),
+        executionTarget: 'local'
+      });
+      const result = await execute({ ...body, executionId });
       const receipt = {
         ...result,
         executionTarget: 'local',
         attempt: Number(body.attempt),
-        executionId: text(body.executionId),
+        executionId,
         challengeNonce: text(body.executionChallenge?.nonce),
         payloadDigest: executionPayloadDigest(body?.payload ?? {}),
         origin,
