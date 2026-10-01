@@ -1183,6 +1183,15 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       situation: brief,
       // What this person told Kindgleam in earlier chats.
       remembered: remembered.slice(-maxContextItems).map(item => item.content),
+      // Every code-workspace chat carries its explicit, server-owned chat
+      // identity so the primary model and every advisory agent share the
+      // same memory scope and adaptive panel policy.
+      chat: run.adaptation?.unifiedWorkContext?.chat ?? {
+        conversationId: run.conversationId ?? null,
+        memory: { scope: run.conversationId ? 'conversation' : 'unavailable', alwaysOn: Boolean(run.conversationId), crossChat: 'user-controlled' },
+        multiAgent: { mode: config.agents?.multiAgent ?? 'auto', maxAgents: config.agents?.maxAgents ?? 5, adaptive: true, serverOrchestrated: true, advisoryOnly: true }
+      },
+      workspace: run.adaptation?.unifiedWorkContext?.workspace ?? null,
       // Earlier turns of the same chat, oldest first.
       conversation: (run.adaptation?.conversation ?? []).slice(-maxContextItems),
       attachments: attached.files,
