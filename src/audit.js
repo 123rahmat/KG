@@ -35,7 +35,7 @@ export class Audit {
       await client.query(
         `INSERT INTO audit_log
           (principal_id, workspace_id, action, target, outcome, detail, detail_enc, detail_encryption_version, request_id, ip)
-         VALUES ($1, $2, $3, $4, $5, '{}'::jsonb, $6, 1, $7, $8)`,
+         VALUES ($1, $2, $3, $4, $5, NULL, $6, 1, $7, $8)`,
         [
           row.principalId, row.workspaceId, row.action, row.target, row.outcome,
           encryptJson(this.encryptionKey, 'audit-detail-v1', row.detail),
