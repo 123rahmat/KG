@@ -156,3 +156,63 @@ test('custom skill descriptors use the same contract validation', () => {
   const custom = { name: 'example', description: 'A test skill', version: '1', taskTypes: ['respond'], requiresSkills: [], evidence: ['answer'], phases: ['execute'], costClass: 'light' };
   assert.equal(validateSkillDescriptor(custom, { registry: builtinSkillDescriptors().concat(custom) }).valid, true);
 });
+
+test('skill registry rejects dependency cycles instead of silently dropping prerequisites', () => {
+  const a = { name: 'alpha', description: 'A', version: '1', taskTypes: ['demo'], requiresSkills: ['beta'], phases: ['execute'], evidence: ['a'], costClass: 'light' };
+  const b = { name: 'beta', description: 'B', version: '1', taskTypes: ['demo'], requiresSkills: ['alpha'], phases: ['execute'], evidence: ['b'], costClass: 'light' };
+  const result = evaluateSkillRegistry([a, b]);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some(error => error.startsWith('dependency-cycle:')));
+});
+
+test('skill composition never keeps a parent when a required dependency misses the budget', () => {
+  const testing = builtinSkillDescriptors().find(skill => skill.name === 'testing');
+  const security = builtinSkillDescriptors().find(skill => skill.name === 'security-review');
+  const deployment = builtinSkillDescriptors().find(skill => skill.name === 'deployment');
+  const plan = composeSkillPlan([deployment, security, testing], { taskType: 'deploy', maxSkills: 8, maxCost: 1 });
+  assert.equal(plan.skills.length, 1);
+  assert.equal(plan.skills[0].name, 'testing');
+  assert.ok(plan.skipped.some(item => item.name === 'security-review'));
+  assert.ok(plan.skipped.some(item => item.name === 'deployment' && item.reason === 'required-dependency-unavailable'));
+});
+
+test('unified recovery remains bounded and records a machine-readable lesson', async () => {
+  const { classifyRecoveryFailure, decideRecovery, recoveryLesson } = await import('../src/adaptive-runtime-state.js');
+  assert.equal(classifyRecoveryFailure('provider timeout'), 'timeout');
+  const decision = decideRecovery({ taskType: 'code', reason: 'test assertion failed', attempt: 1, maxAttempts: 3, repairAvailable: true });
+  assert.equal(decision.action, 'repair');
+  assert.deepEqual(recoveryLesson(decision, { taskId: 'test-code', summary: 'one regression failed' }), {
+    version: 1,
+    taskId: 'test-code',
+    action: 'repair',
+    failureClass: 'tests',
+    reason: 'targeted-code-repair-available',
+    summary: 'one regression failed'
+  });
+  assert.equal(decideRecovery({ reason: 'security finding', attempt: 1, maxAttempts: 3 }).action, 'escalate');
+  assert.equal(decideRecovery({ reason: 'anything', attempt: 3, maxAttempts: 3 }).action, 'stop');
+});
+
+test('evaluation summary exposes quality and efficiency metrics', async () => {
+  const { summarizeEval, compareEvalReports, regressionGate } = await import('../src/evals.js');
+  const baseline = { results: [
+    { id: 'a', pass: true, elapsedMs: 100, tokens: 100, tags: ['code'] },
+    { id: 'b', pass: true, elapsedMs: 200, tokens: 200, tags: ['research'] }
+  ] };
+  const candidate = { results: [
+    { id: 'a', pass: true, elapsedMs: 120, tokens: 110, tags: ['code'] },
+    { id: 'b', pass: false, elapsedMs: 250, tokens: 240, tags: ['research'] }
+  ] };
+  const summary = summarizeEval(candidate);
+  assert.equal(summary.failed, 1);
+  assert.equal(summary.total, 2);
+  const comparison = compareEvalReports(candidate, baseline);
+  assert.equal(comparison.passRateDelta, -0.5);
+  assert.ok(comparison.averageTokensDelta > 0);
+  const gate = regressionGate({
+    ...candidate,
+    baselinePassRate: 1,
+    baselineAverageTokens: summarizeEval(baseline).averageTokens
+  }, { minPassRate: 0.5, maxFailed: 1, maxPassRateDrop: 0.4 });
+  assert.equal(gate.pass, false);
+});
