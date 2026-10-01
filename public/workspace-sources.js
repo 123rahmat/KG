@@ -9,6 +9,36 @@ const MAX_FILES = 250;
 const MAX_FILE_BYTES = 256 * 1024;
 const MAX_TOTAL_BYTES = 4 * 1024 * 1024;
 
+async function contentDigest(content) {
+  const bytes = new TextEncoder().encode(content);
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function sourceManifest(files) {
+  const entries = [];
+  for (const file of files) entries.push({ path: file.path, bytes: new TextEncoder().encode(file.content).byteLength, digest: await contentDigest(file.content) });
+  const basis = entries.slice().sort((a, b) => a.path.localeCompare(b.path)).map(item => item.path + '\0' + item.digest + '\0').join('');
+  return {
+    contentHash: await contentDigest(basis),
+    fileCount: entries.length,
+    files: entries.sort((a, b) => a.path.localeCompare(b.path))
+  };
+}
+
+function sourceDelta(previousManifest, nextFiles, nextManifest) {
+  const previous = new Map((previousManifest?.files ?? []).map(item => [item.path, item]));
+  const changed = [];
+  for (const file of nextFiles) {
+    const old = previous.get(file.path);
+    const current = nextManifest.files.find(item => item.path === file.path);
+    if (!old || old.digest !== current.digest) changed.push(file);
+  }
+  const currentPaths = new Set(nextFiles.map(file => file.path));
+  const deletedPaths = [...previous.keys()].filter(path => !currentPaths.has(path));
+  return { changedFiles: changed, deletedPaths, manifest: nextManifest };
+}
+
 async function readDirectory(handle, prefix = '', files = [], totals = { bytes: 0 }) {
   for await (const [name, entry] of handle.entries()) {
     if (EXCLUDED.has(name)) continue;
@@ -108,7 +138,13 @@ export async function syncLocalFolder() {
   const sourceId = state.chat?.workspaceSourceId ?? state.workspaceSourceId;
   if (!localDirectory || !sourceId) return null;
   const files = await folderFiles();
-  const result = await api('POST', `/api/workspace/sources/local/${encodeURIComponent(sourceId)}/sync`, { files });
+  const nextManifest = await sourceManifest(files);
+  const delta = sourceDelta(state.workspaceSource?.metadata?.manifest ? { files: state.workspaceSource.metadata.manifest } : null, files, nextManifest);
+  const result = await api('POST', `/api/workspace/sources/local/${encodeURIComponent(sourceId)}/sync`, {
+    manifest: nextManifest,
+    changedFiles: delta.changedFiles,
+    deletedPaths: delta.deletedPaths
+  });
   state.workspaceSource = result.source;
   return result;
 }
