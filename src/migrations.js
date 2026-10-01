@@ -1911,5 +1911,37 @@ export const MIGRATIONS = [
         );
       REVOKE ALL ON adaptive_cache FROM PUBLIC;
     `
+  }  ,{
+    version: 46,
+    name: 'run-outcome-feedback',
+    sql: `
+      CREATE TABLE IF NOT EXISTS run_feedback (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+        rating TEXT NOT NULL CHECK (rating IN ('positive', 'negative')),
+        reason TEXT NOT NULL CHECK (reason IN ('correct','incorrect','incomplete','unsafe','too-slow','too-expensive','other')),
+        note_enc TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE(run_id, principal_id)
+      );
+      CREATE INDEX IF NOT EXISTS run_feedback_scope_idx ON run_feedback(workspace_id, principal_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS run_feedback_run_idx ON run_feedback(run_id, created_at DESC);
+      ALTER TABLE run_feedback ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE run_feedback FORCE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS run_feedback_scope_policy ON run_feedback;
+      CREATE POLICY run_feedback_scope_policy ON run_feedback
+        USING (
+          run_feedback.workspace_id = current_setting('app.workspace_id', true)
+          AND run_feedback.principal_id = current_setting('app.principal_id', true)
+        )
+        WITH CHECK (
+          run_feedback.workspace_id = current_setting('app.workspace_id', true)
+          AND run_feedback.principal_id = current_setting('app.principal_id', true)
+        );
+      REVOKE ALL ON run_feedback FROM PUBLIC;
+    `
   }
 ];
