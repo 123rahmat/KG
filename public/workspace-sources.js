@@ -94,13 +94,84 @@ export async function syncLocalFolder() {
   return result;
 }
 
+export async function loadGithubRepositories() {
+  const token = $('githubToken')?.value.trim();
+  const status = $('githubLoadStatus');
+  const repository = $('githubRepository');
+  const branch = $('githubBranch');
+  if (!token) {
+    notify('projectSourcesNotice', 'warn', 'Enter your GitHub access token first.');
+    return [];
+  }
+  try {
+    if (status) status.textContent = 'Loading repositories…';
+    const result = await api('POST', '/api/workspace/sources/github/repositories', { token });
+    const repos = Array.isArray(result.repositories) ? result.repositories : [];
+    repository.replaceChildren(
+      Object.assign(document.createElement('option'), { value: '', textContent: repos.length ? 'Choose repository' : 'No repositories available' }),
+      ...repos.map(repo => Object.assign(document.createElement('option'), {
+        value: repo.fullName,
+        textContent: `${repo.fullName}${repo.private ? ' · private' : ''}`,
+        dataset: { owner: repo.owner, name: repo.name, defaultBranch: repo.defaultBranch }
+      }))
+    );
+    repository.disabled = repos.length === 0;
+    if (status) status.textContent = repos.length ? `${repos.length} repositories found` : 'No accessible repositories found';
+    branch.replaceChildren(Object.assign(document.createElement('option'), { value: '', textContent: 'Choose repository first' }));
+    branch.disabled = true;
+    const connect = $('connectGithub');
+    if (connect) connect.disabled = true;
+    return repos;
+  } catch (error) {
+    if (status) status.textContent = '';
+    notify('projectSourcesNotice', 'warn', error.message || 'GitHub repositories could not be loaded.');
+    return [];
+  }
+}
+
+export async function loadGithubBranches() {
+  const token = $('githubToken')?.value.trim();
+  const selected = $('githubRepository')?.selectedOptions?.[0];
+  const branch = $('githubBranch');
+  const connect = $('connectGithub');
+  if (!token || !selected?.dataset?.owner || !selected?.dataset?.name) {
+    branch.replaceChildren(Object.assign(document.createElement('option'), { value: '', textContent: 'Select a repository first' }));
+    branch.disabled = true;
+    if (connect) connect.disabled = true;
+    return;
+  }
+  try {
+    const result = await api('POST', '/api/workspace/sources/github/branches', {
+      token,
+      owner: selected.dataset.owner,
+      repo: selected.dataset.name
+    });
+    const branches = Array.isArray(result.branches) ? result.branches : [];
+    branch.replaceChildren(
+      Object.assign(document.createElement('option'), { value: '', textContent: branches.length ? 'Choose branch or tag' : 'No branches found' }),
+      ...branches.map(item => Object.assign(document.createElement('option'), {
+        value: item.name,
+        textContent: `${item.name}${item.protected ? ' · protected' : ''}`
+      }))
+    );
+    branch.disabled = branches.length === 0;
+    if (selected.dataset.defaultBranch && branches.some(item => item.name === selected.dataset.defaultBranch)) {
+      branch.value = selected.dataset.defaultBranch;
+    }
+    if (connect) connect.disabled = !(branch.value && selected.dataset.name);
+  } catch (error) {
+    notify('projectSourcesNotice', 'warn', error.message || 'GitHub branches could not be loaded.');
+  }
+}
+
 export async function connectGitHub() {
   const token = $('githubToken')?.value.trim();
-  const owner = $('githubOwner')?.value.trim();
-  const repo = $('githubRepo')?.value.trim();
-  const ref = $('githubRef')?.value.trim() || '';
-  if (!token || !owner || !repo) {
-    notify('projectSourcesNotice', 'warn', 'Enter the GitHub credential, owner, and repository.');
+  const selected = $('githubRepository')?.selectedOptions?.[0];
+  const ref = $('githubBranch')?.value.trim() || '';
+  const owner = selected?.dataset?.owner || '';
+  const repo = selected?.dataset?.name || '';
+  if (!token || !owner || !repo || !ref) {
+    notify('projectSourcesNotice', 'warn', 'Choose a GitHub repository and branch first.');
     return null;
   }
   try {
@@ -119,7 +190,8 @@ export async function connectGitHub() {
     if ($('githubToken')) $('githubToken').value = '';
     updateSourceUI();
     renderPanelState();
-    notify('projectSourcesNotice', 'info', `Connected GitHub repository ${owner}/${repo} · ${result.manifest.fileCount} files`);
+    $('projectSourcesDialog')?.close();
+    notify('runNotice', 'info', `Connected GitHub repository ${owner}/${repo} · ${ref}`);
     return result.source;
   } catch (error) {
     notify('projectSourcesNotice', 'warn', error.message || 'GitHub could not be connected.');
@@ -151,9 +223,33 @@ export async function initWorkspaceSources() {
   const github = $('connectGithub');
   const localSync = $('syncLocalFolderFromPanel');
   const sync = $('syncWorkspaceSource');
+  const tabLocal = $('sourceTabLocal');
+  const tabGithub = $('sourceTabGithub');
+  const localPanel = $('sourcePanelLocal');
+  const githubPanel = $('sourcePanelGithub');
+  const repoButton = $('loadGithubRepositories');
+  const repoSelect = $('githubRepository');
+  const branchSelect = $('githubBranch');
+  const selectSourceTab = tab => {
+    const localActive = tab === 'local';
+    tabLocal?.classList.toggle('active', localActive);
+    tabGithub?.classList.toggle('active', !localActive);
+    tabLocal?.setAttribute('aria-selected', String(localActive));
+    tabGithub?.setAttribute('aria-selected', String(!localActive));
+    if (localPanel) { localPanel.hidden = !localActive; localPanel.classList.toggle('active', localActive); }
+    if (githubPanel) { githubPanel.hidden = localActive; githubPanel.classList.toggle('active', !localActive); }
+  };
   open?.addEventListener('click', () => dialog?.showModal());
   close?.addEventListener('click', () => dialog?.close());
+  tabLocal?.addEventListener('click', () => selectSourceTab('local'));
+  tabGithub?.addEventListener('click', () => selectSourceTab('github'));
   local?.addEventListener('click', () => openLocalFolder());
+  repoButton?.addEventListener('click', () => loadGithubRepositories());
+  repoSelect?.addEventListener('change', () => loadGithubBranches());
+  branchSelect?.addEventListener('change', () => {
+    const connect = $('connectGithub');
+    if (connect) connect.disabled = !branchSelect.value;
+  });
   github?.addEventListener('click', () => connectGitHub());
   localSync?.addEventListener('click', async () => {
     try {
