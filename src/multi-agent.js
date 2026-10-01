@@ -432,6 +432,10 @@ export function agentMessages(role, basePayload) {
         workPlan: basePayload?.workPlan ?? null,
         previousAttempts: basePayload?.previousAttempts ?? [],
         evidenceSoFar: basePayload?.evidenceSoFar ?? [],
+        skills: Array.isArray(basePayload?.skills) ? basePayload.skills.slice(0, 6).map(skill => ({
+          name: skill.name, version: skill.version, description: skill.description,
+          instructions: String(skill.instructions ?? '').slice(0, 5000), fingerprint: skill.fingerprint ?? null
+        })) : [],
         blackboard: basePayload?.blackboard ?? null,
         // Every workspace chat uses the same server-selected chat context as
         // the primary model: local memory, recent turns and the current
