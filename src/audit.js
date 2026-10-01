@@ -51,7 +51,7 @@ export class Audit {
       const id = Number(sequence.id);
       const at = sequence.at;
       const { rows: [previous] } = await db.query(
-        'SELECT entry_hash FROM audit_log WHERE workspace_id IS NOT DISTINCT FROM $1 ORDER BY id DESC LIMIT 1 FOR SHARE',
+        'SELECT kg_audit_previous_hash($1) AS entry_hash',
         [row.workspaceId]
       );
       const prevHash = previous?.entry_hash ?? null;
