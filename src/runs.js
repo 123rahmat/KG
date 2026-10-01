@@ -1200,10 +1200,15 @@ export class RunStore {
         humanReviewRequired: run.adaptation?.verification?.humanReviewRequired === true,
         repairAvailable: target.type === 'code'
       });
-      adaptiveUpdate.recovery = recoveryLesson(recovery, {
+      const recoveryRecord = recoveryLesson(recovery, {
         taskId: target.id,
         summary: result?.summary
       });
+      adaptiveUpdate.recovery = recoveryRecord;
+      adaptiveUpdate.recoveryHistory = [
+        ...(Array.isArray(run.adaptation?.recoveryHistory) ? run.adaptation.recoveryHistory : []),
+        recoveryRecord
+      ].slice(-16);
 
       const { rows: existingIterate } = await client.query(
         "SELECT id FROM run_tasks WHERE run_id = $1 AND id = 'iterate'",
@@ -1906,6 +1911,9 @@ function lessonFrom(run, tasks, reason) {
     attempt: run.attempt,
     at: new Date().toISOString(),
     reason,
+    recovery: Array.isArray(run.adaptation?.recoveryHistory)
+      ? run.adaptation.recoveryHistory.slice(-6)
+      : [],
     failed: tasks.filter(item => item.status === 'failed').map(item => ({
       taskId: item.id,
       type: item.type,
