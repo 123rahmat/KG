@@ -5,7 +5,10 @@ import { isWorkspacePath, workspacePath } from '../src/workspace-path.js';
 
 test('one strict workspace-path rule protects workflow context and sandbox paths', () => {
   assert.equal(workspacePath('src/components/App.jsx'), 'src/components/App.jsx');
-  for (const unsafe of ['../secret', '/etc/passwd', 'src/../secret', 'src//file.js', '.env', 'src/.hidden/file.js', 'src/file.js ', '  src/file.js']) {
+  for (const safe of ['.env', 'src/.hidden/file.js', '.gitignore', '.github/workflows/ci.yml']) {
+    assert.equal(isWorkspacePath(safe), true, safe);
+  }
+  for (const unsafe of ['../secret', '/etc/passwd', 'src/../secret', 'src//file.js', 'src/./file.js', '.', '..', 'src/file.js ', '  src/file.js', 'src/secret\0.txt']) {
     assert.equal(isWorkspacePath(unsafe), false, unsafe);
   }
 });
