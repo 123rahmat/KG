@@ -51,7 +51,8 @@ export class Audit {
       const id = Number(sequence.id);
       const at = sequence.at;
       const { rows: [previous] } = await db.query(
-        'SELECT entry_hash FROM audit_log ORDER BY id DESC LIMIT 1 FOR SHARE'
+        'SELECT entry_hash FROM audit_log WHERE workspace_id IS NOT DISTINCT FROM $1 ORDER BY id DESC LIMIT 1 FOR SHARE',
+        [row.workspaceId]
       );
       const prevHash = previous?.entry_hash ?? null;
       const detailEnc = encryptJson(this.encryptionKey, 'audit-detail-v1', row.detail);
@@ -103,13 +104,16 @@ export class Audit {
     }));
   }
 
-  async verify({ limit = 1000 } = {}) {
+  async verify({ limit = 1000, workspaceId = null } = {}) {
     const cap = Math.min(Math.max(Number(limit) || 1000, 2), 5000);
+    const scope = workspaceId;
     const { rows } = await this.pool.query(
       `SELECT id, at, principal_id, workspace_id, action, target, outcome,
               detail_enc, detail_encryption_version, request_id, ip, prev_hash, entry_hash
-         FROM audit_log ORDER BY id DESC LIMIT $1`,
-      [cap + 1]
+         FROM audit_log
+        WHERE workspace_id IS NOT DISTINCT FROM $2
+        ORDER BY id DESC LIMIT $1`,
+      [cap + 1, scope]
     );
     const ordered = rows.reverse();
     if (!ordered.length) return { ok: true, checked: 0 };
