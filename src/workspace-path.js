@@ -1,12 +1,11 @@
 /**
- * One path boundary for every user/model supplied project path.
+ * One canonical boundary for workspace-relative paths.
  *
- * Paths are logical workspace-relative names, never host filesystem paths.
- * Keeping this rule shared by the workflow, project context and sandbox
- * prevents a permissive metadata path from later becoming an executable one.
+ * Dotfiles and dot-directories are legitimate project files (for example
+ * .gitignore and .github); traversal, absolute paths, control characters and
+ * ambiguous duplicate separators are not.
  */
-
-const PATH = /^(?![./ -])(?!.*\.\.)(?!.*\/[./ -])(?!.*[ /]$)[\p{L}\p{N}._/ +@-]{1,160}$/u;
+const PATH = /^(?=.{1,240}$)(?![\\/])(?!.*[\\/]{2})(?!.*[\u0000\r\n])(?!.*(?:^|\\/)\\.{1,2}(?:\\/|$))[\p{L}\p{N}._/ +@-]+$/u;
 
 export function workspacePath(value) {
   const raw = String(value ?? '');
