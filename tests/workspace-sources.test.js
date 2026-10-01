@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { githubApplyChanges, githubHeaders, githubListBranches, githubListRepositories, githubReadRepository, normalizeSourceFiles, sourceManifest } from '../src/workspace-sources.js';
+import { githubApplyChanges, githubHeaders, githubListBranches, githubListRepositories, githubReadRepository, normalizeSourceFiles, sourceManifest, workspaceReviewDigest } from '../src/workspace-sources.js';
 import { workspacePath } from '../src/workspace-path.js';
 
 test('workspace source files normalize safely and deterministically', () => {
@@ -211,6 +211,15 @@ test('GitHub write-back rejects ambiguous change sets', async () => {
     }),
     /only full-file upserts and deletes/
   );
+});
+
+test('workspace review digests are canonical and change when content changes', () => {
+  const source = { id: 'source-1', metadata: { contentHash: 'base' } };
+  const a = workspaceReviewDigest(source, [{ path: 'b.js', content: 'b', beforeDigest: '2'.repeat(64) }, { path: 'a.js', content: 'a', beforeDigest: '1'.repeat(64) }]);
+  const b = workspaceReviewDigest(source, [{ path: 'a.js', content: 'a', beforeDigest: '1'.repeat(64) }, { path: 'b.js', content: 'b', beforeDigest: '2'.repeat(64) }]);
+  const c = workspaceReviewDigest(source, [{ path: 'a.js', content: 'changed', beforeDigest: '1'.repeat(64) }, { path: 'b.js', content: 'b', beforeDigest: '2'.repeat(64) }]);
+  assert.equal(a, b);
+  assert.notEqual(a, c);
 });
 
 test('GitHub write-back builds one revision and rejects stale bases', async () => {

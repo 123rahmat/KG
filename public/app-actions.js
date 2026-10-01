@@ -81,14 +81,14 @@ function codeWorkspaceChanges(structured) {
   return changes;
 }
 
-async function applyCodeWorkspace(run, structured) {
+async function applyCodeWorkspace(run, structured, reviewDigest = null) {
   const sourceId = state.chat?.workspaceSourceId ?? state.workspaceSourceId;
   const source = state.workspaceSource;
   const changes = codeWorkspaceChanges(structured);
   if (!sourceId || !source || !changes.length) return;
   await guard(async () => {
     if (source.kind === 'local-folder') {
-      await applyLocalWorkspaceChanges(changes);
+      await applyLocalWorkspaceChanges(changes, { reviewDigest });
       return;
     }
     if (source.kind !== 'github') throw new Error('This project source cannot receive code changes.');
@@ -97,6 +97,7 @@ async function applyCodeWorkspace(run, structured) {
       confirm: 'APPLY_WORKSPACE_CHANGES',
       expectedCommitSha: source.metadata?.commitSha ?? '',
       changes,
+      reviewDigest,
       message: 'workspace: apply reviewed code changes'
     });
     state.workspaceSource = result.source;
@@ -165,12 +166,14 @@ function workspaceApplyCard(run, structured) {
   const confirmation = element('div', { class: 'workspace-apply-confirm stack small', hidden: true });
   const reviewHolder = element('div', { class: 'stack workspace-review-list', hidden: true });
   const reviewStatus = element('span', { class: 'muted small', 'aria-live': 'polite' });
+  let approvedReviewDigest = null;
   const review = button('Review changes', async event => {
     event.currentTarget.disabled = true;
     reviewStatus.textContent = 'Checking the current workspace revision…';
     try {
       const reviewed = await reviewCodeWorkspace(source, state.chat?.workspaceSourceId ?? state.workspaceSourceId, changes);
       renderWorkspaceReview(reviewHolder, reviewed);
+      approvedReviewDigest = reviewed.review.digest;
       reviewHolder.hidden = false;
       confirmation.hidden = false;
       apply.disabled = false;
@@ -185,7 +188,7 @@ function workspaceApplyCard(run, structured) {
 
   const apply = button('Apply now', async event => {
     event.currentTarget.disabled = true;
-    await applyCodeWorkspace(run, structured);
+    await applyCodeWorkspace(run, structured, approvedReviewDigest);
     holder.remove();
   }, 'primary small');
   apply.disabled = true;

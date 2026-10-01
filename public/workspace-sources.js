@@ -134,7 +134,7 @@ export async function openLocalFolder() {
   }
 }
 
-export async function syncLocalFolder() {
+export async function syncLocalFolder({ reviewDigest = null } = {})
   const sourceId = state.chat?.workspaceSourceId ?? state.workspaceSourceId;
   if (!localDirectory || !sourceId) return null;
   const files = await folderFiles();
@@ -144,7 +144,8 @@ export async function syncLocalFolder() {
     baseContentHash: state.workspaceSource?.metadata?.contentHash ?? null,
     manifest: nextManifest,
     changedFiles: delta.changedFiles,
-    deletedPaths: delta.deletedPaths
+    deletedPaths: delta.deletedPaths,
+    ...(reviewDigest ? { reviewDigest } : {})
   });
   state.workspaceSource = result.source;
   return result;
@@ -263,7 +264,7 @@ export async function connectGitHub() {
   }
 }
 
-export async function applyLocalWorkspaceChanges(changes = []) {
+export async function applyLocalWorkspaceChanges(changes = [], { reviewDigest = null } = {})
   if (!localDirectory) throw new Error('Choose the local project folder again before applying changes.');
   const ensurePermission = async () => {
     const permission = await localDirectory.queryPermission?.({ mode: 'readwrite' });
@@ -378,7 +379,7 @@ export async function applyLocalWorkspaceChanges(changes = []) {
     throw error;
   }
 
-  const result = await syncLocalFolder();
+  const result = await syncLocalFolder({ reviewDigest });
   notify('runNotice', 'info', result?.unchanged ? 'Local folder already contained these changes.' : 'Changes applied to the local project.');
   return result;
 }

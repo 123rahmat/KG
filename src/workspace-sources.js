@@ -61,6 +61,18 @@ export function normalizeSourceFiles(files = []) {
   return [...map].sort(([a], [b]) => a.localeCompare(b)).map(([path, content]) => ({ path, content }));
 }
 
+export function workspaceReviewDigest(source, changes = []) {
+  const revision = source?.metadata?.commitSha ?? source?.metadata?.contentHash ?? null;
+  const normalized = (Array.isArray(changes) ? changes : []).map(change => ({
+    path: safePath(change?.path),
+    kind: change?.kind === 'delete' || change?.delete === true ? 'delete' : 'upsert',
+    content: change?.kind === 'delete' || change?.delete === true ? null : String(change?.content ?? ''),
+    beforeDigest: text(change?.beforeDigest) || null
+  })).sort((a,b) => String(a.path).localeCompare(String(b.path)) || a.kind.localeCompare(b.kind));
+  const basis = JSON.stringify({ sourceId: text(source?.id), sourceRevision: text(revision), changes: normalized });
+  return crypto.createHash('sha256').update(basis, 'utf8').digest('hex');
+}
+
 export function sourceManifest(files = []) {
   const normalized = normalizeSourceFiles(files);
   const digest = crypto.createHash('sha256');

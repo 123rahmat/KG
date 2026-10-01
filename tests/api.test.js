@@ -343,6 +343,40 @@ test('coding workspace review is revision-bound and returns safe before/after pr
     assert.equal(stale.body.code, 'stale-local-source');
   }));
 
+test('local reviewed sync rejects a mismatched review digest', () =>
+  withServer(async ({ call, seed }) => {
+    const { token, workspace } = await seed();
+    const auth = { token, workspace };
+    const connected = await call('POST', '/api/workspace/sources/local', {
+      ...auth,
+      body: { name: 'digest-project', files: [{ path: 'src/app.js', content: 'one' }], write: true }
+    });
+    const source = connected.body.source;
+    const manifest = connected.body.manifest;
+    const reviewed = await call('POST', `/api/workspace/sources/${source.id}/review`, {
+      ...auth,
+      body: {
+        baseContentHash: manifest.contentHash,
+        changes: [{ path: 'src/app.js', content: 'two', beforeDigest: manifest.files[0].digest }]
+      }
+    });
+    assert.equal(reviewed.status, 200);
+    const stale = await call('POST', `/api/workspace/sources/local/${source.id}/sync`, {
+      ...auth,
+      body: {
+        baseContentHash: manifest.contentHash,
+        manifest: { contentHash: 'x', fileCount: 1, files: [] },
+        changedFiles: [{ path: 'src/app.js', content: 'three' }],
+        deletedPaths: [],
+        reviewDigest: reviewed.body.review.digest
+      }
+    });
+    assert.equal(stale.status, 409);
+    assert.equal(stale.body.code, 'review-stale');
+  }));
+
+
+
 test('local folder full-snapshot syncs require the current server revision', () =>
   withServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();

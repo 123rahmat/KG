@@ -10,7 +10,8 @@ import {
   githubApplyChanges,
   normalizeSourceFiles,
   sourceManifest,
-  sourcePublic
+  sourcePublic,
+  workspaceReviewDigest
 } from '../workspace-sources.js';
 import crypto from 'node:crypto';
 import { workspacePath } from '../workspace-path.js';
@@ -369,7 +370,7 @@ export function registerWorkspaceSourcesRoutes(app, {
       sourceRevision: source.metadata?.commitSha ?? source.metadata?.contentHash ?? null,
       changes: effective
     });
-    const reviewDigest = crypto.createHash('sha256').update(reviewBasis, 'utf8').digest('hex');
+    const reviewDigest = workspaceReviewDigest(source, effective);
 
     res.json({
       source: sourcePublic(source),
@@ -413,6 +414,14 @@ export function registerWorkspaceSourcesRoutes(app, {
     if (!token) return res.status(409).json({ error: 'GitHub credentials are unavailable. Reconnect the repository.', code: 'source-credentials-missing' });
     const baseFiles = await readSnapshotFiles(objects, req.scope, source.snapshot_object_id);
     const effective = effectiveGithubChanges(baseFiles, changes);
+    const reviewDigest = workspaceReviewDigest(source, effective);
+    if (text(req.body?.reviewDigest) !== reviewDigest) {
+      return res.status(409).json({
+        error: 'A fresh server review is required before these exact changes can be applied.',
+        code: 'review-required',
+        reviewDigest
+      });
+    }
     if (!effective.length) return res.json({ source: sourcePublic(source), unchanged: true, result: { unchanged: true, commitSha: storedCommitSha, ref: source.repo_ref, changedFiles: [] } });
     const result = await githubApplyChanges({
       fetchImpl, token,
