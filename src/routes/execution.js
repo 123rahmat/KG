@@ -37,6 +37,7 @@ import { buildUnifiedWorkContext } from '../unified-work-context.js';
 import { buildProjectIndex } from '../project-index.js';
 import { compileCodeContext, isCodeTask } from '../context-compiler.js';
 import { RagStore } from '../rag.js';
+import { loadSelectedSkills } from '../skills.js';
 import { BlackboardStore } from '../blackboard.js';
 
 /** Which tasks execute where. Everything else needs a human decision. */
@@ -1236,6 +1237,13 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     // on criteria it never saw.
     const brief = situationBrief(run);
     if (task.type === 'verify') brief.successCriteria = plannedCriteriaFor(run);
+    const selectedSkills = await loadSelectedSkills(run.goal, {
+      taskType: task.id === 'build-code' ? 'build-code' : task.type,
+      intent: run.intent?.kind,
+      capabilities: run.capabilities?.granted ?? [],
+      limit: 6,
+      maxInstructionChars: 5000
+    });
     // The server's stand-in criterion is for the check only: shown to the
     // step that answers, it padded short answers with "evidence" sections.
     else if (Array.isArray(brief.successCriteria)) brief.successCriteria = brief.successCriteria.filter(item => item !== GENERIC_CRITERION);
@@ -1249,6 +1257,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       // Every code-workspace chat carries its explicit, server-owned chat
       // identity so the primary model and every advisory agent share the
       // same memory scope and adaptive panel policy.
+      skills: selectedSkills.map(skill => ({ name: skill.name, version: skill.version, description: skill.description, instructions: skill.instructions, fingerprint: skill.fingerprint, risk: skill.risk })),
       chat: run.adaptation?.unifiedWorkContext?.chat ?? {
         conversationId: run.conversationId ?? null,
         memory: { scope: run.conversationId ? 'conversation' : 'unavailable', alwaysOn: Boolean(run.conversationId), crossChat: 'user-controlled' },
