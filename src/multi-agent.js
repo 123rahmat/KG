@@ -319,6 +319,9 @@ export function rolesFor(run, task, {
   if (task?.id === 'build-code' && task?.metadata?.buildPlan !== true) {
     targetCount = Math.min(targetCount, 2);
   }
+  if (observedPanelSignals(progress).disagreement) {
+    targetCount = Math.max(targetCount, Math.min(maximum, 4));
+  }
   const candidates = roleCandidates(run, task, progress);
   const roles = [];
   const utilities = {};
