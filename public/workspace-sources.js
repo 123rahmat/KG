@@ -126,14 +126,19 @@ export async function loadGithubRepositories() {
     if (status) status.textContent = 'Loading repositories…';
     const result = await api('POST', '/api/workspace/sources/github/repositories', { token });
     const repos = Array.isArray(result.repositories) ? result.repositories : [];
-    repository.replaceChildren(
-      Object.assign(document.createElement('option'), { value: '', textContent: repos.length ? 'Choose repository' : 'No repositories available' }),
-      ...repos.map(repo => Object.assign(document.createElement('option'), {
-        value: repo.fullName,
-        textContent: `${repo.fullName}${repo.private ? ' · private' : ''}`,
-        dataset: { owner: repo.owner, name: repo.name, defaultBranch: repo.defaultBranch }
-      }))
-    );
+    const options = [Object.assign(document.createElement('option'), {
+      value: '', textContent: repos.length ? 'Choose repository' : 'No repositories available'
+    })];
+    for (const repo of repos) {
+      const option = document.createElement('option');
+      option.value = repo.fullName;
+      option.textContent = `${repo.fullName}${repo.private ? ' · private' : ''}`;
+      option.dataset.owner = repo.owner;
+      option.dataset.name = repo.name;
+      option.dataset.defaultBranch = repo.defaultBranch;
+      options.push(option);
+    }
+    repository.replaceChildren(...options);
     repository.disabled = repos.length === 0;
     if (status) status.textContent = repos.length ? `${repos.length} repositories found` : 'No accessible repositories found';
     branch.replaceChildren(Object.assign(document.createElement('option'), { value: '', textContent: 'Choose repository first' }));
