@@ -194,10 +194,10 @@ export function registerWorkspaceSourcesRoutes(app, {
     const repo = text(req.body?.repo);
     if (!token) return res.status(400).json({ error: 'A GitHub credential is required.', code: 'github-credential-required' });
     assertGitHubRepo(owner, repo);
-    const read = await githubReadRepository({ fetchImpl, token, owner, repo, ref: text(req.body?.ref) || null });
+    const read = await githubReadRepository({ fetchImpl, token, owner, repo, ref: text(req.body?.ref) || null, repoPath: text(req.body?.repoPath) || null });
     const manifest = sourceManifest(read.files);
     const object = await snapshotObject(objects, req.scope, req.principal, read.files, `${owner}-${repo}.workspace`, {
-      kind: 'github', owner, repo, ref: read.source.ref, contentHash: manifest.contentHash, fileCount: manifest.fileCount, ingestion: read.ingestion
+      kind: 'github', owner, repo, ref: read.source.ref, repoPath: read.source.repoPath, contentHash: manifest.contentHash, fileCount: manifest.fileCount, ingestion: read.ingestion
     });
     const sourceId = createSourceId();
     const { rows: [row] } = await pool.query(
@@ -211,7 +211,7 @@ export function registerWorkspaceSourcesRoutes(app, {
         `github:${owner}/${repo}`, owner, repo, read.source.ref, object.id,
         encryptSourceCredentials(encryptionKey, token),
         JSON.stringify({ read: true, write: req.body?.write === true }),
-        JSON.stringify({ url: read.source.url, private: read.source.private, commitSha: read.source.commitSha, treeSha: read.source.treeSha, contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files, ingestion: read.ingestion })
+        JSON.stringify({ url: read.source.url, private: read.source.private, commitSha: read.source.commitSha, treeSha: read.source.treeSha, repoPath: read.source.repoPath, contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files, ingestion: read.ingestion })
       ]
     );
     await audit?.record({
@@ -265,7 +265,7 @@ export function registerWorkspaceSourcesRoutes(app, {
     if (source.metadata?.commitSha && revision.sha === source.metadata.commitSha) {
       return res.json({ source: sourcePublic(source), unchanged: true, revision: revision.sha, manifest: { contentHash: source.metadata?.contentHash ?? null, fileCount: source.metadata?.fileCount ?? 0, files: source.metadata?.manifest ?? [] } });
     }
-    const read = await githubReadRepository({ fetchImpl, token, owner: source.repo_owner, repo: source.repo_name, ref: source.repo_ref });
+    const read = await githubReadRepository({ fetchImpl, token, owner: source.repo_owner, repo: source.repo_name, ref: source.repo_ref, repoPath: text(source.metadata?.repoPath) || null });
     const manifest = sourceManifest(read.files);
     if (source.metadata?.contentHash === manifest.contentHash) return res.json({ source: sourcePublic(source), unchanged: true, manifest });
     const object = await snapshotObject(objects, req.scope, req.principal, read.files, `${source.name}.workspace`, {
@@ -278,7 +278,7 @@ export function registerWorkspaceSourcesRoutes(app, {
         WHERE id = $1 AND workspace_id = $2 AND principal_id = $3 RETURNING *`,
       [
         source.id, req.scope.workspaceId, req.principal.id, object.id, read.source.ref,
-        JSON.stringify({ url: read.source.url, private: read.source.private, commitSha: read.source.commitSha, treeSha: read.source.treeSha, contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files, ingestion: read.ingestion, syncedAt: new Date().toISOString() })
+        JSON.stringify({ url: read.source.url, private: read.source.private, commitSha: read.source.commitSha, treeSha: read.source.treeSha, repoPath: read.source.repoPath, contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files, ingestion: read.ingestion, syncedAt: new Date().toISOString() })
       ]
     );
     res.json({ source: sourcePublic(updated), manifest, unchanged: false });
@@ -423,6 +423,7 @@ export function registerWorkspaceSourcesRoutes(app, {
       owner: source.repo_owner,
       repo: source.repo_name,
       ref: source.repo_ref,
+      repoPath: text(source.metadata?.repoPath) || null,
       expectedCommitSha: storedCommitSha,
       changes: effective,
       message: text(req.body?.message) || 'workspace: apply reviewed changes'
