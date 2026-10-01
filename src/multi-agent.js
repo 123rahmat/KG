@@ -724,28 +724,31 @@ export async function runAdaptiveAgentPanel({
       completed: results.filter(item => item.parsed).map(item => item.role),
       failed: results.filter(item => !item.parsed).map(item => item.role)
     };
-    waves.push(waveRecord);
-    await recordWave({ run, task, wave: waveRecord });
-    blackboard = mergeBlackboardForPanel(blackboard, results);
-    await recordBlackboard({ run, task, blackboard });
     const avgLatencyMs = results.length
       ? results.reduce((sum, item) => sum + Number(item.elapsedMs || 0), 0) / results.length
       : 0;
     const errorRate = results.length
       ? results.filter(item => !item.parsed).length / results.length
       : 1;
+    const remainingBudgetRatio = run?.maxTokens === null || run?.maxTokens === undefined
+      ? 1
+      : Math.max(0, Math.min(1, (Number(run.maxTokens) - Number(run.tokensUsed ?? 0)) / Math.max(1, Number(run.maxTokens))));
     const concurrency = adaptConcurrency({
       current: effectiveMaxParallel,
       min: 1,
       max: maxAgents,
       averageLatencyMs: avgLatencyMs,
       errorRate,
-      remainingBudgetRatio: 1,
+      remainingBudgetRatio,
       risk: run?.situation?.risk ?? 'ordinary',
       benefit: Number(lastAllocation?.dimensions?.concurrencyOpportunity ?? 0)
     });
     effectiveMaxParallel = concurrency.next;
     waveRecord.concurrency = concurrency;
+    waves.push(waveRecord);
+    await recordWave({ run, task, wave: waveRecord });
+    blackboard = mergeBlackboardForPanel(blackboard, results);
+    await recordBlackboard({ run, task, blackboard });
     await Promise.all(results.map(item => recordAgent({
       run,
       task,
