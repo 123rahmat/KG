@@ -348,7 +348,8 @@ async function runStep(button, extra = {}, targetRun = state.run) {
   state.busyRuns ??= new Set();
   if (state.busyRuns.has(run.id)) return run;
   state.busyRuns.add(run.id);
-  state.driving = run.id;
+  const visibleRun = !state.chat?.id || state.chat.id === run.conversationId;
+  if (visibleRun) state.driving = run.id;
   const original = button?.textContent;
   if (button) { button.disabled = true; button.textContent = 'Processing…'; }
   let updatedRun = run;
