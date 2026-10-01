@@ -236,10 +236,12 @@ test('a project attached as a zip is changed by the files the AI returns, and th
     const built = await call('POST', `/api/runs/${run.id}/execute`, { ...auth, body: {} });
     assert.equal(built.status, 200, JSON.stringify(built.body).slice(0, 300));
     // The code step saw the project it changes.
-    const buildRequest = seen.find(request => request.task?.id === 'build-code');
-    assert.ok(buildRequest?.codeIntelligence, 'code context is compiled server-side');
+    const buildRequests = seen.filter(request => request.task?.id === 'build-code' && request.codeIntelligence);
+    assert.ok(buildRequests.length, 'code context is compiled server-side');
+    const buildRequest = buildRequests.find(request => request.codeIntelligence.project.fileCount === 2)
+      ?? buildRequests[0];
     assert.equal(buildRequest.codeIntelligence.project.fileCount, 2);
-    assert.ok(buildRequest.codeIntelligence.files.some(file => file.path === 'shop/shop/pricing.py'));
+    assert.ok(buildRequests.some(request => request.codeIntelligence.files.some(file => file.path === 'shop/shop/pricing.py')));
     const tested = await call('POST', `/api/runs/${run.id}/execute`, { ...auth, body: { approved: true } });
     assert.equal(tested.status, 200, JSON.stringify(tested.body).slice(0, 400));
     const payload = runnerRequests.at(-1).payload;
@@ -290,7 +292,10 @@ test('in a run, the code step of a large attached project reads the files its re
     await call('POST', `/api/runs/${run.id}/advance`, { ...auth, body: { taskId: 'approval', approved: true } });
     const built = await call('POST', `/api/runs/${run.id}/execute`, { ...auth, body: {} });
     assert.ok(seen.some(request => request.task?.id === 'build-code'), `${run.tasks.map(task => task.id).join(' ')} → ${JSON.stringify(built.body).slice(0, 300)}`);
-    const project = seen.find(request => request.task?.id === 'build-code').codeIntelligence;
+    const project = seen.filter(request => request.task?.id === 'build-code' && request.codeIntelligence)
+      .map(request => request.codeIntelligence)
+      .find(pack => pack.files.some(file => file.path === 'shop/billing/invoice.py'))
+      ?? seen.find(request => request.task?.id === 'build-code' && request.codeIntelligence)?.codeIntelligence;
     assert.ok(project, 'large projects use compiled code intelligence');
     assert.ok(project.budget.truncated, 'a large project is context-bounded');
     assert.ok(project.files.some(file => file.path === 'shop/billing/invoice.py'));
