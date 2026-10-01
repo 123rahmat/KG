@@ -293,7 +293,11 @@ export function containerArgs(job, { phase, workdir, name, images = DEFAULT_IMAG
       : ['npm', 'install', '--ignore-scripts', '--no-audit', '--no-fund', '--no-save', '--prefix', '/work/.deps', ...job.packages])];
   }
   if (phase === 'check') return [...args, ...job.spec.checkCommand(job.checked)];
-  return [...args, ...(job.command ?? (job.tested ? job.spec.testCommand : job.spec.command))];
+  const command = job.command ?? (job.tested ? job.spec.testCommand : job.spec.command) ?? job.spec.run;
+  if (!Array.isArray(command) || !command.length) {
+    throw new SandboxError('Sandbox run command is not configured', 'sandbox-command');
+  }
+  return [...args, ...command];
 }
 
 /**
