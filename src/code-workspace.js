@@ -58,10 +58,6 @@ export const WORKSPACE_LIMITS = Object.freeze({
   maxContextBytes: 80_000
 });
 
-export function safeWorkspacePath(value) {
-  const path = text(value).replaceAll('\\', '/').replace(/^\.\//, '');
-  return PATH.test(path) ? path : null;
-}
 
 export function normalizeWorkspaceFiles(files = []) {
   const source = Array.isArray(files) ? files : Object.entries(files ?? {}).map(([path, content]) => ({ path, content }));
