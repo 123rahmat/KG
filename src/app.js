@@ -27,6 +27,8 @@ import { registerRunsRoutes } from './routes/runs.js';
 import { registerExecutionRoutes } from './routes/execution.js';
 import { registerObjectsRoutes } from './routes/objects.js';
 import { registerWorkspaceSourcesRoutes } from './routes/workspace-sources.js';
+import { registerCodeWorkspaceSessionRoutes } from './routes/code-workspace-sessions.js';
+import { registerRagRoutes } from './routes/rag.js';
 import { registerAccountRoutes } from './routes/account.js';
 import { registerSignInRoutes, registerMailAdminRoutes } from './routes/sign-in.js';
 import { Mailer } from './mailer.js';
@@ -356,6 +358,8 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
   app.locals.executeNext = registerExecutionRoutes(app, deps).executeNext;
   registerObjectsRoutes(app, deps);
   registerWorkspaceSourcesRoutes(app, { ...deps, pool, config });
+  registerCodeWorkspaceSessionRoutes(app, { pool, audit, route, scoped });
+  registerRagRoutes(app, { pool, config, audit, route, scoped });
 
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Unknown endpoint', code: 'no-route' }));
 
