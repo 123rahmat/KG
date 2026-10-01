@@ -120,6 +120,17 @@ function parseAiProviders(raw, errors, { vertexConfigured = false } = {}) {
   return [...new Map(out.map(item => [item.provider, item])).values()];
 }
 
+function parseJsonObject(raw, name, errors, fallback = {}) {
+  if (!text(raw)) return fallback;
+  try {
+    const value = JSON.parse(raw);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error();
+    return value;
+  } catch {
+    errors.push(name + ' must be a JSON object');
+    return fallback;
+  }
+}
 function stripePlans(raw, errors) {
   if (!text(raw)) return [];
   let parsed;
@@ -397,6 +408,24 @@ export function loadConfig(env = process.env) {
       toolToken: text(env.TOOL_RUNNER_TOKEN) || (production ? null : text(env.RUNNER_TOKEN) || null)
     },
 
+    terminal: {
+      enabled: boolean(env.TERMINAL_ENABLED, true),
+      runtime: text(env.TERMINAL_RUNTIME) || null,
+      maxSessionsPerPrincipal: integer(env.TERMINAL_MAX_SESSIONS_PER_PRINCIPAL, 2, { min: 1, max: 8, name: 'TERMINAL_MAX_SESSIONS_PER_PRINCIPAL', errors }),
+      maxSessionsPerWorkspace: integer(env.TERMINAL_MAX_SESSIONS_PER_WORKSPACE, 4, { min: 1, max: 16, name: 'TERMINAL_MAX_SESSIONS_PER_WORKSPACE', errors }),
+      idleMs: integer(env.TERMINAL_IDLE_MS, 10 * 60_000, { min: 60_000, max: 60 * 60_000, name: 'TERMINAL_IDLE_MS', errors }),
+      lifetimeMs: integer(env.TERMINAL_LIFETIME_MS, 30 * 60_000, { min: 5 * 60_000, max: 4 * 60 * 60_000, name: 'TERMINAL_LIFETIME_MS', errors }),
+      maxOutputBytes: integer(env.TERMINAL_MAX_OUTPUT_BYTES, 8 * 1024 * 1024, { min: 64 * 1024, max: 64 * 1024 * 1024, name: 'TERMINAL_MAX_OUTPUT_BYTES', errors }),
+      maxInputBytesPerSecond: integer(env.TERMINAL_MAX_INPUT_BYTES_PER_SECOND, 128 * 1024, { min: 8 * 1024, max: 4 * 1024 * 1024, name: 'TERMINAL_MAX_INPUT_BYTES_PER_SECOND', errors }),
+      images: parseJsonObject(env.TERMINAL_IMAGES_JSON, 'TERMINAL_IMAGES_JSON', errors, {
+        node: 'node:22-slim',
+        python: 'python:3.12-slim',
+        go: 'golang:1.23-alpine',
+        rust: 'rust:1-alpine',
+        java: 'eclipse-temurin:21-jdk-alpine',
+        gcc: 'gcc:14'
+      })
+    },
     execution: {
       // Browser-to-loopback/local-agent bridge. It is opt-in; no local service
       // is contacted unless this URL is explicitly configured by the deployment.
@@ -590,6 +619,18 @@ export function loadConfig(env = process.env) {
     errors.push('RATE_LIMIT_STORE must be postgres in production for multi-instance rate limiting');
   }
 
+  if (production && config.terminal.enabled) {
+    if (!config.terminal.runtime) errors.push('TERMINAL_RUNTIME must be configured in production');
+    else {
+      const runtimeName = config.terminal.runtime.split('/').pop();
+      if (!['runsc', 'kata-runtime'].includes(runtimeName)) errors.push('TERMINAL_RUNTIME must be runsc or kata-runtime in production');
+    }
+    for (const [name, image] of Object.entries(config.terminal.images ?? {})) {
+      if (!/^[^@\s]+@sha256:[0-9a-f]{64}$/i.test(String(image ?? '').trim())) {
+        errors.push('TERMINAL_IMAGES_JSON.' + name + ' must use an immutable @sha256 image reference in production');
+      }
+    }
+  }
   if (production && config.runners.sandbox && (!config.runners.sandboxToken || config.runners.sandboxToken.length < 32)) {
     errors.push('SANDBOX_RUNNER_TOKEN must be at least 32 characters in production when the sandbox runner is configured');
   }
