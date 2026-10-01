@@ -2127,5 +2127,27 @@ export const MIGRATIONS = [
         );
       REVOKE ALL ON evolution_proposals FROM PUBLIC;
     `
+  },
+  {
+    version: 51,
+    name: 'evolution-admin-update-policy',
+    sql: `
+      DROP POLICY IF EXISTS evolution_proposals_scope_policy ON evolution_proposals;
+      CREATE POLICY evolution_proposals_scope_policy ON evolution_proposals
+        USING (
+          evolution_proposals.workspace_id = current_setting('app.workspace_id', true)
+          AND (
+            evolution_proposals.principal_id = current_setting('app.principal_id', true)
+            OR current_setting('app.role', true) IN ('admin', 'service')
+          )
+        )
+        WITH CHECK (
+          evolution_proposals.workspace_id = current_setting('app.workspace_id', true)
+          AND (
+            evolution_proposals.principal_id = current_setting('app.principal_id', true)
+            OR current_setting('app.role', true) IN ('admin', 'service')
+          )
+        );
+    `
   }
 ];
