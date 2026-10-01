@@ -16,7 +16,9 @@ export function normalizeMcpServer(server = {}) {
     resources: Array.isArray(server.resources) ? server.resources.slice(0, 100) : [],
     prompts: Array.isArray(server.prompts) ? server.prompts.slice(0, 100) : [],
     transport: text(server.transport) || 'managed',
-    trust: 'untrusted-until-authorized' };
+    supportedFeatures: ['resources', 'prompts', 'tools', 'progress', 'cancellation'],
+    trust: 'untrusted-until-authorized',
+    authorization: 'server-gateway-required' };
 }
 
 export function normalizeA2AAgent(agent = {}) {
