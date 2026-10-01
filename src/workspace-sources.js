@@ -130,6 +130,7 @@ export async function githubReadRepository({
     token
   );
   const resolvedRef = text(ref) || text(root.default_branch) || 'main';
+  const revision = await githubResolveRevision({ fetchImpl, token, owner, repo, ref: resolvedRef });
   const tree = await githubJson(
     fetchImpl,
     `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodeURIComponent(resolvedRef)}?recursive=1`,
@@ -158,7 +159,7 @@ export async function githubReadRepository({
     if (files.length >= MAX_FILES) break;
   }
   return {
-    source: { owner, repo, ref: resolvedRef, defaultBranch: root.default_branch, private: root.private === true, url: root.html_url },
+    source: { owner, repo, ref: resolvedRef, defaultBranch: root.default_branch, private: root.private === true, url: root.html_url, commitSha: revision.sha, treeSha: revision.treeSha },
     files: normalizeSourceFiles(files)
   };
 }
