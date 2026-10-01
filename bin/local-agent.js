@@ -373,9 +373,14 @@ async function executeCode(body) {
   if (!runtime) return { executed: false, status: 'unsupported-language', supported: Object.keys(CODE_RUNTIMES) };
 
   const project = payload.project === true || (payload.files && typeof payload.files === 'object');
-  const executionId = safeTaskId(text(body.executionId));
   const runId = safeRunId(body.runId);
   const taskId = safeTaskId(body.taskId);
+  // Older local-agent clients did not send executionId. Derive the same
+  // stable identity the server signs so the challenge remains task/attempt
+  // bound without weakening replay protection.
+  const executionId = safeTaskId(text(body.executionId) || executionIdFor({
+    runId, taskId, attempt: Number(body.attempt), executionTarget: 'local'
+  }));
   const timeoutMs = Math.min(Math.max(Number(payload.timeoutMs) || TIMEOUT_MS, 1_000), TIMEOUT_MS);
   const files = await payloadFiles(payload, runtime);
 
