@@ -1,4 +1,4 @@
-import { state, $, notify } from './ui-core.js';
+import { state, $, api, notify } from './ui-core.js';
 import { applyLocalWorkspaceChanges } from './workspace-sources.js';
 
 let TerminalCtor = null;
@@ -92,23 +92,12 @@ async function applyCapturedChanges() {
     return;
   }
   try {
-    const result = await fetch('/api/workspace/sources/' + encodeURIComponent(source.id) + '/apply', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: {
-        'content-type': 'application/json',
-        'x-kindgleam-client': 'web',
-        ...(state.workspaceId ? { 'x-workspace-id': state.workspaceId } : {})
-      },
-      body: JSON.stringify({
-        confirm: 'APPLY_WORKSPACE_CHANGES',
-        expectedCommitSha: source.metadata?.commitSha || '',
-        changes,
-        message: 'workspace: apply reviewed terminal changes'
-      })
-    });
-    const payload = await result.json().catch(() => ({}));
-    if (!result.ok) throw new Error(payload.error || 'GitHub changes could not be applied.');
+    const payload = await api('POST', '/api/workspace/sources/' + encodeURIComponent(source.id) + '/apply', {
+      confirm: 'APPLY_WORKSPACE_CHANGES',
+      expectedCommitSha: source.metadata?.commitSha || '',
+      changes,
+      message: 'workspace: apply reviewed terminal changes'
+    }, { idempotencyKey: crypto.randomUUID() });
     state.workspaceSource = payload.source;
     setChangeStatus('Changes committed to ' + source.repoOwner + '/' + source.repoName + ' · ' + source.repoRef);
     closeSocket();
