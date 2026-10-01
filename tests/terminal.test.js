@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { terminalArgs, terminalImagesForFiles } from '../src/terminal.js';
+import { terminalArgs, terminalImagesForFiles, terminalOriginAllowed } from '../src/terminal.js';
 
 const config = {
   terminal: {
@@ -33,4 +33,11 @@ test('terminal container boundary disables network and privilege escalation', ()
   assert.ok(args.includes('/tmp/kindgleam-terminal-test:/work:rw'));
   assert.equal(args.at(-2), 'sh');
   assert.equal(args.at(-1), '-i');
+});
+
+test('production terminal requires an origin and matches the public origin', () => {
+  const base = { headers: { host: 'app.example' } };
+  assert.equal(terminalOriginAllowed(base, { production: true, publicUrl: 'https://app.example' }), false);
+  assert.equal(terminalOriginAllowed({ headers: { host: 'app.example', origin: 'https://app.example' } }, { production: true, publicUrl: 'https://app.example' }), true);
+  assert.equal(terminalOriginAllowed({ headers: { host: 'app.example', origin: 'https://evil.example' } }, { production: true, publicUrl: 'https://app.example' }), false);
 });
