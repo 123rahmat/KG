@@ -10,6 +10,7 @@ import { assistantMessage, userMessage, welcome } from './app-actions.js';
 import { loadUsage, selectTab } from './app-account.js';
 import { clearDraft, deleteOfflineFiles, loadOfflineFiles, storeOfflineFiles, writeOfflineQueue } from './app-settings.js';
 import { syncAdaptiveWorkspace } from './adaptive-workspace.js';
+import { syncActiveWorkspaceSource } from './workspace-sources.js';
 
 /* ------------------------------------------------------------- attachments */
 
@@ -339,6 +340,7 @@ async function createRunFromQueuedItem(item) {
     ...personalContext(),
     adaptiveControl: item.adaptiveControl ?? personalContext().adaptiveControl,
     attachments,
+    ...(item.workspaceSourceId ? { workspaceSourceId: item.workspaceSourceId } : {}),
     visibility,
     privacyConsent: { modelProvider: state.chat.consent }
   }, { idempotencyKey: item.idempotencyKey });
@@ -354,6 +356,7 @@ async function queueOfflineMessage(goal, files, visibility, idempotencyKey = cry
     conversationId: state.chat.id,
     workspaceId: state.workspaceId,
     visibility,
+    workspaceSourceId: state.workspaceSourceId ?? null,
     attachmentIds: [],
     files
   };
@@ -453,6 +456,10 @@ export async function sendMessage(text) {
   const visibility = $('shareRun').checked ? 'workspace' : 'private';
   state.chat.id ??= crypto.randomUUID();
 
+  if (navigator.onLine !== false && state.workspaceSourceId) {
+    await syncActiveWorkspaceSource().catch(error => notify('runNotice', 'warn', error.message || 'Workspace source synchronization failed.'));
+  }
+
   if (navigator.onLine === false && state.settings.offlineQueue) {
     $('goal').value = '';
     await queueOfflineMessage(goal, files, visibility);
@@ -478,6 +485,7 @@ export async function sendMessage(text) {
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       ...personalContext(),
       attachments,
+      ...(state.workspaceSourceId ? { workspaceSourceId: state.workspaceSourceId } : {}),
       visibility,
       privacyConsent: { modelProvider: state.chat.consent }
     }, { idempotencyKey });
