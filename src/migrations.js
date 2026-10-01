@@ -1951,5 +1951,73 @@ export const MIGRATIONS = [
       CREATE UNIQUE INDEX IF NOT EXISTS rag_documents_owner_source_chunk_idx
         ON rag_documents (workspace_id, principal_id, source_id, chunk_index);
     `
+  },
+  {
+    version: 48,
+    name: 'tamper-evident-audit-and-runtime-grants',
+    sql: `
+      CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+      ALTER TABLE audit_log
+        ADD COLUMN IF NOT EXISTS prev_hash TEXT,
+        ADD COLUMN IF NOT EXISTS entry_hash TEXT;
+
+      DROP TRIGGER IF EXISTS audit_log_no_update_delete ON audit_log;
+
+      DO $audit$
+      DECLARE
+        previous_hash TEXT := NULL;
+        item RECORD;
+        canonical TEXT;
+        current_hash TEXT;
+      BEGIN
+        FOR item IN
+          SELECT id, at, principal_id, workspace_id, action, target, outcome,
+                 detail_enc, detail_encryption_version, request_id, ip
+            FROM audit_log
+           ORDER BY id
+        LOOP
+          canonical :=
+            COALESCE(item.id::text, '') || E'\\x1f' ||
+            COALESCE(item.at::text, '') || E'\\x1f' ||
+            COALESCE(item.principal_id, '') || E'\\x1f' ||
+            COALESCE(item.workspace_id, '') || E'\\x1f' ||
+            COALESCE(item.action, '') || E'\\x1f' ||
+            COALESCE(item.target, '') || E'\\x1f' ||
+            COALESCE(item.outcome, '') || E'\\x1f' ||
+            COALESCE(item.detail_enc, '') || E'\\x1f' ||
+            COALESCE(item.detail_encryption_version::text, '') || E'\\x1f' ||
+            COALESCE(item.request_id, '') || E'\\x1f' ||
+            COALESCE(item.ip, '') || E'\\x1f' ||
+            COALESCE(previous_hash, '');
+          current_hash := encode(digest(canonical, 'sha256'), 'hex');
+          UPDATE audit_log
+             SET prev_hash = previous_hash, entry_hash = current_hash
+           WHERE id = item.id;
+          previous_hash := current_hash;
+        END LOOP;
+      END
+      $audit$;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS audit_log_entry_hash_uidx
+        ON audit_log(entry_hash);
+      CREATE INDEX IF NOT EXISTS audit_log_hash_idx
+        ON audit_log(workspace_id, id DESC, entry_hash);
+
+      CREATE OR REPLACE FUNCTION prevent_audit_log_mutation()
+      RETURNS trigger
+      LANGUAGE plpgsql
+      AS $$
+      BEGIN
+        RAISE EXCEPTION 'audit_log is append-only';
+      END;
+      $$;
+
+      DROP TRIGGER IF EXISTS audit_log_no_update_delete ON audit_log;
+      CREATE TRIGGER audit_log_no_update_delete
+      BEFORE UPDATE OR DELETE ON audit_log
+      FOR EACH ROW
+      EXECUTE FUNCTION prevent_audit_log_mutation();
+    `
   }
 ];
