@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildUnifiedWorkContext, applyWorkChange } from '../src/unified-work-context.js';
+import { isWorkspacePath, workspacePath } from '../src/workspace-path.js';
+
+test('one strict workspace-path rule protects workflow context and sandbox paths', () => {
+  assert.equal(workspacePath('src/components/App.jsx'), 'src/components/App.jsx');
+  for (const unsafe of ['../secret', '/etc/passwd', 'src/../secret', 'src//file.js', '.env', 'src/.hidden/file.js', 'src/file.js ', '  src/file.js']) {
+    assert.equal(isWorkspacePath(unsafe), false, unsafe);
+  }
+});
 
 test('workflow, filesystem and code share one project-owned context', () => {
   const context = buildUnifiedWorkContext({
