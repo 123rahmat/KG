@@ -266,6 +266,34 @@ export async function githubApplyChanges({
   assertGitHubRepo(owner, repo);
   const prefix = text(repoPath) ? safePath(repoPath) : null;
   if (text(repoPath) && !prefix) throw new Error('GitHub repository subdirectory is invalid');
+
+  // Validate the complete change set locally before any network write. A
+  // malformed or ambiguous request must never create a Git object as a side effect.
+  const list = Array.isArray(changes) ? changes : [];
+  if (list.length > 500) throw new Error('Too many GitHub changes in one operation');
+  const normalizedChanges = [];
+  const seenPaths = new Set();
+  for (const change of list) {
+    const path = safePath(change?.path);
+    if (!path) throw new Error('GitHub change path is invalid');
+    const remotePath = prefix ? repositoryPath(prefix, path) : path;
+    if (!remotePath) throw new Error('GitHub repository subdirectory path is invalid: ' + path);
+    if (seenPaths.has(remotePath)) throw new Error('GitHub change set contains duplicate paths: ' + path);
+    seenPaths.add(remotePath);
+    if (change?.kind && change.kind !== 'delete' && change.kind !== 'upsert') {
+      throw new Error('GitHub write-back accepts only full-file upserts and deletes.');
+    }
+    const deleting = change?.kind === 'delete' || change?.delete === true;
+    if (!deleting) {
+      const content = String(change?.content ?? '');
+      if (Buffer.byteLength(content, 'utf8') > MAX_FILE_BYTES) throw new Error('GitHub changed file is too large: ' + path);
+    }
+    if (text(change?.beforeDigest) && !/^[0-9a-f]{64}$/i.test(text(change.beforeDigest))) {
+      throw new Error('GitHub pre-image digest is invalid: ' + path);
+    }
+    normalizedChanges.push({ original: change, path, remotePath, deleting, content: deleting ? null : String(change?.content ?? ''), beforeDigest: text(change?.beforeDigest) || null });
+  }
+
   const revision = await githubResolveRevision({ fetchImpl, token, owner, repo, ref });
   if (text(expectedCommitSha) && revision.sha !== text(expectedCommitSha)) {
     const error = new Error('GitHub branch changed since this workspace revision was loaded.');
@@ -273,49 +301,10 @@ export async function githubApplyChanges({
     throw error;
   }
   if (!revision.sha || !revision.treeSha) throw new Error('GitHub repository revision could not be resolved');
-  const list = Array.isArray(changes) ? changes : [];
-  if (list.length > 500) throw new Error('Too many GitHub changes in one operation');
-  const elements = [];
-  const seenPaths = new Set();
-  for (const change of list) {
-    const path = safePath(change?.path);
-    if (!path) throw new Error('GitHub change path is invalid');
-    const remotePath = prefix ? repositoryPath(prefix, path) : path;
-    if (!remotePath) throw new Error('GitHub repository subdirectory path is invalid: ' + path);
-    if (seenPaths.has(path)) throw new Error('GitHub change set contains duplicate paths: ' + path);
-    seenPaths.add(path);
-    if (change?.kind && change.kind !== 'delete' && change.kind !== 'upsert') {
-      throw new Error('GitHub write-back accepts only full-file upserts and deletes.');
-    }
-    if (change?.kind === 'delete' || change?.delete === true) {
-      elements.push({ path: remotePath, mode: '100644', type: 'blob', sha: null });
-      continue;
-    }
-    const content = String(change?.content ?? '');
-    if (Buffer.byteLength(content, 'utf8') > MAX_FILE_BYTES) throw new Error('GitHub changed file is too large: ' + path);
-    if (text(change?.beforeDigest)) {
-      const expected = text(change.beforeDigest);
-      if (!/^[0-9a-f]{64}$/i.test(expected)) throw new Error('GitHub pre-image digest is invalid: ' + path);
-    }
-    const blob = await githubJson(
-      fetchImpl,
-      'https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/git/blobs',
-      token,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ content, encoding: 'utf-8' })
-      }
-    );
-    if (!text(blob?.sha)) throw new Error('GitHub did not return a blob for ' + path);
-    elements.push({ path: remotePath, mode: '100644', type: 'blob', sha: blob.sha });
-  }
-  if (!elements.length) return { unchanged: true, commitSha: revision.sha, ref: revision.ref };
+  if (!normalizedChanges.length) return { unchanged: true, commitSha: revision.sha, ref: revision.ref };
 
-  // The workspace snapshot may intentionally omit generated, binary, or
-  // over-budget files. Never let a later write silently turn one of those
-  // existing upstream files into a "new" file. Resolve the exact immutable
-  // tree again and require an explicit pre-image for every existing path.
+  // Resolve the exact immutable tree before any blob/commit writes. This also
+  // lets us prove every overwrite/delete has the expected pre-image.
   const currentTree = await githubJson(
     fetchImpl,
     'https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/git/trees/' + encodeURIComponent(revision.sha) + '?recursive=1',
@@ -324,22 +313,69 @@ export async function githubApplyChanges({
   if (currentTree?.truncated === true || !Array.isArray(currentTree?.tree) || currentTree.tree.length > MAX_TREE_ENTRIES) {
     throw new Error('GitHub repository tree is too large for a safe workspace write; narrow the source to a smaller repository or ref.');
   }
-  const upstreamPaths = new Set(
+  const upstream = new Map(
     currentTree.tree
       .filter(entry => entry?.type === 'blob')
-      .map(entry => safePath(entry.path))
+      .map(entry => {
+        const safe = safePath(entry.path);
+        return safe ? [safe, entry] : null;
+      })
       .filter(Boolean)
   );
-  for (const change of list) {
-    const path = safePath(change?.path);
-    const remotePath = prefix ? repositoryPath(prefix, path) : path;
-    if (!path || !remotePath || !upstreamPaths.has(remotePath)) continue;
-    if (!text(change?.beforeDigest)) {
-      const error = new Error('An explicit pre-image digest is required before overwriting an existing GitHub file: ' + path);
+
+  // Read and verify pre-images before any write. Only the exact files named by
+  // the change set are fetched, keeping omitted files out of the workspace.
+  for (const item of normalizedChanges) {
+    const existing = upstream.get(item.remotePath);
+    if (!existing) continue;
+    if (!item.beforeDigest) {
+      const error = new Error('An explicit pre-image digest is required before overwriting an existing GitHub file: ' + item.path);
       error.code = 'github-preimage-required';
       throw error;
     }
+    const blob = await githubJson(
+      fetchImpl,
+      'https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/git/blobs/' + encodeURIComponent(existing.sha),
+      token
+    );
+    if (blob?.encoding !== 'base64') throw new Error('GitHub pre-image could not be read: ' + item.path);
+    let bytes;
+    try {
+      bytes = Buffer.from(String(blob.content ?? '').replaceAll('\\n', ''), 'base64');
+    } catch {
+      throw new Error('GitHub pre-image is not valid base64: ' + item.path);
+    }
+    const actualDigest = crypto.createHash('sha256').update(bytes).digest('hex');
+    if (actualDigest.toLowerCase() !== item.beforeDigest.toLowerCase()) {
+      const error = new Error('GitHub file changed since it was reviewed: ' + item.path);
+      error.code = 'stale-github-preimage';
+      throw error;
+    }
   }
+
+  const elements = [];
+  for (const item of normalizedChanges) {
+    if (item.deleting) {
+      if (upstream.has(item.remotePath)) {
+        elements.push({ path: item.remotePath, mode: '100644', type: 'blob', sha: null });
+      }
+      continue;
+    }
+    const blob = await githubJson(
+      fetchImpl,
+      'https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/git/blobs',
+      token,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ content: item.content, encoding: 'utf-8' })
+      }
+    );
+    if (!text(blob?.sha)) throw new Error('GitHub did not return a blob for ' + item.path);
+    elements.push({ path: item.remotePath, mode: '100644', type: 'blob', sha: blob.sha });
+  }
+
+  if (!elements.length) return { unchanged: true, commitSha: revision.sha, ref: revision.ref };
 
   const tree = await githubJson(
     fetchImpl,
@@ -373,7 +409,14 @@ export async function githubApplyChanges({
       body: JSON.stringify({ sha: newSha, force: false })
     }
   );
-  return { unchanged: false, commitSha: newSha, treeSha: text(tree?.sha) || null, parentSha: revision.sha, ref: revision.ref, changedFiles: list.map(item => safePath(item?.path)).filter(Boolean) };
+  return {
+    unchanged: false,
+    commitSha: newSha,
+    treeSha: text(tree?.sha) || null,
+    parentSha: revision.sha,
+    ref: revision.ref,
+    changedFiles: normalizedChanges.map(item => item.path)
+  };
 }
 
 export async function githubWriteFile({
