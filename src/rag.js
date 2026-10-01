@@ -7,6 +7,20 @@ import { encryptJson, decryptField, keyedDigest } from './data-protection.js';
 import { AdaptiveCache } from './adaptive-cache.js';
 
 const text = value => String(value ?? '').trim();
+
+const RAG_SECRET_PATTERNS = [
+  /\b(?:\d[ -]?){13,19}\b/g,
+  /\b(?:password|passwd|passcode|pin|api[ _-]?key|secret[ _-]?key|access[ _-]?token|refresh[ _-]?token|private[ _-]?key|seed[ _-]?phrase|recovery[ _-]?phrase|otp|cvv)\b\s*[:=]\s*[^\s,;]+/gi,
+  /\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9_-]{8,}/g,
+  /\b(?:ghp|gho|github_pat|xox[bpas]|AKIA)[A-Za-z0-9_-]{8,}/g,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g
+];
+
+const sanitizeRagText = value => {
+  let output = text(value);
+  for (const pattern of RAG_SECRET_PATTERNS) output = output.replace(pattern, '[redacted]');
+  return output;
+};
 const terms = value => [...new Set(text(value).toLowerCase()
   .split(/[^\p{L}\p{N}_-]+/u).filter(item => item.length > 2))].slice(0, 32);
 
@@ -42,7 +56,7 @@ export class RagStore {
   }
 
   async index(scope, { sourceType, sourceId, title = '', text: content, metadata = {} } = {}) {
-    const body = text(content);
+    const body = sanitizeRagText(content);
     if (!body) return { chunks: 0 };
     const source = text(sourceId);
     if (!source) throw new Error('RAG sourceId is required');
