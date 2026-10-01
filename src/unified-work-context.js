@@ -82,7 +82,7 @@ export function buildUnifiedWorkContext({
   const chat = createWorkspaceChatContext({
     conversationId,
     multiAgentMode: multiAgent?.mode ?? multiAgent?.multiAgent ?? 'auto',
-    maxAgents: multiAgent?.maxAgents ?? 5
+    maxAgents: multiAgent?.maxAgents ?? 11
   });
 
   return {
