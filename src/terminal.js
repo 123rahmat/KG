@@ -23,6 +23,8 @@ const MIN_COLS = 20;
 const MIN_ROWS = 5;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_OUTPUT_CHUNK = 64 * 1024;
+const MAX_CONTROL_MESSAGES_PER_SECOND = 30;
+const SENSITIVE_TERMINAL_PATH = /(?:^|\/)(?:\.env(?:\.(?!example$|sample$|template$)[^/]*)?|\.npmrc|\.netrc|\.pypirc|id_rsa(?:\.[^/]*)?|[^/]+\.(?:pem|key|p12|pfx))$/i;
 const EXCLUDED_DIRS = new Set([
   '.git', 'node_modules', '.next', '.cache', 'dist', 'build', 'coverage',
   '.venv', 'venv', '__pycache__', '.pytest_cache', 'target', '.cargo',
@@ -31,8 +33,9 @@ const EXCLUDED_DIRS = new Set([
 
 const text = value => String(value ?? '').trim();
 
-function terminalOriginAllowed(req, config) {
+export function terminalOriginAllowed(req, config) {
   const origin = text(req.headers.origin);
+  if (config.production && !origin) return false;
   if (!origin) return true;
   if (config.publicUrl) {
     try { return origin === new URL(config.publicUrl).origin; } catch { return false; }
@@ -97,7 +100,10 @@ async function writeSnapshot(workdir, files) {
     await fs.mkdir(parent, { recursive: true, mode: 0o755 });
     await fs.writeFile(destination, file.content, { encoding: 'utf8', mode: 0o644 });
   }
-  await fs.chmod(workdir, 0o777);
+  const dirs = new Set([workdir]);
+  for (const file of files) dirs.add(path.dirname(path.join(workdir, file.path)));
+  for (const dir of dirs) await fs.chmod(dir, 0o777);
+  for (const file of files) await fs.chmod(path.join(workdir, file.path), 0o666);
 }
 
 async function readSnapshot(objects, scope, objectId) {
@@ -128,7 +134,9 @@ async function walkTextFiles(root) {
       if (stat.size > MAX_FILE_BYTES) continue;
       const content = await fs.readFile(target, 'utf8');
       if (content.includes('\0')) continue;
-      files.push({ path: relative.replaceAll('\\\\', '/'), content });
+      const safeRelative = relative.replaceAll('\\\\', '/');
+      if (SENSITIVE_TERMINAL_PATH.test(safeRelative)) continue;
+      files.push({ path: safeRelative, content });
       if (files.length > 250) return;
     }
   }
@@ -175,6 +183,8 @@ class TerminalSession {
     this.outputBytes = 0;
     this.inputWindowStartedAt = this.createdAt;
     this.inputWindowBytes = 0;
+    this.controlWindowStartedAt = this.createdAt;
+    this.controlMessageCount = 0;
     this.closed = false;
     this.lifetimeTimer = null;
     this.idleTimer = null;
@@ -267,10 +277,15 @@ export function attachTerminalServer(server, {
         throw error;
       }
       const [, image] = terminalImagesForFiles(baseFiles, config);
-      if (!image) throw Object.assign(new Error('No terminal image is configured'), { code: 'terminal-image-unavailable' });
+      if (!image) {
+        await fs.rm(workdir, { recursive: true, force: true }).catch(() => {});
+        throw Object.assign(new Error('No terminal image is configured'), { code: 'terminal-image-unavailable' });
+      }
       const safeCols = Math.max(MIN_COLS, Math.min(MAX_COLS, Number(cols) || 100));
       const safeRows = Math.max(MIN_ROWS, Math.min(MAX_ROWS, Number(rows) || 30));
-      const child = pty.spawn('docker', terminalArgs({ image, runtime: config.terminal.runtime, workdir }), {
+      let child;
+      try {
+        child = pty.spawn('docker', terminalArgs({ image, runtime: config.terminal.runtime, workdir }), {
         name: 'xterm-256color',
         cols: safeCols,
         rows: safeRows,
@@ -280,7 +295,11 @@ export function attachTerminalServer(server, {
           LANG: 'C.UTF-8',
           LC_ALL: 'C.UTF-8'
         }
-      });
+        });
+      } catch (error) {
+        await fs.rm(workdir, { recursive: true, force: true }).catch(() => {});
+        throw error;
+      }
 
       const session = new TerminalSession({
         id: crypto.randomUUID(), ws, principal, scope, source,
@@ -328,6 +347,18 @@ export function attachTerminalServer(server, {
         return;
       }
       const type = text(message?.type);
+      if (!['input'].includes(type)) {
+        const now = Date.now();
+        if (now - session.controlWindowStartedAt >= 1000) {
+          session.controlWindowStartedAt = now;
+          session.controlMessageCount = 0;
+        }
+        session.controlMessageCount += 1;
+        if (session.controlMessageCount > MAX_CONTROL_MESSAGES_PER_SECOND) {
+          session.send({ type: 'error', error: 'Terminal control rate limit reached' });
+          return;
+        }
+      }
       if (type === 'input') {
         const data = typeof message.data === 'string' ? message.data : '';
         const bytes = Buffer.byteLength(data, 'utf8');
