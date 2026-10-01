@@ -6,7 +6,6 @@ let FitAddonCtor = null;
 let terminal = null;
 let fitAddon = null;
 let socket = null;
-let sessionId = null;
 let capturedChanges = [];
 let currentSource = null;
 let resizeObserver = null;
@@ -63,7 +62,6 @@ function closeSocket() {
   if (socket && socket.readyState === WebSocket.OPEN) send({ type: 'close' });
   try { socket?.close(); } catch {}
   socket = null;
-  sessionId = null;
 }
 
 async function requestChanges() {
@@ -180,7 +178,6 @@ async function openTerminal() {
         return;
       }
       if (message.type === 'ready') {
-        sessionId = message.sessionId;
         terminal?.writeln('\r\nKindgleam sandbox terminal ready.\r');
         if (!currentSource) terminal?.writeln('No project source is connected; this session starts with an empty /work.\r');
         return;
@@ -215,7 +212,6 @@ async function openTerminal() {
     });
     socket.addEventListener('close', () => {
       socket = null;
-      sessionId = null;
       if ($('terminalDialog')?.open) setStatus('Disconnected');
     });
     socket.addEventListener('error', () => {
