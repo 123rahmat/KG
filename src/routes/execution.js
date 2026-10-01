@@ -1272,9 +1272,12 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       limit: 6,
       maxInstructionChars: 5000
     });
-    // The server's stand-in criterion is for the check only: shown to the
-    // step that answers, it padded short answers with "evidence" sections.
-    else if (Array.isArray(brief.successCriteria)) brief.successCriteria = brief.successCriteria.filter(item => item !== GENERIC_CRITERION);
+    // The server's stand-in criterion is for the check only: do not show
+    // it to ordinary answer steps, where it only pads short answers with
+    // "evidence" sections. Verifiers receive the real planned criteria above.
+    if (task.type !== 'verify' && Array.isArray(brief.successCriteria)) {
+      brief.successCriteria = brief.successCriteria.filter(item => item !== GENERIC_CRITERION);
+    }
     let payload = compact({
       goal: run.goal,
       adaptation: adaptationFor(run, task),
