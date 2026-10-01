@@ -20,9 +20,11 @@ import { codeMarkdown, hasCode, initActions } from './app-actions.js';
 import { renderMarkdown } from './markdown.js';
 import { initSettingsWindow } from './app-settings-window.js';
 import { initWorkspaceSources } from './workspace-sources.js';
+import { initTerminal } from './terminal.js';
 
 initSettings();
 initWorkspaceSources();
+initTerminal();
 
 
 /* --------------------------------------------------------------- transport */
