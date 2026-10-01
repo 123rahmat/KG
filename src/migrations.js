@@ -1870,4 +1870,13 @@ export const MIGRATIONS = [
       REVOKE ALL ON run_blackboards FROM PUBLIC;
     `
   }
+  ,{
+    version: 44,
+    name: 'memory-layer-expansion',
+    sql: `
+      ALTER TABLE memories DROP CONSTRAINT IF EXISTS memories_kind_check;
+      ALTER TABLE memories ADD CONSTRAINT memories_kind_check
+        CHECK (kind IN ('about', 'preference', 'project', 'fact', 'episodic', 'semantic'));
+    `
+  }
 ];
