@@ -568,7 +568,7 @@ function buildBrief(findings, arbiter, decision, states = [], allocation = null)
   };
 }
 
-/** Run the adaptive panel and, only on disagreement, a separate arbiter. */
+/** Run adaptive specialist waves in parallel; re-plan between waves. */
 export async function runAdaptiveAgentPanel({
   run,
   task,
@@ -583,6 +583,192 @@ export async function runAdaptiveAgentPanel({
   canSpend = async () => true,
   recordUsage = async () => {},
   modelCaller = callModel
+} = {}) {
+  const { buildHarnessContext } = await import('./agent-harness.js');
+  const mode = config?.agents?.multiAgent ?? 'auto';
+  const maxAgents = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(config?.agents?.maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
+  let allocationResult = rolesFor(run, task, { maxAgents, mode });
+  if (!allocationResult.decision.enabled) {
+    return { enabled: false, decision: allocationResult.decision, brief: null, agents: [], findings: [], arbiter: null };
+  }
+
+  const usedModels = [];
+  const findings = [];
+  const agentStates = [];
+  const completedRoles = [];
+  const failedRoles = [];
+  const waves = [];
+  let lastAllocation = allocationResult.allocation;
+
+  while (true) {
+    const progress = {
+      completedRoles,
+      failedRoles,
+      goal: basePayload?.goal,
+      workPlan: basePayload?.workPlan,
+      evidenceSoFar: basePayload?.evidenceSoFar,
+      findings
+    };
+    allocationResult = rolesFor(run, task, { maxAgents, mode, progress });
+    lastAllocation = allocationResult.allocation ?? lastAllocation;
+
+    const pendingRoles = allocationResult.roles.filter(role =>
+      !completedRoles.includes(role) && !failedRoles.includes(role)
+    );
+    if (!pendingRoles.length) break;
+
+    // A role is a read-only cognitive worker here; independent roles form one
+    // wave. The server still owns all tool and mutation authorities.
+    const waveRoles = pendingRoles.slice(0, maxAgents);
+    const waveIndex = waves.length;
+    const harness = buildHarnessContext({
+      run, task, goal: basePayload?.goal,
+      capabilities: run?.capabilities?.granted ?? [],
+      evidence: basePayload?.evidenceSoFar ?? [],
+      projectPaths: basePayload?.workspace?.paths ?? basePayload?.unifiedWorkContext?.code?.paths ?? [],
+      priorTopics: basePayload?.conversation?.map(item => item?.user) ?? []
+    });
+
+    const jobs = [];
+    for (const role of waveRoles) {
+      if (!dataAllowed) {
+        failedRoles.push(role);
+        agentStates.push({ role, status: 'data-policy-blocked', wave: waveIndex });
+        continue;
+      }
+      if (!(await canSpend())) {
+        agentStates.push({ role, status: 'budget-blocked', wave: waveIndex });
+        continue;
+      }
+
+      const modelId = agentModelFor(selection, primaryModelId, role, {
+        used: usedModels,
+        allows: allowsModel
+      });
+      usedModels.push(modelId);
+      jobs.push({ role, modelId, wave: waveIndex });
+    }
+
+    if (!jobs.length) break;
+
+    const results = await Promise.all(jobs.map(async job => {
+      const payload = { ...basePayload, harness };
+      const result = await modelCaller(agentMessages(job.role, payload), {
+        config,
+        fetchImpl,
+        modelId: job.modelId,
+        allowBackup,
+        effort: lastAllocation?.pressure >= 0.72 ? 'high' : 'medium',
+        json: true,
+        maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS
+      }).catch(() => null);
+      if (result?.usage) await recordUsage(result.usage, result.provider, result.model);
+
+      const parsed = result && !result.incomplete
+        ? normalizedRoleFinding(parseJsonObject(result.text), job.role)
+        : null;
+
+      return { ...job, result, parsed };
+    }));
+
+    const waveState = [];
+    for (const item of results) {
+      if (!item.parsed) {
+        failedRoles.push(item.role);
+        const state = { role: item.role, model: item.result?.model ?? item.modelId, status: 'unavailable', wave: item.wave };
+        agentStates.push(state);
+        waveState.push(state);
+        continue;
+      }
+
+      findings.push(item.parsed);
+      completedRoles.push(item.role);
+      const state = {
+        role: item.role,
+        model: item.result.model,
+        status: 'complete',
+        recommendation: item.parsed.recommendation,
+        summary: item.parsed.summary,
+        confidence: item.parsed.confidence,
+        wave: item.wave
+      };
+      agentStates.push(state);
+      waveState.push(state);
+    }
+
+    waves.push({
+      index: waveIndex,
+      roles: waveRoles,
+      parallel: waveRoles.length > 1,
+      completed: waveState.filter(item => item.status === 'complete').map(item => item.role),
+      failed: waveState.filter(item => item.status !== 'complete').map(item => item.role)
+    });
+
+    // New findings affect role utility only between waves, preventing one
+    // specialist from anchoring another specialist in the same wave.
+    const next = rolesFor(run, task, {
+      maxAgents,
+      mode,
+      progress: {
+        completedRoles,
+        failedRoles,
+        goal: basePayload?.goal,
+        workPlan: basePayload?.workPlan,
+        evidenceSoFar: basePayload?.evidenceSoFar,
+        findings
+      }
+    });
+    allocationResult = next;
+    lastAllocation = next.allocation ?? lastAllocation;
+  }
+
+  let arbiter = null;
+  if (findings.length >= 2 && disagreementProfile(findings).disagreement && await canSpend() && dataAllowed) {
+    const modelId = agentModelFor(selection, primaryModelId, 'critic', {
+      used: usedModels,
+      allows: allowsModel
+    });
+    const result = await modelCaller(arbiterMessages(basePayload, findings), {
+      config,
+      fetchImpl,
+      modelId,
+      allowBackup,
+      effort: lastAllocation?.pressure >= 0.72 ? 'high' : 'medium',
+      json: true,
+      maxOutputTokens: ARBITER_MAX_OUTPUT_TOKENS
+    }).catch(() => null);
+    if (result?.usage) await recordUsage(result.usage, result.provider, result.model);
+    const parsed = result && !result.incomplete
+      ? normalizedRoleFinding(parseJsonObject(result.text), 'arbiter')
+      : null;
+    if (parsed) {
+      arbiter = { ...parsed, model: result.model };
+      agentStates.push({ role: 'arbiter', model: result.model, status: 'complete' });
+    } else {
+      agentStates.push({ role: 'arbiter', model: result?.model ?? modelId, status: 'unavailable' });
+    }
+  }
+
+  const finalDecision = allocationResult.decision;
+  const finalAllocation = {
+    ...lastAllocation,
+    waves,
+    waveCount: waves.length,
+    parallel: waves.some(wave => wave.parallel),
+    completedRoles,
+    failedRoles
+  };
+  const brief = buildBrief(findings, arbiter, finalDecision, agentStates, finalAllocation);
+  return {
+    enabled: true,
+    decision: finalDecision,
+    allocation: finalAllocation,
+    waves,
+    agents: agentStates,
+    findings,
+    arbiter,
+    brief
+  };
 } = {}) {
 
   const mode = config?.agents?.multiAgent ?? 'auto';
