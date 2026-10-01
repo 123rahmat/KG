@@ -236,6 +236,7 @@ export async function connectGitHub() {
   const token = $('githubToken')?.value.trim();
   const selected = $('githubRepository')?.selectedOptions?.[0];
   const ref = $('githubBranch')?.value.trim() || '';
+  const repoPath = $('githubRepoPath')?.value.trim() || '';
   const owner = selected?.dataset?.owner || '';
   const repo = selected?.dataset?.name || '';
   if (!token || !owner || !repo || !ref) {
@@ -250,6 +251,7 @@ export async function connectGitHub() {
       owner,
       repo,
       ref,
+      repoPath,
       write: $('githubWriteAccess')?.checked === true
     });
     state.workspaceSourceId = result.source.id;
