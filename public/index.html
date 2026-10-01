@@ -407,9 +407,14 @@
         </label>
       </div>
 
+      <label class="project-source-field project-source-checkbox">
+        <span><input id="githubWriteAccess" type="checkbox"> Enable explicit GitHub write-back</span>
+        <small>Off by default. Writing requires a token with repository write permission and still needs an explicit apply confirmation.</small>
+      </label>
+
       <div class="project-source-security">
         <strong>Connection</strong>
-        <span>Read-only from this panel. No remote commit or push is performed here.</span>
+        <span>Read-only by default. Remote writes are disabled unless you explicitly enable write-back.</span>
       </div>
 
       <div class="project-source-actions">
