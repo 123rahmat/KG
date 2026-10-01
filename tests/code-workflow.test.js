@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { codeFailure, staleAfterRepair, repairRecord, repairContext, canRepair, untestedCode, missingTests, compactCodeEvidence, MAX_CODE_REPAIRS } from '../src/code-workflow.js';
+import { codeFailure, staleAfterRepair, repairRecord, repairContext, canRepair, untestedCode, missingTests, compactCodeEvidence, hasMeaningfulTests, MAX_CODE_REPAIRS } from '../src/code-workflow.js';
 
 const tasks = [
   { id: 'approval', position: 5, status: 'complete', dependsOn: [] },
@@ -50,7 +50,9 @@ test('repairs are counted per attempt and the next build sees the failed code an
 
 test('code without tests is asked for tests and cannot be certified by the automated check', () => {
   assert.equal(missingTests({ language: 'python', source: 'print(1)', tests: '' }), true);
-  assert.equal(missingTests({ language: 'python', source: 'print(1)', tests: 'import main' }), false);
+  assert.equal(missingTests({ language: 'python', source: 'print(1)', tests: 'import main' }), true, 'an import alone runs no assertion');
+  assert.equal(missingTests({ language: 'python', source: 'print(1)', tests: 'from main import f\n\ndef test_f():\n  assert f() == 1' }), false);
+  assert.equal(hasMeaningfulTests({ language: 'javascript', source: 'export const f = () => 1', tests: "import test from 'node:test'; test('f', () => {});" }), true);
   assert.equal(missingTests(null), false);
   const ran = tested => ({ tasks: [{ id: 'test-code', status: 'complete', evidence: { result: { executed: true, output: { status: 'completed', tested } } } }] });
   assert.equal(untestedCode(ran(false)), true);
