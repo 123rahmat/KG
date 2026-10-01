@@ -183,7 +183,7 @@ function isConfig(path) {
 }
 
 function resolveLocalImport(filePath, target, files) {
-  const clean = trim(target).replace(/^\.[\/]/, '').replace(/\\/g, '/');
+  const clean = trim(target).replace(new RegExp('^\\./'), '').replace(/\\/g, '/');
   if (!clean || (!clean.startsWith('.') && !clean.startsWith('/'))) return null;
   const base = filePath.includes('/') ? filePath.slice(0, filePath.lastIndexOf('/') + 1) : '';
   const candidate = safeWorkspacePath((target.startsWith('.') ? base : '') + clean) || null;
@@ -256,7 +256,7 @@ export function buildProjectIndex(files = [], { revisionId = null, maxSymbols = 
     imports.push(...fileImports.map(target => ({ from: file.path, target })));
     if (isTest) tests.push(file.path);
     if (isCfg) config.push(file.path);
-    if (/^(?:src|app|lib|server|main|index)\\//i.test(file.path) || /^(?:index|main|server)\\./i.test(file.path)) entries.push(file.path);
+    if (new RegExp('^(?:src|app|lib|server|main|index)/', 'i').test(file.path) || /^(?:index|main|server)\\./i.test(file.path)) entries.push(file.path);
     return Object.freeze({
       path: file.path,
       bytes: Buffer.byteLength(file.content, 'utf8'),
