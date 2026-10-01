@@ -9,7 +9,7 @@
  */
 
 import { impactClosure, relatedSymbols, relatedTests } from './project-index.js';
-import { normalizeWorkspaceFiles, safeWorkspacePath } from './code-workspace.js';
+import { normalizeWorkspaceFiles, safeWorkspacePath, workspaceContentHash } from './code-workspace.js';
 import crypto from 'node:crypto';
 
 const text = value => String(value ?? '');
@@ -173,7 +173,9 @@ export function compileCodeContext({
     strategy:'semantic-minimum-sufficient-context',
     sourceOfTruth:'workspace',
     project:{
-      revisionId:index?.revisionId ?? null, contentHash:index?.contentHash ?? null,
+      revisionId:index?.revisionId ?? null,
+      contentHash:index?.contentHash ?? null,
+      workspaceContentHash: workspaceContentHash(normalized),
       fileCount:index?.fileCount ?? normalized.length,
       languages:[...new Set((index?.files ?? []).map(file => file.language).filter(Boolean))].sort(),
       entryPoints:(index?.entryPoints ?? []).slice(0,30),
