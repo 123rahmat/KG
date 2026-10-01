@@ -194,6 +194,7 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
       attachments,
       goal: req.body?.goal,
       conversationId: req.body?.conversationId,
+      ...(req.body?.workspaceSourceId ? { workspaceSourceId: req.body.workspaceSourceId } : {}),
       ethics: ethicsOf(verdict),
       classifierHints: classification.hints,
       classification: publicClassification(classification),
