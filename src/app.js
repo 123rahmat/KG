@@ -26,6 +26,7 @@ import { registerGovernanceRoutes } from './routes/governance.js';
 import { registerRunsRoutes } from './routes/runs.js';
 import { registerExecutionRoutes } from './routes/execution.js';
 import { registerObjectsRoutes } from './routes/objects.js';
+import { registerWorkspaceSourcesRoutes } from './routes/workspace-sources.js';
 import { registerAccountRoutes } from './routes/account.js';
 import { registerSignInRoutes, registerMailAdminRoutes } from './routes/sign-in.js';
 import { Mailer } from './mailer.js';
@@ -348,6 +349,7 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
   // The background worker runs queued jobs through the same function.
   app.locals.executeNext = registerExecutionRoutes(app, deps).executeNext;
   registerObjectsRoutes(app, deps);
+  registerWorkspaceSourcesRoutes(app, { ...deps, pool, config });
 
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Unknown endpoint', code: 'no-route' }));
 
