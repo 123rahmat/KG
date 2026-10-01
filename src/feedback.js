@@ -37,7 +37,7 @@ export class FeedbackStore {
 
   async list(scope, runId) {
     const { rows } = await this.pool.query(
-      'SELECT id, run_id AS "runId", rating, reason, note_enc, created_at AS "createdAt", updated_at AS "updatedAt" FROM run_feedback WHERE run_id = $1 AND workspace_id = $2 ORDER BY updated_at DESC',
+      'SELECT id, run_id AS "runId", principal_id, rating, reason, note_enc, created_at AS "createdAt", updated_at AS "updatedAt" FROM run_feedback WHERE run_id = $1 AND workspace_id = $2 ORDER BY updated_at DESC',
       [runId, scope.workspaceId]
     );
     return rows.map(row => {
