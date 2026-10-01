@@ -132,25 +132,25 @@ function extractSymbols(content, language) {
 function extractImports(content, language) {
   const patterns = {
     javascript: [
-      /\\bimport\\s+(?:[^'"]+\\s+from\\s+)?['"]([^'"]+)['"]/g,
-      /\\brequire\\s*\\(\\s*['"]([^'"]+)['"]\\s*\\)/g,
-      /\\bexport\\s+[^;]*?\\s+from\\s+['"]([^'"]+)['"]/g
+      /\bimport\s+(?:[^'"]+\s+from\s+)?['"]([^'"]+)['"]/g,
+      /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+      /\bexport\s+[^;]*?\s+from\s+['"]([^'"]+)['"]/g
     ],
     typescript: [],
     python: [
-      /^\\s*import\\s+([A-Za-z0-9_./-]+)/gm,
-      /^\\s*from\\s+([A-Za-z0-9_./-]+)\\s+import\\s+/gm
+      /^\s*import\s+([A-Za-z0-9_./-]+)/gm,
+      /^\s*from\s+([A-Za-z0-9_./-]+)\s+import\s+/gm
     ],
-    go: [/\\bimport\\s+(?:\\(\\s*)?['"]([^'"]+)['"]/g],
-    rust: [/\\buse\\s+(?:crate::|self::|super::)?([A-Za-z0-9_:/.-]+)/g],
-    java: [/^\\s*import\\s+([A-Za-z0-9_.-]+)\\s*;/gm],
-    csharp: [/^\\s*using\\s+([A-Za-z0-9_.-]+)\\s*;/gm],
-    ruby: [/^\\s*require(?:_relative)?\\s+['"]([^'"]+)['"]/gm],
-    php: [/\\brequire(?:_once)?\\s*\\(?\\s*['"]([^'"]+)['"]/g],
-    swift: [/^\\s*import\\s+([A-Za-z0-9_.-]+)/gm],
-    kotlin: [/^\\s*import\\s+([A-Za-z0-9_.-]+)/gm],
-    c: [/^\\s*#include\\s*[<"]([^>"]+)[>"]/gm],
-    cpp: [/^\\s*#include\\s*[<"]([^>"]+)[>"]/gm]
+    go: [/\bimport\s+(?:\(\s*)?['"]([^'"]+)['"]/g],
+    rust: [/\buse\s+(?:crate::|self::|super::)?([A-Za-z0-9_:/.-]+)/g],
+    java: [/^\s*import\s+([A-Za-z0-9_.-]+)\s*;/gm],
+    csharp: [/^\s*using\s+([A-Za-z0-9_.-]+)\s*;/gm],
+    ruby: [/^\s*require(?:_relative)?\s+['"]([^'"]+)['"]/gm],
+    php: [/\brequire(?:_once)?\s*\(?\s*['"]([^'"]+)['"]/g],
+    swift: [/^\s*import\s+([A-Za-z0-9_.-]+)/gm],
+    kotlin: [/^\s*import\s+([A-Za-z0-9_.-]+)/gm],
+    c: [/^\s*#include\s*[<"]([^>"]+)[>"]/gm],
+    cpp: [/^\s*#include\s*[<"]([^>"]+)[>"]/gm]
   };
   patterns.typescript = patterns.javascript;
   const list = patterns[language] ?? [];
@@ -172,7 +172,7 @@ function isLikelyTest(path, content) {
   const type = classifyWorkspaceFile(path);
   if (type === 'test') return true;
   const lower = text(content).toLowerCase();
-  return /\\b(?:describe|it|test|pytest|unittest|#\\[test\\]|@test)\\b/.test(lower);
+  return /\b(?:describe|it|test|pytest|unittest|#\[test\]|@test)\b/.test(lower);
 }
 
 function isConfig(path) {
