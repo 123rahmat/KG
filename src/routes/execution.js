@@ -1292,7 +1292,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       chat: run.adaptation?.unifiedWorkContext?.chat ?? {
         conversationId: run.conversationId ?? null,
         memory: { scope: run.conversationId ? 'conversation' : 'unavailable', alwaysOn: Boolean(run.conversationId), crossChat: 'user-controlled' },
-        multiAgent: { mode: config.agents?.multiAgent ?? 'auto', maxAgents: config.agents?.maxAgents ?? 5, adaptive: true, serverOrchestrated: true, advisoryOnly: true }
+        multiAgent: { mode: config.agents?.multiAgent ?? 'auto', maxAgents: config.agents?.maxAgents ?? 11, adaptive: true, serverOrchestrated: true, advisoryOnly: true }
       },
       workspace: run.adaptation?.unifiedWorkContext?.workspace ?? null,
       // Deterministic code intelligence: symbols, dependencies and tests are computed server-side,
