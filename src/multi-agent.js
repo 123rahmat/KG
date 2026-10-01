@@ -582,7 +582,9 @@ export async function runAdaptiveAgentPanel({
   dataAllowed = true,
   canSpend = async () => true,
   recordUsage = async () => {},
-  modelCaller = callModel
+  modelCaller = callModel,
+  recordWave = async () => {},
+  recordAgent = async () => {}
 } = {}) {
   const { buildHarnessContext } = await import('./agent-harness.js');
   const mode = config?.agents?.multiAgent ?? 'auto';
@@ -687,13 +689,25 @@ export async function runAdaptiveAgentPanel({
       });
     }
 
-    waves.push({
+    const waveRecord = {
       index: waveIndex,
       roles: waveRoles,
       parallel: jobs.length > 1,
       completed: results.filter(item => item.parsed).map(item => item.role),
       failed: results.filter(item => !item.parsed).map(item => item.role)
-    });
+    };
+    waves.push(waveRecord);
+    await recordWave({ run, task, wave: waveRecord });
+    await Promise.all(results.map(item => recordAgent({
+      run,
+      task,
+      waveIndex,
+      role: item.role,
+      modelId: item.result?.model ?? item.modelId,
+      state: item.parsed ? 'complete' : 'failed',
+      finding: item.parsed ?? null,
+      errorCode: item.parsed ? null : 'agent-unavailable'
+    })));
 
     allocationResult = rolesFor(run, task, {
       maxAgents,
@@ -729,8 +743,10 @@ export async function runAdaptiveAgentPanel({
     if (parsed) {
       arbiter = { ...parsed, model: result.model };
       agentStates.push({ role: 'arbiter', model: result.model, status: 'complete' });
+      await recordAgent({ run, task, waveIndex: waves.length, role: 'arbiter', modelId: result.model, state: 'complete', finding: parsed, errorCode: null });
     } else {
       agentStates.push({ role: 'arbiter', model: result?.model ?? modelId, status: 'unavailable' });
+      await recordAgent({ run, task, waveIndex: waves.length, role: 'arbiter', modelId: result?.model ?? modelId, state: 'failed', finding: null, errorCode: 'arbiter-unavailable' });
     }
   }
 
