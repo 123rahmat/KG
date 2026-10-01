@@ -21,7 +21,7 @@ import { workScale, BUILT_IN } from './work-scale.js';
 import { approvalReasons, verificationContract } from './capabilities.js';
 import { buildUnifiedAdaptiveIntelligence } from './unified-adaptive-intelligence.js';
 import { buildUnifiedWorkContext } from './unified-work-context.js';
-import { selectSkillDescriptors } from './skills.js';
+import { selectSkillDescriptors, summarizeSkillLearning, skillContextSignature } from './skills.js';
 import { parallelDecision } from './parallel-orchestrator.js';
 
 export const CONTRACT = 'kindgleam-open-world-situation-adaptive-v9';
@@ -381,6 +381,9 @@ export function planGoal(goal, {
   // Validated model classification (src/classifier.js), or null for keywords.
   classifierHints = null,
   modelSelection = null,
+  // Learned skill profiles are user/workspace-scoped evidence used only to
+  // adapt skill selection. They never grant permissions or bypass governance.
+  learnedSkills = [],
   // The ethical reading of the situation (safety.js); a declined request is
   // answered for the person's real need, in one step, without tools.
   ethics = null
@@ -401,6 +404,7 @@ export function planGoal(goal, {
     user, workspace, project, files, priorWork, constraints, resources,
     requirements, successCriteria, outputs, environment, language,
     skillLevel, preferences, currentState, completedSteps, failedSteps,
+    learnedSkills,
     evidence, questions, dataSources, connections, connectedServices, verifiedConnections, privacyConsent, need, adaptiveControl,
     workspaceType, runtimeMode, activeSurface, jurisdiction, blockedTopics, classifierHints, modelSelection,
     // Every attached file is part of the working set; only unreadable ones
@@ -606,7 +610,7 @@ export function planGoal(goal, {
     broad: BROAD_WORK.test(value) || value.split(/\s+/).length > 40
       || value.split(/[,;]|\band\b|\bwith\b|\bplus\b/i).filter(part => part.trim().split(/\s+/).length >= 2).length >= 4
   });
-  const unifiedIntelligence = buildUnifiedAdaptiveIntelligence(value, {
+  const baseUnifiedIntelligence = buildUnifiedAdaptiveIntelligence(value, {
     analysis,
     files,
     attachments,
@@ -621,7 +625,56 @@ export function planGoal(goal, {
     executionAvailable
   });
   const skillTaskType = intent.kind === 'coding' ? 'build-code' : intent.kind === 'discovery' ? 'investigate' : intent.kind === 'chat' ? 'respond' : 'plan';
-  const selectedSkills = selectSkillDescriptors(value, { taskType: skillTaskType, intent: intent.kind, capabilities: granted, limit: 6 });
+  const selectedSkills = selectSkillDescriptors(value, {
+    taskType: skillTaskType,
+    intent: intent.kind,
+    capabilities: granted,
+    limit: 6,
+    learnedSkills,
+    skillLevel,
+    preferences,
+    situation
+  });
+
+  const skillLearning = summarizeSkillLearning(selectedSkills);
+  const skillPatternContext = skillContextSignature({
+    goal: value,
+    taskType: skillTaskType,
+    intent: intent.kind,
+    coding: analysis.flags?.code === true,
+    projectWork: Boolean(project || files.length > 1 || attachments.length > 1),
+    unknown: analysis.unknownSituation === true,
+    complexity: Number(baseUnifiedIntelligence?.complexity ?? 0),
+    scale: baseUnifiedIntelligence?.scale ?? '',
+    retrying: failedSteps.length > 0,
+    verification: verification.required === true,
+    language
+  });
+
+  const learningCaution = skillLearning.experienced && skillLearning.reliability < 0.58;
+  const unifiedIntelligence = {
+    ...baseUnifiedIntelligence,
+    learning: {
+      ...skillLearning,
+      caution: learningCaution
+    },
+    patternContext: skillPatternContext,
+    reasoning: {
+      ...baseUnifiedIntelligence.reasoning,
+      depth: learningCaution && baseUnifiedIntelligence.reasoning.depth === 'focused'
+        ? 'structured'
+        : baseUnifiedIntelligence.reasoning.depth,
+      verification: learningCaution ? 'strong' : baseUnifiedIntelligence.reasoning.verification,
+      evidenceRequired: baseUnifiedIntelligence.reasoning.evidenceRequired || learningCaution
+    },
+    verification: learningCaution
+      ? {
+          ...baseUnifiedIntelligence.verification,
+          stages: [...new Set([...(baseUnifiedIntelligence.verification?.stages ?? []), 'learned-skill-recheck'])],
+          drivenBy: { ...(baseUnifiedIntelligence.verification?.drivenBy ?? {}), learnedSkillCaution: true }
+        }
+      : baseUnifiedIntelligence.verification
+  };
 
 
   const tasks = buildTasks(
@@ -672,7 +725,22 @@ export function planGoal(goal, {
     tasks,
     next: blocked.length ? null : nextTask(tasks)?.id ?? null,
     principles: PRINCIPLES,
-    adaptation: { ...adaptive, scale, unifiedWorkContext, skills: selectedSkills.map(item => ({ name: item.name, version: item.version, description: item.description, progressiveDisclosure: true })), parallel: parallelDecision({ mode: adaptiveControl?.parallelMode ?? adaptiveControl?.parallel ?? 'auto', pressure: Number(unifiedIntelligence.complexity) || 0, concurrencyOpportunity: unifiedIntelligence.scale === 'large-project' ? 0.9 : unifiedIntelligence.scale === 'complex' ? 0.7 : unifiedIntelligence.scale === 'multi-file' ? 0.45 : 0, risk: analysis.situation?.risk ?? 'ordinary', maxParallel: adaptiveControl?.maxParallel ?? adaptiveControl?.multiAgentMaxAgents ?? 4, itemCount: Math.max(1, tasks.length), explicit: adaptiveControl?.parallelMode === 'always' }), ...(notAvailableHere.length ? { notAvailableHere } : {}), ...(analysis.ownWork ? { ownWork: true } : {}) },
+    adaptation: {
+       ...adaptive,
+       scale,
+       unifiedWorkContext,
+       learning: {
+         ...skillLearning,
+         patternContext: skillPatternContext
+       },
+       skills: selectedSkills.map(item => ({
+         name: item.name,
+         version: item.version,
+         description: item.description,
+         ...(item.learning ? { learning: item.learning } : {}),
+         progressiveDisclosure: true
+       })),
+       parallel: parallelDecision({ mode: adaptiveControl?.parallelMode ?? adaptiveControl?.parallel ?? 'auto', pressure: Number(unifiedIntelligence.complexity) || 0, concurrencyOpportunity: unifiedIntelligence.scale === 'large-project' ? 0.9 : unifiedIntelligence.scale === 'complex' ? 0.7 : unifiedIntelligence.scale === 'multi-file' ? 0.45 : 0, risk: analysis.situation?.risk ?? 'ordinary', maxParallel: adaptiveControl?.maxParallel ?? adaptiveControl?.multiAgentMaxAgents ?? 4, itemCount: Math.max(1, tasks.length), explicit: adaptiveControl?.parallelMode === 'always' }), ...(notAvailableHere.length ? { notAvailableHere } : {}), ...(analysis.ownWork ? { ownWork: true } : {}) },
     intelligence: unifiedIntelligence,
     execution: {
       targets: adaptive.execution?.targets ?? [],

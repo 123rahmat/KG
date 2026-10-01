@@ -5,7 +5,7 @@
 
 import { state, $, element, api, notify, guard, capabilities } from './ui-core.js';
 import { loadUsage, openBillingPortal, renderBillingSection, renderMemories, renderSchedules, renderSecuritySection, renderUsageSection, renderWorkspaceTools, revokeOtherSessions, saveBilling, selectTab, syncScheduleForm } from './app-account.js';
-import { setupVoiceInput } from './app.js';
+import { setupVoiceInput, svgIcon } from './app.js';
 import { DEFAULT_SETTINGS, applyTheme, persistPreferencePatch, saveSettings } from './app-settings.js';
 import { renderReports } from './app-actions.js';
 
@@ -115,6 +115,34 @@ async function saveAdminModelSettings() {
   }
 }
 
+async function renderSkillLearning() {
+  const list = $('skillLearningList');
+  if (!list) return;
+  const result = await api('GET', '/api/skills/profiles').catch(() => null);
+  const profiles = Array.isArray(result?.profiles) ? result.profiles : [];
+  if (!result) {
+    list.replaceChildren(element('li', { class: 'muted small', text: 'Learned patterns could not be loaded.' }));
+    return;
+  }
+  if (!profiles.length) {
+    list.replaceChildren(element('li', { class: 'muted small', text: 'No learned work patterns yet. Completed and rated work will teach the adaptive layer over time.' }));
+    return;
+  }
+  list.replaceChildren(...profiles.slice(0, 8).map(item => {
+    const attempts = Number(item.attempts ?? 0);
+    const success = Number(item.success ?? 0);
+    const failure = Number(item.failure ?? 0);
+    const confidence = Number(item.confidence ?? 0.5);
+    const taskType = item.taskType ? ' · ' + item.taskType : '';
+    return element('li', { class: 'memory-item' }, [
+      element('span', { class: 'action-icon' }, [svgIcon('sparkle')]),
+      element('span', { class: 'memory-text' }, [
+        element('strong', { text: (item.skillName || 'skill') + taskType }),
+        element('span', { class: 'small muted', text: attempts + ' observations · ' + success + ' successful · ' + failure + ' failed · ' + Math.round(confidence * 100) + '% confidence' })
+      ])
+    ]);
+  }));
+}
 function renderCapabilities() {
   const can = capabilities();
   const provider = state.executionConfig?.reasoning?.provider;
@@ -281,7 +309,7 @@ export function activateSettingsSection(name) {
   if (activeName === 'security') renderSecuritySection();
   if (activeName === 'workspace') { renderWorkspaceTools(); renderReports(); loadModels(); }
   if (activeName === 'schedules') { renderSchedules(); syncScheduleForm(); }
-  if (activeName === 'personalization') renderMemories();
+  if (activeName === 'personalization') { renderMemories(); renderSkillLearning(); }
   if (activeName === 'mail') renderMailSection().catch(error => notify('mailNotice', 'bad', error.message));
 }
 // Resetting asks on the button itself: a second click within a few seconds.
@@ -310,6 +338,14 @@ export function initSettingsWindow() {
   $('revokeSessions').addEventListener('click', revokeOtherSessions);
   $('settingsFiles').addEventListener('click', () => { $('settings').close(); selectTab('objects'); });
   $('settingsActivity').addEventListener('click', () => { $('settings').close(); selectTab('audit'); });
+  $('skillLearningRefresh')?.addEventListener('click', renderSkillLearning);
+  $('skillLearningClear')?.addEventListener('click', async () => {
+    if (!confirm('Forget all learned work patterns for this workspace?')) return;
+    await guard(async () => {
+      await api('DELETE', '/api/skills/profiles');
+      await renderSkillLearning();
+    }, 'runNotice');
+  });
   document.querySelectorAll('.settings-nav-item').forEach(button => {
     button.addEventListener('click', () => {
       $('settingsSearch').value = '';

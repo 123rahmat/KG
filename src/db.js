@@ -204,7 +204,7 @@ export async function assertRlsReady(pool) {
   const expected = [
     'workspaces', 'organizations', 'memberships',
     'objects', 'blobs', 'runs', 'run_tasks', 'audit_log',
-    'governance_policies', 'capability_specs', 'situation_events', 'run_jobs',
+    'governance_policies', 'capability_specs', 'situation_events', 'run_jobs', 'skill_profiles', 'skill_observations',
     'idempotency_keys', 'user_preferences',
     'usage_events', 'workspace_billing', 'workspace_ai_settings', 'stripe_events', 'run_actions', 'workspace_tools', 'schedules', 'notifications', 'memories', 'safety_events', 'safety_reports', 'terms_acceptances',
     'workspace_sources', 'run_agents', 'run_waves', 'code_workspace_sessions', 'rag_documents', 'run_blackboards', 'adaptive_cache', 'run_feedback', 'evolution_proposals'
@@ -420,7 +420,7 @@ async function hardenRuntimeRole(client, runtimeRole, logger) {
     ['SELECT, INSERT, UPDATE, DELETE', ['memories']],
     ['SELECT, INSERT', ['safety_events', 'terms_acceptances']],
     ['SELECT, INSERT, UPDATE', ['safety_reports']],
-    ['SELECT, INSERT, UPDATE, DELETE', ['workspace_sources', 'run_agents', 'run_waves', 'code_workspace_sessions', 'rag_documents', 'run_blackboards', 'adaptive_cache', 'run_feedback', 'evolution_proposals']],
+    ['SELECT, INSERT, UPDATE, DELETE', ['workspace_sources', 'run_agents', 'run_waves', 'code_workspace_sessions', 'rag_documents', 'run_blackboards', 'adaptive_cache', 'run_feedback', 'evolution_proposals', 'skill_profiles', 'skill_observations']],
     ['SELECT, INSERT, UPDATE, DELETE', ['login_links']],
     ['SELECT, INSERT, UPDATE', ['mail_settings']]
   ];

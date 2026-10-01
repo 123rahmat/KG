@@ -13,6 +13,7 @@ import { configuredExecutionTargets, planPolicyAllows, dataPolicyAllows, modelPo
 import { resolveModelSelection } from '../model-routing.js';
 import { FeedbackStore } from '../feedback.js';
 import { EvolutionStore } from '../evolution.js';
+import { SkillLearningStore, skillContextSignature } from '../skills.js';
 
 // Files the AI reads for itself: text and code, CSV, PDF, Word, Excel and
 // PowerPoint become text; images are shown to the model. Anything else stays
@@ -30,6 +31,8 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
   const evolution = config.security?.personalDataEncryptionKey
     ? new EvolutionStore(pool, { encryptionKey: config.security.personalDataEncryptionKey })
     : null;
+
+  const skillLearning = new SkillLearningStore(pool);
 
   function executionAvailable() {
     return {
@@ -139,12 +142,22 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
       workspaceId: req.scope.workspaceId,
       principalId: req.principal.id
     });
+    const planSkillContext = skillContextSignature({
+      goal: req.body?.goal,
+      taskType: classification.source === 'model' ? (classification.hints?.actions ?? []).includes('investigate') ? 'investigate' : classification.hints?.actions?.includes('answer') ? 'respond' : 'plan' : 'plan',
+      intent: classification.hints?.intent?.kind ?? '',
+      coding: req.body?.activeSurface === 'code' || /\b(?:code|coding|debug|repository|repo|software|program)\b/i.test(String(req.body?.goal ?? '')),
+      projectWork: Boolean(req.body?.project || (req.body?.files ?? req.body?.artifacts ?? []).length),
+      language: req.body?.language ?? ''
+    });
+    const learnedSkills = await skillLearning.profiles(req.scope, { limit: 48, contextSignature: planSkillContext });
     const plan = planGoal(req.body?.goal, {
       ...planningInput(req, policies, config),
       executionAvailable: executionAvailable(),
       blockedTopics: blockedTopicsFrom(config),
       classifierHints: classification.hints,
-      modelSelection: modelSelection.selectedModelId || null
+      modelSelection: modelSelection.selectedModelId || null,
+      learnedSkills
     });
     if (plan.adaptation) plan.adaptation.classification = { ...plan.adaptation.classification, ...publicClassification(classification) };
     res.json(plan);
@@ -171,6 +184,15 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
       workspaceId: req.scope.workspaceId,
       principalId: req.principal.id
     });
+    const runSkillContext = skillContextSignature({
+      goal: req.body?.goal,
+      taskType: 'plan',
+      intent: classification.hints?.intent?.kind ?? '',
+      coding: req.body?.activeSurface === 'code' || /\b(?:code|coding|debug|repository|repo|software|program)\b/i.test(String(req.body?.goal ?? '')),
+      projectWork: Boolean(req.body?.project || (req.body?.files ?? req.body?.artifacts ?? []).length),
+      language: req.body?.language ?? ''
+    });
+    const learnedSkills = await skillLearning.profiles(req.scope, { limit: 48, contextSignature: runSkillContext });
     const verdict = combineDecisions(screenRequest(req.body?.goal, { blockedTopics: blockedTopicsFrom(config) }), classification.hints?.policy);
     // When the model read the request, a declined one becomes a chat answered
     // for the person's situation and real need. Without that reading, and for
@@ -207,7 +229,8 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
       ethics: ethicsOf(verdict),
       classifierHints: classification.hints,
       classification: publicClassification(classification),
-      modelSelection: modelSelection.selectedModelId || null
+      modelSelection: modelSelection.selectedModelId || null,
+      learnedSkills
     }, { requestId: req.requestId });
     // Classification spent real tokens; they count against the run's budget.
     const usage = classification.usage;
@@ -282,7 +305,60 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
       action: 'run.feedback', target: run.id, outcome: 'allowed',
       detail: { rating: saved.rating, reason: saved.reason }, requestId: req.requestId
     });
+    const feedbackOutcome = saved.rating === 'positive'
+      ? 'success'
+      : ['too-slow', 'too-expensive', 'other'].includes(saved.reason) ? 'uncertain'
+        : 'failure';
+    const feedbackUtility = saved.rating === 'positive'
+      ? 1
+      : saved.reason === 'too-slow' || saved.reason === 'too-expensive' ? -0.5
+        : saved.reason === 'other' ? 0
+          : -1;
+    const runSkills = [...new Set([
+      ...(Array.isArray(run.tasks) ? run.tasks : [])
+        .flatMap(task => Array.isArray(task?.evidence?.skillsUsed) ? task.evidence.skillsUsed : []),
+      ...((run.tasks ?? []).some(task => Array.isArray(task?.evidence?.skillsUsed) && task.evidence.skillsUsed.length)
+        ? []
+        : (Array.isArray(run.adaptation?.skills) ? run.adaptation.skills.map(item => item?.name) : []))
+    ].map(item => String(item ?? '').trim()).filter(Boolean))];
+    const feedbackTaskType = (Array.isArray(run.tasks) ? run.tasks : [])
+      .find(task => Array.isArray(task?.evidence?.skillsUsed) && task.evidence.skillsUsed.length)?.id
+      || run.intent?.kind
+      || 'run';
+    await skillLearning.observe(req.scope, {
+      runId: run.id,
+      taskId: 'run-feedback',
+      taskType: feedbackTaskType,
+      skillNames: runSkills,
+      outcome: feedbackOutcome,
+      source: 'feedback',
+      reason: saved.reason,
+      eventKey: saved.id,
+      contextSignature: run.adaptation?.learning?.patternContext ?? '',
+      utilitySignal: feedbackUtility
+    }).catch(error => audit?.record({
+      principalId: req.principal.id, workspaceId: req.scope.workspaceId,
+      action: 'skill.learning.failed', target: run.id, outcome: 'warning',
+      detail: { source: 'feedback', code: error.code ?? 'learning-failed' }, requestId: req.requestId
+    }));
     res.status(201).json({ feedback: saved });
+  }));
+
+  app.get('/api/skills/profiles', scoped('viewer'), route(async (req, res) =>
+    res.json({ version: '2', profiles: await skillLearning.profiles(req.scope, { limit: req.query.limit }) })));
+
+  app.delete('/api/skills/profiles', scoped('editor'), route(async (req, res) => {
+    const cleared = await skillLearning.clear(req.scope);
+    await audit?.record({
+      principalId: req.principal.id,
+      workspaceId: req.scope.workspaceId,
+      action: 'skill.learning.cleared',
+      target: 'self',
+      outcome: 'allowed',
+      detail: cleared,
+      requestId: req.requestId
+    });
+    res.json({ cleared });
   }));
 
   app.get('/api/audit/integrity', scoped('admin'), route(async (req, res) => {

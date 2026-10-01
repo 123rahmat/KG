@@ -226,6 +226,8 @@ function decisionPressure(run, task, progress = {}) {
   const observed = observedPanelSignals(progress);
   const goalComplexity = Math.min(0.14, signals.goalLength > 160 ? 0.08 : 0);
   const disagreementEscalation = observed.disagreement ? 0.18 + Math.min(0.10, observed.confidenceSpread * 0.2) : 0;
+  const learnedCaution = run?.adaptation?.learning?.caution === true;
+  const learningEscalation = learnedCaution ? 0.14 : 0;
   return Math.min(1,
     signals.scaleComplexity +
     signals.implementationComplexity +
@@ -240,7 +242,8 @@ function decisionPressure(run, task, progress = {}) {
     signals.comparisonComplexity +
     signals.communicationComplexity +
     goalComplexity +
-    disagreementEscalation -
+    disagreementEscalation +
+    learningEscalation -
     observed.resolution
   );
 }
@@ -302,7 +305,9 @@ function roleUtility(role, run, task, progress = {}) {
     'security-reviewer': signals.securityFocus ? 0.92 + signals.stakes * 0.3 : (signals.executable ? 0.16 : 0.04),
     'performance-reviewer': signals.performanceFocus ? 0.88 + signals.scaleComplexity * 0.4 : 0.05
   }[role] ?? 0;
-  return Math.max(0, Math.min(1.2, base + disagreementBoost - resolutionPenalty - (completed.has(role) ? 1 : 0)));
+  const learningBoost = run?.adaptation?.learning?.caution === true
+    && ['critic', 'debugger', 'test-engineer'].includes(role) ? 0.12 : 0;
+  return Math.max(0, Math.min(1.2, base + disagreementBoost + learningBoost - resolutionPenalty - (completed.has(role) ? 1 : 0)));
 }
 
 function roleCandidates(run, task, progress = {}) {
@@ -445,7 +450,10 @@ export function agentMessages(role, basePayload) {
         workPlan: basePayload?.workPlan ?? null,
         previousAttempts: basePayload?.previousAttempts ?? [],
         evidenceSoFar: basePayload?.evidenceSoFar ?? [],
-        skills: Array.isArray(basePayload?.skills) ? basePayload.skills.slice(0, 6).map(skill => ({
+                 skillLearning: basePayload?.skillLearning ?? null,
+         adaptiveContext: basePayload?.adaptiveContext ?? null,
+         precedents: Array.isArray(basePayload?.precedents) ? basePayload.precedents.slice(0, 6) : [],
+skills: Array.isArray(basePayload?.skills) ? basePayload.skills.slice(0, 6).map(skill => ({
           name: skill.name, version: skill.version, description: skill.description,
           instructions: String(skill.instructions ?? '').slice(0, 5000), fingerprint: skill.fingerprint ?? null
         })) : [],
@@ -496,6 +504,9 @@ function arbiterMessages(basePayload, findings) {
         situation: basePayload?.situation ?? null,
         successCriteria: basePayload?.situation?.successCriteria ?? [],
         evidenceSoFar: basePayload?.evidenceSoFar ?? [],
+        skillLearning: basePayload?.skillLearning ?? null,
+        adaptiveContext: basePayload?.adaptiveContext ?? null,
+        precedents: Array.isArray(basePayload?.precedents) ? basePayload.precedents.slice(0, 6) : [],
         remembered: Array.isArray(basePayload?.remembered)
           ? basePayload.remembered.slice(-15).map(item => clip(String(item ?? ''), 600))
           : [],

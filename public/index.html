@@ -563,6 +563,13 @@
           </div>
           <button type="button" class="ghost small danger-text" id="memoryClear">Forget cross-chat memories</button>
           <p class="hint">Chat-local memory cannot be turned off. This setting controls only whether memory can be used between separate chats.</p>
+          <h3 class="settings-subhead">Learned work patterns</h3>
+          <p class="hint">Kindgleam learns which selected skills tend to work well for your tasks. This evidence only changes adaptation; it never grants permissions or overrides safety.</p>
+          <ul class="memory-list" id="skillLearningList" aria-live="polite"></ul>
+          <div class="row wrap">
+            <button type="button" class="ghost small" id="skillLearningRefresh">Refresh learned patterns</button>
+            <button type="button" class="ghost small danger-text" id="skillLearningClear">Forget learned work patterns</button>
+          </div>
           <div class="settings-info-card"><strong>Situation-adaptive workflow</strong><p>The interface and workflow can change with the task. Unknown requirements remain explicit until an actual capability or runner is available.</p></div>
         </section>
 

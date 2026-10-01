@@ -37,7 +37,7 @@ import { buildUnifiedWorkContext } from '../unified-work-context.js';
 import { buildProjectIndex } from '../project-index.js';
 import { compileCodeContext, isCodeTask } from '../context-compiler.js';
 import { RagStore } from '../rag.js';
-import { loadSelectedSkills } from '../skills.js';
+import { loadSelectedSkills, SkillLearningStore, skillContextSignature } from '../skills.js';
 import { BlackboardStore } from '../blackboard.js';
 
 /** Which tasks execute where. Everything else needs a human decision. */
@@ -89,6 +89,9 @@ export function thinkingFor(task, run = null) {
   const scale = run?.adaptation?.scale;
   const highStakes = run?.situation?.risk === 'high-impact';
   if (Number(run?.attempt ?? 1) > 1) level = shiftEffort(level, 1);
+  if (run?.adaptation?.learning?.experienced && run.adaptation.learning.reliability < 0.58) {
+    level = shiftEffort(level, 1);
+  }
   if (scale === 'complex' || highStakes) level = shiftEffort(level, 1);
   else if (scale === 'small' && task?.type !== 'verify') level = shiftEffort(level, -1);
   const briefAnswer = run?.workflow === 'direct' && text(run?.situation?.need?.depth ?? run?.adaptation?.need?.depth) === 'brief';
@@ -134,6 +137,8 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
   const blackboard = config.security?.personalDataEncryptionKey
     ? new BlackboardStore(pool, { encryptionKey: config.security.personalDataEncryptionKey })
     : null;
+
+  const skillLearning = new SkillLearningStore(pool);
 
   /** What tools may use in a step: the person's files and scope, and a way to propose actions. */
   function selectedAttachmentNames(run) {
@@ -812,6 +817,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
               ...(execution.multiAgent ? { multiAgent: execution.multiAgent } : {}),
               // How many memories from earlier chats this step used.
               ...(execution.remembered ? { remembered: execution.remembered } : {}),
+              ...(execution.skillsUsed?.length ? { skillsUsed: execution.skillsUsed } : {}),
               executionTarget: executionDecision?.target ?? null
             }
           : {
@@ -823,6 +829,30 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         requestId: req.requestId,
         externalExecution: Boolean(managedReceipt)
       });
+
+      const runSkills = (Array.isArray(execution?.skillsUsed) ? execution.skillsUsed : [])
+        .map(item => String(item ?? '').trim()).filter(Boolean);
+      const learningOutcome = taskFailed ? 'failure' : 'success';
+      await skillLearning.observe(req.scope, {
+        runId: run.id,
+        taskId: task.id,
+        taskType: task.id === 'build-code' ? 'build-code' : task.type,
+        skillNames: runSkills,
+        outcome: learningOutcome,
+        source: failedCheck ? 'verification' : 'execution',
+        reason: failedCheck
+          ? 'verification-failed'
+          : externalExecutionFailure
+            ? 'runner-failed'
+            : 'completed',
+        eventKey: run.id + ':' + task.id + ':attempt:' + String(run.attempt),
+        contextSignature: taskSkillContext,
+        utilitySignal: taskFailed ? -1 : 1
+      }).catch(error => audit?.record({
+        principalId: req.principal.id, workspaceId: req.scope.workspaceId,
+        action: 'skill.learning.failed', target: run.id, outcome: 'warning',
+        detail: { taskId: task.id, code: error.code ?? 'learning-failed' }, requestId: req.requestId
+      }));
 
       if (rag && (task.type === 'investigate'
         || task.type === 'plan'
@@ -1265,12 +1295,34 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     // on criteria it never saw.
     const brief = situationBrief(run);
     if (task.type === 'verify') brief.successCriteria = plannedCriteriaFor(run);
+    const taskSkillContext = skillContextSignature({
+      goal: run.goal,
+      taskType: task.id === 'build-code' ? 'build-code' : task.type,
+      intent: run.intent?.kind,
+      coding: Boolean(run.intelligence?.coding || run.adaptation?.primarySurface === 'code'),
+      projectWork: Boolean(run.adaptation?.unifiedWorkContext?.workspace?.projectId || run.adaptation?.scale === 'large-project' || run.adaptation?.scale === 'multi-file'),
+      unknown: Boolean(run.investigation?.unknownSituation),
+      complexity: Number(run.intelligence?.complexity ?? 0),
+      scale: run.adaptation?.scale ?? '',
+      retrying: Boolean(run.attempt > 0 || task.type === 'reassess' || task.type === 'replan'),
+      verification: task.type === 'verify' || Boolean(task.metadata?.verification),
+      language: run.adaptation?.language ?? ''
+    });
+    const skillProfiles = await skillLearning.profiles(scope ?? currentDbScope(), {
+      limit: 48,
+      taskType: task.id === 'build-code' ? 'build-code' : '',
+      contextSignature: taskSkillContext
+    }).catch(() => []);
     const selectedSkills = await loadSelectedSkills(run.goal, {
       taskType: task.id === 'build-code' ? 'build-code' : task.type,
       intent: run.intent?.kind,
       capabilities: run.capabilities?.granted ?? [],
       limit: 6,
-      maxInstructionChars: 5000
+      maxInstructionChars: 5000,
+      learnedSkills: skillProfiles,
+      skillLevel: run.adaptation?.skillLevel ?? '',
+      preferences: run.adaptation?.preferences ?? [],
+      situation: run.situation ?? null
     });
     // The server's stand-in criterion is for the check only: do not show
     // it to ordinary answer steps, where it only pads short answers with
@@ -1288,7 +1340,37 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       // Every code-workspace chat carries its explicit, server-owned chat
       // identity so the primary model and every advisory agent share the
       // same memory scope and adaptive panel policy.
-      skills: selectedSkills.map(skill => ({ name: skill.name, version: skill.version, description: skill.description, instructions: skill.instructions, fingerprint: skill.fingerprint, risk: skill.risk })),
+      skills: selectedSkills.map(skill => ({
+        name: skill.name,
+        version: skill.version,
+        description: skill.description,
+        instructions: skill.instructions,
+        fingerprint: skill.fingerprint,
+        risk: skill.risk,
+        userAdaptation: skill.userAdaptation ?? null
+      })),
+      skillLearning: {
+        selected: selectedSkills.map(skill => skill.learning ?? null).filter(Boolean),
+        contextSignature: taskSkillContext
+      },
+      adaptiveContext: {
+        memory: {
+          recalledItems: remembered.length,
+          scope: run.conversationId ? 'conversation' : 'run'
+        },
+        verifiedExperience: ragResults
+          .filter(item => item?.sourceType === 'run-evidence')
+          .slice(0, 6)
+          .map(item => ({ id: item.id, title: item.title, score: item.score ?? null, sourceId: item.sourceId })),
+        learnedSkills: {
+          selected: selectedSkills.map(skill => ({ name: skill.name, learning: skill.learning ?? null })),
+          contextSignature: taskSkillContext
+        },
+        workspaceState: run.adaptation?.unifiedWorkContext?.workspace ?? null,
+        blackboardPresent: Boolean(blackboard),
+        codeIntelligencePresent: Boolean(codeIntelligence),
+        multiAgentEligible: Boolean(run.adaptation?.parallel)
+      },
       chat: run.adaptation?.unifiedWorkContext?.chat ?? {
         conversationId: run.conversationId ?? null,
         memory: { scope: run.conversationId ? 'conversation' : 'unavailable', alwaysOn: Boolean(run.conversationId), crossChat: 'user-controlled' },
@@ -1324,6 +1406,10 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       workPlan: workPlan(run.tasks, task.id),
       evidenceSoFar: evidence,
       blackboard: blackboard ? await blackboard.load(scope ?? currentDbScope(), run.id).catch(() => null) : null,
+      precedents: ragResults
+        .filter(item => item?.sourceType === 'run-evidence')
+        .slice(0, 6)
+        .map(item => ({ id: item.id, sourceId: item.sourceId, title: item.title, content: item.content, score: item.score ?? null, note: 'Prior verified workflow evidence is a precedent, not proof for the current task.' })),
       rag: ragResults.map(item => ({ id: item.id, sourceType: item.sourceType, sourceId: item.sourceId, title: item.title, content: item.content, score: item.score ?? null, metadata: item.metadata ?? {} })).slice(0, 8),
       // Code that failed its run, and how, for a targeted fix.
       codeRepair: task.id === 'build-code' ? repairContext(run, repairCeiling(run)) : null,
@@ -1555,6 +1641,8 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       usage: answer.usage,
       multiAgent: multiAgent.brief ?? null,
       toolLog: answer.toolLog ?? [],
+      // Only skills selected for this exact task receive this task's outcome.
+      skillsUsed: selectedSkills.map(skill => skill.name).filter(Boolean),
       remembered: remembered.length,
       ...(managedTarget ? {
         executionReceipt: {

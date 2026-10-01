@@ -443,7 +443,8 @@ export function resolveAdaptiveContext(goal, {
   classifierHints = null,
   blockedTopics = [],
   modelSelection = null,
-  policyDecision = null
+  policyDecision = null,
+  learnedSkills = []
 } = {}) {
   // The adaptive engine receives the complete situation, not just the prompt.
   // This keeps user, workspace, project, state, evidence and constraints in
@@ -455,7 +456,7 @@ export function resolveAdaptiveContext(goal, {
     skillLevel, preferences, currentState, completedSteps, failedSteps,
     evidence, questions, dataSources, connections, connectedServices,
     verifiedConnections, privacyConsent, need, adaptiveControl, classifierHints, blockedTopics, modelSelection, policyDecision,
-    attachedCode
+    learnedSkills, attachedCode
   };
   const analysis = inspectGoal(goal, adaptiveContext);
   const capabilityRequirements = discoverCapabilityRequirements(goal, analysis);
@@ -596,7 +597,7 @@ export function resolveAdaptiveContext(goal, {
   return {
     universal: true,
     openWorld: true,
-    adaptationEngine: 'goal-model + situation-model + user-controlled-scope + capability-compiler + model-router + evidence-driven replan',
+    adaptationEngine: 'goal-model + situation-model + user-controlled-scope + capability-compiler + learned-skill-selection + model-router + evidence-driven replan',
     capabilitySchemaVersion: CAPABILITY_SCHEMA_VERSION,
     adaptiveContractVersion: ADAPTIVE_CONTRACT_VERSION,
     adaptiveSnapshot,
@@ -632,6 +633,15 @@ export function resolveAdaptiveContext(goal, {
     goalModel: model,
     classification: { source: analysis.classification ?? 'keywords' },
     modelSelection: adaptiveContext.modelSelection?.selectedModelId || null,
+    skillLearning: {
+      version: '1',
+      enabled: true,
+      profileScope: 'workspace+principal',
+      evidence: 'verified outcomes + explicit user feedback',
+      profilesAvailable: Array.isArray(learnedSkills) ? learnedSkills.length : 0
+    },
+    skillLevel: text(skillLevel) || null,
+    preferences: Array.isArray(preferences) ? preferences.map(text).filter(Boolean).slice(0, 30) : [],
     situation: analysis.situation,
     presentation: {
       ...(analysis.situation?.presentation ?? { mode: 'adaptive' }),

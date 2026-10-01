@@ -68,6 +68,48 @@ user and world
 9. **Deliver** artifacts, evidence, provenance, limitations and open
    uncertainty; **iterate** within the attempt budget, learning from failures.
 
+## Unified adaptive intelligence fusion
+
+Every request and every continuation uses the same server-owned adaptive loop. The
+system does not switch between independent "chat", "coding", "research" or "agent"
+brains. Those are surfaces and capability combinations selected from the current
+situation.
+
+The adaptive decision context is fused from:
+
+1. **Situation and user context** — goal, current need, skill level, language,
+   preferences, workspace/project state, prior work, constraints and success criteria.
+2. **Memory** — conversation-local memory and optional user-controlled cross-chat memory,
+   scoped to the authenticated workspace and principal.
+3. **Experience and precedent** — prior verified workflow evidence and current blackboard
+   state, treated as evidence to consider rather than automatic truth.
+4. **Skills** — procedural SKILL.md instructions selected for the task. Learned user/workspace
+   performance changes selection and effort, but never grants authority or permissions.
+5. **Patterns** — repeated outcomes for the same task/context signature strengthen or weaken
+   how a skill is selected in that situation; single observations are deliberately damped.
+6. **Capabilities and resources** — the situation decides what is justified and available,
+   then the existing capability compiler/resource controller selects the smallest viable set.
+7. **Planning and agents** — the dependency-aware server plan chooses the next work item;
+   advisory specialists receive the same adaptive context without becoming a second authority.
+8. **Execution and coding workspace** — sandbox/agent execution, repository-aware edits,
+   tests, repair history, blackboard and workspace state all report evidence back into the loop.
+9. **Verification and governance** — evidence is checked against server-owned criteria;
+   approvals, privacy, policy and safety remain hard boundaries and cannot be learned around.
+10. **Learning and controlled evolution** — successful/failed outcomes update scoped skill
+    performance; explicit feedback also creates the existing governed evolution candidate.
+    Nothing silently rewrites policies, prompts or model weights.
+
+The resulting control loop is:
+
+`observe situation → recall memory/experience → select skills/patterns →
+compile capabilities/resources → plan → approve when required → execute →
+observe evidence → verify → update learning → reassess/replan → deliver/iterate`
+
+For coding work this specializes through context, not a separate engine: repository
+intelligence, code-workflow repair, testing, performance, security-review and GitHub
+skills are selected inside the same loop.
+
+
 Ordinary requests take a short path (answer, then check); crisis and
 emergency situations get an immediate, caring answer before any workflow.
 

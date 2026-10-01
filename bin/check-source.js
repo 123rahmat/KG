@@ -9,7 +9,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 
 const root = process.cwd();
-const roots = ['bin', 'src', 'public', 'tests'];
+const roots = ['bin', 'src', 'public', 'tests', 'test'];
 const explicit = ['server.js'];
 const ignoredDirs = new Set(['node_modules', '.git', 'coverage', 'dist', 'build']);
 const sourceExts = new Set(['.js', '.mjs', '.cjs']);

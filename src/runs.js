@@ -147,7 +147,7 @@ export class RunStore {
     completedSteps = [], failedSteps = [], evidence = [], questions = [],
     dataSources = [], connections = [], connectedServices = [], verifiedConnections = [], privacyConsent = {}, need = null, adaptiveControl = {}, visibility = 'private',
     classifierHints = null, classification = null, conversationId = null, attachments = [],
-    executionAvailable = null, modelSelection = null,
+    executionAvailable = null, modelSelection = null, learnedSkills = [],
     // The ethical side of the situation (safety.js ethicsOf): every step adapts to it.
     ethics = null
   } = {}, { requestId } = {}) {
@@ -187,7 +187,7 @@ export class RunStore {
       successCriteria, outputs, environment, language, skillLevel, preferences, currentState: currentState ?? previousState,
       completedSteps, failedSteps, evidence, questions, dataSources, connections, connectedServices,
       privacyConsent, need, adaptiveControl, verifiedConnections, workspaceType, runtimeMode,
-      activeSurface, jurisdiction, classifierHints, modelSelection
+      activeSurface, jurisdiction, classifierHints, modelSelection, learnedSkills
     };
     const situation = buildSituationModel(goalText, situationContext);
     if (ethics) situation.ethics = ethics;

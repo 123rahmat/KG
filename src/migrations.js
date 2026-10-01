@@ -2187,5 +2187,90 @@ export const MIGRATIONS = [
         ADD CONSTRAINT schedules_kind_check
         CHECK (kind IN ('reminder', 'ask'));
     `
+  },
+  {
+    version: 54,
+    name: 'adaptive-skill-learning',
+    sql: `
+      CREATE TABLE IF NOT EXISTS skill_profiles (
+        workspace_id       TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        principal_id       TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+        skill_name         TEXT NOT NULL,
+        task_type          TEXT NOT NULL DEFAULT '',
+        success_count      INTEGER NOT NULL DEFAULT 0 CHECK (success_count >= 0),
+        failure_count      INTEGER NOT NULL DEFAULT 0 CHECK (failure_count >= 0),
+        uncertain_count    INTEGER NOT NULL DEFAULT 0 CHECK (uncertain_count >= 0),
+        confidence         DOUBLE PRECISION NOT NULL DEFAULT 0.5 CHECK (confidence >= 0 AND confidence <= 1),
+        utility_ema        DOUBLE PRECISION NOT NULL DEFAULT 0 CHECK (utility_ema >= -1 AND utility_ema <= 1),
+        last_observed_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (workspace_id, principal_id, skill_name, task_type)
+      );
+
+      CREATE INDEX IF NOT EXISTS skill_profiles_lookup_idx
+        ON skill_profiles(workspace_id, principal_id, task_type, last_observed_at DESC);
+
+      CREATE TABLE IF NOT EXISTS skill_observations (
+        id                 TEXT PRIMARY KEY,
+        workspace_id       TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        principal_id       TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+        run_id             TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        task_id            TEXT NOT NULL,
+        skill_name         TEXT NOT NULL,
+        task_type          TEXT NOT NULL DEFAULT '',
+        outcome            TEXT NOT NULL CHECK (outcome IN ('success','failure','uncertain')),
+        source             TEXT NOT NULL CHECK (source IN ('execution','feedback','verification','repair')),
+        reason             TEXT NOT NULL DEFAULT '',
+        signal             DOUBLE PRECISION NOT NULL CHECK (signal >= -1 AND signal <= 1),
+        event_key          TEXT NOT NULL,
+        created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE (workspace_id, principal_id, run_id, task_id, skill_name, source, event_key)
+      );
+
+      CREATE INDEX IF NOT EXISTS skill_observations_scope_idx
+        ON skill_observations(workspace_id, principal_id, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS skill_observations_skill_idx
+        ON skill_observations(workspace_id, principal_id, skill_name, task_type, created_at DESC);
+
+      ALTER TABLE skill_profiles ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE skill_profiles FORCE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS skill_profiles_scope_policy ON skill_profiles;
+      CREATE POLICY skill_profiles_scope_policy ON skill_profiles
+        USING (
+          skill_profiles.workspace_id = current_setting('app.workspace_id', true)
+          AND skill_profiles.principal_id = current_setting('app.principal_id', true)
+        )
+        WITH CHECK (
+          skill_profiles.workspace_id = current_setting('app.workspace_id', true)
+          AND skill_profiles.principal_id = current_setting('app.principal_id', true)
+        );
+
+      ALTER TABLE skill_observations ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE skill_observations FORCE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS skill_observations_scope_policy ON skill_observations;
+      CREATE POLICY skill_observations_scope_policy ON skill_observations
+        USING (
+          skill_observations.workspace_id = current_setting('app.workspace_id', true)
+          AND skill_observations.principal_id = current_setting('app.principal_id', true)
+        )
+        WITH CHECK (
+          skill_observations.workspace_id = current_setting('app.workspace_id', true)
+          AND skill_observations.principal_id = current_setting('app.principal_id', true)
+        );
+
+      REVOKE ALL ON skill_profiles FROM PUBLIC;
+      REVOKE ALL ON skill_observations FROM PUBLIC;
+    `
+  },
+  {
+    version: 55,
+    name: 'skill-context-patterns',
+    sql: `
+      ALTER TABLE skill_observations
+        ADD COLUMN IF NOT EXISTS context_signature TEXT NOT NULL DEFAULT '';
+
+      CREATE INDEX IF NOT EXISTS skill_observations_context_idx
+        ON skill_observations(workspace_id, principal_id, context_signature, skill_name, task_type, created_at DESC);
+    `
   }
 ];
