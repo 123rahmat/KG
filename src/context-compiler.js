@@ -148,6 +148,8 @@ export function compileCodeContext({
   })).sort((a,b) => b.score - a.score || a.file.path.localeCompare(b.file.path));
 
   const selected = [];
+  const selectedPathSet = new Set();
+  const criticalPaths = new Set([...changed, ...symbolPaths]);
   let chars = 0;
   for (const candidate of ranked) {
     if (selected.length >= fileBudget) break;
@@ -166,8 +168,32 @@ export function compileCodeContext({
       digest: candidate.file.digest, score: candidate.score,
       symbols: fileSymbols(index,candidate.file.path), imports: fileImports(index,candidate.file.path), content
     });
+    selectedPathSet.add(candidate.file.path);
     chars += cost;
-    if (chars >= charBudget) break;
+    if (chars >= charBudget && !criticalPaths.has(candidate.file.path)) break;
+  }
+
+  // Semantic-critical files (changed files and files containing requested
+  // symbols) are never silently lost just because an earlier candidate filled
+  // the budget. Keep them with a bounded slice of their source when needed.
+  for (const criticalPath of criticalPaths) {
+    if (selectedPathSet.has(criticalPath)) continue;
+    const candidate = ranked.find(item => item.file.path === criticalPath);
+    if (!candidate) continue;
+    const available = Math.max(200, charBudget - chars);
+    if (available <= 200 && selected.length >= fileBudget) continue;
+    const perFile = Math.min(9_000, available);
+    const content = boundedWindows(contextSafeContent(candidate.file.path, candidate.file.content),
+      fileSymbols(index, candidate.file.path).map(item => item.line),
+      defaults.snippetLines, perFile);
+    if (!content) continue;
+    selected.push({
+      path: candidate.file.path, kind: candidate.file.kind, language: candidate.file.language,
+      digest: candidate.file.digest, score: candidate.score,
+      symbols: fileSymbols(index,candidate.file.path), imports: fileImports(index,candidate.file.path), content
+    });
+    selectedPathSet.add(candidate.file.path);
+    chars += content.length + candidate.file.path.length + 80;
   }
 
   const selectedPaths = selected.map(file => file.path);
