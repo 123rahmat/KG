@@ -104,6 +104,50 @@ async function applyCodeWorkspace(run, structured) {
   }, 'runNotice');
 }
 
+function renderWorkspaceReview(reviewHolder, reviewResult) {
+  reviewHolder.replaceChildren(
+    element('div', { class: 'workspace-review-summary small' }, [
+      element('strong', { text: `${reviewResult.review.changes.length} file changes` }),
+      element('span', { class: 'muted', text: reviewResult.review.sourceRevision ? `Snapshot ${String(reviewResult.review.sourceRevision).slice(0, 12)}` : 'Current workspace snapshot' })
+    ])
+  );
+
+  for (const change of reviewResult.review.changes) {
+    const label = change.kind === 'added' ? 'Added' : change.kind === 'deleted' ? 'Deleted' : 'Modified';
+    const before = change.before?.content;
+    const after = change.after?.content;
+    const detail = element('details', { class: 'workspace-review-file' });
+    detail.append(
+      element('summary', { class: 'row wrap' }, [
+        element('strong', { text: change.path }),
+        element('span', { class: 'muted small', text: label })
+      ]),
+      element('div', { class: 'workspace-review-panes' }, [
+        element('section', { class: 'workspace-review-pane' }, [
+          element('div', { class: 'workspace-review-label small muted', text: 'Before' }),
+          element('pre', { class: 'workspace-review-code', text: before ?? '— file did not exist —' }),
+          change.before?.truncated ? element('div', { class: 'small muted', text: 'Preview clipped for this large file.' }) : null
+        ].filter(Boolean)),
+        element('section', { class: 'workspace-review-pane' }, [
+          element('div', { class: 'workspace-review-label small muted', text: 'After' }),
+          element('pre', { class: 'workspace-review-code', text: after ?? '— file will be deleted —' }),
+          change.after?.truncated ? element('div', { class: 'small muted', text: 'Preview clipped for this large file.' }) : null
+        ].filter(Boolean))
+      ])
+    );
+    reviewHolder.append(detail);
+  }
+}
+
+async function reviewCodeWorkspace(source, sourceId, changes) {
+  return api('POST', `/api/workspace/sources/${encodeURIComponent(sourceId)}/review`, {
+    ...(source.kind === 'github'
+      ? { expectedCommitSha: source.metadata?.commitSha ?? '' }
+      : { baseContentHash: source.metadata?.contentHash ?? '' }),
+    changes
+  });
+}
+
 function workspaceApplyCard(run, structured) {
   const source = state.workspaceSource;
   if (!source || !structured || typeof structured !== 'object') return null;
@@ -118,26 +162,48 @@ function workspaceApplyCard(run, structured) {
   }
 
   const holder = element('div', { class: 'stack workspace-apply-card' });
-  const confirmation = element('div', { class: 'workspace-apply-confirm stack small', hidden: true }, [
-    element('strong', { text: 'Apply these reviewed changes?' }),
-    element('span', { class: 'muted', text: 'The server will re-check the workspace revision before writing. Credential and private-key files remain blocked.' })
-  ]);
-  const review = button('Review changes', () => {
-    confirmation.hidden = false;
-    review.disabled = true;
-    apply.focus({ preventScroll: true });
+  const confirmation = element('div', { class: 'workspace-apply-confirm stack small', hidden: true });
+  const reviewHolder = element('div', { class: 'stack workspace-review-list', hidden: true });
+  const reviewStatus = element('span', { class: 'muted small', 'aria-live': 'polite' });
+  const review = button('Review changes', async event => {
+    event.currentTarget.disabled = true;
+    reviewStatus.textContent = 'Checking the current workspace revision…';
+    try {
+      const reviewed = await reviewCodeWorkspace(source, state.chat?.workspaceSourceId ?? state.workspaceSourceId, changes);
+      renderWorkspaceReview(reviewHolder, reviewed);
+      reviewHolder.hidden = false;
+      confirmation.hidden = false;
+      apply.disabled = false;
+      reviewStatus.textContent = 'Reviewed against the current stored snapshot. Applying will re-check it again.';
+      apply.focus({ preventScroll: true });
+    } catch (error) {
+      reviewStatus.textContent = error.message || 'The review could not be completed. Refresh the project source and try again.';
+    } finally {
+      event.currentTarget.disabled = false;
+    }
   }, 'primary small');
+
   const apply = button('Apply now', async event => {
     event.currentTarget.disabled = true;
     await applyCodeWorkspace(run, structured);
     holder.remove();
   }, 'primary small');
+  apply.disabled = true;
+
   const cancel = button('Cancel', () => {
     confirmation.hidden = true;
-    review.disabled = false;
+    reviewHolder.hidden = true;
     review.focus({ preventScroll: true });
   }, 'ghost small');
-  confirmation.append(element('div', { class: 'row wrap' }, [apply, cancel]));
+
+  confirmation.append(
+    element('strong', { text: 'Apply these reviewed changes?' }),
+    element('span', { class: 'muted', text: 'The server will re-check the workspace revision before writing. Credential and private-key files remain blocked.' }),
+    reviewStatus,
+    reviewHolder,
+    element('div', { class: 'row wrap' }, [apply, cancel])
+  );
+
   holder.append(
     element('div', { class: 'row wrap workspace-apply-actions' }, [
       review,
@@ -147,194 +213,6 @@ function workspaceApplyCard(run, structured) {
   );
   return holder;
 }
-
-function actionCards(run) {
-  const proposed = run.tasks.some(task => (task.evidence?.tools ?? []).some(item => item.outcome === 'proposed'));
-  if (!proposed) return null;
-  const actions = state.actions.get(run.id);
-  if (!actions) { loadActions(run.id); return null; }
-  if (!actions.length) return null;
-  return element('div', { class: 'action-cards' }, actions.map(action => {
-    const [icon, label] = toolLabel(action.tool);
-    const status = {
-      proposed: ['Awaiting approval', 'warn'], running: ['Running…', ''], done: ['Completed', 'ok'],
-      failed: ['Failed', 'bad'], declined: ['Declined', '']
-    }[action.status] ?? [action.status, ''];
-    const result = action.status === 'done' && action.result
-      ? element('p', { class: 'small muted', text: action.result.note ?? action.result.tool ?? 'Execution completed.' })
-      : action.status === 'failed' ? element('p', { class: 'small action-error', text: action.result?.error ?? 'The action failed.' }) : null;
-    return element('div', { class: `action-card ${action.status}` }, [
-      element('div', { class: 'action-card-head' }, [
-        element('span', { class: 'action-icon' }, [svgIcon(icon)]),
-        element('div', {}, [element('strong', { text: action.summary || label }), element('span', { class: 'small muted', text: label })]),
-        element('span', { class: `pill ${status[1]}`, text: status[0] })
-      ]),
-      actionDetails(action),
-      result,
-      action.status === 'proposed' && canEdit() ? element('div', { class: 'row wrap' }, [
-        button('Approve', event => decideAction(run, action, true, event.currentTarget), 'primary small'),
-        button('Decline', event => decideAction(run, action, false, event.currentTarget), 'ghost small')
-      ]) : null
-    ].filter(Boolean));
-  }));
-}
-
-/**
- * What the AI did to reach the answer: the tools it used and the sources it
- * cited. Sources already written in the answer are not repeated.
- */
-function toolTrail(run, answer = '') {
-  const used = new Map();
-  const sources = new Map();
-  let remembered = 0;
-  for (const task of run.tasks) {
-    remembered = Math.max(remembered, Number(task.evidence?.remembered) || 0);
-    for (const item of task.evidence?.tools ?? []) {
-      const key = item.outcome === 'ok' ? item.tool : `${item.tool}:${item.outcome}`;
-      const entry = used.get(key) ?? { ...item, count: 0 };
-      entry.count += 1;
-      used.set(key, entry);
-    }
-    for (const source of task.evidence?.citations ?? []) if (source?.url && !answer.includes(source.url)) sources.set(source.url, source);
-  }
-  // Whether the check looked the facts up on the web, and what it found.
-  const factCheck = [...run.tasks].reverse().find(task => task.type === 'verify' && task.evidence?.verdict?.grounding)?.evidence.verdict;
-  // What running the code showed: its tests, and how many fixes it took.
-  const codeRun = run.tasks.find(task => task.id === 'test-code' && task.evidence?.result)?.evidence.result;
-  const codeOutput = codeRun?.output && typeof codeRun.output === 'object' ? codeRun.output : codeRun;
-  const repairs = (run.adaptation?.codeRepairs ?? []).filter(item => Number(item.attempt) === Number(run.attempt)).length;
-  if (!used.size && !sources.size && !remembered && !factCheck && !codeOutput && !repairs) return null;
-  const chips = [...used.values()].map(item => {
-    const [icon, label] = toolLabel(item.tool);
-    const failed = item.outcome !== 'ok';
-    const text = item.outcome === 'proposed' ? `Proposed: ${label.toLowerCase()}`
-      : item.outcome === 'not-ready' ? `Could not: ${label.toLowerCase()}`
-        : failed ? `${label} (failed)` : `${label}${item.count > 1 && !item.tool.startsWith('memory.') ? ` ×${item.count}` : ''}`;
-    return element('span', { class: `tool-chip${failed ? ' muted' : ''}`, title: item.why || item.error || '' }, [svgIcon(icon), element('span', { text })]);
-  });
-  // Say when earlier chats shaped this answer; Settings shows exactly what.
-  if (remembered && !used.has('memory.save')) {
-    chips.unshift(element('span', { class: 'tool-chip', title: 'From Settings → Personalization → Memory' }, [svgIcon('memory'), element('span', { text: 'Used what you told me before' })]));
-  }
-  if (codeOutput) {
-    const tests = codeOutput.testSummary;
-    const text = tests?.total === 0 ? 'Ran without tests' : tests ? `Tests: ${tests.passed} of ${tests.total} passed`
-      : codeOutput.tested === false ? 'Ran without tests' : null;
-    if (text) chips.push(element('span', { class: `tool-chip${tests && !tests.failed ? '' : ' muted'}` }, [svgIcon('check'), element('span', { text })]));
-  }
-  if (repairs) {
-    chips.push(element('span', { class: 'tool-chip', title: 'A failed run went back with its error output for a targeted fix.' },
-      [svgIcon('check'), element('span', { text: run.tasks.some(task => task.id === 'test-code' && task.status === 'complete')
-        ? `Fixed after ${repairs} failed run${repairs === 1 ? '' : 's'}`
-        : `Fixing the code (round ${repairs})` })]));
-  }
-  if (factCheck) {
-    const checkedOnline = factCheck.grounding.checkedAgainstWeb === true;
-    const passed = factCheck.verdict === 'pass';
-    const text = passed
-      ? (checkedOnline ? 'Facts checked on the web'
-        : factCheck.grounding.sources?.length ? 'Checked against its sources' : 'Checked')
-      : 'The check found problems';
-    const title = passed ? (factCheck.warnings ?? []).join('\n') : (factCheck.problems ?? []).slice(0, 5).join('\n');
-    chips.push(element('span', { class: `tool-chip${passed ? '' : ' muted'}`, title }, [svgIcon('check'), element('span', { text })]));
-  }
-  const links = [...sources.values()].slice(0, 8).map(source => {
-    let host = source.url;
-    try { host = new URL(source.url).hostname.replace(/^www\./, ''); } catch { /* keep the raw address */ }
-    return element('a', { class: 'source-link', href: source.url, target: '_blank', rel: 'noopener noreferrer', title: source.url, text: source.title || host });
-  });
-  return element('div', { class: 'tool-trail' }, [
-    chips.length ? element('div', { class: 'tool-chips' }, chips) : null,
-    links.length ? element('div', { class: 'source-links' }, [element('span', { class: 'small muted', text: 'Sources' }), ...links]) : null
-  ].filter(Boolean));
-}
-
-const CODE_EXTENSIONS = { python: 'py', py: 'py', javascript: 'js', js: 'js', typescript: 'ts', ts: 'ts', json: 'json', html: 'html', css: 'css', sql: 'sql', bash: 'sh', sh: 'sh', shell: 'sh', java: 'java', c: 'c', cpp: 'cpp', 'c++': 'cpp', csharp: 'cs', go: 'go', rust: 'rs', php: 'php', ruby: 'rb', kotlin: 'kt', swift: 'swift', yaml: 'yaml', markdown: 'md', csv: 'csv' };
-
-function downloadText(name, content, type = 'text/plain') {
-  const url = URL.createObjectURL(new Blob([content], { type: `${type};charset=utf-8` }));
-  const link = element('a', { href: url, download: name });
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-/** Buttons on a code block in an answer. */
-function codeBlockActions(block) {
-  const copy = element('button', { type: 'button', class: 'md-code-button', text: 'Copy' });
-  copy.addEventListener('click', async () => {
-    copy.textContent = (await copyText(block.text)) ? 'Copied' : 'Copy failed';
-    setTimeout(() => { copy.textContent = 'Copy'; }, 1500);
-  });
-  const download = element('button', { type: 'button', class: 'md-code-button', text: 'Download' });
-  download.addEventListener('click', () => downloadText(`code.${CODE_EXTENSIONS[block.language] ?? 'txt'}`, block.text));
-  return [copy, download];
-}
-
-// Code longer than this is shown trimmed until the person expands it.
-const CODE_PREVIEW_LINES = 18;
-// With this many code blocks in one answer, only the first starts open.
-const MANY_BLOCKS = 3;
-
-/**
- * Code blocks fold: each has a chevron to hide or show it, a long one shows
- * its first lines until expanded, and in an answer with several files only
- * the first starts open. What the person chose is kept across re-renders.
- */
-function foldCodeBlocks(root) {
-  state.codeFolds ??= new Map();
-  const blocks = [...root.querySelectorAll('.md-code')];
-  blocks.forEach((block, index) => {
-    const code = block.querySelector('pre code')?.textContent ?? '';
-    const lines = code.replace(/\n$/, '').split('\n').length;
-    const key = `${lines}:${code.length}:${code.slice(0, 120)}`;
-    const saved = state.codeFolds.get(key) ?? {};
-    const closed = saved.closed ?? (blocks.length >= MANY_BLOCKS && index > 0);
-    const long = lines > CODE_PREVIEW_LINES;
-    let expanded = saved.expanded ?? false;
-    const bar = block.querySelector('.md-code-bar');
-    const size = element('span', { class: 'md-code-size', text: `${lines} line${lines === 1 ? '' : 's'}` });
-    bar.querySelector('.md-code-lang')?.after(size);
-    const toggle = element('button', { type: 'button', class: 'md-code-button md-code-fold' }, svgIcon('chevron', 'i fold-chevron'));
-    const more = long ? element('button', { type: 'button', class: 'md-code-more' }) : null;
-    const apply = () => {
-      const isClosed = block.classList.contains('closed');
-      toggle.setAttribute('aria-expanded', String(!isClosed));
-      toggle.setAttribute('aria-label', isClosed ? 'Show this code' : 'Hide this code');
-      toggle.title = isClosed ? 'Show code' : 'Hide code';
-      block.classList.toggle('clamped', long && !expanded);
-      if (more) more.textContent = expanded ? 'Show less' : `Show all ${lines} lines`;
-      state.codeFolds.set(key, { closed: isClosed, expanded });
-    };
-    block.classList.toggle('closed', closed);
-    toggle.addEventListener('click', () => { block.classList.toggle('closed'); apply(); });
-    // The header opens a folded block too, not only the small chevron.
-    bar.addEventListener('click', event => {
-      if (block.classList.contains('closed') && !event.target.closest('button')) { block.classList.remove('closed'); apply(); }
-    });
-    more?.addEventListener('click', () => {
-      expanded = !expanded;
-      apply();
-      if (!expanded) block.scrollIntoView({ block: 'nearest' });
-    });
-    bar.querySelector('.md-code-actions')?.append(toggle);
-    if (more) block.append(more);
-    apply();
-  });
-  return root;
-}
-
-/** An answer, read as Markdown and built as DOM nodes (never as HTML). */
-function answerBlock(text) {
-  const body = element('div', { class: 'answer' }, [renderMarkdown(text, { codeActions: codeBlockActions })]);
-  foldCodeBlocks(body);
-  return element('div', { class: 'stack answer-wrap' }, [body]);
-}
-
-/** Code a step wrote, as the Markdown an answer shows. */
-/** Whether a build step's output has code: one source file or a project's files. */
-export const hasCode = structured => Boolean(structured?.source || (Array.isArray(structured?.files) && structured.files.length) || (Array.isArray(structured?.delete) && structured.delete.length));
 
 export function codeMarkdown(structured) {
   const language = String(structured.language ?? '').toLowerCase();

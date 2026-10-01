@@ -2219,3 +2219,73 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
   .work-status-now{grid-column:2}
   .work-status-grid{grid-template-columns:1fr 1fr}
 }
+
+
+/* ----------------------------------------------------- coding workspace review */
+.workspace-review-list{
+  display:grid;
+  gap:10px;
+  max-height:min(62vh,720px);
+  overflow:auto;
+  padding-right:2px;
+}
+.workspace-review-summary{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  padding:9px 11px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:var(--softer);
+}
+.workspace-review-file{
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--panel);
+  overflow:hidden;
+}
+.workspace-review-file>summary{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:9px 11px;
+  cursor:pointer;
+  list-style:none;
+}
+.workspace-review-file>summary::-webkit-details-marker{display:none}
+.workspace-review-file>summary:hover{background:var(--softer)}
+.workspace-review-panes{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  border-top:1px solid var(--line);
+}
+.workspace-review-pane{
+  min-width:0;
+  padding:10px;
+}
+.workspace-review-pane + .workspace-review-pane{
+  border-left:1px solid var(--line);
+}
+.workspace-review-label{
+  margin-bottom:6px;
+  font-weight:650;
+}
+.workspace-review-code{
+  margin:0;
+  max-height:360px;
+  overflow:auto;
+  padding:10px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--softer);
+  font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+@media (max-width:900px){
+  .workspace-review-panes{grid-template-columns:1fr}
+  .workspace-review-pane + .workspace-review-pane{
+    border-left:0;
+    border-top:1px solid var(--line);
+  }
+}
