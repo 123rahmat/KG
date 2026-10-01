@@ -34,6 +34,7 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
    */
   async function resolveAttachments(req) {
     const ids = Array.isArray(req.body?.attachments) ? req.body.attachments : [];
+    const sourceId = typeof req.body?.workspaceSourceId === 'string' ? req.body.workspaceSourceId : '';
     if (ids.length > MAX_ATTACHMENTS) {
       throw new RunError(`At most ${MAX_ATTACHMENTS} files can be attached to one message`, { status: 400, code: 'too-many-attachments' });
     }
@@ -51,6 +52,33 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
         format: formatOf({ name: object.name, contentType: object.contentType }),
         readable: READABLE_FORMATS.has(formatOf({ name: object.name, contentType: object.contentType }))
           && object.size <= (formatOf({ name: object.name, contentType: object.contentType }) === 'image' ? MAX_IMAGE_BYTES : MAX_READABLE_BYTES)
+      });
+    }
+    if (sourceId) {
+      const { rows: [source] } = await pool.query(
+        `SELECT id, kind, name, snapshot_object_id, repo_owner, repo_name, repo_ref, permissions
+           FROM workspace_sources
+          WHERE id = $1 AND workspace_id = $2 AND principal_id = $3 AND revoked_at IS NULL
+          LIMIT 1`,
+        [sourceId, req.scope.workspaceId, req.principal.id]
+      );
+      if (!source || !source.snapshot_object_id) {
+        throw new RunError('The selected workspace source is unavailable.', { status: 404, code: 'workspace-source-not-found' });
+      }
+      const object = await objects.get(req.scope, source.snapshot_object_id);
+      if (!object) throw new RunError('The selected workspace source snapshot is unavailable.', { status: 409, code: 'workspace-source-snapshot-missing' });
+      attachments.push({
+        id: object.id,
+        name: object.name ?? source.name,
+        contentType: object.contentType,
+        size: object.size,
+        format: 'project',
+        readable: true,
+        sourceId: source.id,
+        sourceKind: source.kind,
+        sourceName: source.name,
+        sourcePermissions: source.permissions ?? {},
+        sourceRepo: source.kind === 'github' ? { owner: source.repo_owner, repo: source.repo_name, ref: source.repo_ref } : null
       });
     }
     return attachments;
