@@ -238,8 +238,9 @@ export function skillContract(skill) {
 
 export function composeSkillPlan(skills = [], { taskType = '', maxSkills = 8, maxCost = 12 } = {}) {
   const registry = builtinSkillDescriptors();
-  const byName = new Map(registry.map(skill => [skill.name, skill]));
-  const seed = (Array.isArray(skills) ? skills : []).map(item => byName.get(slug(item?.name)) ?? item).filter(item => item?.name);
+  const rawSeed = (Array.isArray(skills) ? skills : []).filter(item => item?.name);
+  const byName = new Map([...rawSeed.map(item => [slug(item.name), item]), ...registry.map(skill => [skill.name, skill])]);
+  const seed = rawSeed.map(item => ({ ...(byName.get(slug(item.name)) ?? {}), ...item })).filter(item => item?.name);
   const selected = new Map();
   const visiting = new Set();
   const add = descriptor => {
@@ -318,10 +319,6 @@ export function selectSkillDescriptors(goal, {
     ...capabilities.map(item => text(item).toLowerCase())
   ]);
   const profiles = (Array.isArray(learnedSkills) ? learnedSkills : []).map(normalizedSkillProfile);
-  const scope = new Map(profiles.map(profile => [
-    profile.skillName + '\\x1f' + profile.taskType,
-    profile
-  ]));
   return builtinSkillDescriptors()
     .map(skill => {
       let score = 0;
@@ -331,11 +328,11 @@ export function selectSkillDescriptors(goal, {
         if (wanted.has(tag) || value.includes(tag) || preferenceText.includes(tag)) score += 2;
       }
       if (wantedTask === 'code' && ['coding','debugging','testing'].includes(skill.name)) score += 2;
-      const exact = scope.get(skill.name + '\\x1f' + wantedTask)
-        ?? scope.get(skill.name + '\\x1f');
-      const general = profiles.find(profile => profile.skillName === skill.name && !profile.taskType);
-      score += skillLearningAdjustment(exact ?? general);
-      return { skill, score, profile: exact ?? general ?? null };
+      const learned = hierarchicalSkillEvidence(profiles, skill.name, wantedTask);
+      score += skillLearningAdjustment(learned);
+      if (!learned || learned.attempts < 2) score += 0.15;
+      if (learned?.failurePattern) score -= 0.25;
+      return { skill, score, profile: learned };
     })
     .filter(item => item.score > 0)
     .sort((a, b) => b.score - a.score || a.skill.name.localeCompare(b.skill.name))
@@ -352,6 +349,7 @@ export function selectSkillDescriptors(goal, {
         contextSuccess: item.profile.contextSuccess,
         contextFailure: item.profile.contextFailure,
         contextUncertain: item.profile.contextUncertain,
+        failurePattern: item.profile.failurePattern ?? null,
         adaptive: true
       } : {
         attempts: 0,
@@ -360,6 +358,7 @@ export function selectSkillDescriptors(goal, {
         uncertain: 0,
         confidence: 0.5,
         utility: 0,
+        failurePattern: null,
         adaptive: false
       },
       skillLevel: text(skillLevel) || null,
@@ -461,7 +460,8 @@ export class SkillLearningStore {
            ON c.skill_name = p.skill_name
           AND c.task_type = p.task_type
         LEFT JOIN (
-          SELECT skill_name, task_type, MAX(pattern_key) AS failure_pattern
+          SELECT skill_name, task_type,
+                 (array_agg(pattern_key ORDER BY last_observed_at DESC))[1] AS failure_pattern
             FROM skill_patterns
            WHERE workspace_id = $1
              AND principal_id = $2
@@ -682,7 +682,8 @@ export async function loadSelectedSkills(goal, {
     taskType, intent, capabilities, limit, learnedSkills, skillLevel, preferences, situation
   });
   const loaded = [];
-  for (const descriptor of selected) {
+  for (const planItem of plan.skills) {
+    const descriptor = planItem;
     try {
       const skill = await loadSkill(descriptor, { maxBytes: MAX_SKILL_BYTES });
       loaded.push({
@@ -696,7 +697,10 @@ export async function loadSelectedSkills(goal, {
         instructions: skill.instructions.slice(0, maxInstructionChars),
         fingerprint: skill.fingerprint,
         progressiveDisclosure: true,
-        learning: skill.learning ?? { attempts: 0, confidence: 0.5, utility: 0, adaptive: false },
+        contract: planItem.contract ?? skillContract(skill),
+        order: planItem.order ?? null,
+        implicit: planItem.implicit === true,
+        learning: descriptor.learning ?? skill.learning ?? { attempts: 0, confidence: 0.5, utility: 0, adaptive: false },
         userAdaptation: {
           skillLevel: text(skillLevel) || null,
           preferences: Array.isArray(preferences)
@@ -705,7 +709,7 @@ export async function loadSelectedSkills(goal, {
         }
       });
     } catch {
-      loaded.push({ ...skillDisclosure(descriptor), fullInstructionsLoaded: false });
+      loaded.push({ ...skillDisclosure(descriptor), contract: planItem.contract ?? skillContract(descriptor), order: planItem.order ?? null, implicit: planItem.implicit === true, fullInstructionsLoaded: false });
     }
   }
   return loaded;
