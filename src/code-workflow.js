@@ -20,7 +20,7 @@ const MAX_REPAIR_RECORDS = 12;
 const MAX_CODE_CHARS = 20_000;
 // A project's files, all together, as a fix or a later step sees them.
 const MAX_PROJECT_CHARS = 60_000;
-const MAX_PROJECT_FILES = 60;
+export const MAX_PROJECT_FILES = 300;
 const tail = (value, max) => {
   const raw = typeof value === 'string' ? value : '';
   return raw.length > max ? `…${raw.slice(-max)}` : raw;

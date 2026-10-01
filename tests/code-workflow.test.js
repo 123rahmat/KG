@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { codeFailure, staleAfterRepair, repairRecord, repairContext, canRepair, untestedCode, missingTests, compactCodeEvidence, hasMeaningfulTests, MAX_CODE_REPAIRS } from '../src/code-workflow.js';
+import { codeFailure, staleAfterRepair, repairRecord, repairContext, canRepair, untestedCode, missingTests, compactCodeEvidence, hasMeaningfulTests, MAX_CODE_REPAIRS, MAX_PROJECT_FILES, codeFiles } from '../src/code-workflow.js';
 
 const tasks = [
   { id: 'approval', position: 5, status: 'complete', dependsOn: [] },
@@ -60,6 +60,15 @@ test('code without tests is asked for tests and cannot be certified by the autom
   // A test file in which no test ran is no test at all.
   const empty = { tasks: [{ id: 'test-code', status: 'complete', evidence: { result: { output: { tested: true, testSummary: { total: 0, passed: 0, failed: 0, skipped: 0 } } } } }] };
   assert.equal(untestedCode(empty), true);
+});
+
+test('project code files stay aligned with the sandbox project limit instead of truncating at an arbitrary lower ceiling', () => {
+  const files = Array.from({ length: MAX_PROJECT_FILES }, (_, index) => ({
+    path: `src/file-${String(index).padStart(3, '0')}.js`,
+    content: `export const value${index} = ${index};`
+  }));
+  assert.equal(codeFiles({ files }).length, MAX_PROJECT_FILES);
+  assert.equal(codeFiles({ files: files.slice(0, 61) }).at(-1).path, 'src/file-060.js');
 });
 
 test('later reasoning sees code results, not megabytes of output', () => {
