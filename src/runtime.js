@@ -277,13 +277,7 @@ export async function callModel(messages, {
   if (!selected) return null;
   const { provider } = selected;
   const providerLimit = config.providerConcurrency ?? {};
-  const state = providerGovernor.state(provider + ':' + selected.model);
-  state.concurrency = Math.max(
-    1,
-    Math.min(Number(providerLimit.max) || 4, state.concurrency, state.maxConcurrency ?? Number(providerLimit.max) || 4)
-  );
-  state.minConcurrency = Number(providerLimit.min) || 1;
-  state.maxConcurrency = Number(providerLimit.max) || 4;
+  providerGovernor.configure(provider + ':' + selected.model, providerLimit);
   const adapter = PROVIDERS[provider];
   if (!adapter) return null;
   // The chosen model first, then the operator's backups: each Gemini model
