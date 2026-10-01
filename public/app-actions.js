@@ -556,6 +556,61 @@ function requirementsCard(run) {
   ]);
 }
 
+function workDetailsCard(run) {
+  const situation = run?.situation ?? {};
+  const intelligence = run?.adaptation?.unifiedIntelligence ?? run?.adaptation?.unifiedIntelligence;
+  const meta = intelligence?.metaReasoning ?? run?.adaptation?.metaReasoning ?? {};
+  const resource = run?.adaptation?.resourceDecision ?? meta?.resourceDecision ?? intelligence?.resourceDecision ?? {};
+  const next = Array.isArray(run?.tasks) ? run.tasks.find(task => task.id === run.next) : null;
+  const multi = Array.isArray(run?.tasks)
+    ? run.tasks.map(task => task.evidence?.multiAgent).filter(Boolean).at(-1)
+    : null;
+  const agentStates = Array.isArray(multi?.agentStates) ? multi.agentStates : [];
+  const source = state.workspaceSource;
+  const execution = Array.isArray(run?.tasks)
+    ? [...run.tasks].reverse().map(task => ({
+        target: task.evidence?.executionTarget ?? task.evidence?.result?.executionTarget ?? null,
+        sandbox: task.evidence?.result?.output?.sandbox ?? task.evidence?.result?.sandbox ?? null
+      })).find(item => item.target || item.sandbox)
+    : null;
+  const verificationTask = Array.isArray(run?.tasks) ? [...run.tasks].reverse().find(task => task.type === 'verify') : null;
+  const changed = new Set();
+  for (const task of run?.tasks ?? []) {
+    for (const file of task.evidence?.structured?.files ?? []) if (file?.path) changed.add(file.path);
+    for (const file of task.evidence?.result?.changedFiles ?? []) if (typeof file === 'string') changed.add(file);
+  }
+  const rows = [
+    situation.title || situation.summary ? ['Situation', String(situation.title || situation.summary)] : null,
+    run?.adaptation?.scale || intelligence?.scale ? ['Scope', String(run?.adaptation?.scale || intelligence?.scale)] : null,
+    Number.isFinite(Number(run?.adaptation?.complexity ?? intelligence?.complexity)) ? ['Complexity', String(Number(run?.adaptation?.complexity ?? intelligence?.complexity).toFixed(2))] : null,
+    resource?.effort ? ['Effort', String(resource.effort)] : null,
+    next ? ['Why now', String(next.purpose || next.metadata?.title || next.id)] : null,
+    execution?.target ? ['Execution', String(execution.target === 'general-ai-sandbox' ? 'Kindgleam sandbox' : execution.target)] : null,
+    execution?.sandbox?.runtime ? ['Sandbox', String(execution.sandbox.runtime) + ' · network ' + String(execution.sandbox.network || 'none')] : null,
+    source ? ['Workspace', [source.name, source.repoRef || source.repoName].filter(Boolean).join(' · ') || source.kind] : null,
+    source?.metadata?.commitSha ? ['Revision', String(source.metadata.commitSha).slice(0, 12)] : null,
+    agentStates.length ? ['Specialists', agentStates.map(item => String(item.role || '') + (item.confidence != null ? ' · ' + Number(item.confidence).toFixed(2) : '')).filter(Boolean).join(' · ')] : null,
+    verificationTask ? ['Verification', verificationTask.status === 'complete' ? 'Completed' : String(verificationTask.status || 'pending')] : null,
+    changed.size ? ['Changes', [...changed].slice(0, 12).join(' · ') + (changed.size > 12 ? ' · +' + (changed.size - 12) + ' more' : '')] : null
+  ].filter(Boolean);
+  if (!rows.length) return null;
+  return section(run, 'details', {
+    className: 'work-details-card',
+    open: false,
+    label: 'Detailed work information',
+    summary: element('div', { class: 'work-details-head' }, [
+      element('strong', { text: 'Work details' }),
+      element('span', { class: 'muted small', text: 'Current server-confirmed scope, execution, evidence and workspace state' })
+    ])
+  }, [
+    element('dl', { class: 'work-details-grid' }, rows.flatMap(([label, value]) => [
+      element('dt', { class: 'small muted', text: label }),
+      element('dd', { class: 'small', text: value })
+    ])),
+    meta?.evidenceState?.unknowns?.length ? element('p', { class: 'small muted', text: 'Open unknowns: ' + meta.evidenceState.unknowns.slice(0, 4).join(' · ') }) : null
+  ].filter(Boolean));
+}
+
 export function workStatusCard(run) {
   const tasks = Array.isArray(run?.tasks) ? run.tasks : [];
   const total = tasks.length;
@@ -619,6 +674,7 @@ export function workStatusCard(run) {
         element('strong', { class: 'small', text: value })
       ]))),
     renderWorkStatus(run),
+    workDetailsCard(run),
     failed ? element('p', { class: 'work-status-warning small', text: failed + ' step' + (failed === 1 ? '' : 's') + ' failed; failure evidence is available for repair or replanning.' }) : null
   ].filter(Boolean));
 }
