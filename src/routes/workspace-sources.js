@@ -130,12 +130,7 @@ export function registerWorkspaceSourcesRoutes(app, {
     res.status(201).json({ source: sourcePublic(row), manifest });
   }));
 
-  app.get('/api/workspace/sources/github/repositories', scoped('viewer'), route(async (req, res) => {
-    const token = text(req.query?.token);
-    if (!token) return res.status(400).json({ error: 'A GitHub credential is required.', code: 'github-credential-required' });
-    const repositories = await githubListRepositories({ fetchImpl: fetch, token, page: req.query?.page });
-    res.json({ repositories });
-  }));
+
 
   app.post('/api/workspace/sources/:id/sync', scoped('editor'), route(async (req, res) => {
     const { rows: [source] } = await pool.query(
