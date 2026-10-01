@@ -10,6 +10,7 @@
 
 import { clip } from './reasoning-context.js';
 import { LANGUAGES, languageName } from './sandbox.js';
+import { workspacePath } from './workspace-path.js';
 import { applySurgicalChanges } from './workspace-patch.js';
 import { workspaceContentHash } from './code-workspace.js';
 
@@ -20,8 +21,6 @@ const MAX_CODE_CHARS = 20_000;
 // A project's files, all together, as a fix or a later step sees them.
 const MAX_PROJECT_CHARS = 60_000;
 const MAX_PROJECT_FILES = 60;
-// The sandbox's own rule for a file path (see FILE_NAME in sandbox.js).
-const PATH = /^(?![./ -])(?!.*\.\.)(?!.*\/[./ -])(?!.*[ /]$)[\p{L}\p{N}._/ +@-]{1,160}$/u;
 const tail = (value, max) => {
   const raw = typeof value === 'string' ? value : '';
   return raw.length > max ? `…${raw.slice(-max)}` : raw;
@@ -61,8 +60,8 @@ export function codeFiles(structured) {
     : raw && typeof raw === 'object' ? Object.entries(raw).map(([path, content]) => ({ path, content })) : [];
   const seen = new Set();
   return list
-    .map(item => ({ path: text(item?.path ?? item?.name), content: typeof item?.content === 'string' ? item.content : String(item?.text ?? '') }))
-    .filter(item => PATH.test(item.path) && !seen.has(item.path) && seen.add(item.path))
+    .map(item => ({ path: workspacePath(item?.path ?? item?.name), content: typeof item?.content === 'string' ? item.content : String(item?.text ?? '') }))
+    .filter(item => item.path && !seen.has(item.path) && seen.add(item.path))
     .slice(0, MAX_PROJECT_FILES);
 }
 
@@ -70,7 +69,7 @@ export function codeFiles(structured) {
 export function deletedPaths(structured) {
   const written = new Set(codeFiles(structured).map(file => file.path));
   const raw = Array.isArray(structured?.delete) ? structured.delete : [];
-  return [...new Set(raw.map(text))].filter(path => PATH.test(path) && !written.has(path)).slice(0, MAX_PROJECT_FILES);
+  return [...new Set(raw.map(workspacePath).filter(Boolean))].filter(path => !written.has(path)).slice(0, MAX_PROJECT_FILES);
 }
 
 /** Whether a package is a project (files it writes or deletes) rather than one source file. */
@@ -82,6 +81,35 @@ export function projectTests(structured) {
   if (!spec) return [];
   // Tests written inside the code (Rust's #[test]) count too.
   return codeFiles(structured).filter(file => file.content.trim() && (spec.test.test(file.path) || spec.inline?.test(file.content)));
+}
+
+// Merely naming a file test_foo.py, or importing a test framework, is not
+// evidence that a test will run. Keep this intentionally conservative and
+// language-aware: the sandbox remains the authority for the final count, but
+// this prevents spending a build/test cycle on an obviously empty test suite.
+const TEST_CASE = {
+  python: /(?:^|\n)\s*(?:async\s+)?def\s+test_[\w]+\s*\(|\bclass\s+\w+\s*\(\s*unittest\.TestCase\s*\)|\bassert\s+/m,
+  javascript: /\b(?:test|it|describe)\s*\(/,
+  typescript: /\b(?:test|it|describe)\s*\(/,
+  go: /(?:^|\n)\s*func\s+Test\w+\s*\(/m,
+  rust: /#\s*\[\s*test\s*\]/,
+  java: /@(?:Test|ParameterizedTest)\b|\bvoid\s+test\w*\s*\(/,
+  csharp: /\[(?:Fact|Theory|Test|TestMethod)\b/,
+  ruby: /\b(?:def\s+test_|it\s+['"]|specify\s+['"])/,
+  php: /\b(?:function\s+test\w*\s*\(|#\[Test\])/,
+  kotlin: /@Test\b|\bfun\s+test\w*\s*\(/,
+  swift: /\bfunc\s+test\w*\s*\(/
+};
+
+export function hasMeaningfulTests(structured, { previous = null, baseFiles = [] } = {}) {
+  if (!structured) return false;
+  const language = languageOf(structured.language);
+  const pattern = TEST_CASE[language];
+  if (!pattern) return false;
+  const files = isProject(structured)
+    ? [...codeFiles(structured), ...(isProject(previous) ? codeFiles(previous) : []), ...baseFiles]
+    : [{ path: '', content: structured.tests }];
+  return files.some(file => pattern.test(String(file?.content ?? '')));
 }
 
 /** Files clipped to a shared budget; a cut file says so. */
@@ -178,7 +206,10 @@ export function sandboxPayload(built, { baseFiles = [] } = {}) {
   }
   const files = {};
   const deleted = new Set(deletedPaths(built));
-  for (const file of baseFiles) if (PATH.test(text(file?.path)) && !deleted.has(text(file.path))) files[text(file.path)] = String(file.content ?? '');
+  for (const file of baseFiles) {
+    const path = workspacePath(file?.path);
+    if (path && !deleted.has(path)) files[path] = String(file.content ?? '');
+  }
   const written = codeFiles(built);
   for (const file of written) files[file.path] = file.content;
   const spec = LANGUAGES[languageOf(built.language)];
