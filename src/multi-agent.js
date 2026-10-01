@@ -316,10 +316,12 @@ export function rolesFor(run, task, {
   let targetCount = Math.min(maximum, targetAgentCount(decision.pressure, maximum));
   // A normal build-code step uses a focused pair; explicit build planning can
   // justify more specialists when decomposition or risk actually warrants it.
-  if (task?.id === 'build-code' && task?.metadata?.buildPlan !== true) {
+  const observed = observedPanelSignals(progress);
+  const highStakeBuild = task?.id === 'build-code' && HIGH_STAKES.has(text(run?.situation?.risk).toLowerCase());
+  if (task?.id === 'build-code' && task?.metadata?.buildPlan !== true && !highStakeBuild) {
     targetCount = Math.min(targetCount, 2);
   }
-  if (observedPanelSignals(progress).disagreement) {
+  if (observed.disagreement) {
     targetCount = Math.max(targetCount, Math.min(maximum, 4));
   }
   const candidates = roleCandidates(run, task, progress);
@@ -329,7 +331,7 @@ export function rolesFor(run, task, {
     if (roles.length >= targetCount) break;
     const marginal = candidate.utility - roles.length * ROLE_REDUNDANCY_PENALTY;
     utilities[candidate.role] = Number(marginal.toFixed(3));
-    if (marginal < MIN_ROLE_UTILITY && roles.length > 0) continue;
+    if (marginal < MIN_ROLE_UTILITY && roles.length > 0 && !observed.disagreement) continue;
     roles.push(candidate.role);
   }
   if (!roles.length && candidates[0]) {
@@ -338,6 +340,10 @@ export function rolesFor(run, task, {
   }
 
   const signals = taskSignals(run, task, progress);
+  if (signals.retrying && ['plan', 'reassess'].includes(signals.type) && targetCount >= 2 && !roles.includes('strategist')) {
+    roles.splice(Math.max(0, roles.length - 1), 1, 'strategist');
+    utilities.strategist = Number(roleUtility('strategist', run, task, progress).toFixed(3));
+  }
   const allocation = {
     targetAgents: targetCount,
     selectedAgents: roles.length,
