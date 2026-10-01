@@ -35,6 +35,7 @@ import { registerSignInRoutes, registerMailAdminRoutes } from './routes/sign-in.
 import { Mailer } from './mailer.js';
 import { MemoryStore } from './memory.js';
 import { registerStripeWebhook, registerStripeRoutes, STRIPE_WEBHOOK_PATH } from './routes/stripe.js';
+import { providerConcurrencyStats } from './runtime.js';
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
@@ -56,6 +57,12 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
     { tags: { state: 'idle' }, value: pool.idleCount },
     { tags: { state: 'waiting' }, value: pool.waitingCount }
   ]);
+  metrics.gauge('model_provider_active_requests', () =>
+    providerConcurrencyStats().map(item => ({ tags: { model: item.key }, value: item.active })));
+  metrics.gauge('model_provider_queued_requests', () =>
+    providerConcurrencyStats().map(item => ({ tags: { model: item.key }, value: item.queued })));
+  metrics.gauge('model_provider_concurrency_limit', () =>
+    providerConcurrencyStats().map(item => ({ tags: { model: item.key }, value: item.concurrency })));
   installIngressBoundary(app, { trustProxy: config.trustProxy });
   installApiRequestBoundary(app, { exemptPaths: [STRIPE_WEBHOOK_PATH] });
   installBrowserBoundary(app, { production: config.production });
