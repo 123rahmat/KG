@@ -18,6 +18,8 @@ import path from 'node:path';
 import { spawn, execFile } from 'node:child_process';
 import { createServer } from 'node:http';
 import { executionPayloadDigest, signExecutionReceipt, verifyExecutionChallenge } from '../src/execution.js';
+import { isWorkspacePath } from '../src/workspace-path.js';
+import { testSummary } from '../src/sandbox.js';
 
 const text = value => String(value ?? '').trim();
 const boolean = (value, fallback = false) => {
@@ -38,6 +40,9 @@ const ALLOW_EXECUTION = boolean(process.env.LOCAL_AGENT_ALLOW_PROCESS_EXECUTION)
 const SHARED_SECRET = text(process.env.LOCAL_AGENT_SHARED_SECRET);
 const TIMEOUT_MS = Math.min(Math.max(Number(process.env.LOCAL_AGENT_TIMEOUT_MS) || 120_000, 1_000), 900_000);
 const MAX_OUTPUT = Math.min(Math.max(Number(process.env.LOCAL_AGENT_MAX_OUTPUT_BYTES) || 4 * 1024 * 1024, 1_024), 16 * 1024 * 1024);
+const MAX_FILES = 300;
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 40 * 1024 * 1024;
 const AGENT_VERSION = '1.0.0';
 
 const CODE_RUNTIMES = Object.freeze({
@@ -95,7 +100,7 @@ function claimNonce(nonce, expiresAt) {
   return true;
 }
 
-async function readBody(req, maxBytes = 8 * 1024 * 1024) {
+async function readBody(req, maxBytes = 48 * 1024 * 1024) {
   const chunks = [];
   let total = 0;
   for await (const chunk of req) {
@@ -193,7 +198,7 @@ function safeTaskId(value) {
   return id;
 }
 
-async function runProcess(command, args, { cwd, env }) {
+async function runProcess(command, args, { cwd, env, stdin = '', timeoutMs = TIMEOUT_MS }) {
   return new Promise(resolve => {
     const startedAt = new Date().toISOString();
     const child = spawn(command, args, {
@@ -201,7 +206,8 @@ async function runProcess(command, args, { cwd, env }) {
       env,
       shell: false,
       windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe']
+      detached: process.platform !== 'win32',
+      stdio: ['pipe', 'pipe', 'pipe']
     });
 
     let stdout = '';
@@ -211,7 +217,8 @@ async function runProcess(command, args, { cwd, env }) {
     const capture = (target, chunk) => {
       if (truncated) return;
       const remaining = MAX_OUTPUT - bytesSeen;
-      const textChunk = Buffer.from(chunk).subarray(0, Math.max(remaining, 0)).toString('utf8');
+      if (remaining <= 0) { truncated = true; return; }
+      const textChunk = Buffer.from(chunk).subarray(0, remaining).toString('utf8');
       target.value += textChunk;
       bytesSeen += Buffer.byteLength(textChunk);
       if (bytesSeen >= MAX_OUTPUT) truncated = true;
@@ -221,13 +228,21 @@ async function runProcess(command, args, { cwd, env }) {
     const err = { value: '' };
     child.stdout.on('data', chunk => capture(out, chunk));
     child.stderr.on('data', chunk => capture(err, chunk));
+    child.stdin.on('error', () => {});
+    child.stdin.end(String(stdin ?? ''));
 
     let timedOut = false;
+    const killTree = signal => {
+      try {
+        if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, signal);
+        else child.kill(signal);
+      } catch {}
+    };
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill('SIGTERM');
-      setTimeout(() => child.kill('SIGKILL'), 2_000).unref();
-    }, TIMEOUT_MS);
+      killTree('SIGTERM');
+      setTimeout(() => killTree('SIGKILL'), 2_000).unref();
+    }, timeoutMs);
 
     child.on('error', error => {
       clearTimeout(timer);
@@ -237,7 +252,8 @@ async function runProcess(command, args, { cwd, env }) {
         error: error.code === 'ENOENT' ? 'runtime-not-found' : 'process-error',
         message: error.message,
         startedAt,
-        completedAt: new Date().toISOString()
+        completedAt: new Date().toISOString(),
+        durationMs: Date.now() - Date.parse(startedAt)
       });
     });
 
@@ -254,32 +270,178 @@ async function runProcess(command, args, { cwd, env }) {
         stderr,
         outputTruncated: truncated,
         startedAt,
-        completedAt: new Date().toISOString()
+        completedAt: new Date().toISOString(),
+        durationMs: Date.now() - Date.parse(startedAt)
       });
     });
   });
 }
 
+async function decodePayloadFile(value, name) {
+  if (typeof value === 'string') return Buffer.from(value, 'utf8');
+  if (value?.base64 !== undefined) {
+    const raw = String(value.base64).replace(/\s+/g, '');
+    if (!raw || raw.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(raw)) throw new Error('invalid base64 file: ' + name);
+    return Buffer.from(raw, 'base64');
+  }
+  return Buffer.from(String(value?.text ?? ''), 'utf8');
+}
+
+async function payloadFiles(payload, runtime) {
+  const files = new Map();
+  const source = String(payload?.source ?? '');
+  if (source.trim()) files.set(runtime.file, Buffer.from(source, 'utf8'));
+  const tests = String(payload?.tests ?? '');
+  if (tests.trim() && runtime.testFile && !files.has(runtime.testFile)) {
+    files.set(runtime.testFile, Buffer.from(tests, 'utf8'));
+  }
+
+  const raw = payload?.files && typeof payload.files === 'object' ? payload.files : {};
+  const entries = Array.isArray(raw)
+    ? raw.map(item => [item?.path ?? item?.name, item])
+    : Object.entries(raw);
+
+  for (const [rawPath, value] of entries) {
+    const filePath = String(rawPath ?? '').replaceAll('\\', '/');
+    if (!isWorkspacePath(filePath) || filePath.startsWith('.deps/')) {
+      throw new Error('invalid workspace file path: ' + filePath);
+    }
+    const bytes = await decodePayloadFile(value, filePath);
+    if (bytes.length > MAX_FILE_BYTES) throw new Error('workspace file is too large: ' + filePath);
+    files.set(filePath, bytes);
+  }
+
+  if (files.size > MAX_FILES) throw new Error('too many workspace files');
+  const total = [...files.values()].reduce((sum, bytes) => sum + bytes.length, 0);
+  if (total > MAX_TOTAL_BYTES) throw new Error('workspace files are too large together');
+  return files;
+}
+
+function codeFilesHaveTests(files, language) {
+  const names = [...files.keys()];
+  if (language === 'python') return names.some(name => /(^|\/)test[^/]*\.py$/i.test(name));
+  return names.some(name =>
+    /(^|\/)test[^/]*\.(?:mjs|cjs|js)$/i.test(name) || /\.test\.(?:mjs|cjs|js)$/i.test(name)
+  );
+}
+
+async function executeChecks(files, language, runtime, directory, timeoutMs, checkList) {
+  const checked = [...new Set(Array.isArray(checkList) ? checkList.map(String) : [])];
+  if (!checked.length) return null;
+  if (checked.some(name => !files.has(name) || !isWorkspacePath(name))) {
+    throw new Error('execution check references a file not in the payload');
+  }
+
+  const env = { PATH: process.env.PATH || '', LANG: process.env.LANG || 'C', NODE_ENV: 'production' };
+  if (language === 'python') {
+    return runProcess(runtime.command, [
+      '-c',
+      'import ast,sys\nfor name in sys.argv[1:]: ast.parse(open(name, encoding="utf-8").read(), name)',
+      ...checked
+    ], { cwd: directory, env, timeoutMs });
+  }
+
+  let result = null;
+  for (const file of checked) {
+    result = await runProcess(runtime.command, ['--check', file], { cwd: directory, env, timeoutMs });
+    if (result.timedOut || result.exitCode !== 0) return result;
+  }
+  return result;
+}
+
 async function executeCode(body) {
-  const language = text(body?.payload?.language).toLowerCase();
-  const source = String(body?.payload?.source ?? '');
+  const payload = body?.payload && typeof body.payload === 'object' ? body.payload : {};
+  if (Array.isArray(payload.packages) && payload.packages.length) {
+    return {
+      executed: false,
+      status: 'local-packages-not-supported',
+      message: 'The local agent never installs packages. Run this project in the managed sandbox instead.'
+    };
+  }
+
+  const rawLanguage = text(payload.language).toLowerCase();
+  const language = ({
+    javascript: 'node',
+    js: 'node',
+    nodejs: 'node',
+    python3: 'python'
+  })[rawLanguage] ?? rawLanguage;
   const runtime = CODE_RUNTIMES[language];
   if (!runtime) return { executed: false, status: 'unsupported-language', supported: Object.keys(CODE_RUNTIMES) };
-  if (!source.trim()) return { executed: false, status: 'source-required' };
 
+  const project = payload.project === true || (payload.files && typeof payload.files === 'object');
+  const executionId = safeTaskId(text(body.executionId));
   const runId = safeRunId(body.runId);
   const taskId = safeTaskId(body.taskId);
-  const directory = path.join(RUN_ROOT, runId, taskId);
-  await fs.mkdir(directory, { recursive: true });
-  const file = path.join(directory, runtime.file);
-  await fs.writeFile(file, source, { encoding: 'utf8', mode: 0o600 });
+  const timeoutMs = Math.min(Math.max(Number(payload.timeoutMs) || TIMEOUT_MS, 1_000), TIMEOUT_MS);
+  const files = await payloadFiles(payload, runtime);
 
-  const env = {
-    PATH: process.env.PATH || '',
-    LANG: process.env.LANG || 'C',
-    NODE_ENV: 'production'
-  };
-  return await runProcess(runtime.command, runtime.args(file), { cwd: directory, env });
+  if (!files.size) return { executed: false, status: 'source-required' };
+
+  const entry = text(payload.entry)
+    || (files.has(runtime.file) ? runtime.file : project ? null : runtime.file);
+  if (entry && (!isWorkspacePath(entry) || !files.has(entry))) {
+    return { executed: false, status: 'invalid-entry' };
+  }
+
+  const directory = path.join(RUN_ROOT, runId, taskId, executionId);
+  await fs.rm(directory, { recursive: true, force: true });
+  await fs.mkdir(directory, { recursive: true });
+
+  for (const [name, bytes] of files) {
+    const target = path.join(directory, name);
+    const folder = path.dirname(target);
+    await fs.mkdir(folder, { recursive: true });
+    await fs.writeFile(target, bytes, { mode: 0o600 });
+  }
+
+  const env = { PATH: process.env.PATH || '', LANG: process.env.LANG || 'C', NODE_ENV: 'production' };
+
+  try {
+    const check = await executeChecks(files, language, runtime, directory, timeoutMs, payload.check);
+    if (check && (check.timedOut || check.exitCode !== 0)) {
+      return {
+        ...check,
+        executed: true,
+        status: check.timedOut ? 'timeout' : 'syntax-error',
+        testSummary: null
+      };
+    }
+
+    const hasTests = codeFilesHaveTests(files, language);
+    let tests = null;
+    if (hasTests) {
+      tests = language === 'python'
+        ? await runProcess(runtime.command, ['-m', 'unittest', 'discover', '-v', '-s', '.', '-p', 'test*.py'], {
+            cwd: directory, env, timeoutMs
+          })
+        : await runProcess(runtime.command, ['--test'], { cwd: directory, env, timeoutMs });
+
+      const summary = testSummary(language === 'node' ? 'javascript' : 'python', tests.stdout, tests.stderr);
+      if (tests.timedOut || tests.exitCode !== 0) return { ...tests, testSummary: summary };
+    }
+
+    if (!entry) {
+      return {
+        ...(tests ?? { executed: true }),
+        executed: true,
+        status: tests?.timedOut ? 'timeout' : 'completed',
+        exitCode: tests?.exitCode ?? 0,
+        stdout: tests?.stdout ?? '',
+        stderr: tests?.stderr ?? '',
+        testSummary: tests ? testSummary(language === 'node' ? 'javascript' : 'python', tests.stdout, tests.stderr) : null
+      };
+    }
+
+    return {
+      ...await runProcess(runtime.command, [entry], {
+        cwd: directory, env, stdin: payload.stdin ?? '', timeoutMs
+      }),
+      ...(tests ? { testSummary: testSummary(language === 'node' ? 'javascript' : 'python', tests.stdout, tests.stderr) } : {})
+    };
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 if (ALLOW_EXECUTION && SHARED_SECRET.length < 32) {

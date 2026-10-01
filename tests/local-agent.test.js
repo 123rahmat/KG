@@ -90,6 +90,32 @@ test('a signed challenge runs once and yields a verifiable receipt', () =>
     assert.equal((await replay.json()).status, 'execution-challenge-replayed');
   }));
 
+test('the local agent executes a complete multi-file JavaScript workspace', () =>
+  withAgent(async base => {
+    const payload = {
+      project: true,
+      language: 'javascript',
+      files: {
+        'main.mjs': 'import { value } from "./lib/value.mjs"; console.log(value * 2);',
+        'lib/value.mjs': 'export const value = 21;',
+        'main.test.mjs': 'import test from "node:test"; import assert from "node:assert/strict"; import { value } from "./lib/value.mjs"; test("value", () => assert.equal(value, 21));'
+      },
+      entry: 'main.mjs'
+    };
+    const request = {
+      runId: 'run-project', taskId: 'test-code', taskType: 'code', executionTarget: 'local', attempt: 1,
+      executionChallenge: challengeFor('run-project', 'test-code', 1, payload),
+      payload
+    };
+    const response = await post(base, request);
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.status, 'completed');
+    assert.equal(body.stdout, '42\n');
+    assert.equal(body.testSummary.total, 1);
+    assert.equal(body.receipt.payloadDigest, executionPayloadDigest(payload));
+  }));
+
 test('a challenge for another task or with a forged signature is refused', () =>
   withAgent(async base => {
     const moved = await post(base, {
