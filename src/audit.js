@@ -98,9 +98,12 @@ export class Audit {
     return rows.map(row => ({
       id: row.id, at: row.at, principal_id: row.principal_id, workspace_id: row.workspace_id,
       action: row.action, target: row.target, outcome: row.outcome,
+      // Legacy plaintext audit detail must not be re-exposed after the
+      // encryption hardening. Decrypt only the encrypted representation; a
+      // missing ciphertext is intentionally returned as unavailable.
       detail: row.detail_enc
         ? decryptJsonWithKeys(this.encryptionKeys, 'audit-detail-v1', row.detail_enc).value
-        : row.detail,
+        : null,
       request_id: row.request_id, prev_hash: row.prev_hash, entry_hash: row.entry_hash
     }));
   }
