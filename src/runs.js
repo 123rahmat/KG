@@ -238,7 +238,12 @@ export class RunStore {
       files,
       projectOverlay,
       situation,
-      currentState: currentState ?? previousState
+      currentState: currentState ?? previousState,
+      conversationId: conversation || null,
+      multiAgent: {
+        mode: adaptiveControl?.multiAgentMode ?? adaptiveControl?.multiAgent ?? 'auto',
+        maxAgents: adaptiveControl?.maxAgents ?? adaptiveControl?.multiAgentMaxAgents ?? 5
+      }
     });
     if (previousState) {
       plan.adaptation.continuation = {
