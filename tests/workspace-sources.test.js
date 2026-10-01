@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { githubHeaders, githubListBranches, githubListRepositories, normalizeSourceFiles, sourceManifest } from '../src/workspace-sources.js';
+import { githubApplyChanges, githubHeaders, githubListBranches, githubListRepositories, normalizeSourceFiles, sourceManifest } from '../src/workspace-sources.js';
 
 test('workspace source files normalize safely and deterministically', () => {
   const files = normalizeSourceFiles([
@@ -42,4 +42,46 @@ test('GitHub repository and branch discovery uses POST-safe server-side helpers'
   assert.equal(calls.length, 2);
   assert.equal(calls[1].init.headers.authorization, 'Bearer secret');
   assert.ok(!calls[1].url.includes('secret'));
+});
+
+
+test('GitHub write-back builds one revision and rejects stale bases', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init = {}) => {
+    calls.push({ url, init });
+    if (url.includes('/commits/main')) {
+      return new Response(JSON.stringify({ sha: 'base123', commit: { tree: { sha: 'tree123' } } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    if (url.endsWith('/git/blobs')) return new Response(JSON.stringify({ sha: 'blob123' }), { status: 201, headers: { 'content-type': 'application/json' } });
+    if (url.endsWith('/git/trees')) return new Response(JSON.stringify({ sha: 'newtree123' }), { status: 201, headers: { 'content-type': 'application/json' } });
+    if (url.endsWith('/git/commits')) return new Response(JSON.stringify({ sha: 'commit123' }), { status: 201, headers: { 'content-type': 'application/json' } });
+    if (url.includes('/git/refs/heads/main')) return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'content-type': 'application/json' } });
+    return new Response('{}', { status: 404, headers: { 'content-type': 'application/json' } });
+  };
+  const result = await githubApplyChanges({
+    fetchImpl,
+    token: 'secret',
+    owner: 'demo',
+    repo: 'app',
+    ref: 'main',
+    expectedCommitSha: 'base123',
+    changes: [{ path: 'src/app.js', content: 'export const ok = true;' }],
+    message: 'workspace: reviewed change'
+  });
+  assert.equal(result.commitSha, 'commit123');
+  assert.equal(calls.filter(call => call.init.method === 'POST').length, 3);
+  assert.equal(calls.at(-1).init.method, 'PATCH');
+
+  await assert.rejects(
+    () => githubApplyChanges({
+      fetchImpl,
+      token: 'secret',
+      owner: 'demo',
+      repo: 'app',
+      ref: 'main',
+      expectedCommitSha: 'other',
+      changes: [{ path: 'src/app.js', content: 'changed' }]
+    }),
+    error => error.code === 'stale-github-revision'
+  );
 });
