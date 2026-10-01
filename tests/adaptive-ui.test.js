@@ -54,6 +54,15 @@ test('the chat workspace exposes server-owned, evidence-backed approach options'
   assert.match(css, /\.brainstorm-option\[data-selected="true"\]/);
 });
 
+test('work status exposes server-confirmed work details without hidden reasoning', async () => {
+  const js = await client();
+  assert.match(js, /function workDetailsCard\(run\)/);
+  assert.match(js, /Current server-confirmed scope, execution, evidence and workspace state/);
+  assert.match(js, /Work details/);
+  assert.match(js, /Why now/);
+  assert.match(js, /Revision/);
+});
+
 test('adaptive UI keeps execution approval and evidence boundaries visible', async () => {
   const js = await client();
   assert.match(js, /approved/);
