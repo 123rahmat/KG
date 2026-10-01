@@ -25,12 +25,12 @@ export function normalizeA2AAgent(agent = {}) {
     capabilities: Array.isArray(agent.capabilities) ? agent.capabilities.slice(0, 100) : [],
     skills: Array.isArray(agent.skills) ? agent.skills.slice(0, 100) : [],
     authentication: agent.authentication ?? null,
-    trust: 'untrusted-until-authorized' };
+    trust: 'untrusted-until-authorized', authorization: 'server-gateway-required' };
 }
 
 export function delegationEnvelope({ runId, taskId, agentId, goal, successCriteria = [], budget = {}, dataPolicy = {}, expiresAt = null } = {}) {
   return {
-    protocol: 'a2a', version: '1', runId: text(runId), taskId: text(taskId), agentId: text(agentId),
+    protocol: 'a2a', version: '1.0.0', runId: text(runId), taskId: text(taskId), agentId: text(agentId),
     goal: text(goal).slice(0, 4000), successCriteria: Array.isArray(successCriteria) ? successCriteria.slice(0, 30) : [],
     budget, dataPolicy, expiresAt,
     authority: { mayPropose: true, mayExecute: false, mayApprove: false, mayChangePolicy: false }
