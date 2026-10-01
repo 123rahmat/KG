@@ -21,7 +21,7 @@ import { executionTargetsFor, defaultExecutionRequirements } from './execution.j
 import { normalizeCapabilityDiscovery, verificationContract } from './capabilities.js';
 import { buildSituationModel, evolveSituation, situationQualityGate } from './situation.js';
 import { adaptiveBudgetStatus, adaptiveBudgetForRun, reconcileAdaptiveTransition } from './adaptive-control.js';
-import { updateAdaptiveRuntimeState } from './adaptive-runtime-state.js';
+import { updateAdaptiveRuntimeState, decideRecovery, recoveryLesson } from './adaptive-runtime-state.js';
 import { buildUnifiedWorkContext, applyWorkChange } from './unified-work-context.js';
 import { reevaluateSituationGovernance } from './situation-governance.js';
 import { MAX_CODE_REPAIRS, canRepair, builtCode, staleAfterRepair, repairRecord, hasCode, isProject, codeFiles, deletedPaths, mergeFix, repairsThisAttempt, normalizePackage } from './code-workflow.js';
@@ -1191,11 +1191,25 @@ export class RunStore {
     }
 
     if (decision.status === 'failed') {
+      const recovery = decideRecovery({
+        taskType: target.type,
+        reason: text(result?.summary) || text(result?.reason) || 'workflow-step-failed',
+        attempt: run.attempt,
+        maxAttempts: run.max_attempts,
+        governanceStatus: run.adaptation?.governance?.status ?? 'ready',
+        humanReviewRequired: run.adaptation?.verification?.humanReviewRequired === true,
+        repairAvailable: target.type === 'code'
+      });
+      adaptiveUpdate.recovery = recoveryLesson(recovery, {
+        taskId: target.id,
+        summary: result?.summary
+      });
+
       const { rows: existingIterate } = await client.query(
         "SELECT id FROM run_tasks WHERE run_id = $1 AND id = 'iterate'",
         [run.id]
       );
-      if (!existingIterate.length) {
+      if (recovery.action !== 'stop' && !existingIterate.length) {
         const { rows: currentRows } = await client.query(
           'SELECT position FROM run_tasks WHERE run_id = $1 ORDER BY position',
           [run.id]
@@ -1207,8 +1221,14 @@ export class RunStore {
           type: 'iterate',
           dependsOn: [target.id],
           requires: ['iteration'],
-          purpose: 'Decide whether to retry, re-plan from the new evidence, or stop after the failed step.',
-          metadata: { adaptive: true, dynamicGraph: true, createdFrom: target.id }
+          purpose: 'Apply the bounded recovery decision: retry transient work, repair a bounded coding failure, re-plan from new evidence, escalate to a person, or stop.',
+          metadata: {
+            adaptive: true,
+            dynamicGraph: true,
+            createdFrom: target.id,
+            recoveryAction: recovery.action,
+            failureClass: recovery.failureClass
+          }
         });
       }
     }
@@ -1223,7 +1243,9 @@ export class RunStore {
     const authoritativeNext = nextTask(authoritativeTasks.map(row => ({
       id: row.id, type: row.type, status: row.status, dependsOn: row.depends_on
     })));
-    if (decision.status === 'failed') {
+    if (decision.status === 'failed' && adaptiveUpdate?.recovery?.action === 'stop') {
+      nextState = 'exhausted';
+    } else if (decision.status === 'failed') {
       nextState = 'iterate';
     } else if (authoritativeNext) {
       nextState = authoritativeNext.type;
