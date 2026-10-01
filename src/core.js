@@ -21,6 +21,8 @@ import { workScale, BUILT_IN } from './work-scale.js';
 import { approvalReasons, verificationContract } from './capabilities.js';
 import { buildUnifiedAdaptiveIntelligence } from './unified-adaptive-intelligence.js';
 import { buildUnifiedWorkContext } from './unified-work-context.js';
+import { selectSkillDescriptors } from './skills.js';
+import { buildParallelExecutionPlan } from './parallel-orchestrator.js';
 
 export const CONTRACT = 'kindgleam-open-world-situation-adaptive-v9';
 export { CAPABILITIES, SURFACES };
@@ -604,6 +606,13 @@ export function planGoal(goal, {
     broad: BROAD_WORK.test(value) || value.split(/\s+/).length > 40
       || value.split(/[,;]|\band\b|\bwith\b|\bplus\b/i).filter(part => part.trim().split(/\s+/).length >= 2).length >= 4
   });
+  const previewSkillTask = intent.kind === 'coding' ? 'build-code' : intent.kind === 'discovery' ? 'investigate' : intent.kind === 'chat' ? 'respond' : 'plan';
+  const selectedSkills = selectSkillDescriptors(value, {
+    taskType: previewSkillTask,
+    intent: intent.kind,
+    capabilities: granted,
+    limit: 6
+  });
   const unifiedIntelligence = buildUnifiedAdaptiveIntelligence(value, {
     analysis,
     files,
@@ -617,6 +626,16 @@ export function planGoal(goal, {
     constraints,
     activeSurface,
     executionAvailable
+  });
+
+  const parallelExecution = buildParallelExecutionPlan({
+    mode: adaptiveControl?.parallelMode ?? adaptiveControl?.parallel ?? 'auto',
+    maxParallel: adaptiveControl?.maxParallel ?? adaptiveControl?.multiAgentMaxAgents ?? 4,
+    pressure: unifiedIntelligence?.reasoning?.pressure ?? 0,
+    concurrencyOpportunity: unifiedIntelligence?.reasoning?.concurrencyOpportunity ?? 0,
+    risk: analysis.situation?.risk ?? 'ordinary',
+    stages: [],
+    explicit: adaptiveControl?.parallelMode === 'always'
   });
 
   const tasks = buildTasks(
@@ -667,7 +686,7 @@ export function planGoal(goal, {
     tasks,
     next: blocked.length ? null : nextTask(tasks)?.id ?? null,
     principles: PRINCIPLES,
-    adaptation: { ...adaptive, scale, unifiedWorkContext, ...(notAvailableHere.length ? { notAvailableHere } : {}), ...(analysis.ownWork ? { ownWork: true } : {}) },
+    adaptation: { ...adaptive, scale, unifiedWorkContext, skills: selectedSkills.map(item => ({ name: item.name, version: item.version, description: item.description, progressiveDisclosure: true })), parallel: parallelExecution, ...(notAvailableHere.length ? { notAvailableHere } : {}), ...(analysis.ownWork ? { ownWork: true } : {}) },
     intelligence: unifiedIntelligence,
     execution: {
       targets: adaptive.execution?.targets ?? [],
