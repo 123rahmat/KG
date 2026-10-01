@@ -15,6 +15,9 @@ test('workflow, filesystem and code share one project-owned context', () => {
   assert.deepEqual(context.code.editablePaths, ['src/App.jsx']);
   assert.equal(context.filesystem.scope, 'active-workspace-and-project');
   assert.ok(context.identity.key);
+  assert.equal(context.chat.conversationId, null);
+  assert.equal(context.chat.memory.scope, 'unavailable');
+  assert.equal(context.chat.multiAgent.mode, 'auto');
 });
 
 test('material code changes update the same context instead of creating a second state', () => {
@@ -63,4 +66,22 @@ test('deleted overlay state remains deleted after a later material change', () =
   });
   const next = applyWorkChange(context, { files: [{ path: 'src/next.js' }] });
   assert.ok(next.filesystem.deleted.includes('src/old.js'));
+});
+
+
+test('unified code workspace context binds chat memory and multi-agent settings to one conversation', () => {
+  const context = buildUnifiedWorkContext({
+    goal: 'Fix the app',
+    project: { id: 'project-chat' },
+    conversationId: 'chat-12345678',
+    multiAgent: { mode: 'always', maxAgents: 3 },
+    files: [{ path: 'src/app.js', type: 'code' }]
+  });
+  assert.equal(context.chat.conversationId, 'chat-12345678');
+  assert.equal(context.chat.memory.scope, 'conversation');
+  assert.equal(context.chat.memory.alwaysOn, true);
+  assert.equal(context.chat.memory.crossChat, 'user-controlled');
+  assert.equal(context.chat.multiAgent.mode, 'always');
+  assert.equal(context.chat.multiAgent.maxAgents, 3);
+  assert.equal(context.chat.multiAgent.serverOrchestrated, true);
 });
