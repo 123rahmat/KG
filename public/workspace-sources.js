@@ -2,9 +2,12 @@ import { state, $, api, notify } from './ui-core.js';
 
 let localDirectory = null;
 
-const EXCLUDED = new Set(['.git', 'node_modules', '.next', '.cache', 'dist', 'build', 'coverage']);
-const MAX_FILES = 10_000;
-const MAX_TOTAL_BYTES = 200 * 1024 * 1024;
+const EXCLUDED = new Set(['.git', 'node_modules', '.next', '.cache', 'dist', 'build', 'coverage', '.venv', 'venv', '__pycache__', '.pytest_cache', 'target']);
+const SOURCE_EXTENSIONS = new Set(['py','pyi','js','mjs','cjs','jsx','ts','tsx','json','toml','cfg','ini','yaml','yml','md','txt','rst','html','css','scss','sql','sh','c','h','cc','cxx','cpp','hh','hpp','ino','java','kt','kts','gradle','go','mod','sum','rs','lock','rb','php','cs','swift','proto','cmake','csv','xml']);
+const SOURCE_NAMES = new Set(['Makefile','Dockerfile','requirements.txt','package.json','pyproject.toml','setup.cfg','README','LICENSE','go.mod','go.sum','Cargo.toml','Cargo.lock','CMakeLists.txt','build.gradle','settings.gradle','pom.xml']);
+const MAX_FILES = 250;
+const MAX_FILE_BYTES = 256 * 1024;
+const MAX_TOTAL_BYTES = 4 * 1024 * 1024;
 
 async function readDirectory(handle, prefix = '', files = [], totals = { bytes: 0 }) {
   for await (const [name, entry] of handle.entries()) {
@@ -16,9 +19,12 @@ async function readDirectory(handle, prefix = '', files = [], totals = { bytes: 
     }
     if (entry.kind !== 'file') continue;
     const file = await entry.getFile();
-    if (totals.bytes + file.size > MAX_TOTAL_BYTES) throw new Error('The selected folder is larger than the workspace source limit.');
-    if (files.length >= MAX_FILES) throw new Error('The selected folder contains too many files.');
+    const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+    if (!SOURCE_EXTENSIONS.has(ext) && !SOURCE_NAMES.has(name)) continue;
+    if (file.size > MAX_FILE_BYTES || totals.bytes + file.size > MAX_TOTAL_BYTES) continue;
+    if (files.length >= MAX_FILES) continue;
     const content = await file.text();
+    if (content.includes('\\0')) continue;
     files.push({ path, content });
     totals.bytes += file.size;
   }
