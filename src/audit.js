@@ -31,6 +31,7 @@ export class Audit {
   }
 
   async record(entry, client = null) {
+    const critical = entry?.critical === true;
     const row = {
       principalId: text(entry.principalId),
       workspaceId: text(entry.workspaceId),
@@ -75,8 +76,8 @@ export class Audit {
       if (client) return await write(client);
       return await transaction(this.pool, write);
     } catch (error) {
-      this.logger?.error('audit write failed', { error, action: row.action, target: row.target });
-      if (client) throw error;
+      this.logger?.error('audit write failed', { error, action: row.action, target: row.target, critical });
+      if (client || critical) throw error;
       return null;
     }
   }
