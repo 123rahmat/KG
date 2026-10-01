@@ -1837,4 +1837,37 @@ export const MIGRATIONS = [
       REVOKE ALL ON run_agents, run_waves, code_workspace_sessions, rag_documents FROM PUBLIC;
         `
   }
+  ,{
+    version: 43,
+    name: 'encrypted-run-blackboard',
+    sql: `
+      CREATE TABLE IF NOT EXISTS run_blackboards (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+        version INTEGER NOT NULL DEFAULT 1,
+        state_enc TEXT NOT NULL,
+        state_digest TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE(run_id)
+      );
+      CREATE INDEX IF NOT EXISTS run_blackboards_scope_idx
+        ON run_blackboards(workspace_id, principal_id, updated_at DESC);
+      ALTER TABLE run_blackboards ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE run_blackboards FORCE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS run_blackboards_scope_policy ON run_blackboards;
+      CREATE POLICY run_blackboards_scope_policy ON run_blackboards
+        USING (
+          run_blackboards.workspace_id = current_setting('app.workspace_id', true)
+          AND run_blackboards.principal_id = current_setting('app.principal_id', true)
+        )
+        WITH CHECK (
+          run_blackboards.workspace_id = current_setting('app.workspace_id', true)
+          AND run_blackboards.principal_id = current_setting('app.principal_id', true)
+        );
+      REVOKE ALL ON run_blackboards FROM PUBLIC;
+    `
+  }
 ];
