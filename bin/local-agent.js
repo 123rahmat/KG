@@ -17,7 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, execFile } from 'node:child_process';
 import { createServer } from 'node:http';
-import { executionPayloadDigest, signExecutionReceipt, verifyExecutionChallenge } from '../src/execution.js';
+import { executionPayloadDigest, signExecutionReceipt, verifyExecutionChallenge, executionIdFor } from '../src/execution.js';
 import { isWorkspacePath } from '../src/workspace-path.js';
 import { testSummary } from '../src/sandbox.js';
 
