@@ -737,7 +737,7 @@ export async function runAdaptiveAgentPanel({
   const finalDecision = allocationResult.decision;
   const finalAllocation = {
     ...lastAllocation,
-    allocationRounds,
+    allocationRounds: Math.max(allocationRounds, completedRoles.length),
     waves,
     waveCount: waves.length,
     parallel: waves.some(wave => wave.parallel),
