@@ -97,7 +97,10 @@ export class AdaptiveProviderGovernor {
         if (index >= 0) state.queued.splice(index, 1);
         reject(new ProviderConcurrencyError(state.key));
       }, state.queueTimeoutMs);
-      entry.timer.unref?.();
+      // Do not unref the queue timeout. A queued request is an active
+      // operation whose rejection Promise must remain deliverable even when
+      // nothing else is keeping the Node.js event loop alive.
+
     });
   }
 
