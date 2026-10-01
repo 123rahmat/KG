@@ -14,7 +14,6 @@ import { workspacePath } from './workspace-path.js';
 
 const text = value => String(value ?? '').trim();
 const SOURCE_ID = /^[A-Za-z0-9_-]{8,80}$/;
-const SAFE_PATH = /^(?![./ -])(?!.*\.\.)(?!.*\/[./ -])(?!.*[ /]$)[\p{L}\p{N}._/ +@-]{1,240}$/u;
 const GITHUB_REPO = /^[A-Za-z0-9_.-]{1,100}$/;
 const MAX_FILES = 250;
 const MAX_FILE_BYTES = 256 * 1024;
@@ -48,7 +47,7 @@ export function normalizeSourceFiles(files = []) {
     const path = safePath(item?.path || item?.name);
     if (!path) continue;
     const content = typeof item?.content === 'string' ? item.content : '';
-    if (content.includes('\\0')) throw new Error(`Source file contains invalid binary data: ${path}`);
+    if (content.includes('\0')) throw new Error(`Source file contains invalid binary data: ${path}`);
     const bytes = Buffer.byteLength(content, 'utf8');
     const previous = map.get(path);
     if (bytes > MAX_FILE_BYTES) throw new Error(`Source file is too large: ${path}`);
