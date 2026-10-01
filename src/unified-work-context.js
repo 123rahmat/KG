@@ -9,13 +9,11 @@
 
 import crypto from 'node:crypto';
 import { createWorkspaceState, workspaceContentHash, createWorkspaceChatContext } from './code-workspace.js';
+import { workspacePath } from './workspace-path.js';
 
 const text = value => String(value ?? '').trim();
 
-const safePath = value => {
-  const p = text(value);
-  return p && !p.includes('..') && !p.startsWith('/') && !p.startsWith('\\') ? p : null;
-};
+const safePath = workspacePath;
 
 export function projectIdentity(project = null, attachments = []) {
   const p = project && typeof project === 'object' ? project : {};
