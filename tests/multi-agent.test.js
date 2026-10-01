@@ -74,6 +74,26 @@ test('agent prompts treat supplied content as data and never grant tool authorit
   assert.deepEqual(body.task, { id: 'build-code', type: 'code' });
 });
 
+test('workspace specialists receive the same chat memory and recent context without peer findings', () => {
+  const messages = agentMessages('architect', {
+    goal: 'Fix the application',
+    task: { id: 'build-code', type: 'code' },
+    situation: { successCriteria: ['tests pass'] },
+    remembered: ['Use the existing service boundaries.'],
+    conversation: [{ user: 'Fix auth', assistant: 'I changed session handling.' }],
+    workspace: { projectId: 'p1', revisionId: 'r1', contentHash: 'hash', fileCount: 12 },
+    chat: { conversationId: 'chat-12345678', memory: { scope: 'conversation', alwaysOn: true }, multiAgent: { mode: 'auto', maxAgents: 5 } },
+    attachments: [{ name: 'src/auth.js', content: 'export const auth = true;' }]
+  });
+  const body = JSON.parse(messages[1].content);
+  assert.deepEqual(body.remembered, ['Use the existing service boundaries.']);
+  assert.deepEqual(body.conversation, [{ user: 'Fix auth', assistant: 'I changed session handling.' }]);
+  assert.equal(body.workspace.projectId, 'p1');
+  assert.equal(body.chat.conversationId, 'chat-12345678');
+  assert.deepEqual(body.attachments, [{ name: 'src/auth.js', content: 'export const auth = true;' }]);
+  assert.deepEqual(body.advisoryFindings, []);
+});
+
 test('the panel runs specialists, records usage, and adds an arbiter only on disagreement', async () => {
   const calls = [];
   const usage = [];
