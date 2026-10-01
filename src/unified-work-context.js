@@ -8,7 +8,7 @@
  */
 
 import crypto from 'node:crypto';
-import { createWorkspaceState, workspaceContentHash } from './code-workspace.js';
+import { createWorkspaceState, workspaceContentHash, createWorkspaceChatContext } from './code-workspace.js';
 
 const text = value => String(value ?? '').trim();
 
@@ -43,7 +43,9 @@ export function buildUnifiedWorkContext({
   currentState = null,
   identityOverride = null,
   revision = 0,
-  lastChange = null
+  lastChange = null,
+  conversationId = null,
+  multiAgent = null
 } = {}) {
   const derivedIdentity = projectIdentity(project, attachments);
   const identity = identityOverride && identityOverride.key
@@ -79,6 +81,11 @@ export function buildUnifiedWorkContext({
     task: { id: situation?.phase || null, title: situation?.title || goal }
   });
   const contentHash = workspaceContentHash(workspaceFiles);
+  const chat = createWorkspaceChatContext({
+    conversationId,
+    multiAgentMode: multiAgent?.mode ?? multiAgent?.multiAgent ?? 'auto',
+    maxAgents: multiAgent?.maxAgents ?? 5
+  });
 
   return {
     contract: 'kindgleam-unified-work-context-v2',
@@ -94,6 +101,7 @@ export function buildUnifiedWorkContext({
       source: identity.source,
       isolated: Boolean(identity.key)
     },
+    chat,
     workspace: {
       ...workspace,
       projectName: text(project?.name),
