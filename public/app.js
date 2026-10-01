@@ -262,8 +262,9 @@ async function executeLocalAgent(request) {
 /* -------------------------------------------------------------- run actions */
 
 /** Record a person's step result and show the updated run. */
-async function advance(body) {
-  const run = state.run;
+async function advance(body, targetRun = state.run) {
+  const run = targetRun;
+  if (!run) return;
   let updated = null;
   await guard(async () => {
     updated = await api('POST', `/api/runs/${run.id}/advance`, body);
@@ -286,15 +287,16 @@ function scheduleRetry(runId, outcome) {
   autoRetries.set(runId, tries + 1);
   const seconds = Math.min(90, Math.max(10, Number(outcome.retryAfterSeconds) || 20));
   setTimeout(() => {
-    if (state.run?.id === runId && !state.busy) autoDrive(state.run);
+    const current = state.chat?.runs?.find(item => item.id === runId);
+    if (current && !state.busyRuns?.has(runId) && !state.drivingRuns?.has(runId)) autoDrive(current);
   }, seconds * 1000);
   return seconds;
 }
 
 /** Run one step with the person's explicit input, then carry on on its own. */
-async function stepThenContinue(buttonNode, extra) {
-  await runStep(buttonNode, extra);
-  await autoDrive(state.run);
+async function stepThenContinue(buttonNode, extra, targetRun = state.run) {
+  const updated = await runStep(buttonNode, extra, targetRun);
+  await autoDrive(updated ?? targetRun);
 }
 
 /**
@@ -327,102 +329,99 @@ async function waitForJob(runId, jobId, button) {
   }
 }
 
-function explainNotExecuted(execution, task) {
+function explainNotExecuted(execution, task, targetRun = state.run) {
   if (execution?.status === 'consent-required') {
-    state.consentNeeded.add(state.run.id);
+    if (targetRun?.id) state.consentNeeded.add(targetRun.id);
     return null;
   }
   const message = execution?.message ?? execution?.status ?? 'Nothing was done.';
   if (execution?.status === 'not-configured' && ['investigate', 'tool'].includes(task?.type)) {
-    return `${message} You can add your own findings instead.`;
+    return message + ' You can add your own findings instead.';
   }
   return message;
 }
 
-/**
- * Run the next step on the server: the AI for reasoning steps, the
- * authorized runner or tool for execution steps. `extra` carries approvals,
- * targets and consent.
- */
-async function runStep(button, extra = {}) {
-  const run = state.run;
+async function runStep(button, extra = {}, targetRun = state.run) {
+  const run = targetRun;
   const task = nextTaskOf(run);
-  if (!run || !task || state.busy) return;
-  state.busy = true;
+  if (!run || !task) return run;
+  state.busyRuns ??= new Set();
+  if (state.busyRuns.has(run.id)) return run;
+  state.busyRuns.add(run.id);
+  state.driving = run.id;
   const original = button?.textContent;
   if (button) { button.disabled = true; button.textContent = 'Processing…'; }
-
-  await guard(async () => {
-    state.network.interruptedRunId = null;
-    if (extra.modelConsent) {
-      state.consented.add(run.id);
-      state.consentNeeded.delete(run.id);
-    }
-    const body = { ...extra, taskId: task.id, ...(state.consented.has(run.id) ? { modelConsent: true } : {}) };
-
-    // Everything except the local agent runs as a background job, so a slow
-    // model or runner never holds this request open.
-    // One key per attempt: a retry after a lost response replays the first
-    // answer, and a step already queued is joined rather than refused.
-    const queued = body.executionTarget === 'local'
-      ? null
-      : await api('POST', `/api/runs/${run.id}/execute`, { ...body, background: true }, { idempotencyKey: crypto.randomUUID() })
-        .catch(error => {
-          if (error.code === 'jobs-unavailable') return null;
-          if (error.code === 'job-already-active' && error.payload?.job?.id) return { job: error.payload.job };
-          throw error;
-        });
-    if (queued) {
-      const job = await waitForJob(run.id, queued.job.id, button);
-      const outcome = job.outcome ?? {};
-      if (outcome.execution?.status === 'consent-required') state.consentNeeded.add(run.id);
-      renderRun(await api('GET', `/api/runs/${run.id}`));
-      await loadRuns();
-      if (job.state !== 'succeeded' || outcome.execution?.executed === false) {
-        const message = outcome.error ?? explainNotExecuted(outcome.execution, task);
-        const retry = !button && scheduleRetry(run.id, outcome);
-        if (message) notify('runNotice', 'warn', retry ? `${message} Trying again in ${retry}s…` : message);
+  let updatedRun = run;
+  try {
+    await guard(async () => {
+      state.network.interruptedRunId = null;
+      if (extra.modelConsent) {
+        state.consented.add(run.id);
+        state.consentNeeded.delete(run.id);
       }
-      return;
-    }
-
-    // Held open for the whole step: a model or runner can take minutes here.
-    const first = await api('POST', `/api/runs/${run.id}/execute`, body, { timeoutMs: 10 * 60_000 });
-    if (first.execution?.status === 'local-agent-required') {
-      const local = await executeLocalAgent(first.execution.request);
-      const receipt = local.receipt ?? {
-        executed: local.executed === true,
-        status: local.status ?? 'completed',
-        result: local.result ?? local.output ?? null,
-        executionTarget: 'local'
-      };
-      if (receipt.executed !== true) {
-        notify('runNotice', 'warn', local.message ?? 'The local agent did not report a finished run.');
+      const body = { ...extra, taskId: task.id, ...(state.consented.has(run.id) ? { modelConsent: true } : {}) };
+      const queued = body.executionTarget === 'local'
+        ? null
+        : await api('POST', '/api/runs/' + run.id + '/execute', { ...body, background: true }, { idempotencyKey: crypto.randomUUID() })
+          .catch(error => {
+            if (error.code === 'jobs-unavailable') return null;
+            if (error.code === 'job-already-active' && error.payload?.job?.id) return { job: error.payload.job };
+            throw error;
+          });
+      if (queued) {
+        const job = await waitForJob(run.id, queued.job.id, button);
+        const outcome = job.outcome ?? {};
+        if (outcome.execution?.status === 'consent-required') state.consentNeeded.add(run.id);
+        updatedRun = await api('GET', '/api/runs/' + run.id);
+        renderRun(updatedRun);
+        await loadRuns();
+        if (job.state !== 'succeeded' || outcome.execution?.executed === false) {
+          const message = outcome.error ?? explainNotExecuted(outcome.execution, task, run);
+          const retry = !button && scheduleRetry(run.id, outcome);
+          if (message) notify('runNotice', 'warn', retry ? message + ' Trying again in ' + retry + 's…' : message);
+        }
         return;
       }
-      const result = await api('POST', `/api/runs/${run.id}/execution-result`, {
-        taskId: task.id, executionTarget: 'local', receipt, evidence: { source: 'local-agent', receipt }
-      });
-      renderRun(result.run);
+      const first = await api('POST', '/api/runs/' + run.id + '/execute', body, { timeoutMs: 10 * 60_000 });
+      if (first.execution?.status === 'local-agent-required') {
+        const local = await executeLocalAgent(first.execution.request);
+        const receipt = local.receipt ?? {
+          executed: local.executed === true,
+          status: local.status ?? 'completed',
+          result: local.result ?? local.output ?? null,
+          executionTarget: 'local'
+        };
+        if (receipt.executed !== true) {
+          notify('runNotice', 'warn', local.message ?? 'The local agent did not report a finished run.');
+          return;
+        }
+        const result = await api('POST', '/api/runs/' + run.id + '/execution-result', {
+          taskId: task.id, executionTarget: 'local', receipt, evidence: { source: 'local-agent', receipt }
+        });
+        updatedRun = result.run;
+        renderRun(updatedRun);
+        await loadRuns();
+        return;
+      }
+      updatedRun = first.run;
+      renderRun(updatedRun);
+      if (!first.execution?.executed) {
+        const message = explainNotExecuted(first.execution, task, run);
+        if (message) notify('runNotice', 'warn', message);
+      }
       await loadRuns();
-      return;
-    }
-    renderRun(first.run);
-    if (!first.execution?.executed) {
-      const message = explainNotExecuted(first.execution, task);
-      if (message) notify('runNotice', 'warn', message);
-    }
-    await loadRuns();
-  }, 'runNotice', error => {
-    if (error.code !== 'offline' && !error.transient) return null;
-    // Picked up again by resumeAfterReconnect when the server answers.
-    state.network.interruptedRunId = run.id;
-    return 'Connection lost. This continues on its own as soon as you are back online.';
-  });
-
-  state.busy = false;
-  if (button?.isConnected) { button.disabled = false; button.textContent = original; }
-  loadUsage();
+    }, 'runNotice', error => {
+      if (error.code !== 'offline' && !error.transient) return null;
+      state.network.interruptedRunId = run.id;
+      return 'Connection lost. This continues on its own as soon as you are back online.';
+    });
+  } finally {
+    state.busyRuns.delete(run.id);
+    if (state.driving === run.id) state.driving = null;
+    if (button?.isConnected) { button.disabled = false; button.textContent = original; }
+    loadUsage();
+  }
+  return updatedRun;
 }
 
 /* --------------------------------------------------------- next-step cards */
@@ -878,23 +877,37 @@ function repairRerun(run) {
 
 /** Run the AI steps one after another, stopping where the person is needed. */
 export async function autoDrive(run) {
-  if (!run || state.driving) return;
-  state.run = run;
-  state.driving = run.id;
+  if (!run) return run;
+  state.drivingRuns ??= new Set();
+  if (state.drivingRuns.has(run.id)) return run;
+  state.drivingRuns.add(run.id);
+  let current = run;
   try {
-    for (let steps = 0; steps < 30 && isAutomatic(state.run); steps += 1) {
-      const before = `${state.run.next}:${state.run.attempt}`;
-      const rerun = repairRerun(state.run);
-      state.drivingLabel = rerun ? 'Running the revised code' : taskLabel(nextTaskOf(state.run));
-      renderThread();
-      await runStep(null, rerun ?? {});
-      if (`${state.run.next}:${state.run.attempt}` === before) break;
+    for (let steps = 0; steps < 30 && isAutomatic(current); steps += 1) {
+      const before = String(current.next) + ':' + String(current.attempt);
+      const rerun = repairRerun(current);
+      if (state.chat?.id === current.conversationId || !state.chat?.id) {
+        state.run = current;
+        state.driving = current.id;
+        state.drivingLabel = rerun ? 'Running the revised code' : taskLabel(nextTaskOf(current));
+        renderThread();
+      }
+      const updated = await runStep(null, rerun ?? {}, current);
+      if (updated) current = updated;
+      if (String(current.next) + ':' + String(current.attempt) === before) break;
     }
   } finally {
-    state.driving = null;
+    state.drivingRuns.delete(run.id);
+    if (state.driving === run.id) state.driving = null;
     state.drivingLabel = '';
-    renderThread();
+    if (state.run?.id === run.id) {
+      state.run = current;
+      renderThread();
+    } else {
+      loadRuns().catch(() => {});
+    }
   }
+  return current;
 }
 
 // Only real outcomes are shown as the answer; planning and checking notes
