@@ -278,6 +278,9 @@ test('GitHub write-back builds one revision and rejects stale bases', async () =
     if (url.includes('/commits/main')) {
       return new Response(JSON.stringify({ sha: 'base123', commit: { tree: { sha: 'tree123' } } }), { status: 200, headers: { 'content-type': 'application/json' } });
     }
+    if (url.includes('/git/trees/base123?recursive=1')) {
+      return new Response(JSON.stringify({ truncated: false, tree: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
     if (url.endsWith('/git/blobs')) return new Response(JSON.stringify({ sha: 'blob123' }), { status: 201, headers: { 'content-type': 'application/json' } });
     if (url.endsWith('/git/trees')) return new Response(JSON.stringify({ sha: 'newtree123' }), { status: 201, headers: { 'content-type': 'application/json' } });
     if (url.endsWith('/git/commits')) return new Response(JSON.stringify({ sha: 'commit123' }), { status: 201, headers: { 'content-type': 'application/json' } });
