@@ -654,9 +654,13 @@ export async function runAdaptiveAgentPanel({
     const pendingRoles = allocationResult.roles.filter(role =>
       !completedRoles.includes(role) && !failedRoles.includes(role)
     );
-    if (!pendingRoles.length) break;
+    // An allocation is a capacity target, not an instruction to exhaust every
+    // role forever. Once the completed specialists satisfy the current target,
+    // stop; only a newly justified expansion or failed slot can recruit more.
+    const neededRoles = Math.max(0, Number(allocationResult.agentCount ?? allocationResult.roles.length) - completedRoles.length);
+    if (!pendingRoles.length || neededRoles === 0) break;
 
-    const waveRoles = pendingRoles.slice(0, effectiveMaxParallel);
+    const waveRoles = pendingRoles.slice(0, Math.min(effectiveMaxParallel, neededRoles));
     const waveIndex = waves.length;
     const jobs = [];
 
