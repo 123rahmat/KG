@@ -338,6 +338,16 @@ export function rolesFor(run, task, {
     roles.push(candidates[0].role);
     utilities[candidates[0].role] = Number(candidates[0].utility.toFixed(3));
   }
+  // When evidence explicitly shows disagreement, the target is a deliberate
+  // request for additional independent perspectives. Fill the panel rather
+  // than silently under-allocating because of a utility floor.
+  if (observed.disagreement && roles.length < targetCount) {
+    for (const candidate of candidates) {
+      if (roles.length >= targetCount || roles.includes(candidate.role)) break;
+      roles.push(candidate.role);
+      utilities[candidate.role] = Number(candidate.utility.toFixed(3));
+    }
+  }
 
   const signals = taskSignals(run, task, progress);
   if (signals.retrying && ['plan', 'reassess'].includes(signals.type) && targetCount >= 2 && !roles.includes('strategist')) {
