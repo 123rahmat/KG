@@ -92,7 +92,11 @@ export async function attachmentContext(objects, scope, attachments, { maxChars 
       files.push({
         name: file.name, readable: true, kind: 'project', format: 'project',
         truncated: view.notShown.length > 0, text: view.text,
-        ...(view.notShown.length ? { notShown: view.notShown.length } : {})
+        ...(view.notShown.length ? { notShown: view.notShown.length } : {}),
+        ...(read.ingestion?.partial ? {
+          note: 'This project snapshot is incomplete: ' + (read.ingestion.skippedCount || read.skipped?.length || 0) + ' source files were omitted by the source importer. Do not claim the repository was fully inspected.',
+          ingestion: read.ingestion
+        } : {})
       });
       budget -= Math.min(view.text.length, budget);
       continue;
