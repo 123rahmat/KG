@@ -95,6 +95,25 @@ test('GitHub snapshots report importer omissions instead of pretending the proje
   assert.deepEqual(result.files, [{ path: 'src/app.js', content: 'a' }]);
 });
 
+test('GitHub subdirectories map to workspace-root paths', async () => {
+  const fetchImpl = async (url) => {
+    if (url.endsWith('/repos/demo/app')) return new Response(JSON.stringify({ default_branch: 'main', private: true, html_url: 'https://github.com/demo/app' }), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (url.includes('/commits/main')) return new Response(JSON.stringify({ sha: 'base123', commit: { tree: { sha: 'tree123' } } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (url.includes('/git/trees/base123?recursive=1')) return new Response(JSON.stringify({
+      truncated: false,
+      tree: [
+        { type: 'blob', path: 'apps/service/src/main.js', size: 1, sha: 'main' },
+        { type: 'blob', path: 'README.md', size: 1, sha: 'readme' }
+      ]
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (url.includes('/git/blobs/main')) return new Response(JSON.stringify({ encoding: 'base64', content: Buffer.from('x').toString('base64') }), { status: 200, headers: { 'content-type': 'application/json' } });
+    throw new Error('out-of-scope file should not be fetched');
+  };
+  const result = await githubReadRepository({ fetchImpl, token: 'secret', owner: 'demo', repo: 'app', ref: 'main', repoPath: 'apps/service' });
+  assert.equal(result.source.repoPath, 'apps/service');
+  assert.deepEqual(result.files, [{ path: 'src/main.js', content: 'x' }]);
+});
+
 test('GitHub repository snapshots read the immutable resolved commit', async () => {
   const calls = [];
   const fetchImpl = async (url, init = {}) => {
