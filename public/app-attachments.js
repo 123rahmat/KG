@@ -164,6 +164,8 @@ export function growComposer() {
 export function newChat() {
   if ($('tab-runs').hidden) selectTab('runs');
   state.chat = { id: null, runs: [], pending: null, consent: state.settings.consent, workspaceSourceId: null };
+  state.workspaceSourceId = null;
+  state.workspaceSource = null;
   if (state.usage) state.usage.context = null;
   $('shareRun').checked = state.settings.share;
   clearDraft();
