@@ -329,6 +329,20 @@ export function executionIdFor({ runId, taskId, attempt = 0, executionTarget = '
     .digest('hex');
 }
 
+function canonicalPayloadValue(value) {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (Array.isArray(value)) return value.map(canonicalPayloadValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value).sort()
+        .filter(key => value[key] !== undefined)
+        .map(key => [key, canonicalPayloadValue(value[key])])
+    );
+  }
+  return null;
+}
+
 export function canonicalExecutionReceipt({ runId, taskId, taskType, attempt = 0, challengeNonce = '', receipt = {} } = {}) {
   const outputHash = crypto.createHash('sha256')
     .update(String(receipt.stdout ?? ''), 'utf8')
@@ -345,6 +359,7 @@ export function canonicalExecutionReceipt({ runId, taskId, taskType, attempt = 0
     executionId: text(receipt.executionId),
     challengeNonce: text(challengeNonce || receipt.challengeNonce),
     executionTarget: text(receipt.executionTarget),
+    payloadDigest: text(receipt.payloadDigest),
     executed: receipt.executed === true,
     status: text(receipt.status),
     exitCode: Number.isInteger(receipt.exitCode) ? receipt.exitCode : null,
@@ -373,10 +388,9 @@ export function executionSucceeded(result = {}) {
  * used to run another, whoever carries it between server and agent.
  */
 export function executionPayloadDigest(payload = {}) {
-  return crypto.createHash('sha256').update(JSON.stringify({
-    language: text(payload?.language).toLowerCase(),
-    source: String(payload?.source ?? '')
-  }), 'utf8').digest('base64url');
+  return crypto.createHash('sha256')
+    .update(JSON.stringify(canonicalPayloadValue(payload)), 'utf8')
+    .digest('base64url');
 }
 
 export function signExecutionChallenge(secret, context = {}) {

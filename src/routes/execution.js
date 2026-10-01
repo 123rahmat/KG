@@ -513,6 +513,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
             executionTarget: 'local',
             round: repairsThisAttempt(run).length
           });
+          const payloadDigest = executionPayloadDigest(req.body?.payload ?? {});
           const signature = signExecutionChallenge(config.execution.localAgentSharedSecret, {
             runId: run.id,
             taskId: task.id,
@@ -529,7 +530,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
             req.principal,
             run.id,
             task.id,
-            { attempt: run.attempt, nonce, expiresAt, executionId }
+            { attempt: run.attempt, nonce, expiresAt, executionId, payloadDigest }
           );
           if (!issued) {
             return res.status(409).json({
@@ -564,6 +565,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
                 executionChallenge: {
                   expiresAt,
                   nonce,
+                  payloadDigest,
                   signature,
                   executionId,
                   attempt: run.attempt
@@ -949,6 +951,21 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       return res.status(409).json({
         error: 'This execution receipt does not belong to the current execution request.',
         code: 'stale-execution-id'
+      });
+    }
+
+    const challenge = task.metadata?.executionChallenge;
+    if (!challenge || Number(challenge.attempt) !== Number(run.attempt)
+        || text(challenge.executionId) !== expectedExecutionId
+        || text(challenge.principalId) !== text(req.principal.id)
+        || !text(receipt.challengeNonce)
+        || crypto.createHash('sha256').update(text(receipt.challengeNonce), 'utf8').digest('hex') !== text(challenge.nonceHash)
+        || !text(challenge.payloadDigest)
+        || text(receipt.payloadDigest) !== text(challenge.payloadDigest)
+        || Date.parse(text(challenge.expiresAt)) <= Date.now()) {
+      return res.status(409).json({
+        error: 'The local execution receipt does not match the server-issued execution challenge.',
+        code: 'stale-execution-challenge'
       });
     }
 

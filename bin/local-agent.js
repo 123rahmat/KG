@@ -353,6 +353,7 @@ const server = createServer(async (req, res) => {
         attempt: Number(body.attempt),
         executionId: text(body.executionId),
         challengeNonce: text(body.executionChallenge?.nonce),
+        payloadDigest: executionPayloadDigest(body?.payload ?? {}),
         origin,
         agentVersion: AGENT_VERSION
       };

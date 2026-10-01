@@ -736,6 +736,7 @@ test('local execution challenges are stored hashed and become stale across run a
     assert.equal(task.metadata.executionChallenge.attempt, 1);
     assert.equal(task.metadata.executionChallenge.nonce, undefined);
     assert.match(task.metadata.executionChallenge.nonceHash, /^[0-9a-f]{64}$/);
+    assert.match(task.metadata.executionChallenge.payloadDigest, /^[A-Za-z0-9_-]+$/);
 
     const now = new Date().toISOString();
     const receipt = {
@@ -751,7 +752,8 @@ test('local execution challenges are stored hashed and become stale across run a
       attempt: 1,
       challengeNonce: request.executionChallenge.nonce,
       executionId: request.executionId,
-      executionTarget: 'local'
+      executionTarget: 'local',
+      payloadDigest: request.executionChallenge.payloadDigest
     };
     receipt.signature = signExecutionReceipt(secret, {
       runId: run.id,

@@ -183,6 +183,28 @@ test('local execution receipts are cryptographically bound to the run and task',
   );
 });
 
+test('execution payload digest binds the complete payload deterministically', () => {
+  const a = {
+    project: true,
+    language: 'javascript',
+    source: 'console.log(1)',
+    files: { 'src/a.mjs': 'export const a = 1;', 'test/a.test.mjs': 'test("a",()=>{})' },
+    packages: ['x'],
+    entry: 'src/main.mjs'
+  };
+  const b = {
+    entry: 'src/main.mjs',
+    packages: ['x'],
+    files: { 'test/a.test.mjs': 'test("a",()=>{})', 'src/a.mjs': 'export const a = 1;' },
+    source: 'console.log(1)',
+    language: 'javascript',
+    project: true
+  };
+  assert.equal(executionPayloadDigest(a), executionPayloadDigest(b));
+  assert.notEqual(executionPayloadDigest(a), executionPayloadDigest({ ...b, files: { ...b.files, 'src/a.mjs': 'export const a = 2;' } }));
+  assert.notEqual(executionPayloadDigest(a), executionPayloadDigest({ ...b, tests: 'changed' }));
+});
+
 test('execution success is separate from execution occurrence', () => {
   assert.equal(executionSucceeded({ executed: true, status: 'completed', exitCode: 0 }), true);
   assert.equal(executionSucceeded({ executed: true, status: 'failed', exitCode: 1 }), false);

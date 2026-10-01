@@ -310,7 +310,7 @@ export class RunStore {
    * the nonce is persisted; the signed plaintext challenge is returned to the
    * caller and can be consumed exactly once by advance().
    */
-  async issueExecutionChallenge(scope, principal, runId, taskId, { attempt, nonce, expiresAt, executionId } = {}) {
+  async issueExecutionChallenge(scope, principal, runId, taskId, { attempt, nonce, expiresAt, executionId, payloadDigest } = {}) {
     const nonceText = text(nonce);
     const expires = text(expiresAt);
     if (!nonceText || !expires) return false;
@@ -338,6 +338,7 @@ export class RunStore {
           executionId: text(executionId),
           principalId: principal.id,
           nonceHash,
+          payloadDigest: text(payloadDigest),
           expiresAt: expires
         }
       };
