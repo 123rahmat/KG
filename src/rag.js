@@ -123,7 +123,7 @@ export class RagStore {
         const packed = JSON.parse(plaintext);
         content = text(packed?.content);
       } catch {
-        content = '';
+        // Corrupt/undecryptable chunks are ignored; plaintext is never surfaced.
       }
       return { ...row, content };
     });
