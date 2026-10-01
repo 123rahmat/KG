@@ -473,7 +473,8 @@ async function execute(body) {
   }
   const runId = safeRunId(body.runId);
   const taskId = safeTaskId(body.taskId);
-  const executionId = safeTaskId(text(body.executionId) || executionIdFor({
+  const providedExecutionId = text(body.executionId);
+  const executionId = safeTaskId(providedExecutionId || executionIdFor({
     runId, taskId, attempt: Number(body.attempt), executionTarget: 'local'
   }));
   const challenge = body?.executionChallenge;
@@ -482,7 +483,8 @@ async function execute(body) {
     taskId,
     taskType: body.taskType,
     attempt: Number(body.attempt),
-    executionId,
+    // Preserve the legacy signed shape when older clients omitted executionId.
+    executionId: providedExecutionId,
     executionTarget: body.executionTarget,
     expiresAt: challenge.expiresAt,
     nonce: challenge.nonce,
