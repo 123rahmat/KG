@@ -248,8 +248,8 @@ function decisionPressure(run, task, progress = {}) {
 function targetAgentCount(pressure, maxAgents) {
   const maximum = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
   const desired = pressure >= 0.99 ? 5
-    : pressure >= 0.98 ? 4
-      : pressure >= 0.80 ? 3
+    : pressure >= 0.80 ? 4
+      : pressure >= 0.65 ? 3
         : pressure >= 0.41 ? 2
           : 1;
   return Math.min(maximum, desired);
@@ -696,7 +696,11 @@ export async function runAdaptiveAgentPanel({
 
     const results = await Promise.all(jobs.map(async job => {
       const startedAt = Date.now();
-      const result = await modelCaller(agentMessages(job.role, { ...basePayload, harness, blackboard }), {
+      // Specialists remain independent across waves. The live blackboard is
+      // updated from peer findings for orchestration/audit, but those findings
+      // must not be fed back into another specialist and create anchoring.
+      const specialistBlackboard = basePayload?.blackboard ?? null;
+      const result = await modelCaller(agentMessages(job.role, { ...basePayload, harness, blackboard: specialistBlackboard }), {
         config,
         fetchImpl,
         modelId: job.modelId,
