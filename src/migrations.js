@@ -2084,5 +2084,48 @@ export const MIGRATIONS = [
       FOR EACH ROW
       EXECUTE FUNCTION prevent_audit_log_mutation();
     `
+  },
+  {
+    version: 50,
+    name: 'governed-evolution-proposals',
+    sql: `
+      CREATE TABLE IF NOT EXISTS evolution_proposals (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        feedback_id TEXT REFERENCES run_feedback(id) ON DELETE CASCADE,
+        target TEXT NOT NULL CHECK (target IN ('retrieval','reasoning','verification','orchestration','efficiency','safety')),
+        status TEXT NOT NULL DEFAULT 'candidate'
+          CHECK (status IN ('candidate','approved','rejected','implemented')),
+        summary_enc TEXT NOT NULL,
+        evidence_enc TEXT,
+        fingerprint TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE(feedback_id, target)
+      );
+      CREATE INDEX IF NOT EXISTS evolution_proposals_scope_idx
+        ON evolution_proposals(workspace_id, status, created_at DESC);
+      CREATE INDEX IF NOT EXISTS evolution_proposals_run_idx
+        ON evolution_proposals(run_id, created_at DESC);
+
+      ALTER TABLE evolution_proposals ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE evolution_proposals FORCE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS evolution_proposals_scope_policy ON evolution_proposals;
+      CREATE POLICY evolution_proposals_scope_policy ON evolution_proposals
+        USING (
+          evolution_proposals.workspace_id = current_setting('app.workspace_id', true)
+          AND (
+            evolution_proposals.principal_id = current_setting('app.principal_id', true)
+            OR current_setting('app.role', true) IN ('admin', 'service')
+          )
+        )
+        WITH CHECK (
+          evolution_proposals.workspace_id = current_setting('app.workspace_id', true)
+          AND evolution_proposals.principal_id = current_setting('app.principal_id', true)
+        );
+      REVOKE ALL ON evolution_proposals FROM PUBLIC;
+    `
   }
 ];
