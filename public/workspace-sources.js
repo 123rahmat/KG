@@ -36,20 +36,35 @@ function sourceName() {
 
 function updateSourceUI() {
   const sync = $('syncWorkspaceSource');
+  const status = $('workspaceSourceStatus');
   const source = state.workspaceSource;
   if (sync) {
     sync.hidden = !source;
     sync.textContent = source?.kind === 'github' ? 'Sync GitHub' : 'Sync folder';
   }
+  if (status) status.textContent = source
+    ? `${source.kind === 'github' ? 'GitHub' : 'Local'} · ${source.name || 'Project source'}`
+    : 'No project connected';
+  renderPanelState();
+}
+
+function renderPanelState() {
+  const source = state.workspaceSource;
+  const localMeta = $('localFolderMeta');
+  const localSync = $('syncLocalFolderFromPanel');
+  if (localMeta) localMeta.textContent = localDirectory
+    ? `${source?.kind === 'local-folder' ? source.name : localDirectory.name} · connected`
+    : 'No folder selected';
+  if (localSync) localSync.hidden = !localDirectory || source?.kind !== 'local-folder';
 }
 
 export async function openLocalFolder() {
   if (!window.showDirectoryPicker) {
-    notify('runNotice', 'warn', 'This browser does not support direct folder access. Use the normal file attachment flow instead.');
+    notify('projectSourcesNotice', 'warn', 'This browser does not support direct folder access. Use the file attachment flow instead.');
     return null;
   }
   try {
-    localDirectory = await window.showDirectoryPicker({ mode: 'readwrite' });
+    localDirectory = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'desktop' });
     const files = await folderFiles();
     const result = await api('POST', '/api/workspace/sources/local', {
       name: sourceName(),
@@ -60,11 +75,12 @@ export async function openLocalFolder() {
     state.workspaceSource = result.source;
     if (state.chat) state.chat.workspaceSourceId = result.source.id;
     updateSourceUI();
-    notify('runNotice', 'info', `Connected ${sourceName()} · ${result.manifest.fileCount} files`);
+    renderPanelState();
+    notify('projectSourcesNotice', 'info', `Connected ${sourceName()} · ${result.manifest.fileCount} files`);
     return result.source;
   } catch (error) {
     if (error?.name === 'AbortError') return null;
-    notify('runNotice', 'warn', error.message || 'The local folder could not be opened.');
+    notify('projectSourcesNotice', 'warn', error.message || 'The local folder could not be opened.');
     return null;
   }
 }
@@ -79,13 +95,17 @@ export async function syncLocalFolder() {
 }
 
 export async function connectGitHub() {
-  const token = window.prompt('Paste a GitHub fine-grained token for this workspace. It is sent over HTTPS and stored encrypted; it is never placed in chat memory.');
-  if (!token) return null;
-  const owner = window.prompt('GitHub owner or organization name');
-  const repo = window.prompt('GitHub repository name');
-  if (!owner || !repo) return null;
-  const ref = window.prompt('Branch or tag (optional; default branch will be used if blank)') || '';
+  const token = $('githubToken')?.value.trim();
+  const owner = $('githubOwner')?.value.trim();
+  const repo = $('githubRepo')?.value.trim();
+  const ref = $('githubRef')?.value.trim() || '';
+  if (!token || !owner || !repo) {
+    notify('projectSourcesNotice', 'warn', 'Enter the GitHub credential, owner, and repository.');
+    return null;
+  }
   try {
+    const button = $('connectGithub');
+    if (button) button.disabled = true;
     const result = await api('POST', '/api/workspace/sources/github', {
       token,
       owner,
@@ -96,12 +116,17 @@ export async function connectGitHub() {
     state.workspaceSourceId = result.source.id;
     state.workspaceSource = result.source;
     if (state.chat) state.chat.workspaceSourceId = result.source.id;
+    if ($('githubToken')) $('githubToken').value = '';
     updateSourceUI();
-    notify('runNotice', 'info', `Connected GitHub repository ${owner}/${repo}`);
+    renderPanelState();
+    notify('projectSourcesNotice', 'info', `Connected GitHub repository ${owner}/${repo} · ${result.manifest.fileCount} files`);
     return result.source;
   } catch (error) {
-    notify('runNotice', 'warn', error.message || 'GitHub could not be connected.');
+    notify('projectSourcesNotice', 'warn', error.message || 'GitHub could not be connected.');
     return null;
+  } finally {
+    const button = $('connectGithub');
+    if (button) button.disabled = false;
   }
 }
 
@@ -119,17 +144,35 @@ export async function syncActiveWorkspaceSource() {
 
 export async function initWorkspaceSources() {
   updateSourceUI();
+  const dialog = $('projectSourcesDialog');
+  const open = $('openProjectSources');
+  const close = $('projectSourcesClose');
   const local = $('openLocalFolder');
   const github = $('connectGithub');
+  const localSync = $('syncLocalFolderFromPanel');
   const sync = $('syncWorkspaceSource');
+  open?.addEventListener('click', () => dialog?.showModal());
+  close?.addEventListener('click', () => dialog?.close());
   local?.addEventListener('click', () => openLocalFolder());
   github?.addEventListener('click', () => connectGitHub());
+  localSync?.addEventListener('click', async () => {
+    try {
+      const result = await syncLocalFolder();
+      if (result) {
+        renderPanelState();
+        updateSourceUI();
+        notify('projectSourcesNotice', 'info', result.unchanged ? 'Local folder is already up to date.' : 'Local folder synchronized.');
+      }
+    } catch (error) {
+      notify('projectSourcesNotice', 'warn', error.message || 'Local folder synchronization failed.');
+    }
+  });
   sync?.addEventListener('click', async () => {
     try {
       const result = await syncActiveWorkspaceSource();
-      if (result) notify('runNotice', 'info', result.unchanged ? 'Workspace source is already up to date.' : 'Workspace source synchronized.');
+      if (result) notify('projectSourcesNotice', 'info', result.unchanged ? 'Project source is already up to date.' : 'Project source synchronized.');
     } catch (error) {
-      notify('runNotice', 'warn', error.message || 'Workspace source synchronization failed.');
+      notify('projectSourcesNotice', 'warn', error.message || 'Project source synchronization failed.');
     }
   });
 }
