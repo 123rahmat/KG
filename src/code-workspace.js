@@ -12,6 +12,38 @@ import crypto from 'node:crypto';
 const PATH = /^(?![./ -])(?!.*\.\.)(?!.*\/[./ -])(?!.*[ /]$)[\p{L}\p{N}._/ +@-]{1,240}$/u;
 const text = value => String(value ?? '').trim();
 
+const CONVERSATION_ID = /^[A-Za-z0-9-]{8,64}$/;
+
+export function createWorkspaceChatContext({
+  conversationId = null,
+  multiAgentMode = 'auto',
+  maxAgents = 5
+} = {}) {
+  const id = text(conversationId);
+  if (id && !CONVERSATION_ID.test(id)) {
+    throw new Error('Workspace chat conversationId must be 8-64 letters, digits or dashes');
+  }
+  const mode = ['auto', 'always', 'off'].includes(text(multiAgentMode)) ? text(multiAgentMode) : 'auto';
+  const limit = Math.max(1, Math.min(5, Number(maxAgents) || 5));
+  return Object.freeze({
+    conversationId: id || null,
+    memory: {
+      scope: id ? 'conversation' : 'unavailable',
+      alwaysOn: Boolean(id),
+      crossChat: 'user-controlled',
+      note: 'Chat-local memory is isolated to this conversation; cross-chat recall never happens implicitly.'
+    },
+    multiAgent: {
+      mode,
+      maxAgents: limit,
+      adaptive: true,
+      serverOrchestrated: true,
+      advisoryOnly: true
+    }
+  });
+}
+
+
 export const WORKSPACE_LIMITS = Object.freeze({
   maxFiles: 10_000,
   maxFileBytes: 10 * 1024 * 1024,
