@@ -70,7 +70,7 @@ test('context compiler prioritizes changed code and related verification', () =>
     maxFiles: 6
   });
   assert.equal(pack.strategy, 'semantic-minimum-sufficient-context');
-  assert.equal(pack.project.workspaceContentHash, require('node:crypto') ? pack.project.workspaceContentHash : pack.project.workspaceContentHash);
+  assert.match(pack.project.workspaceContentHash, /^[a-f0-9]{64}$/);
   assert.equal(pack.focus.changedFiles[0], 'src/auth.js');
   assert.ok(pack.focus.relatedTests.includes('tests/auth.test.js'));
   assert.ok(pack.files.some(item => item.path === 'src/auth.js'));
