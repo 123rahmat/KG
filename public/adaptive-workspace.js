@@ -72,6 +72,56 @@ export function adaptiveWorkspaceState() {
   };
 }
 
+function taskLabel(task) {
+  return text(task?.metadata?.title || task?.purpose || task?.id || task?.type || 'Step');
+}
+
+function taskTone(task) {
+  if (task?.status === 'complete') return 'ok';
+  if (task?.status === 'failed') return 'bad';
+  if (['waiting', 'approval'].includes(task?.status)) return 'warn';
+  if (task?.status === 'running') return 'active';
+  return 'pending';
+}
+
+function executionLabel(task) {
+  const target = text(task?.evidence?.executionTarget || task?.evidence?.result?.executionTarget || task?.evidence?.receipt?.executionTarget);
+  if (!target) return null;
+  if (target === 'general-ai-sandbox') return 'Sandbox';
+  if (target === 'local') return 'Local';
+  if (target === 'builtin-research') return 'Research';
+  if (target === 'builtin-tools') return 'Built-in tool';
+  if (target === 'generic-tool-router') return 'Tool runner';
+  return target.replaceAll('-', ' ');
+}
+
+export function renderWorkStatus(run) {
+  const tasks = Array.isArray(run?.tasks) ? run.tasks : [];
+  const visible = tasks.slice(-6);
+  if (!visible.length) return null;
+  const current = tasks.find(task => task.id === run.next) ?? tasks.find(task => !['complete','skipped'].includes(task.status));
+  const execution = current?.evidence?.executionTarget || current?.evidence?.result?.executionTarget
+    ? executionLabel(current)
+    : null;
+  return element('div', { class: 'work-timeline', 'aria-label': 'Work progress' }, [
+    element('div', { class: 'work-timeline-head' }, [
+      element('span', { class: 'small muted', text: 'Live workflow' }),
+      current ? element('span', { class: 'small', text: 'Next · ' + taskLabel(current) + (execution ? ' · ' + execution : '') }) : element('span', { class: 'small muted', text: run.state === 'complete' ? 'All work finished' : 'No pending step' })
+    ]),
+    element('div', { class: 'work-timeline-list' }, visible.map(task => {
+      const tone = taskTone(task);
+      const exec = executionLabel(task);
+      return element('div', { class: 'work-timeline-item ' + tone }, [
+        element('span', { class: 'work-timeline-dot', 'aria-hidden': 'true' }),
+        element('div', { class: 'work-timeline-copy' }, [
+          element('strong', { class: 'small', text: taskLabel(task) }),
+          element('span', { class: 'small muted', text: [task.status || 'pending', exec].filter(Boolean).join(' · ') })
+        ]),
+        task.status === 'failed' ? element('span', { class: 'small work-timeline-flag', text: 'Needs attention' }) : null
+      ].filter(Boolean));
+    }))
+  ]);
+}
 export function renderAdaptiveWorkspace(host, mode = 'chat') {
   if (!host) return;
   const data = adaptiveWorkspaceState();
