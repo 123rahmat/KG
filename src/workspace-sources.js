@@ -19,6 +19,19 @@ const MAX_FILES = 250;
 const MAX_FILE_BYTES = 256 * 1024;
 const MAX_TOTAL_BYTES = 4 * 1024 * 1024;
 
+const SOURCE_EXTENSIONS = new Set(['py','pyi','js','mjs','cjs','jsx','ts','tsx','json','toml','cfg','ini','yaml','yml','md','txt','rst','html','css','scss','sql','sh','c','h','cc','cxx','cpp','hh','hpp','java','kt','kts','gradle','go','mod','sum','rs','rb','php','cs','swift','proto','cmake','csv','xml']);
+const SOURCE_NAMES = new Set(['Makefile','Dockerfile','requirements.txt','package.json','pyproject.toml','setup.cfg','README','LICENSE','go.mod','go.sum','Cargo.toml','Cargo.lock','CMakeLists.txt','build.gradle','settings.gradle','pom.xml']);
+const EXCLUDED_DIRS = new Set(['.git','node_modules','.next','.cache','dist','build','coverage','.venv','venv','__pycache__','.pytest_cache','target','vendor']);
+
+function isUsefulSourcePath(path) {
+  const parts = text(path).split('/');
+  if (parts.some(part => EXCLUDED_DIRS.has(part))) return false;
+  const name = parts.at(-1) ?? '';
+  if (SOURCE_NAMES.has(name)) return true;
+  const dot = name.lastIndexOf('.');
+  return dot > 0 && SOURCE_EXTENSIONS.has(name.slice(dot + 1).toLowerCase());
+}
+
 export const SOURCE_KINDS = Object.freeze(['local-folder', 'github']);
 
 function safePath(value) {
@@ -127,7 +140,7 @@ export async function githubReadRepository({
   for (const entry of tree?.tree ?? []) {
     if (entry?.type !== 'blob') continue;
     const path = safePath(entry.path);
-    if (!path) continue;
+    if (!path || !isUsefulSourcePath(path)) continue;
     const size = Number(entry.size) || 0;
     if (size > MAX_FILE_BYTES || total + size > maxBytes) continue;
     const blob = await githubJson(
