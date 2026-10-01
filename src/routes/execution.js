@@ -31,7 +31,7 @@ import { reviewDecision, reviewerModelFor, reviewMessages, readReview, mergeRevi
 import { runAdaptiveAgentPanel } from '../multi-agent.js';
 import { workPlan, readStepAnswer } from '../step-plan.js';
 import { adaptationFor, compact } from '../prompt-scope.js';
-import { codeFailure, codeRunOutput, repairDecision, repairCeiling, codeNotRunNow, repairsThisAttempt, repairContext, untestedCode, missingTests, compactCodeEvidence, TESTS_REQUIRED_PROMPT, isProject, sandboxPayload, hasCode, compactProject, mergeFix } from '../code-workflow.js';
+import { codeFailure, codeRunOutput, repairDecision, repairCeiling, codeNotRunNow, repairsThisAttempt, repairContext, untestedCode, missingTests, compactCodeEvidence, TESTS_REQUIRED_PROMPT, isProject, sandboxPayload, hasCode, compactProject, mergeFix, materializeCodePackage } from '../code-workflow.js';
 import { cleanCheckpoint } from '../checkpoint.js';
 import { buildUnifiedWorkContext } from '../unified-work-context.js';
 import { buildProjectIndex } from '../project-index.js';
@@ -1322,9 +1322,21 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     // Code comes with tests: a package without them is sent back once. A
     // project change counts the tests it already had (the version it fixes,
     // the attached project), since it returns only the files it writes.
-    const firstPackage = task.id === 'build-code' ? parseJsonObject(answer.text) : null;
+    let firstPackage = task.id === 'build-code' ? parseJsonObject(answer.text) : null;
+    let baseFilesForPackage = [];
+    if (firstPackage && (isProject(firstPackage) || Array.isArray(firstPackage.patches))) {
+      baseFilesForPackage = await projectFiles(
+        objects,
+        scope ?? currentDbScope(),
+        scopedAttachments(run),
+        { overlay: run.adaptation?.projectOverlay }
+      );
+      if (Array.isArray(firstPackage.patches) && firstPackage.patches.length) {
+        firstPackage = materializeCodePackage(firstPackage, { baseFiles: baseFilesForPackage });
+      }
+    }
     const hadTests = firstPackage && isProject(firstPackage)
-      ? { previous: repairsThisAttempt(run).at(-1)?.code ?? null, baseFiles: await projectFiles(objects, scope ?? currentDbScope(), scopedAttachments(run), { overlay: run.adaptation?.projectOverlay }) }
+      ? { previous: repairsThisAttempt(run).at(-1)?.code ?? null, baseFiles: baseFilesForPackage }
       : {};
     if (task.id === 'build-code' && missingTests(firstPackage, hadTests)) {
       const retry = await callModel([
