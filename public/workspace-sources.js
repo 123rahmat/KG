@@ -141,6 +141,7 @@ export async function syncLocalFolder() {
   const nextManifest = await sourceManifest(files);
   const delta = sourceDelta(state.workspaceSource?.metadata?.manifest ? { files: state.workspaceSource.metadata.manifest } : null, files, nextManifest);
   const result = await api('POST', `/api/workspace/sources/local/${encodeURIComponent(sourceId)}/sync`, {
+    baseContentHash: state.workspaceSource?.metadata?.contentHash ?? null,
     manifest: nextManifest,
     changedFiles: delta.changedFiles,
     deletedPaths: delta.deletedPaths

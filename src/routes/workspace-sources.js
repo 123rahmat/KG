@@ -12,6 +12,7 @@ import {
   sourceManifest,
   sourcePublic
 } from '../workspace-sources.js';
+import { workspacePath } from '../workspace-path.js';
 
 const text = value => String(value ?? '').trim();
 
@@ -37,9 +38,10 @@ async function readSnapshotFiles(objects, scope, objectId) {
 
 function mergeSourceDelta(baseFiles, changedFiles, deletedPaths) {
   const map = new Map(normalizeSourceFiles(baseFiles).map(file => [file.path, file.content]));
-  for (const path of Array.isArray(deletedPaths) ? deletedPaths : []) {
-    const safe = String(path ?? '').trim().replaceAll('\\', '/').replace(/^\.\//, '');
-    if (safe) map.delete(safe);
+  for (const rawPath of Array.isArray(deletedPaths) ? deletedPaths : []) {
+    const safe = workspacePath(String(rawPath ?? '').trim().replaceAll('\\', '/').replace(/^\.\//, ''));
+    if (!safe) throw new Error('Local source deletion path is invalid');
+    map.delete(safe);
   }
   for (const file of normalizeSourceFiles(changedFiles)) map.set(file.path, file.content);
   return normalizeSourceFiles([...map].map(([path, content]) => ({ path, content })));
@@ -100,6 +102,15 @@ export function registerWorkspaceSourcesRoutes(app, {
     if (!source) return res.status(404).json({ error: 'Local folder source not found', code: 'no-source' });
     let files;
     if (Array.isArray(req.body?.changedFiles) && req.body?.manifest) {
+      const expectedBaseHash = text(req.body?.baseContentHash);
+      const currentBaseHash = text(source.metadata?.contentHash);
+      if (!expectedBaseHash || !currentBaseHash || expectedBaseHash !== currentBaseHash) {
+        return res.status(409).json({
+          error: 'The local project changed on the server since this folder was last synchronized. Sync or reconnect the folder before applying this delta.',
+          code: 'stale-local-source',
+          expectedBaseHash: currentBaseHash || null
+        });
+      }
       const baseFiles = await readSnapshotFiles(objects, req.scope, source.snapshot_object_id);
       files = mergeSourceDelta(baseFiles, req.body.changedFiles, req.body.deletedPaths);
     } else {

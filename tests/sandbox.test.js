@@ -40,11 +40,14 @@ test('the run phase is sealed: no network, read-only, no capabilities, unprivile
   const flag = name => run[run.indexOf(name) + 1];
   assert.equal(flag('--network'), 'none');
   assert.ok(run.includes('--read-only'));
+  assert.ok(run.includes('--ipc=none'));
   assert.equal(flag('--cap-drop'), 'ALL');
   assert.equal(flag('--security-opt'), 'no-new-privileges');
   assert.equal(flag('--user'), '65534:65534');
   assert.equal(flag('--memory'), '256m');
   assert.equal(flag('--pids-limit'), '256');
+  assert.equal(run[run.indexOf('--ulimit') + 1], 'fsize=104857600:104857600');
+  assert.ok(run.includes('core=0:0'));
   const install = containerArgs(job, { phase: 'install', workdir: '/tmp/w', name: 'n' });
   assert.ok(install.includes('--only-binary=:all:'), 'no package build scripts run while installing');
   const npm = containerArgs(validateJob({ language: 'javascript', source: 'x', packages: ['lodash'] }), { phase: 'install', workdir: '/tmp/w', name: 'n' });

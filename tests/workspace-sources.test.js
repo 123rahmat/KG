@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { githubApplyChanges, githubHeaders, githubListBranches, githubListRepositories, githubReadRepository, normalizeSourceFiles, sourceManifest } from '../src/workspace-sources.js';
+import { workspacePath } from '../src/workspace-path.js';
 
 test('workspace source files normalize safely and deterministically', () => {
   const files = normalizeSourceFiles([
@@ -103,6 +104,12 @@ test('GitHub repository snapshots read the immutable resolved commit', async () 
   assert.deepEqual(result.files, [{ path: 'src/app.js', content: 'export const ok = true;\n' }]);
   assert.ok(calls.some(call => call.url.includes('/git/trees/base123?recursive=1')));
 });
+test('workspace deletion paths use the same canonical traversal boundary', () => {
+  assert.equal(workspacePath('src/file.js'), 'src/file.js');
+  assert.equal(workspacePath('src/../file.js'), null);
+  assert.equal(workspacePath('../file.js'), null);
+});
+
 test('GitHub write-back builds one revision and rejects stale bases', async () => {
   const calls = [];
   const fetchImpl = async (url, init = {}) => {
