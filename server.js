@@ -66,7 +66,7 @@ export async function start({ env = process.env } = {}) {
 
   logger.info('starting', { version: VERSION, nodeEnv: config.nodeEnv, node: process.version });
 
-  const { pool, identity, app, worker, scheduler } = build({ config, logger, metrics });
+  const { pool, identity, app, worker, scheduler, audit } = build({ config, logger, metrics });
   const migrationPool = config.database.migrationUrl
     ? createPool(config, logger, {
         connectionString: config.database.migrationUrl,
