@@ -46,7 +46,7 @@ function terminalOriginAllowed(req, config) {
   }
 }
 
-function terminalImagesForFiles(files, config) {
+export function terminalImagesForFiles(files, config) {
   const paths = new Set(files.map(file => file.path));
   const lower = files.map(file => file.path.toLowerCase());
   if (paths.has('package.json') || lower.some(file => /(^|\/)package-lock\.json$|(^|\/)pnpm-lock\.yaml$|(^|\/)yarn\.lock$/.test(file))) return ['node', config.terminal.images.node];
@@ -58,7 +58,7 @@ function terminalImagesForFiles(files, config) {
   return ['node', config.terminal.images.node];
 }
 
-function terminalArgs({ image, runtime, workdir }) {
+export function terminalArgs({ image, runtime, workdir }) {
   const args = [
     'run', '--rm', '--init',
     ...(runtime ? ['--runtime', runtime] : []),
