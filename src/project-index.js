@@ -17,6 +17,9 @@ const MAX_SYMBOLS = 20_000;
 const MAX_IMPORTS = 30_000;
 const MAX_TESTS = 5_000;
 
+const INDEX_CACHE_LIMIT = 48;
+const indexCache = new Map();
+
 const EXTENSIONS = Object.freeze({
   js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript',
   ts: 'typescript', tsx: 'typescript',
@@ -200,6 +203,10 @@ function fileDigest(content) {
 
 export function buildProjectIndex(files = [], { revisionId = null, maxSymbols = MAX_SYMBOLS } = {}) {
   const normalized = normalizeWorkspaceFiles(files);
+  const cacheBasis = normalized.map(file => [file.path, fileDigest(file.content)]);
+  const cacheKey = crypto.createHash('sha256').update(JSON.stringify({ revisionId: trim(revisionId) || null, maxSymbols, files: cacheBasis })).digest('hex');
+  const cached = indexCache.get(cacheKey);
+  if (cached) { indexCache.delete(cacheKey); indexCache.set(cacheKey, cached); return cached; }
   const symbols = [];
   const edges = [];
   const imports = [];
@@ -239,7 +246,7 @@ export function buildProjectIndex(files = [], { revisionId = null, maxSymbols = 
   const contentHash = crypto.createHash('sha256');
   for (const file of fileRecords) contentHash.update(file.path).update('\\0').update(file.digest).update('\\0');
 
-  return Object.freeze({
+  const result = Object.freeze({
     version: 1,
     revisionId: trim(revisionId) || null,
     contentHash: contentHash.digest('hex'),
@@ -259,6 +266,9 @@ export function buildProjectIndex(files = [], { revisionId = null, maxSymbols = 
     config: [...new Set(config)].sort().slice(0, 500),
     entryPoints: [...new Set(entries)].sort().slice(0, 200)
   });
+  indexCache.set(cacheKey, result);
+  while (indexCache.size > INDEX_CACHE_LIMIT) indexCache.delete(indexCache.keys().next().value);
+  return result;
 }
 
 export function impactClosure(index, changedPaths = [], { maxFiles = 80 } = {}) {
