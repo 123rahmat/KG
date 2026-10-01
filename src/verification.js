@@ -106,6 +106,10 @@ export function verificationBrief(run, decision) {
     sources,
     unretrievedLinks: unretrievedLinks(tasks, sources, given),
     requiredEvidence: (run.adaptation?.understanding?.requiredEvidence ?? []).slice(0, 10).map(item => clip(String(item), 300)),
+    skillEvidenceContracts: (run.adaptation?.skillPlan?.skills ?? []).slice(0, 8).map(skill => ({
+      name: skill.name,
+      evidence: (skill.contract?.evidence ?? []).slice(0, 12)
+    })),
     // Invention is held to its method, not only to the goal's wording.
     ...(tasks.some(task => task.metadata?.inventionLoop) ? { invention: true } : {})
   };

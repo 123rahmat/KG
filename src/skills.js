@@ -448,12 +448,13 @@ export class SkillLearningStore {
          FROM skill_profiles p
          LEFT JOIN (
            SELECT skill_name, task_type,
-                  COUNT(*) FILTER (WHERE outcome = 'success')::int AS context_success,
-                  COUNT(*) FILTER (WHERE outcome = 'failure')::int AS context_failure,
-                  COUNT(*) FILTER (WHERE outcome = 'uncertain')::int AS context_uncertain
-             FROM skill_observations
+                  COALESCE(SUM(success_count), 0)::int AS context_success,
+                  COALESCE(SUM(failure_count), 0)::int AS context_failure,
+                  COALESCE(SUM(uncertain_count), 0)::int AS context_uncertain
+             FROM skill_patterns
             WHERE workspace_id = $1
               AND principal_id = $2
+              AND pattern_kind = 'context-outcome'
               AND ($4::text <> '' AND context_signature = $4)
             GROUP BY skill_name, task_type
          ) c
