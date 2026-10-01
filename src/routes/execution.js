@@ -36,6 +36,7 @@ import { cleanCheckpoint } from '../checkpoint.js';
 import { buildUnifiedWorkContext } from '../unified-work-context.js';
 import { buildProjectIndex } from '../project-index.js';
 import { compileCodeContext, isCodeTask } from '../context-compiler.js';
+import { RagStore } from '../rag.js';
 
 /** Which tasks execute where. Everything else needs a human decision. */
 const RUNNER_FOR = {
@@ -125,6 +126,9 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
    * { status, body } instead of writing a response.
    */
   const actions = new RunActions(pool, { audit });
+  const rag = config.security?.personalDataEncryptionKey
+    ? new RagStore(pool, { encryptionKey: config.security.personalDataEncryptionKey, maxChunkChars: 12000 })
+    : null;
 
   /** What tools may use in a step: the person's files and scope, and a way to propose actions. */
   function selectedAttachmentNames(run) {
@@ -1141,6 +1145,15 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
   }
 
   async function reason(run, task, { managedTarget = null, explicitConsent = false, executionId = null, scope = null } = {}) {
+    let ragResults = [];
+    if (rag && scope) {
+      try {
+        ragResults = await rag.search(scope, [run.goal, task.purpose].filter(Boolean).join('\n'), { limit: 8 });
+      } catch (error) {
+        metrics?.increment('rag_retrieval_errors_total');
+        ragResults = [];
+      }
+    }
     // The composition this step records is the one the server already chose
     // (working scope and way of working): no model call is needed for it.
     if (task.type === 'adapt') return composedLocally(run);
@@ -1264,6 +1277,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       // The steps planned for this need, and where this one stands.
       workPlan: workPlan(run.tasks, task.id),
       evidenceSoFar: evidence,
+      rag: ragResults.map(item => ({ id: item.id, sourceType: item.sourceType, sourceId: item.sourceId, title: item.title, content: item.content, score: item.score ?? null, metadata: item.metadata ?? {} })).slice(0, 8),
       // Code that failed its run, and how, for a targeted fix.
       codeRepair: task.id === 'build-code' ? repairContext(run, repairCeiling(run)) : null,
       verification: verificationContext
@@ -1291,6 +1305,18 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       canSpend: async () => !(await usageBlock(scope)),
       recordUsage: async (usage, provider, model) => {
         await runs.addTokens(run.id, { ...usage, provider, model }, { source: 'multi-agent' });
+      },
+      recordWave: async ({ run: currentRun, task: currentTask, wave }) => {
+        await pool.query(
+          'INSERT INTO run_waves (id, run_id, wave_index, state, agent_count, started_at, completed_at, metadata) VALUES (gen_random_uuid()::text, $1, $2, $3, $4, now(), now(), $5::jsonb) ON CONFLICT (run_id, wave_index) DO UPDATE SET state = EXCLUDED.state, agent_count = EXCLUDED.agent_count, completed_at = now(), metadata = EXCLUDED.metadata',
+          [currentRun.id, wave.index, wave.failed?.length ? 'completed-with-failures' : 'completed', wave.roles.length, JSON.stringify(wave)]
+        );
+      },
+      recordAgent: async ({ run: currentRun, task: currentTask, waveIndex, role, modelId, state: agentState, finding, errorCode }) => {
+        await pool.query(
+          'INSERT INTO run_agents (id, run_id, task_id, role, model_id, state, wave_index, finding, error_code, started_at, completed_at) VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7::jsonb, $8, now(), now()) ON CONFLICT (run_id, role, wave_index) DO UPDATE SET model_id = EXCLUDED.model_id, state = EXCLUDED.state, finding = EXCLUDED.finding, error_code = EXCLUDED.error_code, completed_at = now()',
+          [currentRun.id, currentTask.id, role, modelId || null, agentState, JSON.stringify(finding ?? {}), errorCode || null, waveIndex]
+        );
       }
     });
     if (multiAgent.brief) payload = { ...payload, multiAgent: multiAgent.brief };
