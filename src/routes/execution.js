@@ -1223,7 +1223,15 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       codeIntelligence,
       // Earlier turns of the same chat, oldest first.
       conversation: (run.adaptation?.conversation ?? []).slice(-maxContextItems),
-      attachments: attached.files,
+      attachments: codeIntelligence
+        ? (attached.files ?? []).map(item => ({
+            name: item?.name,
+            readable: item?.readable,
+            kind: item?.kind,
+            format: item?.format,
+            ...(item?.kind === 'image' ? { note: item.note } : {})
+          }))
+        : attached.files,
       previousAttempts: previousAttempts(run),
       task: {
         id: task.id,
