@@ -116,7 +116,11 @@ export function createMetrics() {
   /** Series are keyed by name+tags but keep both, so rendering never re-parses a key. */
   const keyOf = (name, tags) => `${name}|${JSON.stringify(tags ?? {})}`;
 
-  const escape = value => String(value).replace(/[\\"\n]/g, '');
+  const escape = value => String(value)
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r');
 
   const renderTags = (tags, extra) => {
     const parts = [
