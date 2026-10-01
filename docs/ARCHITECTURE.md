@@ -326,3 +326,8 @@ Operational requirements, release gates and deployment steps are in
 ## Skill intelligence compiler
 
 Skills are compiled as contracts rather than instruction snippets. Each selected skill exposes prerequisites, phases, evidence requirements and bounded cost. The server composes required dependencies into an ordered skill plan before execution. Learning combines contextual and general evidence conservatively; observed outcomes also create bounded pattern records and deterministic failure classes. Skill intelligence can improve selection, ordering, effort and verification, but remains subordinate to server governance, capability availability, execution boundaries and verification.
+
+
+## Continuous improvement control loop
+
+The unified controller now treats quality and recovery as first-class runtime state. Skill registries reject cyclic prerequisites, skill composition preserves prerequisite closure under resource budgets, failures receive bounded recovery classes, and evaluation reports can compare reliability, latency and token usage against a baseline. These signals are control inputs only: they tune future planning and review depth but never grant permission, weaken governance or bypass human approval.
