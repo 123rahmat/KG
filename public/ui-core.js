@@ -27,6 +27,9 @@ export const state = {
   chat: { id: null, runs: [], pending: null, consent: false },
   driving: null,
   drivingLabel: '',
+  // Multiple chats/runs may advance concurrently. These sets are keyed by run id.
+  busyRuns: new Set(),
+  drivingRuns: new Set(),
   // Files chosen for the next message, and the last loaded chat list.
   attachments: [],
   attachmentScope: null,
