@@ -113,7 +113,20 @@ export async function syncActiveWorkspaceSource() {
     });
 }
 
+async function loadWorkspaceSources() {
+  try {
+    const result = await api('GET', '/api/workspace/sources');
+    const github = (result.sources ?? []).find(source => source.kind === 'github');
+    if (github) {
+      state.workspaceSourceId = github.id;
+      state.workspaceSource = github;
+    }
+    updateSourceUI();
+  } catch {}
+}
+
 export async function initWorkspaceSources() {
+  await loadWorkspaceSources();
   updateSourceUI();
   const local = $('openLocalFolder');
   const github = $('connectGithub');
