@@ -106,9 +106,15 @@ export function renderRun(run) {
   if (!run) return;
   const index = state.chat.runs.findIndex(item => item.id === run.id);
   if (index >= 0) state.chat.runs[index] = run;
-  else state.chat.runs.push(run);
-  state.run = run;
-  renderThread();
+  else if (state.chat.id === run.conversationId || !state.chat.id) state.chat.runs.push(run);
+  const active = !state.chat.id || state.chat.id === run.conversationId;
+  if (active) {
+    state.run = run;
+    renderThread();
+  } else {
+    // Background work in another chat updates the list/state without stealing focus.
+    loadRuns().catch(() => {});
+  }
 }
 
 /** The open chat's title and a few plain details above the thread. */
