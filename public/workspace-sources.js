@@ -134,7 +134,7 @@ export async function openLocalFolder() {
   }
 }
 
-export async function syncLocalFolder({ reviewDigest = null } = {})
+export async function syncLocalFolder({ reviewDigest = null } = {}) {
   const sourceId = state.chat?.workspaceSourceId ?? state.workspaceSourceId;
   if (!localDirectory || !sourceId) return null;
   const files = await folderFiles();
@@ -264,7 +264,7 @@ export async function connectGitHub() {
   }
 }
 
-export async function applyLocalWorkspaceChanges(changes = [], { reviewDigest = null } = {})
+export async function applyLocalWorkspaceChanges(changes = [], { reviewDigest = null } = {}) {
   if (!localDirectory) throw new Error('Choose the local project folder again before applying changes.');
   const ensurePermission = async () => {
     const permission = await localDirectory.queryPermission?.({ mode: 'readwrite' });

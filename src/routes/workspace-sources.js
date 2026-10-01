@@ -365,11 +365,6 @@ export function registerWorkspaceSourcesRoutes(app, {
       };
     });
 
-    const reviewBasis = JSON.stringify({
-      sourceId: source.id,
-      sourceRevision: source.metadata?.commitSha ?? source.metadata?.contentHash ?? null,
-      changes: effective
-    });
     const reviewDigest = workspaceReviewDigest(source, effective);
 
     res.json({
