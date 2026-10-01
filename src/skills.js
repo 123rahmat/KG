@@ -8,9 +8,10 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const SKILL_REGISTRY_VERSION = '1';
-export const DEFAULT_SKILL_ROOT = 'skills';
+export const DEFAULT_SKILL_ROOT = path.join(fileURLToPath(new URL('../skills/', import.meta.url)));
 export const MAX_SKILL_BYTES = 100_000;
 
 const text = value => String(value ?? '').trim();
