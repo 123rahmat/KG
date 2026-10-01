@@ -17,3 +17,9 @@ test('the live runtime role has only the intended audit privileges', () =>
     assert.equal(row.can_update, false);
     assert.equal(row.can_delete, false);
   }));
+
+
+test('the live runtime role can execute the exact audit-chain query', () =>
+  withServer(async ({ appPool }) => {
+    await appPool.query('SELECT entry_hash FROM audit_log WHERE workspace_id IS NOT DISTINCT FROM $1 ORDER BY id DESC LIMIT 1 FOR SHARE', ['ws']);
+  }));
