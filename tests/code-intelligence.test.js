@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildProjectIndex, impactClosure, relatedSymbols, relatedTests } from '../src/project-index.js';
 import { compileCodeContext, compactContextPack, isCodeTask } from '../src/context-compiler.js';
+import { rolesFor } from '../src/multi-agent.js';
 
 const files = [
   { path: 'src/auth.js', content: [
@@ -71,4 +72,30 @@ test('context compiler prioritizes changed code and related verification', () =>
 test('code task detection stays conservative', () => {
   assert.equal(isCodeTask({ id: 'build-code', type: 'step' }), true);
   assert.equal(isCodeTask({ id: 'respond', type: 'respond' }), false);
+});
+
+
+test('adaptive code specialists recruit the right engineering perspectives', () => {
+  const security = rolesFor(
+    {
+      goal: 'fix authentication token security bug',
+      situation: { risk: 'high-impact', successCriteria: ['secure token validation'] },
+      adaptation: { scale: 'complex' }
+    },
+    { id: 'build-code', type: 'code', purpose: 'repair the auth bug', metadata: { buildPlan: true } },
+    { maxAgents: 5, mode: 'always' }
+  );
+  assert.ok(security.roles.includes('security-reviewer'));
+
+  const retry = rolesFor(
+    {
+      goal: 'fix failing API tests',
+      attempt: 2,
+      situation: { successCriteria: ['tests pass'], failure: true },
+      adaptation: { scale: 'standard' }
+    },
+    { id: 'build-code', type: 'code', purpose: 'repair the failed build', metadata: { buildPlan: true } },
+    { maxAgents: 5, mode: 'always', progress: { failedRoles: [], findings: [] } }
+  );
+  assert.ok(retry.roles.includes('debugger') || retry.roles.includes('diagnostician'));
 });
