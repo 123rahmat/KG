@@ -14,7 +14,7 @@ const project = {
     { path: 'shop/cart.py', content: 'from shop.pricing import total\n' },
     { path: 'shop/pricing.py', content: 'def total(items):\n    return sum(items)\n' },
     { path: 'tests/__init__.py', content: '' },
-    { path: 'tests/test_cart.py', content: 'import unittest\n' }
+    { path: 'tests/test_cart.py', content: 'import unittest\n\nclass CartTest(unittest.TestCase):\n  def test_imports(self):\n    self.assertTrue(True)\n' }
   ],
   packages: []
 };
@@ -23,7 +23,7 @@ test('a code package can be a project of several files, with its tests as files'
   assert.equal(hasCode(project), true);
   assert.equal(missingTests(project), false);
   assert.equal(missingTests({ language: 'python', files: [{ path: 'app.py', content: 'x = 1' }] }), true, 'a project without test files');
-  assert.equal(missingTests({ language: 'javascript', files: [{ path: 'lib/a.mjs', content: 'x' }, { path: 'lib/a.test.mjs', content: 'test' }] }), false);
+  assert.equal(missingTests({ language: 'javascript', files: [{ path: 'lib/a.mjs', content: 'x' }, { path: 'lib/a.test.mjs', content: "test('a', () => {});" }] }), false);
   // Unsafe or repeated paths never get through.
   const paths = codeFiles({ files: [{ path: '../etc/passwd', content: 'x' }, { path: '/abs.py', content: 'x' }, { path: 'a/.hidden', content: 'x' }, { path: 'ok.py', content: '1' }, { path: 'ok.py', content: '2' }] }).map(file => file.path);
   assert.deepEqual(paths, ['ok.py']);

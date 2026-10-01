@@ -82,6 +82,35 @@ export function projectTests(structured) {
   return codeFiles(structured).filter(file => file.content.trim() && (spec.test.test(file.path) || spec.inline?.test(file.content)));
 }
 
+// Merely naming a file `test_foo.py`, or importing a test framework, is not
+// evidence that a test will run. Keep this intentionally conservative and
+// language-aware: the sandbox remains the authority for the final count, but
+// this prevents spending a build/test cycle on an obviously empty test suite.
+const TEST_CASE = {
+  python: /(?:^|\n)\s*(?:async\s+)?def\s+test_[\w]+\s*\(|\bclass\s+\w+\s*\(\s*unittest\.TestCase\s*\)|\bassert\s+/m,
+  javascript: /\b(?:test|it|describe)\s*\(/,
+  typescript: /\b(?:test|it|describe)\s*\(/,
+  go: /(?:^|\n)\s*func\s+Test\w+\s*\(/m,
+  rust: /#\s*\[\s*test\s*\]/,
+  java: /@(?:Test|ParameterizedTest)\b|\bvoid\s+test\w*\s*\(/,
+  csharp: /\[(?:Fact|Theory|Test|TestMethod)\b/,
+  ruby: /\b(?:def\s+test_|it\s+['"]|specify\s+['"])/,
+  php: /\b(?:function\s+test\w*\s*\(|#\[Test\])/,
+  kotlin: /@Test\b|\bfun\s+test\w*\s*\(/,
+  swift: /\bfunc\s+test\w*\s*\(/
+};
+
+export function hasMeaningfulTests(structured, { previous = null, baseFiles = [] } = {}) {
+  if (!structured) return false;
+  const language = languageOf(structured.language);
+  const pattern = TEST_CASE[language];
+  if (!pattern) return false;
+  const files = isProject(structured)
+    ? [...codeFiles(structured), ...(isProject(previous) ? codeFiles(previous) : []), ...baseFiles]
+    : [{ path: '', content: structured.tests }];
+  return files.some(file => pattern.test(String(file?.content ?? '')));
+}
+
 /** Files clipped to a shared budget; a cut file says so. */
 function clipFiles(files, budget = MAX_PROJECT_CHARS) {
   let left = budget;
@@ -300,13 +329,11 @@ export function untestedCode(run) {
 export function missingTests(structured, { previous = null, baseFiles = [] } = {}) {
   if (!structured) return false;
   if (isProject(structured)) {
-    if (text(structured.tests) || projectTests(structured).length) return false;
-    const spec = LANGUAGES[languageOf(structured.language)];
-    const earlier = [...(isProject(previous) ? codeFiles(previous) : []), ...baseFiles];
-    return !(spec && earlier.some(file => String(file.content ?? '').trim() && (spec.test.test(text(file?.path)) || spec.inline?.test(String(file.content)))));
+    if (hasMeaningfulTests(structured, { previous, baseFiles })) return false;
+    return true;
   }
   const inline = LANGUAGES[languageOf(structured.language)]?.inline;
-  return Boolean(text(structured.source) && !text(structured.tests) && !inline?.test(structured.source));
+  return Boolean(text(structured.source) && !hasMeaningfulTests(structured) && !inline?.test(structured.source));
 }
 
 /** A package in one shape, whatever shape the model used: files as [{ path, content }]. */
