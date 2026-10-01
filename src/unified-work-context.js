@@ -8,6 +8,7 @@
  */
 
 import crypto from 'node:crypto';
+import { createWorkspaceState, workspaceContentHash } from './code-workspace.js';
 
 const text = value => String(value ?? '').trim();
 
@@ -69,6 +70,16 @@ export function buildUnifiedWorkContext({
     /\.(?:c|cc|cpp|h|hpp|cs|go|java|js|jsx|ts|tsx|mjs|cjs|py|rs|rb|php|swift|kt|kts|sql|sh|html|css|json|toml|ya?ml)$/i.test(path)
   );
 
+  const workspaceFiles = fileManifest.map(item => ({ path: item.path, content: '' }));
+  const projectRevision = text(project?.revisionId || project?.revision || '') || null;
+  const workspace = createWorkspaceState({
+    projectId: identity.key,
+    revisionId: projectRevision,
+    files: workspaceFiles,
+    task: { id: situation?.phase || null, title: situation?.title || goal }
+  });
+  const contentHash = workspaceContentHash(workspaceFiles);
+
   return {
     contract: 'kindgleam-unified-work-context-v2',
     unified: true,
@@ -82,6 +93,14 @@ export function buildUnifiedWorkContext({
       key: identity.key,
       source: identity.source,
       isolated: Boolean(identity.key)
+    },
+    workspace: {
+      ...workspace,
+      projectName: text(project?.name),
+      contentHash,
+      dirty: Boolean(lastChange && ((lastChange.files?.length ?? 0) || (lastChange.deleted?.length ?? 0))),
+      overlayCount: overlay.length,
+      codeFileCount: codePaths.length
     },
     goal: text(goal),
     workflow: {
