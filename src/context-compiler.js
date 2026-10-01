@@ -52,7 +52,7 @@ function taskTerms(goal, task, failure = null) {
   ].join(' ').toLowerCase().match(/[a-zA-Z_$][a-zA-Z0-9_$-]{2,}/g) ?? [];
 }
 
-function scoreFile(file, { changed, impacted, queryTerms, tests, config }) {
+function scoreFile(file, { changed, impacted, queryTerms, tests, config, symbolPaths = new Set() }) {
   const lower = file.path.toLowerCase();
   const pathParts = new Set(lower.split(/[\\/._-]+/).filter(Boolean));
   let score = 0;
@@ -60,6 +60,7 @@ function scoreFile(file, { changed, impacted, queryTerms, tests, config }) {
   if (impacted.has(file.path)) score += 1600;
   if (tests.has(file.path)) score += 900;
   if (config.has(file.path)) score += 600;
+  if (symbolPaths.has(file.path)) score += 1200;
   for (const term of queryTerms) {
     if (lower.includes(term)) score += 45;
     const parts = term.split(/[_-]+/).filter(part => part.length >= 3);
@@ -138,9 +139,12 @@ export function compileCodeContext({
   const terms = taskTerms(goal, task, failure);
   const testPaths = new Set(relatedTests(index, [...changed], { max: 80 }));
   const configPaths = new Set(index?.config ?? []);
+  const symbolPaths = new Set((index?.symbols ?? [])
+    .filter(symbol => terms.some(term => String(symbol.name ?? '').toLowerCase().includes(term.toLowerCase())))
+    .map(symbol => symbol.path));
   const ranked = normalized.map(file => ({
     file,
-    score: scoreFile(file, { changed, impacted, queryTerms: terms, tests: testPaths, config: configPaths })
+    score: scoreFile(file, { changed, impacted, queryTerms: terms, tests: testPaths, config: configPaths, symbolPaths })
   })).sort((a,b) => b.score - a.score || a.file.path.localeCompare(b.file.path));
 
   const selected = [];
