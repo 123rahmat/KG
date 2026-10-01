@@ -283,9 +283,20 @@ export async function applyLocalWorkspaceChanges(changes = []) {
     for (const part of parts) dir = await dir.getDirectoryHandle(part, { create: true });
     return { dir, name: path.split('/').at(-1) };
   };
-  for (const change of Array.isArray(changes) ? changes : []) {
+  const list = Array.isArray(changes) ? changes : [];
+  const descriptors = [];
+  for (const change of list) {
     const path = safePath(change?.path);
     const { dir, name } = await getParent(path);
+    descriptors.push({ change, path, dir, name });
+  }
+  for (const { change, path, dir, name } of descriptors) {
+    const base = path.split('/').at(-1).toLowerCase();
+    if (
+      base === '.npmrc' || base === '.netrc' || base === '.pypirc' ||
+      /^\.env(?:$|\.)/.test(base) && !/^\.env\.(?:example|sample|template)$/.test(base) ||
+      /^id_rsa(?:\.|$)/.test(base) || /\.(?:pem|key|p12|pfx)$/.test(base)
+    ) throw new Error('Local write-back may not modify credential or private-key files.');
     if (change?.kind === 'delete' || change?.delete === true) {
       await dir.removeEntry(name).catch(error => {
         if (error?.name !== 'NotFoundError') throw error;
