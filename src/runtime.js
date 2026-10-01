@@ -13,6 +13,7 @@ import { AdaptiveProviderGovernor } from './adaptive-provider-governor.js';
 
 const text = value => String(value ?? '').trim();
 const providerGovernor = new AdaptiveProviderGovernor();
+export const providerConcurrencyStats = () => providerGovernor.stats();
 
 export const MODEL_TIMEOUT_MS = 45_000;
 /** How long one call may spend moving through backup models. */
