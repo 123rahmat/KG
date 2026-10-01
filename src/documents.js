@@ -272,7 +272,19 @@ export function readWorkspaceSnapshot(buffer) {
     'Files:', tree, '',
     ...files.map(file => `=== ${file.path} ===\\n${file.content}`)
   ].join('\\n');
-  return { kind: 'project', format: 'project', files, skipped: skipped.slice(0, 50), text };
+  return {
+    kind: 'project',
+    format: 'project',
+    files,
+    skipped: skipped.slice(0, 50),
+    ingestion: parsed.ingestion && typeof parsed.ingestion === 'object' ? {
+      partial: parsed.ingestion.partial === true,
+      skippedCount: Number(parsed.ingestion.skippedCount) || 0,
+      skippedBytes: Number(parsed.ingestion.skippedBytes) || 0,
+      skippedExamples: Array.isArray(parsed.ingestion.skippedExamples) ? parsed.ingestion.skippedExamples.slice(0, 40) : []
+    } : null,
+    text
+  };
 }
 
 export function readProject(buffer) {
