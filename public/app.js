@@ -19,8 +19,10 @@ import { applyRole, enterApp, initAccount, initGate, loadAudit, loadObjects, loa
 import { codeMarkdown, hasCode, initActions } from './app-actions.js';
 import { renderMarkdown } from './markdown.js';
 import { initSettingsWindow } from './app-settings-window.js';
+import { initWorkspaceSources } from './workspace-sources.js';
 
 initSettings();
+initWorkspaceSources();
 
 
 /* --------------------------------------------------------------- transport */
