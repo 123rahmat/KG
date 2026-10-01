@@ -53,3 +53,18 @@ test('code workflow materializes compact patches into the project contract', () 
   assert.equal(pkg.files[0].content, 'const a = 1;\nconst b = 5;\n');
   assert.equal(pkg.patches, undefined);
 });
+
+test('workspace patches reject credential and private-key files', () => {
+  assert.throws(() => applySurgicalChanges(
+    [],
+    [{ path: '.env', content: 'SECRET=value' }]
+  ), /credential or private-key/);
+  assert.throws(() => applySurgicalChanges(
+    [],
+    [{ path: 'certs/server.pem', content: 'PRIVATE' }]
+  ), /credential or private-key/);
+  assert.doesNotThrow(() => applySurgicalChanges(
+    [],
+    [{ path: '.env.example', content: 'PUBLIC_EXAMPLE=value' }]
+  ));
+});
