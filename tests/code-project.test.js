@@ -294,12 +294,12 @@ test('in a run, the code step of a large attached project reads the files its re
     assert.ok(seen.some(request => request.task?.id === 'build-code'), `${run.tasks.map(task => task.id).join(' ')} → ${JSON.stringify(built.body).slice(0, 300)}`);
     const project = seen.filter(request => request.task?.id === 'build-code' && request.codeIntelligence)
       .map(request => request.codeIntelligence)
-      .find(pack => pack.files.some(file => file.path === 'shop/billing/invoice.py'))
+      .find(pack => pack.files.some(file => file.path === 'billing/invoice.py'))
       ?? seen.find(request => request.task?.id === 'build-code' && request.codeIntelligence)?.codeIntelligence;
     assert.ok(project, 'large projects use compiled code intelligence');
     assert.ok(project.budget.truncated, 'a large project is context-bounded');
-    assert.ok(project.files.some(file => file.path === 'shop/billing/invoice.py'));
-    assert.ok(project.files.some(file => file.path === 'shop/tests/test_invoice.py'));
+    assert.ok(project.files.some(file => file.path === 'billing/invoice.py'));
+    assert.ok(project.files.some(file => file.path === 'tests/test_invoice.py'));
   }, {
     env: { AI_PROVIDER: 'google', AI_MODEL: 'gemini-3.8-flash', AI_API_KEY: 'test-key', SANDBOX_RUNNER_URL: 'http://sandbox.test', RUNNER_TOKEN: 'runner-' + 'x'.repeat(31), MAX_ATTACHMENT_CHARS: '20000' },
     fetchImpl: async (_url, options) => {
