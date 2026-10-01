@@ -25,7 +25,7 @@ async function snapshotObject(objects, scope, principal, files, name, provenance
 }
 
 export function registerWorkspaceSourcesRoutes(app, {
-  pool, objects, audit, config, scoped, route, idempotent
+  pool, objects, audit, config, scoped, route, idempotent, fetchImpl = fetch
 }) {
   const encryptionKey = config.security.personalDataEncryptionKey;
 
@@ -103,7 +103,7 @@ export function registerWorkspaceSourcesRoutes(app, {
     const repo = text(req.body?.repo);
     if (!token) return res.status(400).json({ error: 'A GitHub credential is required.', code: 'github-credential-required' });
     assertGitHubRepo(owner, repo);
-    const read = await githubReadRepository({ fetchImpl: fetch, token, owner, repo, ref: text(req.body?.ref) || null });
+    const read = await githubReadRepository({ fetchImpl, token, owner, repo, ref: text(req.body?.ref) || null });
     const manifest = sourceManifest(read.files);
     const object = await snapshotObject(objects, req.scope, req.principal, read.files, `${owner}-${repo}.workspace`, {
       kind: 'github', owner, repo, ref: read.source.ref, contentHash: manifest.contentHash, fileCount: manifest.fileCount
@@ -134,7 +134,7 @@ export function registerWorkspaceSourcesRoutes(app, {
   app.post('/api/workspace/sources/github/repositories', scoped('viewer'), route(async (req, res) => {
     const token = text(req.body?.token);
     if (!token) return res.status(400).json({ error: 'A GitHub credential is required.', code: 'github-credential-required' });
-    const repositories = await githubListRepositories({ fetchImpl: fetch, token, page: req.body?.page });
+    const repositories = await githubListRepositories({ fetchImpl, token, page: req.body?.page });
     res.json({
       repositories: (repositories ?? []).map(repo => ({
         id: repo.id,
@@ -153,7 +153,7 @@ export function registerWorkspaceSourcesRoutes(app, {
     const repo = text(req.body?.repo);
     if (!token) return res.status(400).json({ error: 'A GitHub credential is required.', code: 'github-credential-required' });
     assertGitHubRepo(owner, repo);
-    const branches = await githubListBranches({ fetchImpl: fetch, token, owner, repo, page: req.body?.page });
+    const branches = await githubListBranches({ fetchImpl, token, owner, repo, page: req.body?.page });
     res.json({ branches: (branches ?? []).map(branch => ({ name: branch.name, protected: branch.protected === true })) });
   }));
 
@@ -171,7 +171,7 @@ export function registerWorkspaceSourcesRoutes(app, {
     const token = decryptSourceCredentials(encryptionKey, source.credentials_enc);
     if (!token) return res.status(409).json({ error: 'GitHub credentials are unavailable. Reconnect the repository.', code: 'source-credentials-missing' });
     const read = await githubReadRepository({
-      fetchImpl: fetch, token, owner: source.repo_owner, repo: source.repo_name, ref: source.repo_ref
+      fetchImpl, token, owner: source.repo_owner, repo: source.repo_name, ref: source.repo_ref
     });
     const manifest = sourceManifest(read.files);
     if (source.metadata?.contentHash === manifest.contentHash) return res.json({ source: sourcePublic(source), unchanged: true, manifest });
