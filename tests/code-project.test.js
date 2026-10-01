@@ -237,7 +237,9 @@ test('a project attached as a zip is changed by the files the AI returns, and th
     assert.equal(built.status, 200, JSON.stringify(built.body).slice(0, 300));
     // The code step saw the project it changes.
     const buildRequest = seen.find(request => request.task?.id === 'build-code');
-    assert.match(buildRequest.attachments[0].text, /Code project: 2 source files/);
+    assert.ok(buildRequest?.codeIntelligence, 'code context is compiled server-side');
+    assert.equal(buildRequest.codeIntelligence.project.fileCount, 2);
+    assert.ok(buildRequest.codeIntelligence.files.some(file => file.path === 'shop/shop/pricing.py'));
     const tested = await call('POST', `/api/runs/${run.id}/execute`, { ...auth, body: { approved: true } });
     assert.equal(tested.status, 200, JSON.stringify(tested.body).slice(0, 400));
     const payload = runnerRequests.at(-1).payload;
@@ -288,12 +290,11 @@ test('in a run, the code step of a large attached project reads the files its re
     await call('POST', `/api/runs/${run.id}/advance`, { ...auth, body: { taskId: 'approval', approved: true } });
     const built = await call('POST', `/api/runs/${run.id}/execute`, { ...auth, body: {} });
     assert.ok(seen.some(request => request.task?.id === 'build-code'), `${run.tasks.map(task => task.id).join(' ')} → ${JSON.stringify(built.body).slice(0, 300)}`);
-    const project = seen.find(request => request.task?.id === 'build-code').attachments[0];
-    assert.equal(project.kind, 'project');
-    assert.ok(project.notShown > 0, 'a large project is not sent whole');
-    assert.match(project.text, /=== billing\/invoice\.py ===/);
-    assert.match(project.text, /=== tests\/test_invoice\.py ===/);
-    assert.match(project.text, /app\/module39\.py \(3000 chars\)/, 'every file is still listed');
+    const project = seen.find(request => request.task?.id === 'build-code').codeIntelligence;
+    assert.ok(project, 'large projects use compiled code intelligence');
+    assert.ok(project.budget.truncated, 'a large project is context-bounded');
+    assert.ok(project.files.some(file => file.path === 'shop/billing/invoice.py'));
+    assert.ok(project.files.some(file => file.path === 'shop/tests/test_invoice.py'));
   }, {
     env: { AI_PROVIDER: 'google', AI_MODEL: 'gemini-3.8-flash', AI_API_KEY: 'test-key', SANDBOX_RUNNER_URL: 'http://sandbox.test', RUNNER_TOKEN: 'runner-' + 'x'.repeat(31), MAX_ATTACHMENT_CHARS: '20000' },
     fetchImpl: async (_url, options) => {
@@ -511,7 +512,7 @@ test('a follow-up in the same chat continues the project from the version the la
     assert.deepEqual(next.adaptation.projectOverlay.map(item => item.path).sort(), ['shop/discount.py', 'test_discount.py']);
     // The code step sees the project as the last turn left it...
     const build = seen.filter(request => request.task?.id === 'build-code').at(-1);
-    assert.match(build.attachments[0].text, /discount/);
+    assert.ok(build.codeIntelligence.files.some(file => /discount/.test(file.content)));
     // ...and the sandbox runs all of it: the original, the last change and this one.
     assert.deepEqual(Object.keys(runnerRequests.at(-1).payload.files).sort(),
       ['shop/__init__.py', 'shop/discount.py', 'shop/pricing.py', 'shop/shipping.py', 'test_discount.py', 'test_shipping.py']);
