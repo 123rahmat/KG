@@ -35,7 +35,7 @@ function isUsefulSourcePath(path) {
 export const SOURCE_KINDS = Object.freeze(['local-folder', 'github']);
 
 function safePath(value) {
-  const path = text(value).replaceAll('\\', '/').replace(/^\.\//, '');
+  const path = String(value ?? '').replaceAll('\\', '/').replace(/^\.\//, '');
   return workspacePath(path);
 }
 
