@@ -1867,3 +1867,23 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
   .landing-capabilities article { min-height: 90px; padding-top: 13px; }
   .landing-footer { padding-top: 10px; }
 }
+
+
+/* External code-workspace sources */
+.workspace-source-bar {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  padding: .35rem .75rem .55rem;
+}
+.workspace-source-bar button {
+  font: inherit;
+  font-size: .78rem;
+  border: 1px solid var(--border, #d7dbe2);
+  background: var(--surface, #fff);
+  color: inherit;
+  border-radius: .55rem;
+  padding: .35rem .6rem;
+  cursor: pointer;
+}
+.workspace-source-bar button:hover { filter: brightness(.98); }
