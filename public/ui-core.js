@@ -38,7 +38,8 @@ export const state = {
   models: null,
   voice: { recognition: null, listening: false, baseText: '' },
   network: { online: navigator.onLine !== false, reachable: true, queue: [] },
-  draftSaveTimer: null
+  draftSaveTimer: null,
+  feedbackByRun: new Map()
 };
 
 export function updateConnectionUI() {
