@@ -2148,6 +2148,30 @@ export const MIGRATIONS = [
             OR current_setting('app.role', true) IN ('admin', 'service')
           )
         );
+    `  },
+  {
+    version: 52,
+    name: 'secure-audit-chain-head-lookup',
+    sql: `
+      -- Audit-chain continuity must not depend on the caller being allowed
+      -- to read audit rows. The function is SECURITY DEFINER, locked to the
+      -- migration/maintenance owner, and uses a fixed search path.
+      CREATE OR REPLACE FUNCTION kg_audit_previous_hash(target_workspace TEXT)
+      RETURNS TEXT
+      LANGUAGE SQL
+      SECURITY DEFINER
+      SET search_path = public, pg_temp
+      SET row_security = off
+      AS $audit$
+        SELECT entry_hash
+          FROM audit_log
+         WHERE workspace_id IS NOT DISTINCT FROM target_workspace
+         ORDER BY id DESC
+         LIMIT 1
+      $audit$;
+
+      REVOKE ALL ON FUNCTION kg_audit_previous_hash(TEXT) FROM PUBLIC;
     `
+
   }
 ];
