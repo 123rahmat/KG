@@ -2173,5 +2173,19 @@ export const MIGRATIONS = [
       REVOKE ALL ON FUNCTION kg_audit_previous_hash(TEXT) FROM PUBLIC;
     `
 
-  }
+  }  },
+  {
+    version: 53,
+    name: 'remove-legacy-simulation-schedules',
+    sql: `
+      -- Simulation is no longer an executable/schedulable capability. Remove
+      -- the obsolete database enum-like constraint so old clients cannot
+      -- resurrect that surface through direct writes.
+      ALTER TABLE schedules
+        DROP CONSTRAINT IF EXISTS schedules_kind_check;
+      ALTER TABLE schedules
+        ADD CONSTRAINT schedules_kind_check
+        CHECK (kind IN ('reminder', 'ask'));
+    `
+
 ];
