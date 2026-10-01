@@ -1943,5 +1943,13 @@ export const MIGRATIONS = [
         );
       REVOKE ALL ON run_feedback FROM PUBLIC;
     `
+  }  ,{
+    version: 47,
+    name: 'rag-principal-isolation-constraint',
+    sql: `
+      ALTER TABLE rag_documents DROP CONSTRAINT IF EXISTS rag_documents_workspace_id_source_id_chunk_index_key;
+      CREATE UNIQUE INDEX IF NOT EXISTS rag_documents_owner_source_chunk_idx
+        ON rag_documents (workspace_id, principal_id, source_id, chunk_index);
+    `
   }
 ];
