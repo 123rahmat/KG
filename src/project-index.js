@@ -201,6 +201,38 @@ function fileDigest(content) {
   return crypto.createHash('sha256').update(content, 'utf8').digest('hex');
 }
 
+function parseJsonFile(files, path) {
+  const file = files.find(item => item.path === path);
+  if (!file) return null;
+  try { return JSON.parse(file.content); } catch { return null; }
+}
+
+function projectProfile(files) {
+  const paths = new Set(files.map(file => file.path));
+  const packageJson = parseJsonFile(files, 'package.json');
+  const deps = { ...(packageJson?.dependencies ?? {}), ...(packageJson?.devDependencies ?? {}) };
+  const known = ['express','fastify','next','react','vue','svelte','koa','hapi','django','flask','fastapi'];
+  const frameworks = known.filter(name => Boolean(deps[name]));
+  const lock = paths.has('package-lock.json') ? 'npm'
+    : paths.has('pnpm-lock.yaml') ? 'pnpm'
+      : paths.has('yarn.lock') ? 'yarn'
+        : paths.has('bun.lockb') ? 'bun'
+          : paths.has('poetry.lock') ? 'poetry'
+            : paths.has('uv.lock') ? 'uv' : null;
+  const scripts = packageJson?.scripts && typeof packageJson.scripts === 'object'
+    ? Object.fromEntries(Object.entries(packageJson.scripts).slice(0, 40).map(([key, value]) => [key, text(value).slice(0, 300)]))
+    : {};
+  const testCommands = [...new Set([scripts.test, scripts['test:ci'], scripts.check, scripts.verify, scripts.lint].filter(Boolean))].slice(0, 8);
+  return {
+    packageManager: lock,
+    runtime: packageJson?.engines?.node ? 'node' : paths.has('go.mod') ? 'go' : paths.has('Cargo.toml') ? 'rust' : (paths.has('pyproject.toml') || paths.has('requirements.txt') ? 'python' : null),
+    frameworks: frameworks.sort(),
+    scripts,
+    testCommands,
+    manifests: ['package.json','pyproject.toml','requirements.txt','go.mod','Cargo.toml','pom.xml','composer.json'].filter(path => paths.has(path))
+  };
+}
+
 export function buildProjectIndex(files = [], { revisionId = null, maxSymbols = MAX_SYMBOLS } = {}) {
   const normalized = normalizeWorkspaceFiles(files);
   const cacheBasis = normalized.map(file => [file.path, fileDigest(file.content)]);
@@ -264,7 +296,8 @@ export function buildProjectIndex(files = [], { revisionId = null, maxSymbols = 
     dependencies: edges.slice(0, MAX_IMPORTS),
     tests: [...new Set(tests)].slice(0, MAX_TESTS),
     config: [...new Set(config)].sort().slice(0, 500),
-    entryPoints: [...new Set(entries)].sort().slice(0, 200)
+    entryPoints: [...new Set(entries)].sort().slice(0, 200),
+    profile: projectProfile(normalized)
   });
   indexCache.set(cacheKey, result);
   while (indexCache.size > INDEX_CACHE_LIMIT) indexCache.delete(indexCache.keys().next().value);
