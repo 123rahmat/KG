@@ -1672,3 +1672,47 @@ export const MIGRATIONS = [
     `
   }
 ];
+  ,{
+    version: 41,
+    name: 'workspace-project-sources',
+    sql: `
+      CREATE TABLE IF NOT EXISTS workspace_sources (
+        id                TEXT PRIMARY KEY,
+        workspace_id      TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        principal_id      TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+        kind              TEXT NOT NULL CHECK (kind IN ('local-folder', 'github')),
+        name              TEXT NOT NULL,
+        provider_key      TEXT,
+        repo_owner        TEXT,
+        repo_name         TEXT,
+        repo_ref          TEXT,
+        snapshot_object_id TEXT REFERENCES objects(id) ON DELETE SET NULL,
+        credentials_enc   TEXT,
+        permissions       JSONB NOT NULL DEFAULT '{}'::jsonb,
+        metadata          JSONB NOT NULL DEFAULT '{}'::jsonb,
+        revoked_at        TIMESTAMPTZ,
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS workspace_sources_scope_idx
+        ON workspace_sources (workspace_id, principal_id, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS workspace_sources_provider_idx
+        ON workspace_sources (kind, provider_key);
+      ALTER TABLE workspace_sources ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE workspace_sources FORCE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS workspace_sources_policy ON workspace_sources;
+      CREATE POLICY workspace_sources_policy ON workspace_sources
+        USING (
+          workspace_sources.workspace_id = current_setting('app.workspace_id', true)
+          AND (
+            workspace_sources.principal_id = current_setting('app.principal_id', true)
+            OR current_setting('app.role', true) IN ('admin', 'service')
+          )
+        )
+        WITH CHECK (
+          workspace_sources.workspace_id = current_setting('app.workspace_id', true)
+          AND workspace_sources.principal_id = current_setting('app.principal_id', true)
+        );
+      REVOKE ALL ON workspace_sources FROM PUBLIC;
+    `
+  }
