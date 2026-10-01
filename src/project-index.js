@@ -349,7 +349,7 @@ export function relatedSymbols(index, query = '', changedPaths = [], { max = 60 
 export function relatedTests(index, changedPaths = [], { max = 40 } = {}) {
   const impacted = new Set(impactClosure(index, changedPaths, { maxFiles: 300 }));
   return (index?.tests ?? []).filter(path => impacted.has(path) || changedPaths.some(changed => {
-    const stem = changed.replace(/\\.[^.]+$/, '');
+    const stem = changed.replace(/\.[^.]+$/, '');
     return path.startsWith(stem) || path.includes(stem.split('/').pop());
   })).slice(0, max);
 }
