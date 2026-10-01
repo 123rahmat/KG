@@ -243,13 +243,28 @@ export function compileCodeContext({
 
 export function compactContextPack(pack,{maxChars=18_000,maxFiles=10}={}) {
   if (!pack || typeof pack !== 'object') return null;
-  const files = Array.isArray(pack.files) ? pack.files.slice(0,maxFiles) : [];
+  const files = Array.isArray(pack.files) ? pack.files : [];
+  const criticalPaths = new Set([
+    ...(pack.focus?.changedFiles ?? []),
+    ...(pack.focus?.relevantSymbols ?? []).map(symbol => symbol?.path).filter(Boolean)
+  ]);
+  const fileLimit = Math.max(maxFiles, criticalPaths.size);
   let remaining = Math.max(2_000,Number(maxChars)||18_000);
   const compactFiles = [];
-  for (const file of files) {
-    const header = (file.path + '\n').length;
+  const ordered = [...files].sort((a, b) =>
+    Number(criticalPaths.has(b?.path)) - Number(criticalPaths.has(a?.path))
+    || String(a?.path ?? '').localeCompare(String(b?.path ?? ''))
+  );
+
+  for (const file of ordered) {
+    const critical = criticalPaths.has(file?.path);
+    if (compactFiles.length >= fileLimit) break;
+    const header = (String(file?.path ?? '') + '\n').length;
     const available = Math.max(0,remaining-header);
-    if (available < 200) break;
+    if (available < 200) {
+      if (!critical) break;
+      continue;
+    }
     const content = text(file.content).slice(0,available);
     compactFiles.push({
       path:file.path, kind:file.kind, language:file.language, digest:file.digest,
@@ -257,6 +272,9 @@ export function compactContextPack(pack,{maxChars=18_000,maxFiles=10}={}) {
     });
     remaining -= header + content.length;
   }
+
+  const included = new Set(compactFiles.map(file => file.path));
+  const criticalOmitted = [...criticalPaths].filter(path => !included.has(path)).slice(0,80);
   return {
     version:pack.version, strategy:pack.strategy, project:pack.project, task:pack.task,
     focus:{
@@ -267,6 +285,12 @@ export function compactContextPack(pack,{maxChars=18_000,maxFiles=10}={}) {
     },
     dependencies:(pack.dependencies ?? []).slice(0,60),
     previousAttempts:pack.previousAttempts ?? [], failure:pack.failure ?? null,
-    files:compactFiles, budget:{maxChars,files:compactFiles.length}
+    files:compactFiles,
+    budget:{
+      maxChars,
+      files:compactFiles.length,
+      criticalFiles:criticalPaths.size,
+      criticalFilesIncluded:criticalPaths.size-criticalOmitted.length,
+      criticalFilesOmitted:criticalOmitted
+    }
   };
-}

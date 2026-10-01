@@ -6,6 +6,7 @@ import { codeFiles, missingTests, sandboxPayload, mergeFix, builtCode, repairCon
 import { validateJob, containerArgs, SandboxError, testSummary } from '../src/sandbox.js';
 import { readProject, formatOf } from '../src/documents.js';
 import { projectView, rankFiles, words } from '../src/project-view.js';
+import { compactContextPack } from '../src/context-compiler.js';
 
 const geminiReply = (textValue, { groundingMetadata = undefined, finishReason = 'STOP' } = {}) => jsonResponse({
   candidates: [{
@@ -378,6 +379,33 @@ test('code fixes go on while they get closer to working, and stop when they do n
   assert.equal(repairDecision(run(improving(4), 'small'), tests(10)).reason, 'ceiling');
   assert.equal(repairDecision(run(improving(4), 'complex'), tests(10)).repair, true);
   assert.equal(repairDecision(run(improving(8), 'complex'), tests(5)).reason, 'ceiling');
+});
+
+test('context compaction preserves changed and symbol-critical files before ordinary files', () => {
+  const pack = {
+    version: 1,
+    strategy: 'test',
+    project: { contentHash: 'h' },
+    task: { id: 'build-code' },
+    focus: {
+      changedFiles: ['src/critical.js'],
+      impactedFiles: [],
+      relatedTests: [],
+      relevantSymbols: [{ path: 'src/critical.js', name: 'critical', line: 1 }]
+    },
+    dependencies: [],
+    previousAttempts: [],
+    failure: null,
+    files: [
+      { path: 'src/ordinary.js', kind: 'code', language: 'javascript', digest: 'a', symbols: [], imports: [], content: 'ordinary'.repeat(1000) },
+      { path: 'src/critical.js', kind: 'code', language: 'javascript', digest: 'b', symbols: [{ name: 'critical' }], imports: [], content: 'critical'.repeat(1000) }
+    ]
+  };
+  const compact = compactContextPack(pack, { maxChars: 2_500, maxFiles: 1 });
+  assert.ok(compact.files.some(file => file.path === 'src/critical.js'));
+  assert.equal(compact.budget.criticalFiles, 1);
+  assert.equal(compact.budget.criticalFilesIncluded, 1);
+  assert.deepEqual(compact.budget.criticalFilesOmitted, []);
 });
 
 test('a small project is shown whole; a larger one only as far as the step needs', () => {
