@@ -40,9 +40,9 @@ export function rankLexical(query, rows = [], limit = 12) {
   const wantedSet = new Set(wanted);
   return rows.map(row => {
     const body = text(row.content || row.text || row.title);
-    const bodyTerms = terms(body);
+    const bodyTokens = body.toLowerCase().split(/[^\p{L}\p{N}_-]+/u).filter(item => item.length > 2);
     const counts = new Map();
-    for (const term of bodyTerms) counts.set(term, (counts.get(term) ?? 0) + 1);
+    for (const term of bodyTokens) counts.set(term, (counts.get(term) ?? 0) + 1);
     const matched = wanted.reduce((sum, term) => sum + (counts.get(term) ? 1 : 0), 0);
     const frequency = wanted.reduce((sum, term) => sum + Math.min(counts.get(term) ?? 0, 4) * 0.15, 0);
     const coverage = wantedSet.size ? matched / wantedSet.size : 0;
