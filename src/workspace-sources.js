@@ -15,9 +15,9 @@ const text = value => String(value ?? '').trim();
 const SOURCE_ID = /^[A-Za-z0-9_-]{8,80}$/;
 const SAFE_PATH = /^(?![./ -])(?!.*\.\.)(?!.*\/[./ -])(?!.*[ /]$)[\p{L}\p{N}._/ +@-]{1,240}$/u;
 const GITHUB_REPO = /^[A-Za-z0-9_.-]{1,100}$/;
-const MAX_FILES = 10_000;
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
-const MAX_TOTAL_BYTES = 200 * 1024 * 1024;
+const MAX_FILES = 250;
+const MAX_FILE_BYTES = 256 * 1024;
+const MAX_TOTAL_BYTES = 4 * 1024 * 1024;
 
 export const SOURCE_KINDS = Object.freeze(['local-folder', 'github']);
 
