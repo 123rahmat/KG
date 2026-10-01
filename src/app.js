@@ -172,6 +172,7 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
       ok: true,
       database: 'ready',
       reasoning: config.ai ? { configured: true, provider: config.ai.provider } : { configured: false },
+      terminal: { enabled: Boolean(config.terminal?.enabled) },
       runners: {
         tools: Boolean(config.runners.tools),
         sandbox: Boolean(config.runners.sandbox),
@@ -358,8 +359,7 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
     maxAge: '1 day'
   }));
   app.use('/vendor/xterm-fit', express.static(path.join(PUBLIC_DIR, '..', 'node_modules', '@xterm', 'addon-fit'), {
-    immutable: true,
-    maxAge: '1 year'
+    maxAge: '1 day'
   }));
 
   app.use(express.static(PUBLIC_DIR, {
