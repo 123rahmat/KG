@@ -280,6 +280,7 @@ function roleUtility(role, run, task, progress = {}) {
   const resolutionPenalty = observed.count > 0 && !observed.disagreement && observed.confidence >= 0.82 ? 0.10 : 0;
   const base = {
     strategist: (['plan', 'understand', 'discover', 'reassess'].includes(signals.type) ? 0.46 : 0.18)
+      + (signals.retrying && ['plan', 'reassess'].includes(signals.type) ? 0.14 : 0)
       + signals.decomposition * 1.25 + signals.depth * 0.35 + (signals.flags.design ? 0.08 : 0),
     researcher: signals.unknowns * 1.9 + signals.evidenceDiversity * 1.4,
     analyst: 0.20 + signals.comparisonComplexity * 1.8 + signals.evidenceDiversity * 1.15 + (signals.flags.quantitative ? 0.14 : 0) + typeMatch,
