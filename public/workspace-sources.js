@@ -272,7 +272,7 @@ export async function applyLocalWorkspaceChanges(changes = []) {
   };
 
   const safePath = value => {
-    const path = String(value ?? '').trim().replaceAll('\\', '/').replace(/^\.\//, '');
+    const path = String(value ?? '').replaceAll('\\', '/').replace(/^\.\//, '');
     if (!path || path.startsWith('/') || path.includes('..') ||
         path.split('/').some(part => !part || part === '.' || part === '..') ||
         path.includes('\0') || /[\r\n]/.test(path)) {
