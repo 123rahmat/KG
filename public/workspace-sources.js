@@ -242,7 +242,7 @@ export async function connectGitHub() {
       owner,
       repo,
       ref,
-      write: false
+      write: $('githubWriteAccess')?.checked === true
     });
     state.workspaceSourceId = result.source.id;
     state.workspaceSource = result.source;
