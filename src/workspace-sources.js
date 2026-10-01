@@ -10,6 +10,7 @@
 
 import crypto from 'node:crypto';
 import { encryptJson, decryptField } from './data-protection.js';
+import { workspacePath } from './workspace-path.js';
 
 const text = value => String(value ?? '').trim();
 const SOURCE_ID = /^[A-Za-z0-9_-]{8,80}$/;
