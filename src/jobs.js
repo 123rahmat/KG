@@ -167,28 +167,38 @@ export class JobStore {
     const owner = text(workerId);
     const safeLease = Math.max(10_000, Math.min(900_000, Number(leaseMs) || LEASE_MS));
     if (!owner) return false;
-    const { rowCount } = await this.pool.query(
-      `UPDATE run_jobs
-          SET lease_until = now() + ($2::int * interval '1 millisecond'), updated_at = now()
-        WHERE id = $1 AND state = 'running' AND worker_id = $3
-          AND attempts = $4 AND lease_until > now()`,
-      [job.id, safeLease, owner, Number(attempts) || 0]
+    return runDbScope(
+      { principalId: '', workspaceId: '', organizationId: '', jurisdiction: '', role: 'job-worker' },
+      async () => {
+        const { rowCount } = await this.pool.query(
+          `UPDATE run_jobs
+              SET lease_until = now() + ($2::int * interval '1 millisecond'), updated_at = now()
+            WHERE id = $1 AND state = 'running' AND worker_id = $3
+              AND attempts = $4 AND lease_until > now()`,
+          [job.id, safeLease, owner, Number(attempts) || 0]
+        );
+        return rowCount > 0;
+      }
     );
-    return rowCount > 0;
   }
 
   /** Record the outcome only for the worker/attempt that still owns the lease. */
   async finish(job, state, outcome, { workerId = job.worker_id, attempts = job.attempts } = {}) {
     const owner = text(workerId);
-    const { rowCount } = await this.pool.query(
-      `UPDATE run_jobs
-          SET state = $2, outcome = $3::jsonb, request = request - 'payload',
-              lease_until = NULL, worker_id = NULL, finished_at = now(), updated_at = now()
-        WHERE id = $1 AND state = 'running' AND worker_id = $4
-          AND attempts = $5 AND lease_until > now()`,
-      [job.id, state, JSON.stringify(outcome), owner, Number(attempts) || 0]
+    return runDbScope(
+      { principalId: '', workspaceId: '', organizationId: '', jurisdiction: '', role: 'job-worker' },
+      async () => {
+        const { rowCount } = await this.pool.query(
+          `UPDATE run_jobs
+              SET state = $2, outcome = $3::jsonb, request = request - 'payload',
+                  lease_until = NULL, worker_id = NULL, finished_at = now(), updated_at = now()
+            WHERE id = $1 AND state = 'running' AND worker_id = $4
+              AND attempts = $5 AND lease_until > now()`,
+          [job.id, state, JSON.stringify(outcome), owner, Number(attempts) || 0]
+        );
+        return rowCount > 0;
+      }
     );
-    return rowCount > 0;
   }
 }
 
