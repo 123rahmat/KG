@@ -355,35 +355,12 @@
         <div id="usageLimitBannerCode" class="notice bad usage-limit-banner" role="alert" aria-live="assertive" hidden></div>
          <div class="settings-eyebrow">Code workspace</div>
         <h2 id="projectSourcesTitle">Choose your project</h2>
-        <p class="muted small">Choose one source for this chat. The source stays scoped to this conversation.</p>
+        <p class="muted small">Connect a GitHub repository for this chat. The Code Workspace does not access local folders.</p>
       </div>
       <button class="icon-btn" id="projectSourcesClose" type="button" aria-label="Close project sources" title="Close"><svg class="i" aria-hidden="true"><use href="#i-close"/></svg></button>
     </div>
 
-    <div class="project-source-switch" role="tablist" aria-label="Project source type">
-      <button type="button" class="project-source-tab active" id="sourceTabLocal" role="tab" aria-selected="true" aria-controls="sourcePanelLocal"><span class="project-source-tab-icon">⌂</span><span>Local folder</span></button>
-      <button type="button" class="project-source-tab" id="sourceTabGithub" role="tab" aria-selected="false" aria-controls="sourcePanelGithub"><span class="project-source-tab-icon">GH</span><span>GitHub repository</span></button>
-    </div>
-
-    <section class="project-source-panel active" id="sourcePanelLocal" role="tabpanel" aria-labelledby="sourceTabLocal">
-      <div class="project-source-panel-copy">
-        <h3>Use a folder on this computer</h3>
-        <p class="muted small">Choose the project folder you want this chat to work with.</p>
-      </div>
-      <div class="project-source-local-row">
-        <div class="project-source-meta large" id="localFolderMeta">No folder selected</div>
-        <div class="project-source-actions">
-          <button type="button" class="primary" id="openLocalFolder">Choose project folder</button>
-          <button type="button" class="ghost" id="syncLocalFolderFromPanel" hidden>Refresh files</button>
-        </div>
-      </div>
-      <div class="project-source-security">
-        <strong>Permission</strong>
-        <span>The browser asks you to grant access to the folder you choose. Dependency and generated directories are skipped from the project snapshot.</span>
-      </div>
-    </section>
-
-    <section class="project-source-panel" id="sourcePanelGithub" role="tabpanel" aria-labelledby="sourceTabGithub" hidden>
+    <section class="project-source-panel active" id="sourcePanelGithub" role="tabpanel" aria-labelledby="projectSourcesTitle">
       <div class="project-source-panel-copy">
         <h3>Use a GitHub repository</h3>
         <p class="muted small">Load your repositories, choose the repository, then choose the exact branch or tag.</p>
