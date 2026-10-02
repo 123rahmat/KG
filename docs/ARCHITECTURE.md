@@ -193,8 +193,28 @@ follows the work and current situation, not who the user is.
 The coding panel is adaptive in depth as well as width: clean, deterministic
 work can converge after one pass; complexity, security/performance sensitivity,
 verification gaps or observed failure can justify additional reassessment passes.
-These are adaptive ceilings, not token quotas. The global 4-hour and weekly usage
-limits remain the only token-quota boundaries.
+Specialist recruitment follows a minimum-capable-team-first rule: research,
+architecture and implementation coverage start first, while test, critique,
+debugging, security and performance specialists join only when their marginal
+evidence value is justified. A clean, high-confidence panel can stop before
+exhausting the role catalog. These are adaptive ceilings, not token quotas. The
+global 4-hour and weekly usage limits remain the only token-quota boundaries.
+
+The efficiency controller also separates repository size from active workload:
+large deterministic codebases do not automatically trigger more model calls.
+Live pressure instead weighs active changes, dependency coupling, uncertainty,
+failures, evidence gaps and disagreement. Parallel concurrency contracts on
+actual errors/load or budget pressure and can expand when independent work has
+positive critical-path benefit; high latency by itself does not force
+contraction.
+
+For coding plan governance, new substantive builds and changes to an existing
+codebase are reviewed before mutation. Existing-code work first reads the actual
+codebase and proposes explicit **keep / remove / add / change** decisions. Those
+are suggestions, not authority: the user can edit each category in the approval
+surface, and the approved choices are stored as the binding coding scope. Any
+material change outside that approved scope becomes a new proposal/review rather
+than a silent expansion.
 
 The implementer specialist may return a bounded, structured implementation handoff
 (objective, file targets, tests and contract changes). That handoff is carried
