@@ -141,8 +141,12 @@ export function adaptConcurrency({
   const budget = Math.max(0, Math.min(1, Number(remainingBudgetRatio) || 0));
   const highRisk = HIGH_STAKES.has(text(risk).toLowerCase());
 
-  if (errors >= 0.25 || latency >= 8000 || budget < 0.25) next -= 1;
-  else if (errors <= 0.05 && latency > 0 && latency <= 2500 && benefit >= 0.6 && budget >= 0.5) next += 1;
+  // Latency alone is not a reason to shrink concurrency: doing that can
+  // increase total wall-clock time when the provider is simply slow but
+  // healthy. Contract on actual load/failure pressure, and expand when the
+  // additional independent work can improve the critical path.
+  if (errors >= 0.25 || (latency >= 8000 && errors >= 0.10) || budget < 0.25) next -= 1;
+  else if (errors <= 0.05 && benefit >= 0.45 && budget >= 0.5) next += 1;
 
   if (highRisk) next = Math.min(next, 2);
   next = Math.max(Number(min) || 1, Math.min(Number(max) || DEFAULT_MAX_PARALLEL, next));
