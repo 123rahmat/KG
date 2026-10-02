@@ -436,8 +436,8 @@ test('coding panel converges without a needless second iteration on clean eviden
   });
   assert.equal(result.waves.length, 1);
   assert.equal(result.allocation.subsystemPanels[0].iterations, 1);
-  assert.equal(result.allocation.codingEconomy.roleSpecificOutputCaps, true);
-  assert.equal(calls.every(item => item.options.maxOutputTokens <= 900), true);
+  assert.equal(result.allocation.codingEconomy.roleSpecificOutputCaps, false);
+  assert.equal(calls.every(item => item.options.maxOutputTokens === AGENT_MAX_OUTPUT_TOKENS), true);
 });
 
 test('Code Workspace gives every subsystem its own multi-agent panel with bounded A2A', async () => {
