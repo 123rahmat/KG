@@ -2841,5 +2841,4 @@ export const MIGRATIONS = [
         );
     `
   }
-  }
 ];
