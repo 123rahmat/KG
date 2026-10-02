@@ -240,11 +240,12 @@ export async function runNormalChatControlPlane({
   usageGate,
   canSpend = async () => true,
   recordUsage = async () => {},
-  modelCaller = callModel
+  modelCaller = callModel,
+  specialistPanelOwnsCoordination = false
 } = {}) {
   const needs = normalChatControlNeeds({ run, task, payload });
   const dedicatedCodingFlow = hasDedicatedCodingControl(task, payload);
-  if (dedicatedCodingFlow) {
+  if (dedicatedCodingFlow || specialistPanelOwnsCoordination) {
     needs.stepManager = false;
     needs.resourceDataManager = false;
   }
@@ -264,7 +265,8 @@ export async function runNormalChatControlPlane({
       }
     },
     needs,
-    dedicatedCodingFlow
+    dedicatedCodingFlow,
+    specialistPanelOwnsCoordination: Boolean(specialistPanelOwnsCoordination)
   };
   if (!config?.ai || HUMAN_GATE_TASKS.has(text(task?.type).toLowerCase()) || !CONTROL_TASKS.has(text(task?.type).toLowerCase())) {
     return { ...base, enabled: false, reason: 'control-agents-not-needed-for-this-stage' };
