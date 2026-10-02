@@ -536,3 +536,10 @@ test('model calls are bounded by the adaptive provider concurrency governor', as
   assert.equal(peak, 1, 'the request boundary must enforce the configured model concurrency');
   resetProviderConcurrency();
 });
+
+
+test('estimated model tokens include prompt and requested output headroom', async () => {
+  const { estimateModelTokens } = await import('../src/runtime.js');
+  const estimate = estimateModelTokens([{ role: 'user', content: 'x'.repeat(400) }], { maxOutputTokens: 1000 });
+  assert.ok(estimate >= 1100);
+});

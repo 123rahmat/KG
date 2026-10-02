@@ -144,3 +144,5 @@ check('central-sensitive-file-policy', /isSensitiveWorkspacePath/.test(await rea
 check('docker-base-image-pinned', /^FROM node:24-alpine@sha256:[0-9a-f]{64}$/m.test(await read('Dockerfile')), 'application build stages use an immutable Node base-image digest');
 
 check('usage-summary-universal-scope', /quotaScope:[\s\S]*fourHour: 'principal',[\s\S]*weekly: 'principal'/.test(await read('src/usage.js')), 'usage summaries identify both rolling AI quotas as principal-wide');
+
+check('usage-output-cap', /admittedMaxOutputTokens/.test(await read('src/runtime.js')) && /maxOutputTokens: admittedMaxOutputTokens/.test(await read('src/runtime.js')), 'provider output limits are constrained to the amount admitted by the shared usage reservation');

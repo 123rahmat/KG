@@ -299,6 +299,7 @@ export async function callModel(messages, {
   let usageReservation = null;
   let usageRecorded = false;
   let spentUsage = { inputTokens: 0, outputTokens: 0 };
+  let admittedMaxOutputTokens = Math.max(1, Math.floor(Number(maxOutputTokens) || 1));
   // Resting models go last, not away: when every model is resting, all are
   // still tried. A model that said it does not exist is left out while it rests.
   const live = configured.filter(model => !isRetired(model, startedAt));
@@ -311,9 +312,19 @@ export async function callModel(messages, {
   if (!credential) return null;
   if (usageGate) {
     try {
+      const promptEstimate = Math.min(500_000, Math.max(256, estimateModelTokens(messages, { maxOutputTokens }) - Math.max(0, Math.floor(Number(maxOutputTokens) || 0))));
       usageReservation = await usageGate.reserve({
-        estimatedTokens: estimateModelTokens(messages, { maxOutputTokens })
+        estimatedTokens: promptEstimate + Math.max(1, Math.floor(Number(maxOutputTokens) || 1))
       });
+      if (usageReservation?.estimatedTokens) {
+        admittedMaxOutputTokens = Math.max(
+          1,
+          Math.min(
+            Math.max(1, Math.floor(Number(maxOutputTokens) || 1)),
+            Number(usageReservation.estimatedTokens) - promptEstimate
+          )
+        );
+      }
     } catch (error) {
       if (error?.code === 'usage-limit-reached') {
         return {
@@ -382,7 +393,7 @@ export async function callModel(messages, {
       }
       const overloaded = [];
       for (const [index, candidate] of candidates.entries()) {
-        const { url, headers, body } = adapter.build(credential, candidate, messages, { webSearch: search, maxOutputTokens, json, effort: effectiveEffort(effort, config.ai.effort ?? null), project: selected.vertexProject || config.ai.vertexProject || null, location: selected.vertexLocation || config.ai.vertexLocation || 'global' });
+        const { url, headers, body } = adapter.build(credential, candidate, messages, { webSearch: search, maxOutputTokens: admittedMaxOutputTokens, json, effort: effectiveEffort(effort, config.ai.effort ?? null), project: selected.vertexProject || config.ai.vertexProject || null, location: selected.vertexLocation || config.ai.vertexLocation || 'global' });
         // With another model to turn to, a failing one is not waited on.
         const alone = models.length === 1 || (pass > 0 && index === candidates.length - 1);
         try {
