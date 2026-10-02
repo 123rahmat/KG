@@ -587,7 +587,7 @@ server.on('listening', () => {
 
 server.listen(PORT, HOST, async () => {
   await fs.mkdir(RUN_ROOT, { recursive: true });
-  console.log(`Kindgleam local agent ${AGENT_VERSION} listening on http://${HOST}:${PORT}`);
+  console.log(`Kindgleam local agent ${AGENT_VERSION} listening on http://${HOST}:${boundPort}`);
   console.log(`Allowed origin: ${ALLOWED_ORIGIN || '(none — browser access disabled)'}`);
   console.log(`Process execution: ${ALLOW_EXECUTION ? 'enabled' : 'disabled'}`);
 });
