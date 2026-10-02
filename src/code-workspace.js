@@ -19,17 +19,19 @@ export function safeWorkspacePath(value) {
 
 const CONVERSATION_ID = /^[A-Za-z0-9-]{8,64}$/;
 
+export const CODE_WORKSPACE_MAX_AGENTS = 11;
+
 export function createWorkspaceChatContext({
   conversationId = null,
   multiAgentMode = 'auto',
-  maxAgents = 5
+  maxAgents = CODE_WORKSPACE_MAX_AGENTS
 } = {}) {
   const id = text(conversationId);
   if (id && !CONVERSATION_ID.test(id)) {
     throw new Error('Workspace chat conversationId must be 8-64 letters, digits or dashes');
   }
   const mode = ['auto', 'always', 'off'].includes(text(multiAgentMode)) ? text(multiAgentMode) : 'auto';
-  const limit = Math.max(1, Math.min(5, Number(maxAgents) || 5));
+  const limit = Math.max(1, Math.min(CODE_WORKSPACE_MAX_AGENTS, Number(maxAgents) || CODE_WORKSPACE_MAX_AGENTS));
   return Object.freeze({
     conversationId: id || null,
     memory: {
