@@ -107,26 +107,14 @@ function chooseUnitRoots(index, target) {
     }
     if (bestIndex < 0 || !bestChildren.length) break;
     const parent = units[bestIndex];
-    units.splice(bestIndex, 1, ...bestChildren.map(root => root));
-    // Preserve deterministic order while ensuring we do not accidentally
-    // duplicate a nested root already selected.
+    // Only split when the whole child set fits the desired budget. Keeping
+    // the parent otherwise is safer than creating overlapping or unowned paths.
+    if (units.length - 1 + bestChildren.length > desired) break;
+    units.splice(bestIndex, 1, ...bestChildren);
     const seen = new Set();
     for (let i = units.length - 1; i >= 0; i -= 1) {
       if (seen.has(units[i])) units.splice(i, 1);
       else seen.add(units[i]);
-    }
-    if (units.length === desired) break;
-    if (units.length > desired) {
-      // Merge the smallest excess siblings back into the parent.
-      const scored = units
-        .map((root, indexValue) => ({ root, index: indexValue, files: rootStats(index, root).files }))
-        .sort((a, b) => a.files - b.files || a.root.localeCompare(b.root));
-      const keep = new Set(scored.slice(0, Math.max(0, units.length - desired)).map(item => item.root));
-      const childSet = scored.filter(item => keep.has(item.root)).map(item => item.root);
-      units.splice(0, units.length, ...units.filter(root => !keep.has(root)), parent, ...childSet);
-      // The above intentionally leaves a parent as a grouping root. Stop if
-      // no further split can reach a stable target.
-      break;
     }
   }
   return [...new Set(units)].slice(0, desired);
@@ -163,7 +151,7 @@ export function estimateSubsystemCount(index = {}, {
   minFilesPerSubsystem = 8,
   risk = 'ordinary'
 } = {}) {
-  const files = Math.max(0, Number(index?.fileCount) || Array.isArray(index?.files) ? index.files.length : 0);
+  const files = Math.max(0, Number(index?.fileCount) || (Array.isArray(index?.files) ? index.files.length : 0));
   const bytes = Math.max(0, Number(index?.totals?.bytes) || 0);
   const dependencies = Math.max(0, Number(index?.totals?.dependencies) || Number(index?.dependencies?.length) || 0);
   const roots = topLevelRoots(index);
@@ -230,19 +218,20 @@ export function buildSubsystemPlan(index = {}, {
 } = {}) {
   const decision = estimateSubsystemCount(index, { maxSubsystems, minFilesPerSubsystem, risk });
   const roots = chooseUnitRoots(index, decision.count);
+  const effectiveRoots = roots.length ? roots : ['__root__'];
   const files = Array.isArray(index?.files) ? index.files : [];
   const assignments = new Map();
   const sharedPaths = [];
   for (const file of files) {
     const path = safeWorkspacePath(file?.path);
     if (!path) continue;
-    const root = assignedRoot(path, roots);
+    const root = assignedRoot(path, effectiveRoots);
     if (root) assignments.set(path, root);
     else sharedPaths.push(path);
   }
 
   const subsystemMap = new Map();
-  roots.forEach((root, i) => subsystemMap.set(root, {
+  effectiveRoots.forEach((root, i) => subsystemMap.set(root, {
     id: subsystemId(root, i),
     roots: [root],
     files: [],
@@ -334,7 +323,7 @@ export function buildSubsystemPlan(index = {}, {
     }
   }
 
-  const metrics = dependencyMetrics(index, roots);
+  const metrics = dependencyMetrics(index, effectiveRoots);
   const shared = {
     id: 'shared-integration',
     files: [...new Set(sharedPaths)].sort(),
