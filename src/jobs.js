@@ -262,6 +262,7 @@ export function createJobWorker({ jobs, identity, runs, executeNext, logger, met
           code: 'execution-error',
           error: 'Execution failed unexpectedly; nothing was recorded for this task.'
         });
+        }
       } finally {
         if (heartbeat) clearInterval(heartbeat);
       }
