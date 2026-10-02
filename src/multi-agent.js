@@ -833,7 +833,14 @@ export async function runAdaptiveAgentPanel({
     for (const item of results) {
       if (!item.parsed) {
         failedRoles.push(item.role);
-        agentStates.push({ role: item.role, model: item.result?.model ?? item.modelId, status: 'unavailable', wave: item.wave });
+        if (item.subsystem?.id) assignedSubsystems.delete(item.subsystem.id);
+        agentStates.push({
+          role: item.role,
+          model: item.result?.model ?? item.modelId,
+          status: 'unavailable',
+          wave: item.wave,
+          subsystemId: item.subsystem?.id ?? null
+        });
         continue;
       }
       findings.push(item.parsed);
