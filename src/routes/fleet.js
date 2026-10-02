@@ -1,8 +1,8 @@
 /** Fleet-level project registry and dispatch control. */
-import { FleetStore, adaptFleetCapacity } from '../fleet-control.js';
+import { FleetStore, FleetValidationError, adaptFleetCapacity } from '../fleet-control.js';
 
-export function registerFleetRoutes(app, { pool, audit, route, scoped, metrics }) {
-  const fleet = new FleetStore(pool);
+export function registerFleetRoutes(app, { pool, audit, route, scoped, metrics, fleet: injectedFleet = null }) {
+  const fleet = injectedFleet ?? new FleetStore(pool);
 
   app.get('/api/fleet/status', scoped('viewer'), route(async (req, res) => {
     const summary = await fleet.summary(req.scope);
@@ -57,7 +57,10 @@ export function registerFleetRoutes(app, { pool, audit, route, scoped, metrics }
       const dependencies = await fleet.addDependency(req.scope, req.params.id, req.body?.dependsOnProjectId);
       res.status(201).json({ projectId: req.params.id, dependencies });
     } catch (error) {
-      return res.status(400).json({ error: error.message, code: 'invalid-project-dependency' });
+      if (error instanceof FleetValidationError) {
+        return res.status(400).json({ error: error.message, code: 'invalid-project-dependency' });
+      }
+      throw error;
     }
   }));
 
@@ -73,7 +76,10 @@ export function registerFleetRoutes(app, { pool, audit, route, scoped, metrics }
       metrics?.increment('fleet_dispatches_total', { action: 'queued' });
       res.status(202).json({ dispatch });
     } catch (error) {
-      return res.status(400).json({ error: error.message, code: 'invalid-fleet-dispatch' });
+      if (error instanceof FleetValidationError) {
+        return res.status(400).json({ error: error.message, code: 'invalid-fleet-dispatch' });
+      }
+      throw error;
     }
   }));
 }

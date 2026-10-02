@@ -53,7 +53,7 @@ export function build({ config, logger, metrics, fetchImpl }) {
   const fleet = new FleetStore(pool);
   // Reminders and scheduled questions (src/scheduling.js).
   const scheduler = new Scheduler({ pool, runs, identity, logger, metrics });
-  const app = createApp({ config, pool, identity, governance, capabilities, objects, runs, jobs, scheduler, audit, logger, metrics, fetchImpl });
+  const app = createApp({ config, pool, identity, governance, capabilities, objects, runs, jobs, scheduler, fleet, audit, logger, metrics, fetchImpl });
   app.locals.objects = objects;
   const worker = createJobWorker({ jobs, identity, runs, logger, metrics, executeNext: app.locals.executeNext });
   const fleetWorker = createFleetWorker({

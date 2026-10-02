@@ -42,7 +42,7 @@ const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..',
 
 export const VERSION = '10.4.2';
 
-export function createApp({ config, pool, identity, governance, capabilities, objects, runs, jobs = null, scheduler = null, audit, logger, metrics, fetchImpl = fetch }) {
+export function createApp({ config, pool, identity, governance, capabilities, objects, runs, jobs = null, scheduler = null, fleet = null, audit, logger, metrics, fetchImpl = fetch }) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
@@ -356,7 +356,7 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
   });
   const memories = new MemoryStore(pool, { encryptionKey: config.security.personalDataEncryptionKey });
   const deps = {
-    config, pool, identity, governance, capabilities, objects, runs, jobs, scheduler, memories, audit,
+    config, pool, identity, governance, capabilities, objects, runs, jobs, scheduler, fleet, memories, audit,
     logger, metrics, fetchImpl, route, scoped, idempotent
   };
   registerPlatformRoutes(app, deps);
