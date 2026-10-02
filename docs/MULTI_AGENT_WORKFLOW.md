@@ -77,3 +77,13 @@ Peer communication uses a typed, bounded project bus with these message classes:
 The subsystem plan is persisted in the run blackboard in compact form and is included in the primary/model context. This lets the primary coding workflow see the same ownership, dependency and communication state without creating a second authority system.
 
 The current subsystem stage remains advisory/read-only: the server owns all mutations and the final coding result. This is intentional. It provides the safe coordination contract for future subsystem patch workers and integration workers without introducing unrestricted multi-writer repository access.
+
+
+## GitHub-only Code Workspace source boundary
+
+The Code Workspace has one project-source type: GitHub. Browser directory pickers, local-folder
+snapshot ingestion, local-folder synchronization, and browser local write-back are not
+available. Existing legacy local-folder source rows are revoked by the migration and the
+database now accepts only GitHub source rows. Terminal sessions may still use a disposable
+local filesystem inside their sandbox, but that filesystem is created from the selected
+GitHub snapshot and is never a host/local-folder connection.
