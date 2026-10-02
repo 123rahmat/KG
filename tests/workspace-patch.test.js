@@ -68,3 +68,19 @@ test('workspace patches reject credential and private-key files', () => {
     [{ path: '.env.example', content: 'PUBLIC_EXAMPLE=value' }]
   ));
 });
+
+test('range patch digests change when the exact operation changes', () => {
+  const base = {
+    path: 'src/a.js',
+    kind: 'range',
+    startLine: 2,
+    endLine: 2,
+    expectedDigest: contentDigest('const a = 1;'),
+    replacement: 'const a = 2;'
+  };
+  const line = changeSetDigest([base]);
+  const replacement = changeSetDigest([{ ...base, replacement: 'const a = 3;' }]);
+  const range = changeSetDigest([{ ...base, startLine: 3 }]);
+  assert.notEqual(line, replacement);
+  assert.notEqual(line, range);
+});
