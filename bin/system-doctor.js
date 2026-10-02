@@ -116,7 +116,11 @@ check('terminal-secret-input-filter', /isSensitiveWorkspacePath/.test(await read
 check('usage-reservation-admission', /usage_reservations/.test(await read('src/usage.js')) && /runReserved/.test(await read('src/usage.js')) && /pg_advisory_xact_lock/.test(await read('src/usage.js')), 'model spend is admitted atomically against rolling and per-run token limits');
 check('universal-user-usage-windows', /FROM usage_events/.test(await read('src/usage.js')) && /WHERE principal_id = \$1/.test(await read('src/usage.js')) && /fourHour: 'principal'/.test(await read('src/usage.js')) && /weekly: 'principal'/.test(await read('src/usage.js')), '4-hour and weekly AI quotas are universal per user across chats and workspaces');
 check('account-level-usage-entitlement', /principal_ai_entitlements/.test(await read('src/usage.js')) && /principal_ai_entitlements/.test(await read('src/migrations.js')) && /principal_ai_entitlements/.test(await read('src/db.js')) && /account-entitlements/.test(await read('src/identity.js')) && /syncWorkspaceAiEntitlements/.test(await read('src/routes/stripe.js')), 'paid AI quota is resolved from the user account entitlement rather than the active workspace');
-check('stripe-hosted-billing',
+
+check('skill-pattern-runtime-grant',
+  /'skill_profiles', 'skill_observations', 'skill_patterns'/.test(await read('src/db.js'))
+  && /GRANT ALL ON skill_patterns FROM PUBLIC|REVOKE ALL ON skill_patterns FROM PUBLIC/.test(await read('src/migrations.js')),
+  'runtime can use scoped skill-pattern learning while the table remains revoked from PUBLIC');check('stripe-hosted-billing',
   billingAccount.includes("billingDetailsStoredLocally: false")
     && !billingAccount.includes("app.put('/api/billing'")
     && billingProtection.includes('stripeBillingPrivateState')
@@ -143,6 +147,12 @@ check('action-run-privacy', /run_actions_policy/.test(await read('src/migrations
 check('browser-security-boundary', /sec-fetch-site/.test(securityBoundary) && /SameSite=Strict/.test(app), 'browser state changes have request-metadata and strict-cookie boundaries');
 check('sandbox-production-pinning', /@sha256/.test(sandbox) && /assertProductionSandboxConfiguration/.test(sandbox), 'sandbox source enforces immutable production image references in production');
 check('docker-non-root', /USER node/.test(dockerfile), 'production application image runs as the unprivileged node user');
+
+check('dev-compose-loopback-password',
+  /127\.0\.0\.1:5432:5432/.test(await read('docker-compose.yml'))
+  && /KINDGLEAM_DEV_DB_PASSWORD/.test(await read('docker-compose.yml'))
+  && !/POSTGRES_PASSWORD:\s*kindgleam\b/.test(await read('docker-compose.yml')),
+  'development PostgreSQL is loopback-only and requires an explicit local password');
 check('ci-release-gates', /npm ci/.test(ci) && /npm audit/.test(ci) && /npm test/.test(ci) && /docker build/.test(ci), 'CI covers install, audit, tests and production image build');
 check('verify-release-gate', /npm run verify/.test(verify), 'Verify invokes the unified application verification contract');
 check('codeql-enabled', /github\/codeql-action\/init/.test(codeql) && /security-extended/.test(codeql), 'CodeQL security-extended analysis is present');
