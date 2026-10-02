@@ -193,6 +193,19 @@ export class FleetStore {
     const left = text(id); const right = text(dependsOnId);
     if (!left || !right || left === right) throw new FleetValidationError('A project cannot depend on itself');
     return transaction(this.pool, async client => {
+      // Serialize dependency-graph mutations per workspace. This makes the
+      // cycle check and cardinality check observe one authoritative graph.
+      await client.query(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+        ['kindgleam:fleet-dependencies:' + scope.workspaceId]
+      );
+
+      const { rows: projects } = await client.query(
+        'SELECT id FROM fleet_projects WHERE id = ANY($1::text[]) AND workspace_id=$2 FOR UPDATE',
+        [[left, right], scope.workspaceId]
+      );
+      if (projects.length !== 2) throw new FleetValidationError('One or both fleet projects do not exist in this workspace');
+
       const cycleSql = [
         'WITH RECURSIVE reaches(id) AS (',
         'SELECT depends_on_project_id FROM fleet_project_dependencies WHERE project_id=$1 AND workspace_id=$3',
@@ -204,18 +217,15 @@ export class FleetStore {
       if (cycle.length) throw new FleetValidationError('Adding this dependency would create a project cycle');
 
       const { rows: count } = await client.query(
-        'SELECT count(*)::int count FROM fleet_project_dependencies WHERE project_id=$1 AND workspace_id=$2 FOR UPDATE',
+        'SELECT count(*)::int count FROM fleet_project_dependencies WHERE project_id=$1 AND workspace_id=$2',
         [left, scope.workspaceId]
       );
       if (Number(count[0]?.count || 0) >= FLEET_LIMITS.maxDependencies) throw new FleetValidationError('Project dependency limit reached');
 
-      const inserted = await client.query(
-        'INSERT INTO fleet_project_dependencies(workspace_id,project_id,depends_on_project_id) SELECT $3,$1,$2 WHERE EXISTS (SELECT 1 FROM fleet_projects WHERE id=$1 AND workspace_id=$3) AND EXISTS (SELECT 1 FROM fleet_projects WHERE id=$2 AND workspace_id=$3) ON CONFLICT DO NOTHING RETURNING project_id',
+      await client.query(
+        'INSERT INTO fleet_project_dependencies(workspace_id,project_id,depends_on_project_id) VALUES($3,$1,$2) ON CONFLICT DO NOTHING',
         [left, right, scope.workspaceId]
       );
-      if (!inserted.rows.length) {
-        throw new FleetValidationError('One or both fleet projects do not exist in this workspace');
-      }
 
       const { rows } = await client.query(
         'SELECT d.depends_on_project_id id,p.name,p.state FROM fleet_project_dependencies d JOIN fleet_projects p ON p.id=d.depends_on_project_id WHERE d.project_id=$1 AND d.workspace_id=$2 ORDER BY p.priority DESC,p.id',
