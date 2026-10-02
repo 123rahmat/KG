@@ -89,14 +89,15 @@ export function buildProjectHierarchy(fileRecords = []) {
   for (const file of Array.isArray(fileRecords) ? fileRecords : []) {
     const path = safeWorkspacePath(file?.path);
     if (!path) continue;
-    const ancestors = directoryAncestors(path);
+    const parentPath = directoryOf(path);
+    const ancestors = directoryAncestors(parentPath);
     for (let i = 0; i < ancestors.length; i += 1) {
       const node = ensure(ancestors[i]);
       node.fileCount += 1;
       node.bytes += Math.max(0, Number(file?.bytes) || 0);
       if (i < ancestors.length - 1) node.children.add(ancestors[i + 1]);
     }
-    ensure(directoryOf(path)).files.push({
+    ensure(parentPath).files.push({
       path, digest: text(file?.digest), bytes: Math.max(0, Number(file?.bytes) || 0)
     });
   }
