@@ -322,7 +322,7 @@ export class FleetStore {
   async release(scope, dispatchId, { workerId, attempts, delayMs = 5000, error = null } = {}) {
     const delay = Math.max(1000, Math.min(300000, Number(delayMs) || 5000));
     const { rows: [row] = [] } = await this.pool.query(
-      "UPDATE fleet_dispatches SET state='queued',lease_until=NULL,worker_id=NULL,available_at=now()+($3::bigint * interval '1 millisecond'),error=$6,updated_at=now() WHERE id=$1 AND workspace_id=$2 AND state='running' AND worker_id=$4 AND attempts=$5 RETURNING id,state,available_at",
+      "UPDATE fleet_dispatches SET state='queued',attempts=GREATEST(0,attempts-1),lease_until=NULL,worker_id=NULL,available_at=now()+($3::bigint * interval '1 millisecond'),error=$6,updated_at=now() WHERE id=$1 AND workspace_id=$2 AND state='running' AND worker_id=$4 AND attempts=$5 RETURNING id,state,available_at",
       [text(dispatchId), scope.workspaceId, delay, text(workerId), Number(attempts) || 0, error ? text(error).slice(0,1000) : null]
     );
     return row ? { id: row.id, state: row.state, availableAt: row.available_at } : null;
@@ -386,54 +386,175 @@ export function fleetStatus(projects = [], { capacity = 1, workerCount = 1 } = {
 
 export function createFleetWorker({
   fleet, identity, runs, executeNext, logger, metrics,
-  pollMs = 1000, batchSize = 8, maxConcurrency = 4, workerId = 'fleet-' + process.pid,
+  pollMs = 1000, batchSize = 8, maxConcurrency = 4, workerId = null, leaseMs = 300000,
   partition = null, partitions = 1
 } = {}) {
+  const effectiveWorkerId = text(workerId) || ('fleet-' + process.pid + '-' + crypto.randomUUID());
+  const safeLeaseMs = Math.max(10000, Math.min(900000, Number(leaseMs) || 300000));
   let timer = null; let active = null; let stopping = false;
 
   async function process(dispatch) {
     const startedAt = Date.now();
     const scope = { principalId: dispatch.principalId, workspaceId: dispatch.workspaceId };
+    let heartbeat = null;
+    let leaseLost = false;
     return runDbScope({ ...scope, organizationId: '', jurisdiction: '', role: 'job-worker' }, async () => {
       try {
+        heartbeat = setInterval(() => {
+          fleet.renewLease(scope, dispatch.id, {
+            workerId: effectiveWorkerId,
+            attempts: dispatch.attempts,
+            leaseMs: safeLeaseMs
+          }).then(result => {
+            if (!result) {
+              leaseLost = true;
+              logger?.warn('Fleet lease renewal rejected', {
+                dispatchId: dispatch.id, workerId: effectiveWorkerId, attempts: dispatch.attempts
+              });
+            }
+          }).catch(error => {
+            logger?.warn('Fleet lease renewal failed', { error, dispatchId: dispatch.id });
+          });
+        }, Math.max(1000, Math.floor(safeLeaseMs / 3)));
+        heartbeat.unref?.();
+
         let access;
         try {
           access = await identity.requireAccess({ id: dispatch.principalId }, dispatch.workspaceId, 'editor');
         } catch {
-          await fleet.finish(scope, dispatch.id, { state: 'failed', error: 'Fleet dispatch access was revoked' });
+          await fleet.finish(scope, dispatch.id, {
+            state: 'succeeded',
+            healthOutcome: 'failed',
+            workerId: effectiveWorkerId,
+            attempts: dispatch.attempts,
+            error: 'Fleet dispatch access was revoked'
+          });
           return false;
         }
+
         access.principalId = dispatch.principalId;
         const payload = dispatch.payload ?? {};
         const run = await runs.get(access, payload.runId);
         const task = run?.tasks.find(item => item.id === payload.taskId);
         if (!run || !task) {
-          await fleet.finish(scope, dispatch.id, { state: 'failed', error: 'Fleet dispatch references a missing run or task' });
+          await fleet.finish(scope, dispatch.id, {
+            state: 'succeeded',
+            healthOutcome: 'failed',
+            workerId: effectiveWorkerId,
+            attempts: dispatch.attempts,
+            error: 'Fleet dispatch references a missing run or task'
+          });
           return false;
         }
+
+        if (['complete', 'failed', 'blocked', 'exhausted'].includes(text(run.state))) {
+          await fleet.finish(scope, dispatch.id, {
+            state: 'succeeded',
+            healthOutcome: run.state === 'complete' ? 'succeeded' : 'failed',
+            workerId: effectiveWorkerId,
+            attempts: dispatch.attempts,
+            metadata: { code: 'run-terminal-before-dispatch', runState: run.state }
+          });
+          return run.state === 'complete';
+        }
+
         if (task.status === 'complete') {
-          await fleet.finish(scope, dispatch.id, { state: 'succeeded', metadata: { code: 'completed-earlier' } });
+          await fleet.finish(scope, dispatch.id, {
+            state: 'succeeded',
+            workerId: effectiveWorkerId,
+            attempts: dispatch.attempts,
+            metadata: { code: 'completed-earlier' }
+          });
           return true;
         }
+
         const reply = await executeNext({
-          scope: access, principal: { id: dispatch.principalId }, runId: payload.runId,
-          body: payload.request ?? {}, requestId: null, expectedTaskId: payload.taskId
+          scope: access,
+          principal: { id: dispatch.principalId },
+          runId: payload.runId,
+          body: payload.request ?? {},
+          requestId: null,
+          expectedTaskId: payload.taskId
         });
-        await fleet.finish(scope, dispatch.id, {
-          state: reply.status < 400 ? 'succeeded' : 'failed',
-          error: reply.status < 400 ? null : text(reply.body?.error),
+
+        const responseRun = reply?.body?.run;
+        const updatedTask = Array.isArray(responseRun?.tasks)
+          ? responseRun.tasks.find(item => item.id === payload.taskId)
+          : null;
+        const execution = reply?.body?.execution ?? {};
+        const statusCode = Number(reply?.status) || 500;
+        const runMoved = Boolean(responseRun && responseRun.next && responseRun.next !== payload.taskId);
+        const taskHandled = Boolean(updatedTask && ['complete', 'failed', 'skipped'].includes(updatedTask.status));
+        const taskRemainsPending = Boolean(updatedTask && updatedTask.status === 'pending');
+        const executionNotRun = execution.executed === false;
+        const responseCode = text(reply?.body?.code);
+
+        if ((executionNotRun || taskRemainsPending) && !['complete', 'failed', 'blocked', 'exhausted'].includes(text(responseRun?.state))) {
+          const humanGate = [
+            'execution-approval-required',
+            'awaiting-approval',
+            'awaiting-clarification',
+            'decision-required'
+          ].includes(responseCode);
+          const delayMs = humanGate
+            ? 30000
+            : Math.min(60000, 1000 * (2 ** Math.max(0, Number(dispatch.attempts) - 1)));
+          const released = await fleet.release(scope, dispatch.id, {
+            workerId: effectiveWorkerId,
+            attempts: dispatch.attempts,
+            delayMs,
+            error: text(reply?.body?.error || execution.status || execution.message || 'execution-not-completed')
+          });
+          if (released) {
+            metrics?.increment('fleet_dispatches_total', { action: 'requeued', reason: humanGate ? 'human-gate' : 'not-executed' });
+            return false;
+          }
+        }
+
+        const workflowFailed = updatedTask?.status === 'failed';
+        const handled = taskHandled || runMoved || responseRun?.state === 'complete';
+        const finishResult = await fleet.finish(scope, dispatch.id, {
+          state: 'succeeded',
+          healthOutcome: workflowFailed ? 'failed' : (handled && statusCode < 400 ? 'succeeded' : 'failed'),
+          workerId: effectiveWorkerId,
+          attempts: dispatch.attempts,
+          error: statusCode < 400 ? null : text(reply?.body?.error),
           costComputeMs: Date.now() - startedAt,
-          metadata: { status: reply.status }
+          metadata: {
+            status: statusCode,
+            workflowStatus: updatedTask?.status ?? null,
+            runState: responseRun?.state ?? null,
+            executed: execution.executed ?? null,
+            leaseLost
+          }
         });
-        return reply.status < 400;
+        if (!finishResult) {
+          metrics?.increment('fleet_dispatch_fence_rejections_total');
+          return false;
+        }
+        return Boolean(handled && statusCode < 400);
       } catch (error) {
-        await fleet.finish(scope, dispatch.id, {
-          state: 'failed', error: text(error?.message) || 'Fleet execution failed',
-          costComputeMs: Date.now() - startedAt
-        }).catch(() => {});
+        const released = await fleet.release(scope, dispatch.id, {
+          workerId: effectiveWorkerId,
+          attempts: dispatch.attempts,
+          delayMs: Math.min(60000, 1000 * (2 ** Math.max(0, Number(dispatch.attempts) - 1))),
+          error: text(error?.message) || 'Fleet execution failed'
+        }).catch(() => null);
+        if (!released) {
+          await fleet.finish(scope, dispatch.id, {
+            state: 'succeeded',
+            healthOutcome: 'failed',
+            workerId: effectiveWorkerId,
+            attempts: dispatch.attempts,
+            error: text(error?.message) || 'Fleet execution failed',
+            costComputeMs: Date.now() - startedAt
+          }).catch(() => {});
+        }
         logger?.error('fleet dispatch failed', { error, dispatchId: dispatch.id });
         metrics?.increment('fleet_dispatch_execution_errors_total');
         return false;
+      } finally {
+        if (heartbeat) clearInterval(heartbeat);
       }
     });
   }
@@ -441,7 +562,7 @@ export function createFleetWorker({
   async function runOnce() {
     if (stopping) return 0;
     const batch = await fleet.acquireBatch({
-      limit: batchSize, workerId, partition, partitions
+      limit: batchSize, workerId: effectiveWorkerId, leaseMs: safeLeaseMs, partition, partitions
     });
     if (!batch.length) return 0;
     const ceiling = Math.max(1, Math.min(16, Number(maxConcurrency) || 1));
