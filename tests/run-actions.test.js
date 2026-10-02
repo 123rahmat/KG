@@ -42,7 +42,7 @@ test('private-run actions are not visible to another workspace member', () =>
     assert.equal(ownerView.length, 1);
     assert.equal(peerView.length, 0);
 
-    const routeView = await call('GET', `/api/runs/${run.id}/actions`, {
+    const routeView = await call('GET', `/api/runs/${runId}/actions`, {
       token: peer.token,
       workspace: 'shared'
     });
