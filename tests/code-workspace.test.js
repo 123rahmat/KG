@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyWorkspacePatch, classifyWorkspaceFile, createWorkspaceState, createWorkspaceChatContext, selectWorkspaceContext, workspaceDiff, workspaceImpact, workspaceRevision, workspaceContentHash, WORKSPACE_LIMITS } from '../src/code-workspace.js';
+import { applyWorkspacePatch, classifyWorkspaceFile, createWorkspaceState, createWorkspaceChatContext, normalizeWorkspaceFiles, selectWorkspaceContext, workspaceDiff, workspaceImpact, workspaceRevision, workspaceContentHash, WORKSPACE_LIMITS } from '../src/code-workspace.js';
 
 test('workspace revisions are deterministic for the same project state', () => {
   const files = [{ path: 'src/app.js', content: 'export const x = 1;' }];
@@ -85,16 +85,20 @@ test('workspace chat rejects an invalid conversation scope instead of silently s
 });
 
 test('duplicate paths are charged against the final content size, not the first occurrence', () => {
-  const limit = WORKSPACE_LIMITS.maxTotalBytes;
-  const files = [
-    { path: 'src/shared.js', content: 'a'.repeat(Math.floor(WORKSPACE_LIMITS.maxFileBytes * 0.5)) },
-    { path: 'src/other.js', content: 'x'.repeat(Math.floor(limit * 0.55)) },
-    { path: 'src/shared.js', content: 'b'.repeat(Math.floor(WORKSPACE_LIMITS.maxFileBytes * 0.5)) }
-  ];
+  const limits = { maxFileBytes: 10, maxTotalBytes: 20, maxFiles: 100 };
   assert.throws(
-    () => workspaceContentHash(files),
+    () => normalizeWorkspaceFiles([
+      { path: 'a.js', content: '1234567890' },
+      { path: 'b.js', content: '123456789' },
+      { path: 'a.js', content: 'ABCDEFGHIJ' }
+    ], limits),
     /Workspace exceeds its total file-size limit/
   );
+  assert.doesNotThrow(() => normalizeWorkspaceFiles([
+    { path: 'a.js', content: '1234567890' },
+    { path: 'b.js', content: '123456789' },
+    { path: 'a.js', content: 'x' }
+  ], limits));
 });
 
 test('context selection never returns more bytes than its hard budget', () => {
