@@ -27,7 +27,7 @@ function check(name, ok, detail) {
 const requiredFiles = [
   'server.js', 'package.json', 'src/core.js', 'src/runs.js',
   'src/runtime.js', 'src/safety.js', 'src/verification.js',
-  'src/code-workspace.js', 'src/project-index.js', 'src/context-compiler.js', 'src/parallel-orchestrator.js', 'src/adaptive.js',
+  'src/code-workspace.js', 'src/project-index.js', 'src/context-compiler.js', 'src/parallel-orchestrator.js', 'src/subsystem-orchestrator.js', 'src/adaptive.js',
   'src/jobs.js', 'src/fleet-control.js', 'src/run-actions.js', 'src/security-boundary.js', 'src/sandbox.js',
   '.github/workflows/ci.yml', '.github/workflows/verify.yml', '.github/workflows/codeql.yml', '.github/workflows/secret-scan.yml',
   'tests/security.test.js', 'tests/code-workspace.test.js'
@@ -93,6 +93,20 @@ check('hierarchical-context-integration', /hierarchicalProjectScope\(/.test(cont
 check('workspace-lane-isolation', /workspaceLanesConflict\(/.test(parallel) && /rightReads/.test(parallel) && /leftReads/.test(parallel), 'workspace lanes serialize read/write and stale-revision conflicts');
 check('workspace-parallel-scheduler', /buildWorkspaceParallelPlan\(/.test(parallel), 'coding lanes have a deterministic server-owned parallel scheduler');
 check('multi-agent-lane-integration', /agentWorkspaceLane\(/.test(multiAgent) && /buildWorkspaceParallelPlan\(/.test(multiAgent), 'multi-agent waves execute through workspace lane contracts');
+check('subsystem-orchestration-integration',
+  /buildSubsystemPlan\(/.test(multiAgent)
+  && /subsystemCommunicationContext\(/.test(multiAgent)
+  && /createSubsystemMessage\(/.test(multiAgent),
+  'coding agents receive adaptive subsystem ownership and typed downstream communication through the shared orchestration layer');
+check('subsystem-revision-fencing',
+  /projectRevision/.test(await read('src/subsystem-orchestrator.js'))
+  && /staleRevisionRequiresRebase/.test(await read('src/subsystem-orchestrator.js'))
+  && /item.projectRevision === currentRevision/.test(await read('src/subsystem-orchestrator.js')),
+  'subsystem communication is fenced to the current workspace revision');
+check('subsystem-communication-bounded',
+  /MAX_SUBSYSTEM_MESSAGES = 64/.test(await read('src/subsystem-orchestrator.js'))
+  && /subsystemMessages: mergeSubsystemMessages/.test(await read('src/blackboard.js')),
+  'subsystem peer communication is persisted through the encrypted blackboard with a bounded history');
 const codeWorkflow = await read('src/code-workflow.js');
 check('stale-patch-rejection', /workspace-revision-stale/.test(codeWorkflow) && /expectedBaseHash/.test(codeWorkflow), 'code mutation rejects patches prepared from stale workspace state');
 check('background-job-lease-fencing', /worker_id/.test(jobs) && /lease_until\s*>\s*now\(\)/.test(jobs) && /workerId:\s*effectiveWorkerId/.test(jobs), 'background job completion is fenced to the owning worker, attempt and live lease');
