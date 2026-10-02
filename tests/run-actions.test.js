@@ -15,10 +15,14 @@ test('private-run actions are not visible to another workspace member', () =>
       workspace: 'shared',
       body: { goal: 'Private task' }
     });
-    await pool.query(
-      `INSERT INTO run_actions (id,run_id,task_id,workspace_id,principal_id,tool,input,summary)
-       VALUES ('act-private-test',$1,'respond','shared',$2,'memory.save','{}','private action')`,
-      [run.id, owner.principal.id]
+    assert.ok(run.id);
+    await runDbScope(
+      { principalId: owner.principal.id, workspaceId: 'shared', role: 'editor' },
+      () => pool.query(
+        `INSERT INTO run_actions (id,run_id,task_id,workspace_id,principal_id,tool,input,summary)
+         VALUES ('act-private-test',$1,'respond','shared',$2,'memory.save','{}','private action')`,
+        [run.id, owner.principal.id]
+      )
     );
 
     const actions = new RunActions(pool);
