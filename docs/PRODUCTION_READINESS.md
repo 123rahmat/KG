@@ -31,6 +31,10 @@ For code-workspace workloads, the adaptive path keeps the repository as the sour
 
 Parallel analysis uses the same server-owned workflow scheduler as other adaptive work. Each specialist receives an explicit workspace lane. Read-only specialist lanes may run concurrently; mutation lanes require project identity, an exact revision, and an explicit write set. Shared-path read/write conflicts and stale revisions serialize rather than race.
 
+## Code Workspace source boundary
+
+Code Workspace is GitHub-only. A session must reference an active GitHub repository source, the terminal is populated from that source's immutable commit snapshot, and repository write-back is performed only through the authenticated GitHub API after review, exact-revision, and pre-image checks. The browser exposes no local-folder source picker and no local-folder write-back path. Local execution-agent support, where enabled, is an execution target rather than a filesystem source and does not grant Code Workspace access to a user's local folders.
+
 ## Release gates
 
 A release candidate must pass all of these gates:
