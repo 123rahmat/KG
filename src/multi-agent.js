@@ -1709,6 +1709,18 @@ async function runCodeWorkspaceAgentPanels({
 
   }
 
+  // Reconcile any pending panel state from a last live topology tick.
+  // Existing, converged evidence is sufficient to close the panel; only
+  // unresolved, blocked or evidence-poor panels stay open.
+  for (const [subsystemId, state] of subsystemState.entries()) {
+    if (state.status !== 'pending' || !state.findings?.length) continue;
+    const stability = subsystemPanelStability(state.findings);
+    if (stability.stable) {
+      state.status = 'complete';
+      state.confidence = stability.confidence;
+    }
+  }
+
   const integrationFindings = allFindings.length
     ? allFindings.map(item => ({
         ...item,
@@ -1919,10 +1931,11 @@ export async function runAdaptiveAgentPanel({
   const budgetParallelLimit = () => run?.maxTokens === null || run?.maxTokens === undefined
     ? maxAgents
     : Math.max(1, Math.min(maxAgents, Math.floor(Math.max(1, Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent) / (AGENT_MAX_OUTPUT_TOKENS * 2))));
+  const genericParallelCeiling = run?.maxTokens == null ? 1 : maxAgents;
   let effectiveMaxParallel = Math.max(
     1,
     Math.min(
-      maxAgents,
+      genericParallelCeiling,
       Number(allocationResult.allocation?.targetAgents) || Number(allocationResult.roles?.length) || 1,
       budgetParallelLimit()
     )
@@ -2182,7 +2195,11 @@ export async function runAdaptiveAgentPanel({
     lastAllocation = allocationResult.allocation ?? lastAllocation;
     const earlyStop = panelEarlyConvergence({ run, task, findings, iteration: allocationRounds });
     earlyConvergence = earlyStop;
-    if (earlyStop.stop) {
+    // A generic panel without an explicit run-level token ceiling is
+    // intentionally one-at-a-time: there is no safe way for the caller's
+    // canSpend probe to reserve multiple parallel calls. Live Code Workspace
+    // panels use their own bounded scheduler and remain parallel-capable.
+    if (earlyStop.stop || run?.maxTokens == null) {
       break;
     }
   }
