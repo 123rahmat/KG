@@ -445,7 +445,12 @@ export async function callRunner(url, payload, { config, fetchImpl = fetch, slee
       });
       const raw = await readBounded(response, config.limits.responseBytes);
       return { retryable: RETRY_STATUS.has(response.status), status: response.status, raw };
-    }, { sleep });
+    }, {
+      sleep,
+      // Runner calls can have side effects. Never retry an ambiguous POST here:
+      // a timeout or dropped connection does not prove the runner did nothing.
+      retries: 0
+    });
 
     let result;
     try {
