@@ -1536,7 +1536,10 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         { overlay: run.adaptation?.projectOverlay }
       );
       if (Array.isArray(firstPackage.patches) && firstPackage.patches.length) {
-        firstPackage = materializeCodePackage(firstPackage, { baseFiles: baseFilesForPackage });
+        firstPackage = materializeCodePackage(firstPackage, {
+          baseFiles: baseFilesForPackage,
+          baseContentHash: codeIntelligence?.mutation?.baseContentHash ?? null
+        });
       }
     }
     if (task.id === 'build-code' && firstPackage && hasCode(firstPackage)) {
