@@ -2605,9 +2605,8 @@ export const MIGRATIONS = [
 
       REVOKE ALL ON FUNCTION kg_account_active_billing_plans(TEXT) FROM PUBLIC;
     `
-  },
-  },
-  {
+  }
+  ,{
     version: 65,
     name: 'principal-ai-entitlement-ledger',
     sql: `
