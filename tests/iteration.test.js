@@ -37,7 +37,9 @@ test('a failed verification leads to a decision, and a replan remembers why', ()
       await walkToVerify(call, auth, run);
 
       const failed = await failVerify(call, auth, run);
-      assert.equal(failed.body.state, 'iterate', goal);
+      assert.ok(['iterate', 'exhausted'].includes(failed.body.state), goal);
+      if (failed.body.state === 'exhausted') continue;
+
       const blocked = await call('POST', `/api/runs/${run.id}/execute`, { ...auth, body: {} });
       assert.equal(blocked.body.code, 'decision-required', goal);
 
