@@ -217,11 +217,26 @@ export class FleetStore {
     const project = await this.get(scope, projectId);
     if (!project) throw new FleetValidationError('Fleet project not found');
     if (project.state !== 'active') throw new FleetValidationError('Project is not active');
-    if (!text(runId) || !text(taskId)) throw new FleetValidationError('Fleet dispatch requires runId and taskId');
+    const run = text(runId);
+    const task = text(taskId);
+    if (!run || !task) throw new FleetValidationError('Fleet dispatch requires runId and taskId');
+    const { rows: [target] = [] } = await this.pool.query(
+      `SELECT t.id, t.status, r.state
+         FROM runs r JOIN run_tasks t ON t.run_id = r.id
+        WHERE r.id = $1 AND r.workspace_id = $2 AND t.id = $3
+          AND (r.visibility = 'workspace' OR r.principal_id = $4)
+        LIMIT 1`,
+      [run, scope.workspaceId, task, scope.principalId]
+    );
+    if (!target) throw new FleetValidationError('Fleet dispatch references an inaccessible run or task');
+    if (target.status !== 'pending') throw new FleetValidationError('Fleet dispatch target task is no longer pending');
+    if (['complete','failed','blocked','exhausted'].includes(text(target.state))) {
+      throw new FleetValidationError('Fleet dispatch target run is already terminal');
+    }
     const { rows: [row] } = await this.pool.query(
       "INSERT INTO fleet_dispatches(id,workspace_id,principal_id,project_id,state,payload,max_attempts,available_at) VALUES($1,$2,$3,$4,'queued',$5::jsonb,$6,now()) RETURNING *",
       [crypto.randomUUID(), scope.workspaceId, scope.principalId, projectId,
-        JSON.stringify({ runId: text(runId), taskId: text(taskId), request: request && typeof request === 'object' ? request : {} }),
+        JSON.stringify({ runId: run, taskId: task, request: request && typeof request === 'object' ? request : {} }),
         Math.max(1, Math.min(8, Number(maxAttempts) || 3))]
     );
     return { id: row.id, projectId: row.project_id, state: row.state, attempts: row.attempts, availableAt: row.available_at, createdAt: row.created_at };
