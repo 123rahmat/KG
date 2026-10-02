@@ -1201,7 +1201,7 @@ async function runCodeWorkspaceAgentPanels({
       for (const subsystem of batch) {
         const state = subsystemState.get(subsystem.id);
         const iteration = Math.max(1, Number(state?.iteration ?? 0) + 1);
-        const width = Math.min(panelWidth, maxAgents, Math.max(1, Math.floor(Math.max(1, effectiveMaxParallel) / Math.max(1, maxPanels)));
+        const width = Math.min(panelWidth, maxAgents, Math.max(1, Math.floor(Math.max(1, effectiveMaxParallel) / Math.max(1, maxPanels))));
         const roles = codeWorkspacePanelRoles(run, task, subsystem, {
           width,
           iteration,
