@@ -120,6 +120,9 @@ test('the panel runs specialists, records usage, and adds an arbiter only on dis
 
   assert.equal(result.enabled, true);
   assert.equal(result.findings.length, 2);
+  assert.equal(result.agents[0].lane.authority, 'advisory');
+  assert.equal(result.agents[0].lane.mutation, false);
+  assert.equal(result.agents[0].lane.valid, true);
   assert.equal(result.brief.disagreement, true);
   assert.equal(result.arbiter?.recommendation, 'revise');
   assert.equal(calls.length, 3);
