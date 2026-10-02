@@ -25,6 +25,12 @@ unverifiable states and the release pipeline proves the repository can build and
 test; it does not mean that infrastructure, credentials, runners, backups, or
 operational controls are magically supplied by the source tree.
 
+## Large-project and parallel-workspace architecture
+
+For code-workspace workloads, the adaptive path keeps the repository as the source of truth while compiling only task-relevant source into model context. The project index now carries deterministic directory/subtree counts and digests and classifies work as small, medium, large, or very-large. Very-large work is represented hierarchically and prefers surgical patches bound to the exact indexed workspace content hash.
+
+Parallel analysis uses the same server-owned workflow scheduler as other adaptive work. Each specialist receives an explicit workspace lane. Read-only specialist lanes may run concurrently; mutation lanes require project identity, an exact revision, and an explicit write set. Shared-path read/write conflicts and stale revisions serialize rather than race.
+
 ## Release gates
 
 A release candidate must pass all of these gates:
