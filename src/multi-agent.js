@@ -651,46 +651,6 @@ const CODE_WORKSPACE_MAX_PANEL_ITERATIONS = 2;
 const CODE_WORKSPACE_MIN_PANEL_AGENTS = 2;
 const CODE_WORKSPACE_MAX_PANEL_AGENTS = 5;
 const CODE_WORKSPACE_AUTO_THRESHOLD = 0.22;
-const CODE_WORKSPACE_ROLE_OUTPUT_TOKENS = Object.freeze({
-  architect: 850,
-  implementer: 900,
-  'test-engineer': 750,
-  debugger: 800,
-  critic: 700,
-  'security-reviewer': 700,
-  'performance-reviewer': 700
-});
-const CODE_TASK_SOFT_TOKEN_RATIO = 0.30;
-const CODE_TASK_SOFT_TOKEN_MIN = 2400;
-const CODE_TASK_SOFT_TOKEN_MAX = 12000;
-const CODE_PANEL_SOFT_TOKEN_MIN = 700;
-const CODE_PANEL_SOFT_TOKEN_MAX = 5000;
-
-function codeTaskSoftTokenBudget(run, tokensSpent = 0) {
-  if (run?.maxTokens === null || run?.maxTokens === undefined) return null;
-  const remaining = Math.max(0, Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent);
-  if (!remaining) return 0;
-  return Math.min(
-    remaining,
-    CODE_TASK_SOFT_TOKEN_MAX,
-    Math.max(Math.min(remaining, CODE_TASK_SOFT_TOKEN_MIN), Math.floor(remaining * CODE_TASK_SOFT_TOKEN_RATIO))
-  );
-}
-
-function codePanelSoftTokenBudget(taskBudget, batchSize = 1) {
-  if (taskBudget === null || taskBudget === undefined) return null;
-  if (taskBudget <= 0) return 0;
-  const fairShare = Math.floor(taskBudget / Math.max(1, batchSize));
-  return Math.min(CODE_PANEL_SOFT_TOKEN_MAX, Math.max(1, fairShare));
-}
-
-function codeRoleOutputCap(role, panelBudget, width) {
-  const roleCap = CODE_WORKSPACE_ROLE_OUTPUT_TOKENS[role] ?? AGENT_MAX_OUTPUT_TOKENS;
-  if (panelBudget === null || panelBudget === undefined) return roleCap;
-  const fairShare = Math.max(256, Math.floor(panelBudget / Math.max(1, width)));
-  return Math.max(256, Math.min(roleCap, fairShare));
-}
-
 function codeWorkspaceTask(basePayload, task) {
   return Boolean(
     (task?.id === 'build-code' || task?.metadata?.buildPlan === true || task?.type === 'code')
@@ -921,7 +881,6 @@ async function runCodeWorkspaceAgentPanels({
     1,
     Math.min(maxAgents, Number(initialDecision.maxParallel) || maxAgents)
   );
-  let taskSoftTokenBudget = codeTaskSoftTokenBudget(run, tokensSpent);
 
   const remainingBudgetRatio = () => run?.maxTokens === null || run?.maxTokens === undefined
     ? 1
@@ -955,7 +914,6 @@ async function runCodeWorkspaceAgentPanels({
         ? 1
         : Math.max(1, Math.floor(Math.max(1, effectiveMaxParallel) / Math.max(1, panelWidth)));
       const batch = ready.slice(0, maxPanels);
-      const panelSoftTokenBudget = codePanelSoftTokenBudget(taskSoftTokenBudget, batch.length);
       const jobs = [];
 
       for (const subsystem of batch) {
@@ -1065,14 +1023,13 @@ async function runCodeWorkspaceAgentPanels({
           allowBackup,
           effort: initialDecision.pressure >= 0.72 || job.iteration > 1 ? 'high' : 'medium',
           json: true,
-          maxOutputTokens: codeRoleOutputCap(job.role, panelSoftTokenBudget, width),
+          maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
           usageGate,
           usageSource: 'multi-agent'
         }).catch(() => null);
 
         if (result?.usage) {
           tokensSpent += Number(result.usage.inputTokens ?? 0) + Number(result.usage.outputTokens ?? 0);
-          taskSoftTokenBudget = codeTaskSoftTokenBudget(run, tokensSpent);
           if (!result.usageRecorded) await recordUsage(result.usage, result.provider, result.model);
         }
 
@@ -1308,12 +1265,10 @@ async function runCodeWorkspaceAgentPanels({
     panelMode: singlePanel ? 'normal-chat-zip-single-panel' : 'subsystem-panel-orchestration',
     panelScope: singlePanel ? 'entire-attached-zip-project' : null,
     panelEngine: 'unified-adaptive-code-panel-v1',
-    taskSoftTokenBudget,
-    panelSoftTokenBudgetMode: taskSoftTokenBudget === null ? 'global-adaptive' : 'fair-share-with-borrowing',
     codingEconomy: {
       maxPanelAgents: CODE_WORKSPACE_MAX_PANEL_AGENTS,
       maxIterations: CODE_WORKSPACE_MAX_PANEL_ITERATIONS,
-      roleSpecificOutputCaps: true,
+      roleSpecificOutputCaps: false,
       earlyConvergence: true,
       disagreementRequiredForArbitration: true
     },
