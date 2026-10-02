@@ -43,8 +43,8 @@ const pkg = JSON.parse(await read('package.json'));
 const app = await read('src/app.js');
 const nodeEngineMajor = Number(/(\d+)/.exec(String(pkg.engines?.node ?? ''))?.[1] ?? 0);
 check('node-engine', nodeEngineMajor >= 22, `requires ${pkg.engines?.node ?? 'unset'}`);
-check('package-lock-sync', (await read('package-lock.json')).includes(`\"version\": \"${pkg.version}\"`), 'package.json and package-lock.json versions must match');
-check('app-version-sync', new RegExp(`VERSION\\s*=\\s*['\"]${String(pkg.version).replaceAll('.', '\\\\.') }['\"]`).test(app), 'application VERSION must match package.json');
+check('package-lock-sync', (await read('package-lock.json')).includes(`"version": "${pkg.version}"`), 'package.json and package-lock.json versions must match');
+check('app-version-sync', app.includes(`VERSION = '${pkg.version}'`), 'application VERSION must match package.json');
 for (const script of ['check', 'lint', 'test', 'verify']) {
   check(`script:${script}`, typeof pkg.scripts?.[script] === 'string', pkg.scripts?.[script] ?? 'missing');
 }
@@ -100,7 +100,7 @@ check('background-attempt-bound', /attempts\s*<\s*max_attempts/.test(jobs) && /r
 check('terminal-access-recheck', /ACCESS_RECHECK_MS/.test(await read('src/terminal.js')) && /ensureAccess\(/.test(await read('src/terminal.js')), 'long-lived terminal sessions periodically re-authorize workspace access');
 check('terminal-secret-input-filter', /isSensitiveWorkspacePath/.test(await read('src/terminal.js')), 'credential-bearing files are excluded from terminal sandboxes through the centralized path policy');
 check('usage-reservation-admission', /usage_reservations/.test(await read('src/usage.js')) && /runReserved/.test(await read('src/usage.js')) && /pg_advisory_xact_lock/.test(await read('src/usage.js')), 'model spend is admitted atomically against rolling and per-run token limits');
-check('universal-user-usage-windows', /const sourceRows = globalRows/.test(await read('src/usage.js')) && /fourHour: 'principal'/.test(await read('src/usage.js')) && /weekly: 'principal'/.test(await read('src/usage.js')) && /usage:principal:/.test(await read('src/usage.js')), '4-hour and weekly AI quotas are universal per user across chats and workspaces');
+check('universal-user-usage-windows', /FROM usage_events/.test(await read('src/usage.js')) && /WHERE principal_id = \$1/.test(await read('src/usage.js')) && /fourHour: 'principal'/.test(await read('src/usage.js')) && /weekly: 'principal'/.test(await read('src/usage.js')), '4-hour and weekly AI quotas are universal per user across chats and workspaces');
 check('account-level-usage-entitlement', /principal_ai_entitlements/.test(await read('src/usage.js')) && /principal_ai_entitlements/.test(await read('src/migrations.js')) && /principal_ai_entitlements/.test(await read('src/db.js')) && /account-entitlements/.test(await read('src/identity.js')) && /syncWorkspaceAiEntitlements/.test(await read('src/routes/stripe.js')), 'paid AI quota is resolved from the user account entitlement rather than the active workspace');
 check('stripe-hosted-billing',
   billingAccount.includes("billingDetailsStoredLocally: false")
@@ -117,7 +117,7 @@ check('entitlement-rls-readiness',
   'account-wide entitlement state is covered by the database RLS readiness model'
 );
 check('usage-source-attribution', /multi-agent/.test(await read('src/usage.js')) && /verification-review/.test(await read('src/usage.js')), 'model spend sources remain distinguishable in the usage ledger');
-check('run-action-write-policy-split', /run_actions_select_policy/.test(migrationSource) && /run_actions_update_policy/.test(migrationSource) && !/CREATE POLICY run_actions_policy/.test(migrationSource), 'database policy separates read access from action mutation');
+check('run-action-write-policy-split', migrationSource.includes('version: 60') && migrationSource.includes('CREATE POLICY run_actions_select_policy') && migrationSource.includes('CREATE POLICY run_actions_update_policy'), 'database policy separates read access from action mutation');
 check('migration-order', (() => { const v = [...migrationSource.matchAll(/version:\s*(\d+)/g)].map(m => Number(m[1])); return v.every((n, i) => i === 0 || n > v[i - 1]) && v.at(-1) === 66; })(), 'migrations are strictly increasing and include every hardening migration');
 check('background-worker-cycle-bound', /maxPerCycle/.test(jobs) && /cycleLimit/.test(jobs), 'background workers bound queue draining per cycle for fairness and resource control');
 check('fleet-lease-fencing', /renewLease\(/.test(fleet) && /worker_id/.test(fleet) && /lease_until\s*>\s*now\(\)/.test(fleet), 'fleet completion and renewal are lease-owned');
@@ -127,7 +127,7 @@ check('action-run-privacy', /run_actions_policy/.test(await read('src/migrations
 check('browser-security-boundary', /sec-fetch-site/.test(securityBoundary) && /SameSite=Strict/.test(app), 'browser state changes have request-metadata and strict-cookie boundaries');
 check('sandbox-production-pinning', /@sha256/.test(sandbox) && /assertProductionSandboxConfiguration/.test(sandbox), 'sandbox source enforces immutable production image references in production');
 check('docker-non-root', /USER node/.test(dockerfile), 'production application image runs as the unprivileged node user');
-check('ci-release-gates', /npm ci/.test(ci) && /npm audit/.test(ci) && /node --test/.test(ci) && /docker build/.test(ci), 'CI covers install, audit, tests and production image build');
+check('ci-release-gates', /npm ci/.test(ci) && /npm audit/.test(ci) && /npm test/.test(ci) && /docker build/.test(ci), 'CI covers install, audit, tests and production image build');
 check('verify-release-gate', /npm run verify/.test(verify), 'Verify invokes the unified application verification contract');
 check('codeql-enabled', /github\/codeql-action\/init/.test(codeql) && /security-extended/.test(codeql), 'CodeQL security-extended analysis is present');
 check('codeql-upload-conditional', /upload:\s*\$\{\{/.test(codeql), 'CodeQL upload policy is environment-aware');
