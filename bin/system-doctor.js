@@ -75,6 +75,8 @@ check('hierarchical-context-integration', /hierarchicalProjectScope\(/.test(cont
 check('workspace-lane-isolation', /workspaceLanesConflict\(/.test(parallel) && /rightReads/.test(parallel) && /leftReads/.test(parallel), 'workspace lanes serialize read/write and stale-revision conflicts');
 check('workspace-parallel-scheduler', /buildWorkspaceParallelPlan\(/.test(parallel), 'coding lanes have a deterministic server-owned parallel scheduler');
 check('multi-agent-lane-integration', /agentWorkspaceLane\(/.test(multiAgent) && /buildWorkspaceParallelPlan\(/.test(multiAgent), 'multi-agent waves execute through workspace lane contracts');
+const codeWorkflow = await read('src/code-workflow.js');
+check('stale-patch-rejection', /workspace-revision-stale/.test(codeWorkflow) && /expectedBaseHash/.test(codeWorkflow), 'code mutation rejects patches prepared from stale workspace state');
 
 const forbidden = [
   ['eval', /\beval\s*\(/],
