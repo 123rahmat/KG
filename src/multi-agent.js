@@ -817,15 +817,22 @@ function buildBrief(findings, arbiter, decision, states = [], allocation = null)
 const CODE_WORKSPACE_MIN_PANEL_AGENTS = 2;
 const CODE_WORKSPACE_DEFAULT_PANEL_ITERATIONS = 1;
 
-function codeWorkspacePanelIterationCeiling(run, task) {
+function codeWorkspacePanelIterationCeiling(run, task, {
+  iteration = 1,
+  findings = []
+} = {}) {
   const signals = taskSignals(run, task, {
     goal: null,
-    findings: [],
-    failedRoles: [],
+    findings,
+    failedRoles: iteration > 1 ? ['previous-iteration'] : [],
     evidenceSoFar: []
   });
   const risk = text(run?.situation?.risk).toLowerCase();
-  if (signals.retrying || risk === 'critical' || signals.scaleComplexity >= 0.82) return 4;
+  const observed = observedPanelSignals({ findings });
+  const unresolved = findings.some(item => ['revise', 'investigate'].includes(text(item?.recommendation).toLowerCase()))
+    || observed.disagreement
+    || observed.confidence < 0.7;
+  if (signals.retrying || iteration > 1 || unresolved || risk === 'critical' || signals.scaleComplexity >= 0.82) return 4;
   if (risk === 'high' || signals.securityFocus || signals.performanceFocus || signals.evidenceGap >= 0.5 || signals.implementationComplexity >= 0.72) return 3;
   if (signals.decomposition >= 0.18 || signals.implementationComplexity >= 0.4) return 2;
   return CODE_WORKSPACE_DEFAULT_PANEL_ITERATIONS;
@@ -997,13 +1004,17 @@ function codeWorkspacePanelRoles(run, task, subsystem, {
   };
   const signals = taskSignals(run, task, progress);
 
-  // The panel contract is lifecycle coverage, not a requirement to launch a
-  // separate model for every stage. The first wave covers research,
-  // architecture/replanning, and implementation. Testing/critique/security/
-  // performance are recruited only when their marginal evidence value is high.
-  addRequired('researcher');
-  addRequired('architect');
-  if (signals.executable) addRequired('implementer');
+  // Executable work keeps architecture and implementation in the
+  // smallest capable panel. Research is added when width permits or when
+  // uncertainty makes it decision-relevant.
+  if (signals.executable) {
+    addRequired('architect');
+    addRequired('implementer');
+    addRequired('researcher');
+  } else {
+    addRequired('researcher');
+    addRequired('architect');
+  }
 
   const needsValidation = signals.executable && (
     (subsystem?.tests ?? []).length > 0
@@ -1584,7 +1595,10 @@ async function runCodeWorkspaceAgentPanels({
           if (message) currentWaveMessages.push(message);
         }
 
-        const ceiling = codeWorkspacePanelIterationCeiling(run, task);
+        const ceiling = codeWorkspacePanelIterationCeiling(run, task, {
+          iteration: state.iteration,
+          findings: state.findings
+        });
         if (stability.stable) {
           state.status = 'complete';
         } else if (state.iteration >= ceiling) {
@@ -1776,7 +1790,10 @@ async function runCodeWorkspaceAgentPanels({
         panelId: `${subsystem.id}:i${Math.max(1, Number(state?.iteration ?? 1))}`,
         status: state?.status ?? 'pending',
         iterations: state?.iteration ?? 0,
-        iterationCeiling: codeWorkspacePanelIterationCeiling(run, task, subsystem),
+        iterationCeiling: codeWorkspacePanelIterationCeiling(run, task, {
+          iteration: state?.iteration ?? 1,
+          findings: state?.findings ?? []
+        }),
         roles: state?.roles ?? [],
         confidence: state?.confidence ?? 0
       };
@@ -1860,6 +1877,7 @@ export async function runAdaptiveAgentPanel({
   const waves = [];
   let lastAllocation = allocationResult.allocation;
   let allocationRounds = 0;
+  let earlyConvergence = { stop: false, reason: 'not-reached' };
   let blackboard = await loadBlackboard({ run, task });
   // A normal-chat ZIP project deliberately stays a single panel. It still
   // gets the same adaptive role allocation and parallel specialist execution,
@@ -2148,6 +2166,7 @@ export async function runAdaptiveAgentPanel({
     });
     lastAllocation = allocationResult.allocation ?? lastAllocation;
     const earlyStop = panelEarlyConvergence({ run, task, findings, iteration: allocationRounds });
+    earlyConvergence = earlyStop;
     if (earlyStop.stop) {
       break;
     }
@@ -2188,7 +2207,7 @@ export async function runAdaptiveAgentPanel({
     waves,
     waveCount: waves.length,
     efficiency: {
-      earlyConvergence: panelEarlyConvergence({ run, task, findings, iteration: allocationRounds }),
+      earlyConvergence,
       specialistsCompleted: completedRoles.length,
       specialistsFailed: failedRoles.length,
       parallelWaves: waves.filter(wave => wave.parallel).length,
