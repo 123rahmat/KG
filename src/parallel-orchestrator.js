@@ -145,7 +145,7 @@ export function adaptConcurrency({
   // increase total wall-clock time when the provider is simply slow but
   // healthy. Contract on actual load/failure pressure, and expand when the
   // additional independent work can improve the critical path.
-  if (errors >= 0.25 || (latency >= 8000 && errors >= 0.10) || budget < 0.25) next -= 1;
+  if (errors >= 0.25 || (latency >= 8000 && errors >= 0.20) || budget < 0.25) next -= 1;
   else if (errors <= 0.05 && benefit >= 0.45 && budget >= 0.5) next += 1;
 
   if (highRisk) next = Math.min(next, 2);
