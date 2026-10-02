@@ -162,6 +162,7 @@ export async function usageSummary(pool, { principalId, workspaceId = null, conf
 
 
 const RESERVATION_TTL_MS = 5 * 60_000;
+const MIN_ADMISSION_TOKENS = 32;
 const MAX_RESERVATION_TOKENS = 500_000;
 
 function usageWindowStats(rows, windowMs, nowMs = Date.now()) {
@@ -216,57 +217,73 @@ export async function reserveUsage(pool, {
       ? reservationRows.filter(row => row.run_id === runId).reduce((sum, row) => sum + Number(row.estimated_tokens || 0), 0)
       : 0;
 
-    const ceilings = [
-      ...[limits.fourHourTokens, limits.weeklyTokens].map(Number).filter(value => value > 0),
-      ...(runMax === null ? [] : [runMax])
-    ];
-    if (!ceilings.length) return null;
-    const estimate = Math.min(rawEstimate, ...ceilings);
-    if (estimate <= 0) return null;
-
+    const available = [];
     for (const window of WINDOWS) {
-      const stats = usageWindowStats(usageRows, window.ms);
       const limit = Number(limits[window.limitKey] || 0);
-      if (!limit || stats.used + reserved + estimate <= limit) continue;
-      let resetsAt = stats.inside.length
-        ? new Date(new Date(stats.inside[0].created_at).getTime() + window.ms)
-        : null;
-      for (const row of reservationRows) {
-        const expires = new Date(row.expires_at);
-        if (!resetsAt || expires < resetsAt) resetsAt = expires;
-      }
-      throw new UsageLimitError({
-        id: window.id,
-        label: window.label,
-        hours: window.ms / HOUR,
-        used: stats.used + reserved,
-        input: stats.inside.reduce((sum, row) => sum + Number(row.input_tokens || 0), 0),
-        output: stats.inside.reduce((sum, row) => sum + Number(row.output_tokens || 0), 0),
-        calls: stats.inside.length,
+      if (!limit) continue;
+      const stats = usageWindowStats(usageRows, window.ms);
+      available.push({
+        window,
         limit,
-        percent: Math.min(100, Math.round(((stats.used + reserved) / limit) * 1000) / 10),
+        used: stats.used + reserved,
+        rows: stats.inside,
+        remaining: Math.max(0, limit - stats.used - reserved)
+      });
+    }
+    if (runMax !== null) {
+      available.push({
+        window: { id: 'run', label: 'Run token budget', ms: 0 },
+        limit: runMax,
+        used: runUsed + runReserved,
+        rows: [],
+        remaining: Math.max(0, runMax - runUsed - runReserved)
+      });
+    }
+    if (!available.length) return null;
+
+    const exhausted = available.find(item => item.remaining <= 0);
+    if (exhausted) {
+      throw new UsageLimitError({
+        id: exhausted.window.id,
+        label: exhausted.window.label,
+        hours: exhausted.window.ms ? exhausted.window.ms / HOUR : 0,
+        used: exhausted.used,
+        input: exhausted.rows.reduce((sum, row) => sum + Number(row.input_tokens || 0), 0),
+        output: exhausted.rows.reduce((sum, row) => sum + Number(row.output_tokens || 0), 0),
+        calls: exhausted.rows.length,
+        limit: exhausted.limit,
+        percent: 100,
         exceeded: true,
-        resetsAt: resetsAt?.toISOString() ?? null,
+        resetsAt: exhausted.rows.length && exhausted.window.ms
+          ? new Date(new Date(exhausted.rows[0].created_at).getTime() + exhausted.window.ms).toISOString()
+          : null,
         reserved
-      }, { canUpgrade: Boolean(config.stripe) });
+      }, { canUpgrade: exhausted.window.id !== 'run' && Boolean(config.stripe) });
     }
 
-    if (runMax !== null && runUsed + runReserved + estimate > runMax) {
+    const smallestRemaining = Math.min(...available.map(item => item.remaining));
+    if (smallestRemaining < MIN_ADMISSION_TOKENS) {
+      const constrained = available.reduce((best, item) => item.remaining < best.remaining ? item : best, available[0]);
       throw new UsageLimitError({
-        id: 'run',
-        label: 'Run token budget',
-        hours: 0,
-        used: runUsed + runReserved,
-        input: 0,
-        output: 0,
-        calls: 0,
-        limit: runMax,
-        percent: Math.min(100, Math.round(((runUsed + runReserved) / Math.max(1, runMax)) * 1000) / 10),
+        id: constrained.window.id,
+        label: constrained.window.label,
+        hours: constrained.window.ms ? constrained.window.ms / HOUR : 0,
+        used: constrained.used,
+        input: constrained.rows.reduce((sum, row) => sum + Number(row.input_tokens || 0), 0),
+        output: constrained.rows.reduce((sum, row) => sum + Number(row.output_tokens || 0), 0),
+        calls: constrained.rows.length,
+        limit: constrained.limit,
+        percent: Math.min(100, Math.round((constrained.used / Math.max(1, constrained.limit)) * 1000) / 10),
         exceeded: true,
-        resetsAt: null,
-        reserved: runReserved
-      }, { canUpgrade: false });
+        resetsAt: constrained.rows.length && constrained.window.ms
+          ? new Date(new Date(constrained.rows[0].created_at).getTime() + constrained.window.ms).toISOString()
+          : null,
+        reserved
+      }, { canUpgrade: constrained.window.id !== 'run' && Boolean(config.stripe) });
     }
+
+    const estimate = Math.min(rawEstimate, ...available.map(item => item.remaining));
+    if (estimate < MIN_ADMISSION_TOKENS) return null;
 
     const id = crypto.randomUUID();
     await client.query(
