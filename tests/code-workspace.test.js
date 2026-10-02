@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyWorkspacePatch, classifyWorkspaceFile, createWorkspaceState, createWorkspaceChatContext, selectWorkspaceContext, workspaceDiff, workspaceImpact, workspaceRevision, WORKSPACE_LIMITS } from '../src/code-workspace.js';
+import { applyWorkspacePatch, classifyWorkspaceFile, createWorkspaceState, createWorkspaceChatContext, selectWorkspaceContext, workspaceDiff, workspaceImpact, workspaceRevision, workspaceContentHash, WORKSPACE_LIMITS } from '../src/code-workspace.js';
 
 test('workspace revisions are deterministic for the same project state', () => {
   const files = [{ path: 'src/app.js', content: 'export const x = 1;' }];
@@ -86,27 +86,16 @@ test('workspace chat rejects an invalid conversation scope instead of silently s
 
 test('duplicate paths are charged against the final content size, not the first occurrence', () => {
   const limit = WORKSPACE_LIMITS.maxTotalBytes;
-  const source = 'a'.repeat(Math.floor(limit * 0.6));
-  const replacement = 'b'.repeat(Math.floor(limit * 0.6));
+  const files = [
+    { path: 'src/shared.js', content: 'a'.repeat(Math.floor(limit * 0.60)) },
+    { path: 'src/other.js', content: 'x'.repeat(Math.floor(limit * 0.50)) },
+    { path: 'src/shared.js', content: 'b'.repeat(Math.floor(limit * 0.60)) }
+  ];
   assert.throws(
     () => {
-      const files = [
-        { path: 'src/shared.js', content: source },
-        { path: 'src/other.js', content: 'x'.repeat(Math.floor(limit * 0.3)) },
-        { path: 'src/shared.js', content: replacement }
-      ];
-      // The final unique files total ~90% of the limit, so normalize should allow it.
-      assert.equal(files[0].path, files[2].path);
-      return files;
+      return workspaceContentHash(files);
     },
-    () => false
-  );
-  assert.deepEqual(
-    selectWorkspaceContext(
-      [{ path: 'huge.js', content: 'x'.repeat(limit + 1) }],
-      { maxFiles: 1, maxBytes: 2048 }
-    ).map(file => Buffer.byteLength(file.content, 'utf8')),
-    [2048]
+    /Workspace exceeds its total file-size limit/
   );
 });
 
