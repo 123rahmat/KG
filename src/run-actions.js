@@ -84,8 +84,20 @@ export class RunActions {
 
   async list(scope, runId) {
     const { rows } = await this.pool.query(
-      'SELECT * FROM run_actions WHERE run_id = $1 AND workspace_id = $2 ORDER BY created_at',
-      [runId, scope.workspaceId]
+      `SELECT a.*
+         FROM run_actions a
+         JOIN runs r ON r.id = a.run_id
+        WHERE a.run_id = $1
+          AND a.workspace_id = $2
+          AND (
+            r.principal_id = $3
+            OR (
+              r.visibility = 'workspace'
+              AND $4 IN ('editor', 'admin', 'job-worker')
+            )
+          )
+        ORDER BY a.created_at`,
+      [runId, scope.workspaceId, scope.principalId, scope.role || 'viewer']
     );
     return rows.map(view);
   }
@@ -97,8 +109,19 @@ export class RunActions {
   async decide(scope, principal, { runId, actionId, approve, ctxFor, canApprove = () => true, requestId }) {
     const claimed = await transaction(this.pool, async client => {
       const { rows: [row] } = await client.query(
-        'SELECT * FROM run_actions WHERE id = $1 AND run_id = $2 AND workspace_id = $3 FOR UPDATE',
-        [actionId, runId, scope.workspaceId]
+        `SELECT a.*
+           FROM run_actions a
+           JOIN runs r ON r.id = a.run_id
+          WHERE a.id = $1 AND a.run_id = $2 AND a.workspace_id = $3
+            AND (
+              r.principal_id = $4
+              OR (
+                r.visibility = 'workspace'
+                AND $5 IN ('editor', 'admin', 'job-worker')
+              )
+            )
+          FOR UPDATE OF a`,
+        [actionId, runId, scope.workspaceId, scope.principalId, scope.role || 'viewer']
       );
       if (!row) throw new ActionError('That proposed action does not exist.', 404, 'action-not-found');
       if (row.status !== 'proposed') throw new ActionError('That action was already decided.', 409, 'action-already-decided');
