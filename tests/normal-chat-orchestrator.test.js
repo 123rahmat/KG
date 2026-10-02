@@ -47,7 +47,6 @@ test('control managers run independently in parallel and cannot mutate server au
     payload: {
       attachments: [{ name: 'data.csv', kind: 'text', format: 'csv' }],
       adaptation: { resourcePlan: { selected: { tools: ['file.read'] } } },
-      capabilities: { granted: ['files'] },
       capabilities: { granted: ['files'] }
     },
     modelId: 'google:gemini-3.8-flash',
