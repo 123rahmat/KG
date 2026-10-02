@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { withServer, jsonResponse } from './helpers.js';
+import { syncWorkspaceAiEntitlements } from '../src/account-entitlements.js';
 
 /** A provider that answers everything with 40 tokens in and 10 out. */
 const provider = async () => {
@@ -314,6 +315,8 @@ test('the account entitlement is stable when workspaces have different paid plan
        VALUES ($1, 'active', 'team'), ($2, 'active', 'pro')`,
       [first.workspace, secondWorkspace]
     );
+    await syncWorkspaceAiEntitlements(pool, first.workspace);
+    await syncWorkspaceAiEntitlements(pool, secondWorkspace);
 
     const a = await call('GET', '/api/usage', { token: first.token, workspace: first.workspace });
     const b = await call('GET', '/api/usage', { token: first.token, workspace: secondWorkspace });
