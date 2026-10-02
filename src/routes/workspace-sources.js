@@ -335,6 +335,21 @@ export function registerWorkspaceSourcesRoutes(app, {
       changes: effective,
       message: text(req.body?.message) || 'workspace: apply reviewed changes'
     });
+    const confirmedHead = await githubResolveRevision({
+      fetchImpl,
+      token,
+      owner: source.repo_owner,
+      repo: source.repo_name,
+      ref: source.repo_ref
+    });
+    if (confirmedHead.sha !== result.commitSha) {
+      return res.status(409).json({
+        error: 'The repository moved after the workspace write. Sync and review the changes again.',
+        code: 'write-back-head-changed',
+        commitSha: result.commitSha,
+        currentCommitSha: confirmedHead.sha
+      });
+    }
     const baseMap = new Map(baseFiles.map(file => [file.path, file.content]));
     for (const change of effective) {
       const path = workspacePath(String(change?.path ?? '').trim().replaceAll('\\', '/').replace(/^\.\//, ''));
