@@ -59,7 +59,7 @@ export const WORKSPACE_LIMITS = Object.freeze({
 });
 
 
-export function normalizeWorkspaceFiles(files = []) {
+export function normalizeWorkspaceFiles(files = [], limits = WORKSPACE_LIMITS) {
   const source = Array.isArray(files) ? files : Object.entries(files ?? {}).map(([path, content]) => ({ path, content }));
   const map = new Map();
   let totalBytes = 0;
@@ -68,13 +68,13 @@ export function normalizeWorkspaceFiles(files = []) {
     if (!path) continue;
     const content = String(item?.content ?? item?.text ?? '');
     const bytes = Buffer.byteLength(content, 'utf8');
-    if (bytes > WORKSPACE_LIMITS.maxFileBytes) throw new Error(`Workspace file exceeds ${WORKSPACE_LIMITS.maxFileBytes} bytes: ${path}`);
+    if (bytes > limits.maxFileBytes) throw new Error(`Workspace file exceeds ${limits.maxFileBytes} bytes: ${path}`);
     const previous = map.get(path);
     if (previous !== undefined) totalBytes -= Buffer.byteLength(previous, 'utf8');
     totalBytes += bytes;
-    if (totalBytes > WORKSPACE_LIMITS.maxTotalBytes) throw new Error('Workspace exceeds its total file-size limit');
+    if (totalBytes > limits.maxTotalBytes) throw new Error('Workspace exceeds its total file-size limit');
     map.set(path, content);
-    if (map.size > WORKSPACE_LIMITS.maxFiles) throw new Error('Workspace exceeds its file-count limit');
+    if (map.size > limits.maxFiles) throw new Error('Workspace exceeds its file-count limit');
   }
   return [...map].sort(([a], [b]) => a.localeCompare(b)).map(([path, content]) => ({ path, content }));
 }
