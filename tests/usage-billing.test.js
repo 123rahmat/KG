@@ -230,7 +230,7 @@ test('4-hour and weekly quota usage is universal across a person\'s workspaces',
     assert.equal(usage.body.context.used, 200);
   }), { env: { USAGE_LIMIT_4H_TOKENS: '1000', USAGE_LIMIT_WEEKLY_TOKENS: '1000' } });
 
-test('usage windows are isolated to the active workspace for the same person', () =>
+test('usage windows are universal to the person across workspaces', () =>
   withServer(async ({ call, seed, pool }) => {
     const first = await seed({ workspace: 'usage-ws-a' });
     const secondWorkspace = 'usage-ws-b';
@@ -261,8 +261,12 @@ test('usage windows are isolated to the active workspace for the same person', (
 
     assert.equal(a.status, 200);
     assert.equal(b.status, 200);
-    assert.equal(a.body.windows[0].used, 50);
-    assert.equal(b.body.windows[0].used, 500);
+    assert.equal(a.body.windows[0].used, 550);
+    assert.equal(a.body.windows[1].used, 550);
+    assert.equal(b.body.windows[0].used, 550);
+    assert.equal(b.body.windows[1].used, 550);
+    assert.equal(a.body.quotaScope.fourHour, 'principal');
+    assert.equal(a.body.quotaScope.weekly, 'principal');
     assert.equal(a.body.context.used, 40);
     assert.equal(b.body.context.used, 400);
   }));
