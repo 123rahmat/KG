@@ -392,13 +392,7 @@ export async function renderBillingSection() {
     : billing.portalConfigured
       ? 'Only workspace admins can manage the payment method and invoices.'
       : 'Payments are not set up for this deployment yet. An administrator can connect Stripe.';
-  const fields = { billingEmail: 'billingEmail', companyName: 'billingCompany', taxId: 'billingTaxId', country: 'billingCountry', address: 'billingAddress' };
-  $('billingForm').hidden = !billing.canEdit;
-  $('billingDetailsNote').textContent = billing.canEdit
-    ? 'These appear on your invoices. Never enter card numbers here.'
-    : 'Only workspace admins can see and change billing details.';
-  if (billing.canEdit) for (const [key, id] of Object.entries(fields)) $(id).value = billing.details?.[key] ?? '';
-  $('billingSaved').textContent = billing.updatedAt ? `Last saved ${timeAgo(billing.updatedAt)}` : '';
+  $('billingDetailsNote').textContent = 'Billing profile, tax information, payment methods and invoices are managed on Stripe. Kindgleam does not store them locally.';
   $('billingSupport').textContent = billing.supportEmail ? `Questions about billing? Write to ${billing.supportEmail}.` : '';
   return billing;
 }
@@ -447,19 +441,6 @@ async function handleBillingReturn() {
     await new Promise(resolve => setTimeout(resolve, 2000));
   }
   notify('billingNotice', 'warn', 'Stripe has not confirmed the payment yet. It will show here as soon as it does; nothing else is needed from you.');
-}
-
-export async function saveBilling() {
-  const button = $('billingSave');
-  button.disabled = true;
-  await guard(async () => {
-    await api('PUT', '/api/billing', {
-      billingEmail: $('billingEmail').value, companyName: $('billingCompany').value, taxId: $('billingTaxId').value,
-      country: $('billingCountry').value, address: $('billingAddress').value
-    });
-    $('billingSaved').textContent = 'Saved';
-  }, 'billingNotice');
-  button.disabled = false;
 }
 
 export async function renderSecuritySection() {
