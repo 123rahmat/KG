@@ -509,11 +509,16 @@ test('normal-chat ZIP projects use exactly one adaptive coding panel', async () 
 
   assert.equal(result.brief.panelMode, 'normal-chat-zip-single-panel');
   assert.equal(result.brief.panelScope, 'entire-attached-zip-project');
-  assert.equal(result.allocation.subsystemPlan, null);
-  assert.equal(result.allocation.subsystemPanels, undefined);
+  assert.ok(result.allocation.subsystemPlan);
+  assert.equal(result.allocation.panelMode, 'normal-chat-zip-single-panel');
+  assert.equal(result.allocation.panelScope, 'entire-attached-zip-project');
+  assert.equal(result.allocation.panelEngine, 'unified-adaptive-code-panel-v1');
+  assert.equal(result.allocation.subsystemPanels.length, 1);
   assert.equal(result.waves.length >= 1, true);
   assert.equal(new Set(result.waves.flatMap(wave => wave.roles)).size, result.waves.flatMap(wave => wave.roles).length);
-  assert.equal(calls.every(item => item.body.subsystemPlan === null), true);
-  assert.equal(calls.every(item => item.body.subsystemWork === null), true);
+  assert.equal(calls.every(item => item.body.subsystemPlan?.subsystems?.length === 1), true);
+  assert.equal(calls.every(item => item.body.subsystemWork?.subsystem?.id), true);
+  assert.equal(calls.every(item => item.body.workspacePanel.engine === 'unified-adaptive-code-panel-v1'), true);
+  assert.equal(calls.every(item => item.body.workspacePanel.topology === 'single-project'), true);
   assert.equal(result.brief.findings.every(item => item.role !== 'subsystem-worker'), true);
 });
