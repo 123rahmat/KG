@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   adaptFleetCapacity, fleetHealthUpdate, fleetPartition,
-  normalizeProjectSpec, projectDispatchScore, selectFleetProjects
+  normalizeProjectSpec, projectDispatchScore, selectFleetProjects, updateFleetTelemetry
 } from '../src/fleet-control.js';
 
 test('fleet projects are bounded and normalized', () => {
@@ -41,4 +41,13 @@ test('partitioning is stable and health recovers', () => {
   assert.equal(failed.consecutiveFailures, 1);
   assert.equal(recovered.consecutiveFailures, 0);
   assert.ok(recovered.score > failed.score);
+});
+
+test('fleet telemetry feeds real latency and error signals into adaptation', () => {
+  let telemetry = { averageLatencyMs: 0, errorRate: 0, samples: 0 };
+  telemetry = updateFleetTelemetry(telemetry, { ok: true, latencyMs: 1000 });
+  telemetry = updateFleetTelemetry(telemetry, { ok: false, latencyMs: 3000 });
+  assert.equal(telemetry.samples, 2);
+  assert.ok(telemetry.averageLatencyMs > 1000);
+  assert.ok(telemetry.errorRate > 0);
 });
