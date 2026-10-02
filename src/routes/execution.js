@@ -1401,7 +1401,9 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       codeIntelligence,
       // Large coding work is decomposed server-side into bounded subsystem
       // contracts and dependency waves before any agent is assigned.
-      subsystemPlan,
+      subsystemPlan: compactSubsystemPlan(subsystemPlan, {
+        maxSubsystems: Math.max(1, Math.min(12, Number(config.agents?.maxAgents) || 11))
+      }),
       // Earlier turns of the same chat, oldest first.
       conversation: (run.adaptation?.conversation ?? []).slice(-maxContextItems),
       attachments: codeIntelligence
