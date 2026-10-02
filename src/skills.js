@@ -233,11 +233,14 @@ export function evaluateSkillRegistry(descriptors = builtinSkillDescriptors()) {
 }
 
 function hierarchicalSkillEvidence(profiles, skillName, taskType) {
-  const relevant = (Array.isArray(profiles) ? profiles : []).map(normalizedSkillProfile).filter(profile => profile.skillName === skillName);
+  const wantedSkill = slug(skillName);
+  const relevant = (Array.isArray(profiles) ? profiles : [])
+    .map(normalizedSkillProfile)
+    .filter(profile => slug(profile.skillName) === wantedSkill);
   if (!relevant.length) return null;
-  const wantedTask = text(taskType).toLowerCase();
-  const exact = relevant.find(profile => profile.taskType === wantedTask);
-  const general = relevant.find(profile => !profile.taskType);
+  const wantedTask = slug(taskType);
+  const exact = relevant.find(profile => slug(profile.taskType) === wantedTask);
+  const general = relevant.find(profile => !slug(profile.taskType));
   if (!exact) return general ?? relevant[0];
   if (!general) return exact;
   const exactWeight = Math.max(1, exact.attempts);
