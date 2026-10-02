@@ -38,17 +38,6 @@ async function readSnapshotFiles(objects, scope, objectId) {
   return normalizeSourceFiles(parsed?.files ?? []);
 }
 
-function mergeSourceDelta(baseFiles, changedFiles, deletedPaths) {
-  const map = new Map(normalizeSourceFiles(baseFiles).map(file => [file.path, file.content]));
-  for (const rawPath of Array.isArray(deletedPaths) ? deletedPaths : []) {
-    const safe = workspacePath(String(rawPath ?? '').trim().replaceAll('\\', '/').replace(/^\.\//, ''));
-    if (!safe) throw new Error('Local source deletion path is invalid');
-    map.delete(safe);
-  }
-  for (const file of normalizeSourceFiles(changedFiles)) map.set(file.path, file.content);
-  return normalizeSourceFiles([...map].map(([path, content]) => ({ path, content })));
-}
-
 function contentDigest(content) {
   return crypto.createHash('sha256').update(String(content ?? ''), 'utf8').digest('hex');
 }
@@ -108,113 +97,11 @@ export function registerWorkspaceSourcesRoutes(app, {
   app.get('/api/workspace/sources', scoped('viewer'), route(async (req, res) => {
     const { rows } = await pool.query(
       `SELECT * FROM workspace_sources
-         WHERE workspace_id = $1 AND principal_id = $2 AND revoked_at IS NULL
+         WHERE workspace_id = $1 AND principal_id = $2 AND kind = 'github' AND revoked_at IS NULL
        ORDER BY updated_at DESC, id DESC`,
       [req.scope.workspaceId, req.principal.id]
     );
     res.json({ sources: rows.map(sourcePublic) });
-  }));
-
-  app.post('/api/workspace/sources/local', scoped('editor'), idempotent, route(async (req, res) => {
-    const files = normalizeSourceFiles(req.body?.files);
-    if (!files.length) return res.status(400).json({ error: 'Choose at least one local file.', code: 'local-files-required' });
-    const manifest = sourceManifest(files);
-    const sourceId = createSourceId();
-    const name = text(req.body?.name) || 'Local folder';
-    const object = await snapshotObject(objects, req.scope, req.principal, files, `${name}.workspace`, {
-      kind: 'local-folder', contentHash: manifest.contentHash, fileCount: manifest.fileCount
-    });
-    const { rows: [row] } = await pool.query(
-      `INSERT INTO workspace_sources
-        (id, workspace_id, principal_id, kind, name, provider_key, snapshot_object_id, permissions, metadata)
-       VALUES ($1, $2, $3, 'local-folder', $4, $5, $6, $7::jsonb, $8::jsonb)
-       RETURNING *`,
-      [
-        sourceId, req.scope.workspaceId, req.principal.id, name,
-        `local:${manifest.contentHash.slice(0, 20)}`, object.id,
-        JSON.stringify({ read: true, write: req.body?.write !== false, source: 'browser-folder-permission' }),
-        JSON.stringify({ contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files, browserGranted: true })
-      ]
-    );
-    await audit?.record({
-      principalId: req.principal.id, workspaceId: req.scope.workspaceId,
-      action: 'workspace.source.connect', target: sourceId, outcome: 'allowed',
-      detail: { kind: 'local-folder', fileCount: manifest.fileCount }, requestId: req.requestId
-    });
-    res.status(201).json({ source: sourcePublic(row), manifest });
-  }));
-
-  app.post('/api/workspace/sources/local/:id/sync', scoped('editor'), route(async (req, res) => {
-    const { rows: [source] } = await pool.query(
-      `SELECT * FROM workspace_sources
-         WHERE id = $1 AND workspace_id = $2 AND principal_id = $3
-           AND kind = 'local-folder' AND revoked_at IS NULL
-       FOR UPDATE`,
-      [text(req.params.id), req.scope.workspaceId, req.principal.id]
-    );
-    if (!source) return res.status(404).json({ error: 'Local folder source not found', code: 'no-source' });
-    const expectedBaseHash = text(req.body?.baseContentHash);
-    const currentBaseHash = text(source.metadata?.contentHash);
-    if (!expectedBaseHash || !currentBaseHash || expectedBaseHash !== currentBaseHash) {
-      return res.status(409).json({
-        error: 'The local project changed on the server since this folder was last synchronized. Sync the folder before uploading a full snapshot or delta.',
-        code: 'stale-local-source',
-        expectedBaseHash: currentBaseHash || null
-      });
-    }
-    const baseFiles = await readSnapshotFiles(objects, req.scope, source.snapshot_object_id);
-    let files;
-    if (Array.isArray(req.body?.changedFiles) && req.body?.manifest) {
-      files = mergeSourceDelta(baseFiles, req.body.changedFiles, req.body.deletedPaths);
-    } else {
-      files = normalizeSourceFiles(req.body?.files);
-    }
-
-    // A reviewed local delta/full snapshot is bound to the exact server base
-    // and exact file transition. A mismatched review must never mutate the
-    // source, even though local sync itself stays browser-authorized.
-    if (text(req.body?.reviewDigest)) {
-      const base = new Map(baseFiles.map(file => [file.path, file.content]));
-      const next = new Map(files.map(file => [file.path, file.content]));
-      const reviewChanges = [];
-      for (const [path, content] of next) {
-        const before = base.get(path);
-        if (before === undefined) {
-          reviewChanges.push({ path, content });
-        } else if (before !== content) {
-          reviewChanges.push({ path, content, beforeDigest: contentDigest(before) });
-        }
-      }
-      for (const [path, content] of base) {
-        if (!next.has(path)) reviewChanges.push({ path, kind: 'delete', beforeDigest: contentDigest(content) });
-      }
-      const expectedReview = workspaceReviewDigest(source, reviewChanges);
-      if (text(req.body.reviewDigest) !== expectedReview) {
-        return res.status(409).json({
-          error: 'A fresh server review is required before these exact local changes can be synchronized.',
-          code: 'review-stale',
-          reviewDigest: expectedReview
-        });
-      }
-    }
-
-    const manifest = sourceManifest(files);
-    if (source.metadata?.contentHash === manifest.contentHash) return res.json({ source: sourcePublic(source), unchanged: true, manifest });
-    const object = await snapshotObject(objects, req.scope, req.principal, files, `${source.name}.workspace`, {
-      kind: 'local-folder', sourceId: source.id, contentHash: manifest.contentHash, fileCount: manifest.fileCount
-    });
-    const { rows: [updated] } = await pool.query(
-      `UPDATE workspace_sources
-          SET snapshot_object_id = $4,
-              metadata = metadata || $5::jsonb, updated_at = now()
-        WHERE id = $1 AND workspace_id = $2 AND principal_id = $3
-        RETURNING *`,
-      [
-        source.id, req.scope.workspaceId, req.principal.id, object.id,
-        JSON.stringify({ contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files, syncedAt: new Date().toISOString() })
-      ]
-    );
-    res.json({ source: sourcePublic(updated), manifest, unchanged: false });
   }));
 
   app.post('/api/workspace/sources/github', scoped('editor'), idempotent, route(async (req, res) => {
@@ -287,7 +174,7 @@ export function registerWorkspaceSourcesRoutes(app, {
       [text(req.params.id), req.scope.workspaceId, req.principal.id]
     );
     if (!source) return res.status(404).json({ error: 'Workspace source not found', code: 'no-source' });
-    if (source.kind !== 'github') return res.status(400).json({ error: 'Use the local folder sync endpoint.', code: 'wrong-source-kind' });
+    if (source.kind !== 'github') return res.status(404).json({ error: 'Only GitHub repositories are supported as Code Workspace sources.', code: 'github-source-required' });
     const token = decryptSourceCredentials(encryptionKey, source.credentials_enc);
     if (!token) return res.status(409).json({ error: 'GitHub credentials are unavailable. Reconnect the repository.', code: 'source-credentials-missing' });
     const revision = await githubResolveRevision({ fetchImpl, token, owner: source.repo_owner, repo: source.repo_name, ref: source.repo_ref });
@@ -325,25 +212,16 @@ export function registerWorkspaceSourcesRoutes(app, {
     const changes = Array.isArray(req.body?.changes) ? req.body.changes : [];
     if (!changes.length) return res.status(400).json({ error: 'No changes supplied.', code: 'changes-required' });
 
-    if (source.kind === 'github') {
-      const storedCommitSha = text(source.metadata?.commitSha);
-      const requestedCommitSha = text(req.body?.expectedCommitSha) || storedCommitSha;
-      if (!storedCommitSha || requestedCommitSha !== storedCommitSha) {
-        return res.status(409).json({
-          error: 'The proposed review is based on a different GitHub revision. Sync the repository first.',
-          code: 'stale-github-revision'
-        });
-      }
-    } else if (source.kind === 'local-folder') {
-      const expectedBaseHash = text(req.body?.baseContentHash);
-      const currentBaseHash = text(source.metadata?.contentHash);
-      if (!expectedBaseHash || !currentBaseHash || expectedBaseHash !== currentBaseHash) {
-        return res.status(409).json({
-          error: 'The local project changed on the server since this review was prepared. Sync the folder first.',
-          code: 'stale-local-source',
-          expectedBaseHash: currentBaseHash || null
-        });
-      }
+    if (source.kind !== 'github') {
+      return res.status(404).json({ error: 'Only GitHub repositories are supported as Code Workspace sources.', code: 'github-source-required' });
+    }
+    const storedCommitSha = text(source.metadata?.commitSha);
+    const requestedCommitSha = text(req.body?.expectedCommitSha) || storedCommitSha;
+    if (!storedCommitSha || requestedCommitSha !== storedCommitSha) {
+      return res.status(409).json({
+        error: 'The proposed review is based on a different GitHub revision. Sync the repository first.',
+        code: 'stale-github-revision'
+      });
     }
 
     const baseFiles = await readSnapshotFiles(objects, req.scope, source.snapshot_object_id);
@@ -422,7 +300,7 @@ export function registerWorkspaceSourcesRoutes(app, {
       [text(req.params.id), req.scope.workspaceId, req.principal.id]
     );
     if (!source) return res.status(404).json({ error: 'Workspace source not found', code: 'no-source' });
-    if (source.kind !== 'github') return res.status(400).json({ error: 'Local folder changes are written by the browser after explicit approval.', code: 'local-write-client-side' });
+    if (source.kind !== 'github') return res.status(404).json({ error: 'Only GitHub repositories are supported as Code Workspace sources.', code: 'github-source-required' });
     if (source.permissions?.write !== true) return res.status(403).json({ error: 'This GitHub source is read-only. Reconnect it with explicit write permission to enable write-back.', code: 'source-read-only' });
     const changes = Array.isArray(req.body?.changes) ? req.body.changes : [];
     if (!changes.length) return res.status(400).json({ error: 'No changes supplied.', code: 'changes-required' });
