@@ -635,6 +635,7 @@ export async function runAdaptiveAgentPanel({
   usageGate = null,
   recordUsage = async () => {},
   modelCaller = callModel,
+  subsystemPlan: providedSubsystemPlan = null,
   recordWave = async () => {},
   recordAgent = async () => {},
   loadBlackboard = async () => null,
@@ -657,14 +658,14 @@ export async function runAdaptiveAgentPanel({
   let allocationRounds = 0;
   let blackboard = await loadBlackboard({ run, task });
   const isCodingProject = task?.id === 'build-code' || task?.metadata?.buildPlan === true || task?.type === 'code';
-  const subsystemPlan = isCodingProject && basePayload?.codeIntelligence?.project
+  const subsystemPlan = providedSubsystemPlan ?? (isCodingProject && basePayload?.codeIntelligence?.project
     ? buildSubsystemPlan(basePayload.codeIntelligence.project, {
-        maxSubsystems: Math.max(1, Math.min(12, maxAgents)),
+        maxSubsystems: 12,
         risk: run?.situation?.risk ?? 'ordinary',
         revisionId: basePayload?.codeIntelligence?.project?.revisionId ?? basePayload?.workspace?.revisionId ?? null
       })
-    : null;
-  const subsystemPlanContext = compactSubsystemPlan(subsystemPlan, { maxSubsystems: maxAgents });
+    : null);
+  const subsystemPlanContext = compactSubsystemPlan(subsystemPlan, { maxSubsystems: 12, maxFilesPerSubsystem: 24 });
   const subsystemParallelMode = Boolean(subsystemPlan && (
     subsystemPlan.scale === 'large' || subsystemPlan.scale === 'very-large' || task?.metadata?.buildPlan === true
   ));
