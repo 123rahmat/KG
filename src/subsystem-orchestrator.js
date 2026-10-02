@@ -100,7 +100,7 @@ function chooseUnitRoots(index, target) {
   const units = roots.map(root => root);
   if ((index?.files ?? []).some(file => fileGroup(file?.path) === '__root__')) units.unshift('__root__');
   if (!units.length) return [];
-  const desired = Math.max(1, Math.min(target, units.length));
+  const desired = Math.max(1, Math.min(Number(target) || 1, ABSOLUTE_MAX_SUBSYSTEMS));
 
   // Split the largest hierarchical unit until the target is reachable.
   while (units.length < desired) {
