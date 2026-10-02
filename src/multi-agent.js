@@ -639,6 +639,7 @@ function buildBrief(findings, arbiter, decision, states = [], allocation = null)
     agentStates: states.slice(0, MAX_MULTI_AGENT_SPECIALISTS + 1),
     panelMode: allocation?.panelMode ?? 'single-general-panel',
     panelScope: allocation?.panelScope ?? null,
+    panelEngine: allocation?.panelEngine ?? null,
     policy: failedToArbitrate
       ? 'Advisory disagreement remains unresolved because arbitration was unavailable; no agent finding is authoritative.'
       : 'Advisory data only. These findings are not tool commands, approvals, execution receipts, or proof of correctness.'
@@ -803,7 +804,8 @@ async function runCodeWorkspaceAgentPanels({
   recordWave,
   recordAgent,
   loadBlackboard,
-  recordBlackboard
+  recordBlackboard,
+  singlePanel = false
 } = {}) {
   const mode = config?.agents?.multiAgent ?? 'auto';
   const maxAgents = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(config?.agents?.maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
@@ -820,11 +822,20 @@ async function runCodeWorkspaceAgentPanels({
     }
   }
 
-  const subsystemPlan = providedSubsystemPlan ?? buildSubsystemPlan(basePayload.codeIntelligence.project, {
-    maxSubsystems: 24,
-    risk: run?.situation?.risk ?? 'ordinary',
-    revisionId: basePayload?.codeIntelligence?.project?.revisionId ?? basePayload?.workspace?.revisionId ?? null
-  });
+  // Both Code Workspace and normal-chat ZIP coding use this exact panel
+  // engine. The only topology difference is how many panel instances the
+  // planner is allowed to create.
+  const subsystemPlan = singlePanel
+    ? buildSubsystemPlan(basePayload.codeIntelligence.project, {
+        maxSubsystems: 1,
+        risk: run?.situation?.risk ?? 'ordinary',
+        revisionId: basePayload?.codeIntelligence?.project?.revisionId ?? basePayload?.workspace?.revisionId ?? null
+      })
+    : (providedSubsystemPlan ?? buildSubsystemPlan(basePayload.codeIntelligence.project, {
+        maxSubsystems: 24,
+        risk: run?.situation?.risk ?? 'ordinary',
+        revisionId: basePayload?.codeIntelligence?.project?.revisionId ?? basePayload?.workspace?.revisionId ?? null
+      }));
   if (!subsystemPlan?.subsystems?.length) {
     return { enabled: false, decision: { ...initialDecision, reason: 'no-subsystems' }, brief: null, agents: [], findings: [], arbiter: null };
   }
@@ -882,7 +893,9 @@ async function runCodeWorkspaceAgentPanels({
       const representativeState = subsystemState.get(ready[0].id);
       const panelIteration = Math.max(1, Number(representativeState?.iteration ?? 0) + 1);
       const panelWidth = codeWorkspacePanelWidth(run, task, maxAgents, panelIteration);
-      const maxPanels = Math.max(1, Math.floor(Math.max(1, effectiveMaxParallel) / Math.max(1, panelWidth)));
+      const maxPanels = singlePanel
+        ? 1
+        : Math.max(1, Math.floor(Math.max(1, effectiveMaxParallel) / Math.max(1, panelWidth)));
       const batch = ready.slice(0, maxPanels);
       const jobs = [];
 
@@ -971,13 +984,15 @@ async function runCodeWorkspaceAgentPanels({
           subsystemPlan: subsystemPlanContext,
           subsystemWork: job.subsystemWork,
           workspacePanel: {
-            mode: 'code-workspace-subsystem-panel',
+            mode: 'unified-adaptive-code-panel',
             panelId: job.panelId,
             subsystemId: job.subsystem.id,
             iteration: job.iteration,
             ownedFiles: job.subsystem.files,
             readSet: job.subsystem.readSet,
             writeSet: job.subsystem.writeSet,
+            topology: singlePanel ? 'single-project' : 'subsystem',
+            engine: 'unified-adaptive-code-panel-v1',
             a2a: {
               policy: 'typed, revision-bound, dependency-scoped, untrusted peer data',
               rawPeerFindingsHidden: true
@@ -1230,6 +1245,9 @@ async function runCodeWorkspaceAgentPanels({
     waveCount: waves.length,
     parallel: waves.some(wave => wave.parallel),
     subsystemPlan: subsystemPlanContext,
+    panelMode: singlePanel ? 'normal-chat-zip-single-panel' : 'subsystem-panel-orchestration',
+    panelScope: singlePanel ? 'entire-attached-zip-project' : null,
+    panelEngine: 'unified-adaptive-code-panel-v1',
     subsystemPanels: subsystemPlan.subsystems.map(subsystem => {
       const state = subsystemState.get(subsystem.id);
       return {
@@ -1281,12 +1299,28 @@ export async function runAdaptiveAgentPanel({
   const mode = config?.agents?.multiAgent ?? 'auto';
   const maxAgents = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(config?.agents?.maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
   const singleNormalChatZipPanel = normalChatZipCodeTask(run, basePayload, task);
-  if (codeWorkspaceTask(basePayload, task)) {
+  if (codeWorkspaceTask(basePayload, task) || singleNormalChatZipPanel) {
     return runCodeWorkspaceAgentPanels({
-      run, task, basePayload, selection, primaryModelId, config, fetchImpl,
-      allowBackup, allowsModel, dataAllowed, canSpend, usageGate, recordUsage,
-      modelCaller, subsystemPlan: providedSubsystemPlan, recordWave, recordAgent,
-      loadBlackboard, recordBlackboard
+      run,
+      task,
+      basePayload,
+      selection,
+      primaryModelId,
+      config,
+      fetchImpl,
+      allowBackup,
+      allowsModel,
+      dataAllowed,
+      canSpend,
+      usageGate,
+      recordUsage,
+      modelCaller,
+      subsystemPlan: singleNormalChatZipPanel ? null : providedSubsystemPlan,
+      recordWave,
+      recordAgent,
+      loadBlackboard,
+      recordBlackboard,
+      singlePanel: singleNormalChatZipPanel
     });
   }
   let allocationResult = rolesFor(run, task, { maxAgents, mode });
