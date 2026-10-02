@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { terminalAccessRecheckDue, terminalArgs, terminalImagesForFiles, terminalOriginAllowed } from '../src/terminal.js';
+import { isSensitiveWorkspacePath } from '../src/workspace-path.js';
 
 const config = {
   terminal: {
@@ -59,4 +60,17 @@ test('terminal authorization recheck is time bounded', () => {
   assert.equal(terminalAccessRecheckDue(0, 1000), true);
   assert.equal(terminalAccessRecheckDue(1000, 29000), false);
   assert.equal(terminalAccessRecheckDue(1000, 31000), true);
+});
+
+
+test('central sensitive-file policy blocks credential-bearing paths', () => {
+  assert.equal(isSensitiveWorkspacePath('.env'), true);
+  assert.equal(isSensitiveWorkspacePath('prod.env'), true);
+  assert.equal(isSensitiveWorkspacePath('config/secrets.json'), true);
+  assert.equal(isSensitiveWorkspacePath('credentials.json'), true);
+  assert.equal(isSensitiveWorkspacePath('certs/app.key'), true);
+  assert.equal(isSensitiveWorkspacePath('src/main.js'), false);
+  assert.equal(isSensitiveWorkspacePath('.env.example'), false);
+  assert.equal(isSensitiveWorkspacePath('.env.sample'), false);
+  assert.equal(isSensitiveWorkspacePath('.env.template'), false);
 });

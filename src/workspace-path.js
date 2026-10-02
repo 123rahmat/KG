@@ -7,7 +7,7 @@
  */
 const SEGMENT = /^(?![ -])[\p{L}\p{N}._ +@-]+$/u;
 const MAX_PATH_LENGTH = 240;
-const SENSITIVE_NAME = /^(?:\.env(?:\.(?!example$|sample$|template$)[^/]*)?|\.npmrc|\.netrc|\.pypirc|credentials?(?:\.[^/]*)?|id_rsa(?:\.[^/]*)?|service-account(?:\.[^/]*)?|[^/]+\.(?:pem|key|p12|pfx|jks))$/i;
+const SENSITIVE_NAME = /^(?:\.env(?:\.[^/]*)?|\.npmrc|\.netrc|\.pypirc|credentials?(?:\.[^/]*)?|secrets?(?:\.[^/]*)?|id_rsa(?:\.[^/]*)?|service-account(?:\.[^/]*)?|[^/]+\.(?:env|pem|key|p12|pfx|jks|secret|credentials))$/i;
 
 export function workspacePath(value) {
   const raw = String(value ?? '');
