@@ -1852,6 +1852,9 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
 .build-plan ul, .build-plan ol { margin: 2px 0 0; padding-left: 20px; font-size: .9rem; line-height: 1.55; }
 .build-plan li { margin: 2px 0; }
 .build-plan ol { padding: 8px 12px 8px 30px; border-radius: 8px; background: var(--accent-soft); color: var(--ink); }
+.plan-choice-inputs { display: grid; gap: 8px; margin-top: 10px; }
+.plan-choice-inputs textarea { width: 100%; min-height: 54px; resize: vertical; }
+.plan-choice-inputs label { display: grid; gap: 4px; }
 
 /* ------------------------------------------------------------ settings: email sending */
 
