@@ -11,9 +11,10 @@
 import { parseJsonObject } from './structured.js';
 import { callModel } from './runtime.js';
 import { clip } from './reasoning-context.js';
+import { buildHarnessContext } from './agent-harness.js';
 import { mergeBlackboard } from './blackboard.js';
 import { adaptConcurrency, agentWorkspaceLane, buildWorkspaceParallelPlan } from './parallel-orchestrator.js';
-import { buildSubsystemPlan, compactSubsystemPlan, createSubsystemMessage, subsystemAssignment, subsystemCommunicationContext } from './subsystem-orchestrator.js';
+import { buildSubsystemPlan, compactSubsystemPlan, createSubsystemMessage, mergeSubsystemMessages, subsystemAssignment, subsystemCommunicationContext } from './subsystem-orchestrator.js';
 
 export const MULTI_AGENT_MODES = Object.freeze(['auto', 'always', 'off']);
 export const DEFAULT_MULTI_AGENT_MAX_AGENTS = 11;
@@ -794,33 +795,6 @@ async function runCodeWorkspaceAgentPanels({
   const mode = config?.agents?.multiAgent ?? 'auto';
   const maxAgents = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(config?.agents?.maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
 
-  // Code Workspace has a specialized orchestration path: every planned
-  // subsystem gets its own adaptive panel, and independent panels/specialists
-  // share the same server-owned parallel scheduler. Other surfaces retain the
-  // domain-agnostic cognitive panel.
-  if (codeWorkspaceTask(basePayload, task)) {
-    return runCodeWorkspaceAgentPanels({
-      run,
-      task,
-      basePayload,
-      selection,
-      primaryModelId,
-      config,
-      fetchImpl,
-      allowBackup,
-      allowsModel,
-      dataAllowed,
-      canSpend,
-      usageGate,
-      recordUsage,
-      modelCaller,
-      subsystemPlan: providedSubsystemPlan,
-      recordWave,
-      recordAgent,
-      loadBlackboard,
-      recordBlackboard
-    });
-  }
   const initialDecision = multiAgentDecision(run, task, { mode, progress: {} });
   if (!initialDecision.enabled) {
     const terminalDisable = ['crisis-or-safety-adaptive', 'declined-or-conversational', 'disabled'].includes(initialDecision.reason);
@@ -1291,9 +1265,16 @@ export async function runAdaptiveAgentPanel({
   loadBlackboard = async () => null,
   recordBlackboard = async () => {}
 } = {}) {
-  const { buildHarnessContext } = await import('./agent-harness.js');
   const mode = config?.agents?.multiAgent ?? 'auto';
   const maxAgents = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(config?.agents?.maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
+  if (codeWorkspaceTask(basePayload, task)) {
+    return runCodeWorkspaceAgentPanels({
+      run, task, basePayload, selection, primaryModelId, config, fetchImpl,
+      allowBackup, allowsModel, dataAllowed, canSpend, usageGate, recordUsage,
+      modelCaller, subsystemPlan: providedSubsystemPlan, recordWave, recordAgent,
+      loadBlackboard, recordBlackboard
+    });
+  }
   let allocationResult = rolesFor(run, task, { maxAgents, mode });
   if (!allocationResult.decision.enabled) return { enabled: false, decision: allocationResult.decision, brief: null, agents: [], findings: [], arbiter: null };
 
