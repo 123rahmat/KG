@@ -702,6 +702,21 @@ function arbiterMessages(basePayload, findings) {
   ];
 }
 
+function panelEarlyConvergence({ run, task, findings = [], iteration = 1 } = {}) {
+  if (findings.length < 2) return { stop: false, reason: 'insufficient-independent-evidence' };
+  const signals = observedPanelSignals({ findings });
+  const retrying = Number(run?.attempt ?? 1) > 1 || iteration > 1 || Boolean(run?.situation?.failure || run?.situation?.error);
+  const highStake = HIGH_STAKES.has(text(run?.situation?.risk).toLowerCase());
+  if (!signals.disagreement && signals.confidence >= 0.86 && !retrying && !highStake) {
+    return {
+      stop: true,
+      reason: 'independent-findings-converged-with-sufficient-confidence',
+      confidence: Number(signals.confidence.toFixed(3))
+    };
+  }
+  return { stop: false, reason: 'more-independent-evidence-may-change-the-decision', confidence: Number(signals.confidence.toFixed(3)) };
+}
+
 function disagreementProfile(findings) {
   const recommendations = [...new Set(findings.map(item => item.recommendation).filter(Boolean))];
   const confidences = findings.map(item => confidenceValue(item.confidence));
@@ -873,11 +888,18 @@ export function taskPressureMonitor({
     failedRoles: Array.from({ length: failedRoles }, () => 'failure'),
     goal: progress?.goal ?? run?.goal
   });
-  const pressure = Math.max(
-    observedPressure,
-    projectScalePressure,
-    Math.min(1, projectScalePressure + dependencyPressure + changePressure + failurePressure + confidenceGap)
+  // Repository size matters for baseline context, but should not by itself
+  // buy more model calls. Active uncertainty, changed files, coupling,
+  // failures, and evidence gaps drive live expansion.
+  const workloadPressure = Math.min(
+    1,
+    projectScalePressure * 0.45
+      + dependencyPressure
+      + changePressure
+      + failurePressure
+      + confidenceGap
   );
+  const pressure = Math.max(observedPressure, workloadPressure);
 
   const previousPressure = Number(previous?.pressure);
   const hasPrevious = Number.isFinite(previousPressure);
@@ -936,19 +958,22 @@ function codeWorkspacePanelWidth(run, task, maxAgents, iteration = 1, {
     evidenceSoFar: []
   });
   if (maxAgents < CODE_WORKSPACE_MIN_PANEL_AGENTS) return 1;
-  let desired = signals.securityFocus || signals.performanceFocus
-    ? 6
-    : signals.retrying || iteration > 1
-      ? 6
-      : 5;
+  // Start with the smallest panel that can cover discovery + architecture +
+  // implementation. Add specialist breadth only when live signals justify it.
+  let desired = 3;
+  if (signals.scaleComplexity >= 0.32 || signals.decomposition >= 0.15 || signals.unknowns >= 0.15) desired = 4;
+  if (signals.securityFocus || signals.performanceFocus || signals.retrying || iteration > 1) desired = 5;
+  if (signals.securityFocus && signals.performanceFocus) desired = 6;
 
-  // Small projects do not benefit from a wide panel. Large projects may,
-  // but only when budget headroom exists.
-  if (fileCount > 0 && fileCount <= 24 && !signals.securityFocus && !signals.performanceFocus && !signals.retrying) {
-    desired = 5;
+  // Small projects do not benefit from a wide panel unless risk or active
+  // recovery makes the additional independent view decision-relevant.
+  if (fileCount > 0 && fileCount <= 12
+      && !signals.securityFocus && !signals.performanceFocus
+      && !signals.retrying && iteration === 1) {
+    desired = 3;
   }
-  if (remainingBudgetRatio < 0.35) desired = Math.min(desired, 5);
-  if (remainingBudgetRatio < 0.18) desired = 4;
+  if (remainingBudgetRatio < 0.35) desired = Math.min(desired, 4);
+  if (remainingBudgetRatio < 0.18) desired = Math.min(desired, 3);
   return Math.min(CODE_WORKSPACE_MAX_PANEL_AGENTS, maxAgents, desired);
 }
 
@@ -970,21 +995,37 @@ function codeWorkspacePanelRoles(run, task, subsystem, {
   const addRequired = role => {
     if (!required.includes(role)) required.push(role);
   };
-  // Every coding-panel cycle has explicit research, planning, implementation,
-  // verification and adversarial review coverage. Later cycles additionally
-  // recruit debugging/diagnosis so the panel can repair from new evidence.
+  const signals = taskSignals(run, task, progress);
+
+  // The panel contract is lifecycle coverage, not a requirement to launch a
+  // separate model for every stage. The first wave covers research,
+  // architecture/replanning, and implementation. Testing/critique/security/
+  // performance are recruited only when their marginal evidence value is high.
   addRequired('researcher');
   addRequired('architect');
-  addRequired('implementer');
-  addRequired('test-engineer');
-  addRequired('critic');
-  if (iteration > 1) addRequired('debugger');
-  if ((subsystem?.tests ?? []).length) addRequired('test-engineer');
-  const signals = taskSignals(run, task, progress);
+  if (signals.executable) addRequired('implementer');
+
+  const needsValidation = signals.executable && (
+    (subsystem?.tests ?? []).length > 0
+    || signals.scaleComplexity >= 0.22
+    || signals.decomposition >= 0.12
+    || iteration > 1
+  );
+  const needsAdversarialReview = signals.stakes > 0
+    || signals.unknowns >= 0.18
+    || signals.recovery >= 0.2
+    || signals.decomposition >= 0.20
+    || iteration > 1
+    || findings.some(item => ['revise', 'investigate', 'stop'].includes(text(item?.recommendation).toLowerCase()));
+
+  if (needsValidation) addRequired('test-engineer');
+  if (needsAdversarialReview) addRequired('critic');
+  if (iteration > 1 && signals.executable) addRequired('debugger');
   if (signals.securityFocus) addRequired('security-reviewer');
   if (signals.performanceFocus) addRequired('performance-reviewer');
 
-  const candidates = ['architect', 'implementer', 'test-engineer', 'debugger', 'critic', 'security-reviewer', 'performance-reviewer']
+  const candidates = ['implementer', 'test-engineer', 'critic', 'debugger', 'security-reviewer', 'performance-reviewer',
+    'analyst', 'strategist']
     .map(role => ({ role, utility: roleUtility(role, run, task, progress) }))
     .sort((a, b) => b.utility - a.utility || a.role.localeCompare(b.role));
 
