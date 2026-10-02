@@ -1149,10 +1149,17 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     const index = buildProjectIndex(files, { revisionId: workspace.revisionId ?? null });
     const budget = run.adaptation?.resourcePlan?.budget?.maxAttachmentChars;
     const maxChars = Number.isFinite(Number(budget)) ? Math.min(44_000, Math.max(12_000, Number(budget))) : null;
-    return compileCodeContext({
+    const pack = compileCodeContext({
       files, index, goal: run.goal, task, changedPaths, failure,
       previousAttempts: previousAttempts(run), scale: run.adaptation?.scale ?? 'standard', maxChars
     });
+    if (!pack) return null;
+    const subsystemPlan = buildSubsystemPlan(index, {
+      maxSubsystems: 12,
+      risk: run?.situation?.risk ?? 'ordinary',
+      revisionId: workspace.revisionId ?? null
+    });
+    return { pack, subsystemPlan };
   }
 
   function stepFocus(run, task) {
@@ -1293,14 +1300,9 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       : null;
     const verificationContext = grounding ? verificationBrief(run, grounding) : null;
     const attached = await attachmentTexts(scope, run, task, { focus: stepFocus(run, task) });
-    const codeIntelligence = await codeIntelligenceForStep(run, task, scope).catch(() => null);
-    const subsystemPlan = codeIntelligence?.project && isCodeTask(task)
-      ? buildSubsystemPlan(codeIntelligence.project, {
-          maxSubsystems: Math.max(1, Math.min(12, Number(config.agents?.maxAgents) || 11)),
-          risk: run?.situation?.risk ?? 'ordinary',
-          revisionId: codeIntelligence.project.revisionId ?? null
-        })
-      : null;
+    const codeIntelligenceResult = await codeIntelligenceForStep(run, task, scope).catch(() => null);
+    const codeIntelligence = codeIntelligenceResult?.pack ?? null;
+    const subsystemPlan = codeIntelligenceResult?.subsystemPlan ?? null;
     const remembered = await memoriesFor(memories, scope ?? currentDbScope(), run).catch(() => []);
     // Each step is sent only what it uses (prompt-scope.js), and only the
     // rules that apply to it (systemPromptFor): the server keeps its full
@@ -1403,7 +1405,8 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       // Large coding work is decomposed server-side into bounded subsystem
       // contracts and dependency waves before any agent is assigned.
       subsystemPlan: compactSubsystemPlan(subsystemPlan, {
-        maxSubsystems: Math.max(1, Math.min(12, Number(config.agents?.maxAgents) || 11))
+        maxSubsystems: 12,
+        maxFilesPerSubsystem: 24
       }),
       // Earlier turns of the same chat, oldest first.
       conversation: (run.adaptation?.conversation ?? []).slice(-maxContextItems),
@@ -1457,6 +1460,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       primaryModelId: effectiveModelId,
       config,
       fetchImpl,
+      subsystemPlan,
       allowBackup,
       allowsModel: id => modelPolicyAllows(run, id, 'medium'),
       dataAllowed,
