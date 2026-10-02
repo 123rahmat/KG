@@ -351,7 +351,7 @@ function planCard(plan, billing) {
   else if (sales) {
     action = element('a', { class: 'btn small', href: plan.contactUrl, text: 'Contact sales' });
     if (plan.contactUrl.startsWith('https:')) { action.target = '_blank'; action.rel = 'noopener noreferrer'; }
-  } else if (!billing.canEdit) action = element('span', { class: 'small muted', text: 'An admin can change the plan' });
+  } else if (!billing.canManage) action = element('span', { class: 'small muted', text: 'An admin can change the plan' });
   else if (plan.free) action = button(`Move to ${plan.name}`, openBillingPortal, 'ghost small');
   else if (subscribed) action = button(`Switch to ${plan.name}`, openBillingPortal, 'small');
   else action = button(`Choose ${plan.name}`, event => startCheckout(plan.id, event.currentTarget), 'primary small');
