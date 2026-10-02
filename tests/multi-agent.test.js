@@ -452,3 +452,68 @@ test('Code Workspace gives every subsystem its own multi-agent panel with bounde
   assert.equal(result.allocation.subsystemMessages.every(item => item.projectRevision === 'rev-9'), true);
   assert.equal(result.allocation.subsystemMessages.every(item => ['handoff', 'blocker'].includes(item.type)), true);
 });
+
+
+test('normal-chat ZIP projects use exactly one adaptive coding panel', async () => {
+  const calls = [];
+  const project = {
+    revisionId: 'zip-rev-1',
+    contentHash: 'zip-hash',
+    scale: 'very-large',
+    fileCount: 80,
+    files: Array.from({ length: 80 }, (_, i) => ({
+      path: `src/module-${i % 8}/file-${i}.js`,
+      bytes: 100,
+      test: i % 10 === 0
+    })),
+    dependencies: [],
+    totals: { bytes: 8000, dependencies: 0 },
+    hierarchy: {
+      scale: 'very-large',
+      root: { path: '', depth: 0, fileCount: 80, bytes: 8000, digest: 'root' },
+      directories: Array.from({ length: 9 }, (_, i) => ({
+        path: i === 0 ? '' : `src/module-${i - 1}`,
+        depth: i === 0 ? 0 : 2,
+        fileCount: i === 0 ? 80 : 10,
+        bytes: i === 0 ? 8000 : 1000,
+        digest: `d-${i}`
+      }))
+    }
+  };
+  const fakeModel = async (messages, options) => {
+    const body = JSON.parse(messages[1].content);
+    calls.push({ body, options });
+    return {
+      text: JSON.stringify(finding('proceed', `panel=${body.workspacePanel ?? 'none'}`)),
+      provider: 'google',
+      model: options.modelId,
+      usage: null
+    };
+  };
+
+  const result = await runAdaptiveAgentPanel({
+    run: run({ adaptation: { scale: 'advanced' } }),
+    task: { id: 'build-code', type: 'code' },
+    basePayload: {
+      goal: 'Improve the uploaded system',
+      task: { id: 'build-code', type: 'code' },
+      attachments: [{ name: 'system.zip', readable: true, kind: 'project', format: 'project' }],
+      codeIntelligence: { project, files: project.files }
+    },
+    selection,
+    primaryModelId: 'google:gemini-3.8-flash',
+    config: { agents: { multiAgent: 'always', maxAgents: 4 } },
+    canSpend: async () => true,
+    modelCaller: fakeModel
+  });
+
+  assert.equal(result.brief.panelMode, 'normal-chat-zip-single-panel');
+  assert.equal(result.brief.panelScope, 'entire-attached-zip-project');
+  assert.equal(result.allocation.subsystemPlan, null);
+  assert.equal(result.allocation.subsystemPanels, undefined);
+  assert.equal(result.waves.length >= 1, true);
+  assert.equal(new Set(result.waves.flatMap(wave => wave.roles)).size, result.waves.flatMap(wave => wave.roles).length);
+  assert.equal(calls.every(item => item.body.subsystemPlan === null), true);
+  assert.equal(calls.every(item => item.body.subsystemWork === null), true);
+  assert.equal(result.brief.findings.every(item => item.role !== 'subsystem-worker'), true);
+});
