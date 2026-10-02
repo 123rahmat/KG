@@ -135,3 +135,5 @@ if (failed.length) {
 console.log('\nSystem doctor passed. No release-blocking architecture issue was detected by this deterministic audit.');
 
 check('central-sensitive-file-policy', /isSensitiveWorkspacePath/.test(await read('src/workspace-path.js')) && /sensitive-file-blocked/.test(await read('src/toolbox.js')) && /sensitive-file-blocked/.test(await read('src/tool-forge.js')), 'credential-bearing files use one centralized model and sandbox exclusion policy');
+
+check('docker-base-image-pinned', /^FROM node:24-alpine@sha256:[0-9a-f]{64}$/m.test(await read('Dockerfile')), 'application build stages use an immutable Node base-image digest');

@@ -14,7 +14,7 @@ concurrency:
 jobs:
   source-check:
     name: source-check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,7 +35,7 @@ jobs:
           docker run --rm -v "$PWD/docs/ops:/rules:ro" -w /rules --entrypoint promtool prom/prometheus:v3.5.0 test rules prometheus-alerts.test.yml
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     strategy:
@@ -75,7 +75,7 @@ jobs:
       - run: npm test
 
   migrations:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:
       postgres:
@@ -103,7 +103,7 @@ jobs:
       - run: npm run migrate
 
   container:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: [test, migrations]
     steps:
@@ -120,7 +120,7 @@ jobs:
 
   production-boot:
     name: production-boot
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:
       postgres:
