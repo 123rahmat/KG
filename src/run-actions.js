@@ -10,6 +10,7 @@ import { transaction } from './db.js';
 import { toolNamed } from './toolbox.js';
 
 const text = value => String(value ?? '').trim();
+const ACTION_LEASE_MS = 15 * 60_000;
 
 const view = row => ({
   id: row.id, runId: row.run_id, taskId: row.task_id, tool: row.tool, input: row.input,
@@ -42,6 +43,44 @@ export class RunActions {
     return view(row);
   }
 
+  async renewLease(actionId, principalId, leaseMs = ACTION_LEASE_MS) {
+    const safeLease = Math.max(10_000, Math.min(3_600_000, Number(leaseMs) || ACTION_LEASE_MS));
+    const { rowCount } = await this.pool.query(
+      `UPDATE run_actions
+          SET lease_until = now() + ($3::int * interval '1 millisecond')
+        WHERE id = $1 AND status = 'running' AND decided_by = $2 AND lease_until > now()`,
+      [text(actionId), principalId, safeLease]
+    );
+    return rowCount > 0;
+  }
+
+  async recoverExpired({ limit = 100 } = {}) {
+    return transaction(this.pool, async client => {
+      const safeLimit = Math.max(1, Math.min(500, Number(limit) || 100));
+      const { rows } = await client.query(
+        `WITH expired AS (
+           SELECT id FROM run_actions
+            WHERE status = 'running' AND lease_until IS NOT NULL AND lease_until < now()
+            ORDER BY lease_until ASC, id ASC
+            FOR UPDATE SKIP LOCKED
+            LIMIT $1
+         )
+         UPDATE run_actions a
+            SET status = 'uncertain',
+                result = jsonb_build_object(
+                  'code', 'execution-outcome-uncertain',
+                  'error', 'The action lease expired before its final result was recorded.'
+                ),
+                lease_until = NULL
+           FROM expired e
+          WHERE a.id = e.id
+          RETURNING a.id`,
+        [safeLimit]
+      );
+      return rows.length;
+    });
+  }
+
   async list(scope, runId) {
     const { rows } = await this.pool.query(
       'SELECT * FROM run_actions WHERE run_id = $1 AND workspace_id = $2 ORDER BY created_at',
@@ -65,8 +104,13 @@ export class RunActions {
       // Some actions (a tool for the whole workspace) need a higher role to approve.
       if (approve && !canApprove(row.tool)) throw new ActionError('Only a workspace admin can approve this.', 403, 'action-role-required');
       const { rows: [updated] } = await client.query(
-        `UPDATE run_actions SET status = $2, decided_by = $3, decided_at = now() WHERE id = $1 RETURNING *`,
-        [actionId, approve ? 'running' : 'declined', principal.id]
+        `UPDATE run_actions
+            SET status = $2, decided_by = $3, decided_at = now(),
+                lease_until = CASE WHEN $2 = 'running'
+                  THEN now() + ($4::int * interval '1 millisecond')
+                  ELSE NULL END
+          WHERE id = $1 RETURNING *`,
+        [actionId, approve ? 'running' : 'declined', principal.id, ACTION_LEASE_MS]
       );
       await this.audit?.record({
         principalId: principal.id, workspaceId: scope.workspaceId, action: approve ? 'action.approve' : 'action.decline',
@@ -75,6 +119,13 @@ export class RunActions {
       return updated;
     });
     if (!approve) return view(claimed);
+
+    let heartbeat = setInterval(() => {
+      this.renewLease(claimed.id, principal.id).catch(error => {
+        this.audit?.logger?.warn?.('run action lease renewal failed', { error, actionId: claimed.id });
+      });
+    }, Math.max(1000, Math.floor(ACTION_LEASE_MS / 3)));
+    heartbeat.unref?.();
 
     let status = 'done';
     let result;
@@ -90,10 +141,23 @@ export class RunActions {
       status = 'failed';
       result = { error: text(error?.message) || 'The action failed.' };
     }
-    const { rows: [done] } = await this.pool.query(
-      'UPDATE run_actions SET status = $2, result = $3::jsonb WHERE id = $1 RETURNING *',
-      [actionId, status, JSON.stringify(result ?? {})]
-    );
+    let done = null;
+    try {
+      const { rows } = await this.pool.query(
+        'UPDATE run_actions SET status = $2, result = $3::jsonb, lease_until = NULL WHERE id = $1 AND status = \'running\' AND decided_by = $4 RETURNING *',
+        [actionId, status, JSON.stringify(result ?? {}), principal.id]
+      );
+      done = rows[0] ?? null;
+    } finally {
+      clearInterval(heartbeat);
+    }
+    if (!done) {
+      return {
+        ...view(claimed),
+        status: 'uncertain',
+        result: { code: 'execution-outcome-uncertain', error: 'The action started but its final database state could not be confirmed safely.' }
+      };
+    }
     await this.audit?.record({
       principalId: principal.id, workspaceId: scope.workspaceId, action: 'action.run',
       target: actionId, outcome: status === 'done' ? 'allowed' : 'failed', detail: { tool: claimed.tool, runId }, requestId

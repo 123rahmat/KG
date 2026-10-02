@@ -227,11 +227,11 @@ function actionCards(run) {
     const [icon, label] = toolLabel(action.tool);
     const status = {
       proposed: ['Awaiting approval', 'warn'], running: ['Running…', ''], done: ['Completed', 'ok'],
-      failed: ['Failed', 'bad'], declined: ['Declined', '']
+      failed: ['Failed', 'bad'], declined: ['Declined', ''], uncertain: ['Outcome uncertain', 'bad']
     }[action.status] ?? [action.status, ''];
     const result = action.status === 'done' && action.result
       ? element('p', { class: 'small muted', text: action.result.note ?? action.result.tool ?? 'Execution completed.' })
-      : action.status === 'failed' ? element('p', { class: 'small action-error', text: action.result?.error ?? 'The action failed.' }) : null;
+      : ['failed', 'uncertain'].includes(action.status) ? element('p', { class: 'small action-error', text: action.result?.error ?? 'The action result needs review.' }) : null;
     return element('div', { class: `action-card ${action.status}` }, [
       element('div', { class: 'action-card-head' }, [
         element('span', { class: 'action-icon' }, [svgIcon(icon)]),
