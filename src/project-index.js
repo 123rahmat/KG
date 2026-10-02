@@ -18,7 +18,7 @@ const MAX_IMPORTS = 30_000;
 const MAX_TESTS = 5_000;
 
 const INDEX_CACHE_LIMIT = 48;
-const FILE_SIGNAL_CACHE_LIMIT = 20_000;
+const FILE_SIGNAL_CACHE_LIMIT = 4_096;
 const indexCache = new Map();
 const fileSignalCache = new Map();
 
