@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   assessLocalCompatibility,
   chooseExecutionTarget,
+  codeActionDecision,
   defaultExecutionRequirements,
   executionTargetCatalog,
   executionTargetsFor,
@@ -21,6 +22,42 @@ const GB = 1024 ** 3;
 test('code execution exposes local and Kindgleam sandbox targets', () => {
   assert.deepEqual(executionTargetsFor('code'), ['local', 'general-ai-sandbox']);
 });
+
+test('adaptive code action enters direct coding only when the task is authorized', () => {
+  const direct = codeActionDecision({
+    task: { id: 'build-code', type: 'code', metadata: {} },
+    run: { attempt: 1, situation: { risk: 'ordinary' } }
+  });
+  assert.equal(direct.action, 'direct-code');
+  assert.equal(direct.requiresApproval, false);
+
+  const gated = codeActionDecision({
+    task: { id: 'build-code', type: 'code', metadata: {} },
+    run: { attempt: 1, situation: { risk: 'high-impact' } }
+  });
+  assert.equal(gated.action, 'approval-required');
+  assert.equal(gated.requiresApproval, true);
+
+  const approved = codeActionDecision({
+    task: { id: 'build-code', type: 'code', metadata: {} },
+    run: { attempt: 1, situation: { risk: 'high-impact' } },
+    userApproved: true
+  });
+  assert.equal(approved.action, 'direct-code');
+
+  const repair = codeActionDecision({
+    task: { id: 'build-code', type: 'code', metadata: {} },
+    run: { attempt: 2, situation: { risk: 'high-impact' } }
+  });
+  assert.equal(repair.action, 'direct-code');
+
+  const clarify = codeActionDecision({
+    task: { id: 'build-code', type: 'code', metadata: { requiresClarification: true } },
+    run: { attempt: 1, situation: { risk: 'ordinary' } }
+  });
+  assert.equal(clarify.action, 'clarify');
+});
+
 
 test('there is no simulation task type: nothing can be placed for it', () => {
   assert.deepEqual(executionTargetsFor('simulate'), []);
