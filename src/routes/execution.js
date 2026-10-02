@@ -1565,6 +1565,31 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     const allowBackup = name => modelPolicyAllows(run, `google:${name}`, 'medium')
       && (!selection.configuredModelIds.includes(`google:${name}`) || selection.enabledModelIds.includes(`google:${name}`));
 
+    const normalChatControl = await runNormalChatControlPlane({
+      run,
+      task,
+      payload,
+      modelId: effectiveModelId,
+      config,
+      fetchImpl,
+      allowBackup,
+      usageGate,
+      canSpend: async () => !(await usageBlock(scope)),
+      recordUsage: async (usage, provider, providerModel) => {
+        await runs.addTokens(run.id, {
+          ...usage,
+          provider,
+          model: providerModel
+        }, { source: 'normal-chat-control' });
+      }
+    });
+    if (normalChatControl?.enabled) {
+      payload = {
+        ...payload,
+        normalChatControl: normalChatControl.agents
+      };
+    }
+
     const multiAgent = await runAdaptiveAgentPanel({
       run,
       task,
