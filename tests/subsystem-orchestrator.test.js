@@ -244,3 +244,27 @@ test('large single-root trees can split into bounded residual subsystems', () =>
   assert.equal(new Set(plan.subsystems.flatMap(item => item.files)).size, files.length);
   assert.ok(plan.subsystems.some(item => item.roots.includes('src')));
 });
+
+test('from-scratch architecture turns requested capabilities into bounded subsystem panels', () => {
+  const index = {
+    sourceKind: 'from-scratch',
+    scale: 'large',
+    plannedRoots: ['frontend', 'backend', 'auth', 'data', 'billing', 'worker'],
+    fileCount: 0,
+    totals: { bytes: 0, dependencies: 0 },
+    files: [],
+    dependencies: [],
+    hierarchy: {
+      scale: 'large',
+      directories: [],
+      root: { path: '', depth: 0, fileCount: 0, bytes: 0, digest: 'scratch' }
+    }
+  };
+  const plan = buildSubsystemPlan(index, { maxSubsystems: 6 });
+  assert.equal(plan.decision.reason, 'from-scratch-architectural-scaffold');
+  assert.equal(plan.subsystems.length, 6);
+  assert.equal(plan.metrics.sharedFileCount, 0);
+  assert.equal(plan.subsystems.every(item => item.files.length === 0 && item.writeSet.length === 0), true);
+  assert.equal(plan.waves.length, 1);
+  assert.equal(plan.waves[0].parallel, true);
+});
