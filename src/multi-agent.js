@@ -1712,7 +1712,7 @@ async function runCodeWorkspaceAgentPanels({
   // Reconcile any pending panel state from a last live topology tick.
   // Existing, converged evidence is sufficient to close the panel; only
   // unresolved, blocked or evidence-poor panels stay open.
-  for (const [subsystemId, state] of subsystemState.entries()) {
+  for (const state of subsystemState.values()) {
     if (state.status !== 'pending' || !state.findings?.length) continue;
     const stability = subsystemPanelStability(state.findings);
     if (stability.stable) {
