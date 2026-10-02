@@ -1,10 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parallelDecision, buildParallelExecutionPlan, workspaceLanesConflict, adaptConcurrency, agentWorkspaceLane, buildWorkspaceParallelPlan } from '../src/parallel-orchestrator.js';
+import { parallelDecision, buildParallelExecutionPlan, workspaceLanesConflict, adaptConcurrency, agentWorkspaceLane, buildWorkspaceParallelPlan, tasksConflict } from '../src/parallel-orchestrator.js';
 test('adaptive scheduler exposes elastic but bounded parallelism', () => {
   const plan = buildParallelExecutionPlan({ mode: 'auto', maxParallel: 16, pressure: 0.8, concurrencyOpportunity: 0.8, stages: [{ id: 'a', metadata: {} }, { id: 'b', metadata: {} }, { id: 'c', metadata: {} }] });
   assert.equal(plan.decision.enabled, true); assert.ok(plan.decision.maxParallel <= 4); assert.equal(plan.waves[0].items.length, 3);
 });
+test('generic tasks serialize readers against same-resource writers but allow shared reads', () => {
+  const read = { id: 'read', metadata: { readSet: ['config.json'] } };
+  const write = { id: 'write', metadata: { writeSet: ['config.json'] } };
+  const otherRead = { id: 'read-2', metadata: { readSet: ['config.json'] } };
+  assert.equal(tasksConflict(read, write), true);
+  assert.equal(tasksConflict(write, read), true);
+  assert.equal(tasksConflict(read, otherRead), false);
+});
+
 test('high-stakes auto mode stays conservative without explicit concurrency', () => {
   assert.equal(parallelDecision({ mode: 'auto', pressure: 0.1, concurrencyOpportunity: 0.4, risk: 'high-impact', itemCount: 3 }).enabled, false);
 });
