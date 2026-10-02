@@ -209,7 +209,7 @@ terms before starting, can report any answer, and admins review reports. See
 
 ### Checking it with Gemini 3.8 Flash
 
-`npm run eval:live` sends 30 real requests (greetings, writing, emergencies,
+`npm run eval:live` sends 35 real requests (greetings, writing, emergencies,
 research, files, code, reminders, memory, the usage policy) to a running
 deployment and checks the flow, tools and answer of each, with the real AI
 model. See `docs/LIVE_EVALUATION.md`. What the service keeps and shares, for
