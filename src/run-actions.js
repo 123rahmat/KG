@@ -6,7 +6,7 @@
  */
 
 import crypto from 'node:crypto';
-import { transaction } from './db.js';
+import { runDbScope, transaction } from './db.js';
 import { toolNamed } from './toolbox.js';
 
 const text = value => String(value ?? '').trim();
