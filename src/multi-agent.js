@@ -536,7 +536,11 @@ function scopeImplementationProposal(finding, subsystem, codeIntelligence) {
     return { ...finding, implementation };
   }
   const owned = new Set((subsystem.files ?? []).map(text).filter(Boolean));
-  const changes = (proposal.changes ?? []).filter(change => owned.has(change.path));
+  const roots = (subsystem.files?.length ? [] : (subsystem.roots ?? []))
+    .map(text).filter(Boolean);
+  const changes = (proposal.changes ?? []).filter(change =>
+    owned.has(change.path) || roots.some(root => change.path === root || change.path.startsWith(root + '/'))
+  );
   if (!changes.length) {
     const implementation = { ...finding.implementation };
     delete implementation.patchProposal;
@@ -800,6 +804,13 @@ function codeWorkspaceTask(basePayload, task) {
     (task?.id === 'build-code' || task?.metadata?.buildPlan === true || task?.type === 'code')
     && basePayload?.workspace?.projectId
     && basePayload?.codeIntelligence?.project
+  );
+}
+
+function scratchCodeTask(basePayload, task) {
+  return Boolean(
+    (task?.id === 'build-code' || task?.metadata?.buildPlan === true || task?.type === 'code')
+    && basePayload?.codeIntelligence?.project?.sourceKind === 'from-scratch'
   );
 }
 
@@ -1151,6 +1162,7 @@ async function runCodeWorkspaceAgentPanels({
             subsystemId: job.subsystem.id,
             iteration: job.iteration,
             ownedFiles: job.subsystem.files,
+            writeRoots: job.subsystem.files?.length ? [] : job.subsystem.roots,
             readSet: job.subsystem.readSet,
             writeSet: job.subsystem.writeSet,
             topology: singlePanel ? 'single-project' : 'subsystem',
@@ -1471,7 +1483,8 @@ export async function runAdaptiveAgentPanel({
   const mode = config?.agents?.multiAgent ?? 'auto';
   const maxAgents = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(config?.agents?.maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
   const singleNormalChatZipPanel = normalChatZipCodeTask(run, basePayload, task);
-  if (codeWorkspaceTask(basePayload, task) || singleNormalChatZipPanel) {
+  const scratchProject = scratchCodeTask(basePayload, task);
+  if (codeWorkspaceTask(basePayload, task) || singleNormalChatZipPanel || scratchProject) {
     return runCodeWorkspaceAgentPanels({
       run,
       task,
@@ -1487,7 +1500,7 @@ export async function runAdaptiveAgentPanel({
       usageGate,
       recordUsage,
       modelCaller,
-      subsystemPlan: singleNormalChatZipPanel ? null : providedSubsystemPlan,
+      subsystemPlan: (singleNormalChatZipPanel || scratchProject) ? (scratchProject ? null : providedSubsystemPlan) : providedSubsystemPlan,
       recordWave,
       recordAgent,
       loadBlackboard,
