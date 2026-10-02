@@ -409,3 +409,16 @@ Skills are compiled as contracts rather than instruction snippets. Each selected
 ## Continuous improvement control loop
 
 The unified controller now treats quality and recovery as first-class runtime state. Skill registries reject cyclic prerequisites, skill composition preserves prerequisite closure under resource budgets, failures receive bounded recovery classes, and evaluation reports can compare reliability, latency and token usage against a baseline. These signals are control inputs only: they tune future planning and review depth but never grant permission, weaken governance or bypass human approval.
+
+
+### Normal-chat three-agent control plane
+
+For ordinary chat work, Kindgleam uses three logical roles around the single visible conversation when the situation justifies them:
+
+- **Step Manager** keeps the workflow coherent, identifies the smallest justified next step, tracks dependencies, and proposes evidence-based replans.
+- **Resource & Data Manager** manages proposed tool/resource scope, dependencies, data handling, and whether terminal/tests are needed. Its suggestions do not grant permissions or execute anything.
+- **Main Executor** is the only model role that produces the user-facing answer or coding output. For code, server-owned code writes, test execution, and terminal boundaries remain in force.
+
+The two manager roles receive compact metadata-oriented context and run in parallel. They are suppressed when a dedicated Code Workspace or normal-chat ZIP coding panel already owns the same coordination problem, preventing duplicate specialist calls. Their output is advisory metadata passed to the Main Executor; the server remains authoritative for step transitions, tool allow-lists, resource selection, dependency resolution, data policy, approvals, code mutation, tests, and terminal execution.
+
+The chat presentation mirrors the model of the work: the existing step area explains the workflow, the control card summarizes the Step Manager / Resource & Data Manager / Main Executor responsibilities, the existing tool/action area remains the source of truth for actual tool proposals and use, and the main answer remains the single user-facing conversation.

@@ -27,6 +27,14 @@ const list = value => Array.isArray(value)
 const CONTROL_TASKS = new Set(['plan', 'step', 'respond', 'deliver', 'prototype', 'reassess', 'code', 'build-code', 'implement', 'discover', 'investigate', 'tool']);
 const HUMAN_GATE_TASKS = new Set(['clarify', 'approval', 'iterate', 'observe', 'verify']);
 
+function hasDedicatedCodingControl(task, payload) {
+  if (!isCodeTask(task, payload)) return false;
+  if (payload?.workspace?.projectId && payload?.codeIntelligence?.project) return true;
+  if (payload?.subsystemPlan?.subsystems?.length) return true;
+  const attachments = Array.isArray(payload?.attachments) ? payload.attachments : [];
+  return Boolean(payload?.codeIntelligence?.project && attachments.some(item => /\\.zip$/i.test(text(typeof item === 'string' ? item : item?.name ?? ''))));
+}
+
 function isCodeTask(task, payload) {
   return task?.id === 'build-code'
     || ['code', 'implement'].includes(text(task?.type).toLowerCase())
@@ -239,6 +247,11 @@ export async function runNormalChatControlPlane({
   modelCaller = callModel
 } = {}) {
   const needs = normalChatControlNeeds({ run, task, payload });
+  const dedicatedCodingFlow = hasDedicatedCodingControl(task, payload);
+  if (dedicatedCodingFlow) {
+    needs.stepManager = false;
+    needs.resourceDataManager = false;
+  }
   const base = {
     mode: 'adaptive-three-agent-control-plane',
     principle: 'Use the smallest control team that can materially improve this turn; do not duplicate the main executor.',
@@ -254,7 +267,8 @@ export async function runNormalChatControlPlane({
         services: needs.code ? ['server-code-writes', 'server-tests', 'server-terminal'] : []
       }
     },
-    needs
+    needs,
+    dedicatedCodingFlow
   };
   if (!config?.ai || HUMAN_GATE_TASKS.has(text(task?.type).toLowerCase()) || !CONTROL_TASKS.has(text(task?.type).toLowerCase())) {
     return { ...base, enabled: false, reason: 'control-agents-not-needed-for-this-stage' };

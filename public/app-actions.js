@@ -696,8 +696,8 @@ function normalChatControlCard(run) {
     detail ? element('span', { class: 'small muted', text: detail }) : null
   ].filter(Boolean));
   const resourceDetail = [
-    add.length ? 'Add: ' + add.join(', ') : '',
-    remove.length ? 'Remove: ' + remove.join(', ') : '',
+    add.length ? 'Suggested add: ' + add.join(', ') : '',
+    remove.length ? 'Suggested remove: ' + remove.join(', ') : '',
     deps.length ? 'Dependencies: ' + deps.join(', ') : '',
     changes.data?.needed === true ? 'Data: ' + (changes.data.handling || 'managed in scoped context') : ''
   ].filter(Boolean).join(' · ');

@@ -75,3 +75,26 @@ test('control managers run independently in parallel and cannot mutate server au
   assert.equal(usage.length, 2);
   assert.ok(calls.every(item => !item.messages[0].content.includes('tool call')));
 });
+
+
+test('dedicated coding flows skip duplicate normal-chat manager calls', async () => {
+  const result = await runNormalChatControlPlane({
+    run: run(),
+    task,
+    payload: {
+      workspace: { projectId: 'p1', revisionId: 'r1' },
+      subsystemPlan: { subsystems: [{ id: 's1' }] },
+      codeIntelligence: { project: { fileCount: 12 } },
+      attachments: [{ name: 'project.zip' }]
+    },
+    modelId: 'google:gemini-3.8-flash',
+    config: { ai: true },
+    modelCaller: async () => {
+      throw new Error('duplicate manager call');
+    }
+  });
+  assert.equal(result.enabled, true);
+  assert.equal(result.dedicatedCodingFlow, true);
+  assert.equal(result.agents.stepManager.status, 'not-needed');
+  assert.equal(result.agents.resourceDataManager.status, 'not-needed');
+});

@@ -114,3 +114,16 @@ test('every step has an up/down toggle that shows or hides what it did', async (
   assert.match(css, /\.steps \.step-toggle\[aria-expanded="true"\] svg \{ transform: rotate\(180deg\)/);
   assert.match(html, /id="i-chevron"/);
 });
+
+
+test('normal chat exposes the three logical control-agent areas without exposing model authority', async () => {
+  const js = await client();
+  const css = await read('public/app.css');
+  assert.match(js, /function normalChatControlCard\(run\)/);
+  assert.match(js, /Step Manager/);
+  assert.match(js, /Resource & Data Manager/);
+  assert.match(js, /Main Executor/);
+  assert.match(js, /Three-agent control/);
+  assert.match(css, /\.agent-control-grid/);
+  assert.match(js, /server-controlled/);
+});
