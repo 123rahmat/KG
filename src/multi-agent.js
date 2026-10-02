@@ -12,7 +12,7 @@ import { parseJsonObject } from './structured.js';
 import { callModel } from './runtime.js';
 import { clip } from './reasoning-context.js';
 import { mergeBlackboard } from './blackboard.js';
-import { adaptConcurrency } from './parallel-orchestrator.js';
+import { adaptConcurrency, agentWorkspaceLane, buildWorkspaceParallelPlan } from './parallel-orchestrator.js';
 
 export const MULTI_AGENT_MODES = Object.freeze(['auto', 'always', 'off']);
 export const DEFAULT_MULTI_AGENT_MAX_AGENTS = 11;
@@ -702,7 +702,18 @@ export async function runAdaptiveAgentPanel({
         allows: allowsModel
       });
       usedModels.push(modelId);
-      jobs.push({ role, modelId, wave: waveIndex });
+      const lane = agentWorkspaceLane({
+        agentId: `${text(run?.id) || 'run'}:${text(task?.id) || 'task'}:${role}:${waveIndex}`,
+        role,
+        authority: 'advisory',
+        projectId: basePayload?.workspace?.projectId ?? null,
+        branch: basePayload?.workspace?.branch ?? null,
+        revisionId: basePayload?.workspace?.revisionId ?? basePayload?.codeIntelligence?.project?.revisionId ?? basePayload?.codeIntelligence?.project?.contentHash ?? null,
+        readSet: basePayload?.codeIntelligence?.files?.map(file => file.path) ?? basePayload?.workspace?.paths ?? [],
+        writeSet: [],
+        conversationId: basePayload?.chat?.conversationId ?? null
+      });
+      jobs.push({ role, modelId, wave: waveIndex, lane });
     }
 
     if (!jobs.length) break;
@@ -717,7 +728,18 @@ export async function runAdaptiveAgentPanel({
       priorTopics: basePayload?.conversation?.map(item => item?.user) ?? []
     });
 
-    const results = await Promise.all(jobs.map(async job => {
+    // Run the current specialist wave through the same workspace lane
+    // scheduler used by future code-writing agents. Today these specialists
+    // are advisory/read-only, so disjoint reads may proceed together.
+    const lanePlan = buildWorkspaceParallelPlan({
+      lanes: jobs.map(job => job.lane),
+      maxParallel: effectiveMaxParallel
+    });
+    const scheduledJobs = lanePlan.waves.flatMap(wave => wave.lanes.map(lane =>
+      jobs.find(job => job.lane.agentId === lane.agentId)
+    )).filter(Boolean);
+
+    const results = await Promise.all(scheduledJobs.map(async job => {
       const startedAt = Date.now();
       // Specialists remain independent across waves. The live blackboard is
       // updated from peer findings for orchestration/audit, but those findings
@@ -757,14 +779,16 @@ export async function runAdaptiveAgentPanel({
         recommendation: item.parsed.recommendation,
         summary: item.parsed.summary,
         confidence: item.parsed.confidence,
-        wave: item.wave
+        wave: item.wave,
+        lane: item.lane
       });
     }
 
     const waveRecord = {
       index: waveIndex,
       roles: waveRoles,
-      parallel: jobs.length > 1,
+      parallel: scheduledJobs.length > 1,
+      lanePlan,
       completed: results.filter(item => item.parsed).map(item => item.role),
       failed: results.filter(item => !item.parsed).map(item => item.role)
     };
