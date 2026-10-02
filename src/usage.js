@@ -19,7 +19,7 @@ export const WINDOWS = Object.freeze([
   { id: 'session', label: '4-hour window', ms: 4 * HOUR, limitKey: 'fourHourTokens' },
   { id: 'week', label: 'Weekly', ms: 7 * 24 * HOUR, limitKey: 'weeklyTokens' }
 ]);
-const SOURCES = new Set(['chat', 'classifier']);
+const SOURCES = new Set(['chat', 'classifier', 'multi-agent', 'web-search', 'chat-retry', 'verification-review']);
 
 const count = value => Math.max(0, Math.round(Number(value) || 0));
 
@@ -196,10 +196,39 @@ export async function reserveUsage(pool, {
       [principalId, workspaceId]
     );
     const { rows: reservationRows } = await client.query(
-      'SELECT estimated_tokens, expires_at FROM usage_reservations WHERE principal_id=$1 AND workspace_id=$2 AND state=\'active\' AND expires_at>now()',
+      'SELECT estimated_tokens, expires_at, run_id FROM usage_reservations WHERE principal_id=$1 AND workspace_id=$2 AND state=\'active\' AND expires_at>now()',
       [principalId, workspaceId]
     );
     const reserved = reservationRows.reduce((sum, row) => sum + Number(row.estimated_tokens || 0), 0);
+
+    if (runId) {
+      const { rows: [run] } = await client.query(
+        'SELECT tokens_used, max_tokens FROM runs WHERE id=$1 AND workspace_id=$2 AND principal_id=$3 FOR UPDATE',
+        [runId, workspaceId, principalId]
+      );
+      if (!run) throw new Error('Run not found for usage reservation');
+      const runReserved = reservationRows
+        .filter(row => row.run_id === runId)
+        .reduce((sum, row) => sum + Number(row.estimated_tokens || 0), 0);
+      const runUsed = Number(run.tokens_used || 0);
+      const runMax = run.max_tokens == null ? null : Number(run.max_tokens);
+      if (runMax !== null && runUsed + runReserved + estimate > runMax) {
+        throw new UsageLimitError({
+          id: 'run',
+          label: 'Run token budget',
+          hours: 0,
+          used: runUsed + runReserved,
+          input: 0,
+          output: 0,
+          calls: 0,
+          limit: runMax,
+          percent: Math.min(100, Math.round(((runUsed + runReserved) / Math.max(1, runMax)) * 1000) / 10),
+          exceeded: true,
+          resetsAt: null,
+          reserved: runReserved
+        }, { canUpgrade: false });
+      }
+    }
     for (const window of WINDOWS) {
       const stats = usageWindowStats(usageRows, window.ms);
       const limit = Number(limits[window.limitKey] || 0);
