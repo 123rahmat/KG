@@ -371,6 +371,28 @@ export class FleetStore {
   }
 }
 
+export function classifyFleetExecutionReply(reply, taskId) {
+  const responseRun = reply?.body?.run ?? null;
+  const updatedTask = Array.isArray(responseRun?.tasks)
+    ? responseRun.tasks.find(item => item.id === taskId)
+    : null;
+  const execution = reply?.body?.execution ?? {};
+  const statusCode = Number(reply?.status) || 500;
+  const runMoved = Boolean(responseRun && responseRun.next && responseRun.next !== taskId);
+  const taskHandled = Boolean(updatedTask && ['complete', 'failed', 'skipped'].includes(updatedTask.status));
+  const taskRemainsPending = Boolean(updatedTask && updatedTask.status === 'pending');
+  const executionNotRun = execution.executed === false;
+  const responseCode = text(reply?.body?.code);
+  const runTerminal = ['complete', 'failed', 'blocked', 'exhausted'].includes(text(responseRun?.state));
+  const handled = taskHandled || runMoved || responseRun?.state === 'complete';
+  const retryablePending = (executionNotRun || taskRemainsPending) && !runTerminal;
+  return {
+    responseRun, updatedTask, execution, statusCode, responseCode,
+    runMoved, taskHandled, taskRemainsPending, executionNotRun,
+    runTerminal, handled, retryablePending
+  };
+}
+
 export function fleetStatus(projects = [], { capacity = 1, workerCount = 1 } = {}) {
   const items = Array.isArray(projects) ? projects : [];
   return {
@@ -391,15 +413,21 @@ export function createFleetWorker({
 } = {}) {
   const effectiveWorkerId = text(workerId) || ('fleet-' + process.pid + '-' + crypto.randomUUID());
   const safeLeaseMs = Math.max(10000, Math.min(900000, Number(leaseMs) || 300000));
-  let timer = null; let active = null; let stopping = false;
+  const ceiling = Math.max(1, Math.min(16, Number(maxConcurrency) || 1));
+  let timer = null;
+  let active = null;
+  let stopping = false;
+  let width = ceiling;
+  let latencyEmaMs = 0;
+  let errorEma = 0;
 
   async function process(dispatch) {
     const startedAt = Date.now();
     const scope = { principalId: dispatch.principalId, workspaceId: dispatch.workspaceId };
     let heartbeat = null;
     let leaseLost = false;
-    return runDbScope({ ...scope, organizationId: '', jurisdiction: '', role: 'job-worker' }, async () => {
-      try {
+    try {
+      return await runDbScope({ ...scope, organizationId: '', jurisdiction: '', role: 'job-worker' }, async () => {
         heartbeat = setInterval(() => {
           fleet.renewLease(scope, dispatch.id, {
             workerId: effectiveWorkerId,
@@ -408,11 +436,13 @@ export function createFleetWorker({
           }).then(result => {
             if (!result) {
               leaseLost = true;
+              metrics?.increment('fleet_lease_renewal_rejected_total');
               logger?.warn('Fleet lease renewal rejected', {
                 dispatchId: dispatch.id, workerId: effectiveWorkerId, attempts: dispatch.attempts
               });
             }
           }).catch(error => {
+            metrics?.increment('fleet_lease_renewal_errors_total');
             logger?.warn('Fleet lease renewal failed', { error, dispatchId: dispatch.id });
           });
         }, Math.max(1000, Math.floor(safeLeaseMs / 3)));
@@ -429,7 +459,7 @@ export function createFleetWorker({
             attempts: dispatch.attempts,
             error: 'Fleet dispatch access was revoked'
           });
-          return false;
+          return { handled: true, failed: true, latencyMs: Date.now() - startedAt };
         }
 
         access.principalId = dispatch.principalId;
@@ -444,18 +474,19 @@ export function createFleetWorker({
             attempts: dispatch.attempts,
             error: 'Fleet dispatch references a missing run or task'
           });
-          return false;
+          return { handled: true, failed: true, latencyMs: Date.now() - startedAt };
         }
 
         if (['complete', 'failed', 'blocked', 'exhausted'].includes(text(run.state))) {
+          const complete = run.state === 'complete';
           await fleet.finish(scope, dispatch.id, {
             state: 'succeeded',
-            healthOutcome: run.state === 'complete' ? 'succeeded' : 'failed',
+            healthOutcome: complete ? 'succeeded' : 'failed',
             workerId: effectiveWorkerId,
             attempts: dispatch.attempts,
             metadata: { code: 'run-terminal-before-dispatch', runState: run.state }
           });
-          return run.state === 'complete';
+          return { handled: true, failed: !complete, latencyMs: Date.now() - startedAt };
         }
 
         if (task.status === 'complete') {
@@ -465,7 +496,7 @@ export function createFleetWorker({
             attempts: dispatch.attempts,
             metadata: { code: 'completed-earlier' }
           });
-          return true;
+          return { handled: true, failed: false, latencyMs: Date.now() - startedAt };
         }
 
         const reply = await executeNext({
@@ -476,26 +507,15 @@ export function createFleetWorker({
           requestId: null,
           expectedTaskId: payload.taskId
         });
+        const outcome = classifyFleetExecutionReply(reply, payload.taskId);
 
-        const responseRun = reply?.body?.run;
-        const updatedTask = Array.isArray(responseRun?.tasks)
-          ? responseRun.tasks.find(item => item.id === payload.taskId)
-          : null;
-        const execution = reply?.body?.execution ?? {};
-        const statusCode = Number(reply?.status) || 500;
-        const runMoved = Boolean(responseRun && responseRun.next && responseRun.next !== payload.taskId);
-        const taskHandled = Boolean(updatedTask && ['complete', 'failed', 'skipped'].includes(updatedTask.status));
-        const taskRemainsPending = Boolean(updatedTask && updatedTask.status === 'pending');
-        const executionNotRun = execution.executed === false;
-        const responseCode = text(reply?.body?.code);
-
-        if ((executionNotRun || taskRemainsPending) && !['complete', 'failed', 'blocked', 'exhausted'].includes(text(responseRun?.state))) {
+        if (outcome.retryablePending) {
           const humanGate = [
             'execution-approval-required',
             'awaiting-approval',
             'awaiting-clarification',
             'decision-required'
-          ].includes(responseCode);
+          ].includes(outcome.responseCode);
           const delayMs = humanGate
             ? 30000
             : Math.min(60000, 1000 * (2 ** Math.max(0, Number(dispatch.attempts) - 1)));
@@ -503,88 +523,109 @@ export function createFleetWorker({
             workerId: effectiveWorkerId,
             attempts: dispatch.attempts,
             delayMs,
-            error: text(reply?.body?.error || execution.status || execution.message || 'execution-not-completed')
+            error: text(reply?.body?.error || outcome.execution.status || outcome.execution.message || 'execution-not-completed')
           });
           if (released) {
             metrics?.increment('fleet_dispatches_total', { action: 'requeued', reason: humanGate ? 'human-gate' : 'not-executed' });
-            return false;
+            return { handled: false, failed: false, requeued: true, latencyMs: Date.now() - startedAt };
           }
         }
 
-        const workflowFailed = updatedTask?.status === 'failed';
-        const handled = taskHandled || runMoved || responseRun?.state === 'complete';
+        const workflowFailed = outcome.updatedTask?.status === 'failed';
         const finishResult = await fleet.finish(scope, dispatch.id, {
           state: 'succeeded',
-          healthOutcome: workflowFailed ? 'failed' : (handled && statusCode < 400 ? 'succeeded' : 'failed'),
+          healthOutcome: workflowFailed ? 'failed' : (outcome.handled && outcome.statusCode < 400 ? 'succeeded' : 'failed'),
           workerId: effectiveWorkerId,
           attempts: dispatch.attempts,
-          error: statusCode < 400 ? null : text(reply?.body?.error),
+          error: outcome.statusCode < 400 ? null : text(reply?.body?.error),
           costComputeMs: Date.now() - startedAt,
           metadata: {
-            status: statusCode,
-            workflowStatus: updatedTask?.status ?? null,
-            runState: responseRun?.state ?? null,
-            executed: execution.executed ?? null,
+            status: outcome.statusCode,
+            workflowStatus: outcome.updatedTask?.status ?? null,
+            runState: outcome.responseRun?.state ?? null,
+            executed: outcome.execution.executed ?? null,
             leaseLost
           }
         });
         if (!finishResult) {
           metrics?.increment('fleet_dispatch_fence_rejections_total');
-          return false;
+          return { handled: false, failed: true, latencyMs: Date.now() - startedAt, fenced: true };
         }
-        return Boolean(handled && statusCode < 400);
-      } catch (error) {
-        const released = await fleet.release(scope, dispatch.id, {
+        return {
+          handled: outcome.handled,
+          failed: workflowFailed || outcome.statusCode >= 400,
+          latencyMs: Date.now() - startedAt
+        };
+      });
+    } catch (error) {
+      const released = await fleet.release(scope, dispatch.id, {
+        workerId: effectiveWorkerId,
+        attempts: dispatch.attempts,
+        delayMs: Math.min(60000, 1000 * (2 ** Math.max(0, Number(dispatch.attempts) - 1))),
+        error: text(error?.message) || 'Fleet execution failed'
+      }).catch(() => null);
+      if (!released) {
+        await fleet.finish(scope, dispatch.id, {
+          state: 'succeeded',
+          healthOutcome: 'failed',
           workerId: effectiveWorkerId,
           attempts: dispatch.attempts,
-          delayMs: Math.min(60000, 1000 * (2 ** Math.max(0, Number(dispatch.attempts) - 1))),
-          error: text(error?.message) || 'Fleet execution failed'
-        }).catch(() => null);
-        if (!released) {
-          await fleet.finish(scope, dispatch.id, {
-            state: 'succeeded',
-            healthOutcome: 'failed',
-            workerId: effectiveWorkerId,
-            attempts: dispatch.attempts,
-            error: text(error?.message) || 'Fleet execution failed',
-            costComputeMs: Date.now() - startedAt
-          }).catch(() => {});
-        }
-        logger?.error('fleet dispatch failed', { error, dispatchId: dispatch.id });
-        metrics?.increment('fleet_dispatch_execution_errors_total');
-        return false;
-      } finally {
-        if (heartbeat) clearInterval(heartbeat);
+          error: text(error?.message) || 'Fleet execution failed',
+          costComputeMs: Date.now() - startedAt
+        }).catch(() => {});
       }
-    });
+      logger?.error('fleet dispatch failed', { error, dispatchId: dispatch.id });
+      metrics?.increment('fleet_dispatch_execution_errors_total');
+      return { handled: false, failed: true, requeued: Boolean(released), latencyMs: Date.now() - startedAt };
+    } finally {
+      if (heartbeat) clearInterval(heartbeat);
+    }
   }
 
   async function runOnce() {
     if (stopping) return 0;
+    await runDbScope(
+      { principalId: '', workspaceId: '', organizationId: '', jurisdiction: '', role: 'job-worker' },
+      () => fleet.reapExpired({ limit: 100 })
+    );
     const batch = await fleet.acquireBatch({
-      limit: batchSize, workerId: effectiveWorkerId, leaseMs: safeLeaseMs, partition, partitions
+      limit: batchSize,
+      workerId: effectiveWorkerId,
+      leaseMs: safeLeaseMs,
+      partition,
+      partitions
     });
     if (!batch.length) return 0;
-    const ceiling = Math.max(1, Math.min(16, Number(maxConcurrency) || 1));
-    const adaptive = adaptFleetCapacity({
-      current: runOnce.currentWidth || ceiling,
-      max: ceiling,
-      queueDepth: batch.length,
-      usefulParallelism: batch.length > 1 ? 1 : 0,
-      remainingBudgetRatio: 1
-    });
-    const width = adaptive.next;
-    runOnce.currentWidth = width;
+
     let processed = 0;
     for (let i = 0; i < batch.length; i += width) {
-      await Promise.all(batch.slice(i, i + width).map(process));
-      processed += Math.min(width, batch.length - i);
+      const wave = batch.slice(i, i + width);
+      const waveResults = await Promise.all(wave.map(process));
+      for (const result of waveResults) {
+        const alpha = 0.25;
+        const latency = Math.max(1, Number(result?.latencyMs) || 1);
+        const errorSignal = result?.failed ? 1 : 0;
+        latencyEmaMs = latencyEmaMs ? (latencyEmaMs * (1 - alpha)) + (latency * alpha) : latency;
+        errorEma = errorEma ? (errorEma * (1 - alpha)) + (errorSignal * alpha) : errorSignal;
+      }
+      processed += wave.length;
+      const remaining = batch.length - i - wave.length;
+      if (remaining > 0) {
+        const adaptive = adaptFleetCapacity({
+          current: width,
+          max: ceiling,
+          queueDepth: remaining,
+          errorRate: errorEma,
+          averageLatencyMs: latencyEmaMs,
+          usefulParallelism: wave.length > 1 ? 1 : 0,
+          remainingBudgetRatio: 1
+        });
+        width = adaptive.next;
+      }
     }
     metrics?.increment('fleet_dispatches_total', { action: 'processed' });
     return processed;
   }
-
-  runOnce.currentWidth = Math.max(1, Math.min(16, Number(maxConcurrency) || 1));
 
   const tick = async () => {
     if (active || stopping) return;
@@ -593,9 +634,24 @@ export function createFleetWorker({
 
   return {
     runOnce,
+    getCapacityState() {
+      return {
+        workerId: effectiveWorkerId,
+        width,
+        maxConcurrency: ceiling,
+        leaseMs: safeLeaseMs,
+        latencyEmaMs: Math.round(latencyEmaMs),
+        errorEma: Number(errorEma.toFixed(3)),
+        active: Boolean(active),
+        stopping
+      };
+    },
     start() {
       stopping = false;
-      if (!timer) { timer = setInterval(tick, pollMs); timer.unref?.(); }
+      if (!timer) {
+        timer = setInterval(tick, pollMs);
+        timer.unref?.();
+      }
     },
     async stop() {
       stopping = true;
