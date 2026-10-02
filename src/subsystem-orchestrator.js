@@ -315,7 +315,7 @@ export function buildSubsystemPlan(index = {}, {
         ...contract,
         fingerprint: digest(contract)
       },
-      baseRevision: text(revisionId || index?.revisionId) || null
+      baseRevision: text(revisionId || index?.revisionId || index?.contentHash) || null
     };
   });
 
@@ -358,7 +358,7 @@ export function buildSubsystemPlan(index = {}, {
     scale: decision.scale,
     decision,
     project: {
-      revisionId: text(revisionId || index?.revisionId) || null,
+      revisionId: text(revisionId || index?.revisionId || index?.contentHash) || null,
       contentHash: text(index?.contentHash) || null,
       fileCount: files.length
     },
