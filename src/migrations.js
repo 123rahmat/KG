@@ -2498,5 +2498,74 @@ export const MIGRATIONS = [
         );
       REVOKE ALL ON usage_reservations FROM PUBLIC;
     `
+  },
+
+  {
+    version: 62,
+    name: 'run-action-mutation-role-hardening',
+    sql: `
+      DROP POLICY IF EXISTS run_actions_insert_policy ON run_actions;
+      DROP POLICY IF EXISTS run_actions_update_policy ON run_actions;
+
+      CREATE POLICY run_actions_insert_policy ON run_actions
+        FOR INSERT
+        WITH CHECK (
+          current_setting('app.role', true) IN ('editor','admin','job-worker','service')
+          AND (
+            EXISTS (
+              SELECT 1 FROM runs r
+               WHERE r.id = run_actions.run_id
+                 AND r.workspace_id = current_setting('app.workspace_id', true)
+                 AND (
+                   r.principal_id = current_setting('app.principal_id', true)
+                   OR (
+                     r.visibility = 'workspace'
+                     AND current_setting('app.role', true) IN ('editor','admin')
+                   )
+                 )
+            )
+            OR current_setting('app.role', true) IN ('job-worker','service')
+          )
+        );
+
+      CREATE POLICY run_actions_update_policy ON run_actions
+        FOR UPDATE
+        USING (
+          current_setting('app.role', true) IN ('editor','admin','job-worker','service')
+          AND (
+            EXISTS (
+              SELECT 1 FROM runs r
+               WHERE r.id = run_actions.run_id
+                 AND r.workspace_id = current_setting('app.workspace_id', true)
+                 AND (
+                   r.principal_id = current_setting('app.principal_id', true)
+                   OR (
+                     r.visibility = 'workspace'
+                     AND current_setting('app.role', true) IN ('editor','admin')
+                   )
+                 )
+            )
+            OR current_setting('app.role', true) IN ('job-worker','service')
+          )
+        )
+        WITH CHECK (
+          current_setting('app.role', true) IN ('editor','admin','job-worker','service')
+          AND (
+            EXISTS (
+              SELECT 1 FROM runs r
+               WHERE r.id = run_actions.run_id
+                 AND r.workspace_id = current_setting('app.workspace_id', true)
+                 AND (
+                   r.principal_id = current_setting('app.principal_id', true)
+                   OR (
+                     r.visibility = 'workspace'
+                     AND current_setting('app.role', true) IN ('editor','admin')
+                   )
+                 )
+            )
+            OR current_setting('app.role', true) IN ('job-worker','service')
+          )
+        );
+    `
   }
 ];
