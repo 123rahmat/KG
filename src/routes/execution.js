@@ -39,6 +39,7 @@ import { compileCodeContext, isCodeTask } from '../context-compiler.js';
 import { RagStore } from '../rag.js';
 import { loadSelectedSkills, SkillLearningStore, skillContextSignature, skillPlanForSelectedSkills } from '../skills.js';
 import { BlackboardStore } from '../blackboard.js';
+import { buildSubsystemPlan, compactSubsystemPlan } from '../subsystem-orchestrator.js';
 
 /** Which tasks execute where. Everything else needs a human decision. */
 const RUNNER_FOR = {
