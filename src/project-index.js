@@ -18,7 +18,9 @@ const MAX_IMPORTS = 30_000;
 const MAX_TESTS = 5_000;
 
 const INDEX_CACHE_LIMIT = 48;
+const FILE_SIGNAL_CACHE_LIMIT = 20_000;
 const indexCache = new Map();
+const fileSignalCache = new Map();
 
 const EXTENSIONS = Object.freeze({
   js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript',
@@ -351,6 +353,29 @@ function fileDigest(content) {
   return crypto.createHash('sha256').update(content, 'utf8').digest('hex');
 }
 
+function cachedFileSignals(file) {
+  const key = file.path + '\0' + fileDigest(file.content);
+  const cached = fileSignalCache.get(key);
+  if (cached) {
+    fileSignalCache.delete(key);
+    fileSignalCache.set(key, cached);
+    return cached;
+  }
+  const language = languageOf(file.path);
+  const signals = Object.freeze({
+    language,
+    digest: fileDigest(file.content),
+    symbols: extractSymbols(file.content, language),
+    imports: extractImports(file.content, language),
+    test: isLikelyTest(file.path, file.content),
+    config: isConfig(file.path),
+    kind: classifyWorkspaceFile(file.path)
+  });
+  fileSignalCache.set(key, signals);
+  while (fileSignalCache.size > FILE_SIGNAL_CACHE_LIMIT) fileSignalCache.delete(fileSignalCache.keys().next().value);
+  return signals;
+}
+
 function parseJsonFile(files, path) {
   const file = files.find(item => item.path === path);
   if (!file) return null;
@@ -396,23 +421,24 @@ export function buildProjectIndex(files = [], { revisionId = null, maxSymbols = 
   const config = [];
   const entries = [];
   const fileRecords = normalized.map(file => {
-    const language = languageOf(file.path);
-    const digest = fileDigest(file.content);
-    const fileSymbols = extractSymbols(file.content, language).slice(0, Math.max(0, maxSymbols - symbols.length));
-    const fileImports = extractImports(file.content, language);
-    const isTest = isLikelyTest(file.path, file.content);
-    const isCfg = isConfig(file.path);
+    const signals = cachedFileSignals(file);
+    const {
+      language, digest, symbols: extractedSymbols, imports: extractedImports,
+      test: isTest, config: isCfg, kind
+    } = signals;
+    const fileSymbols = extractedSymbols.slice(0, Math.max(0, maxSymbols - symbols.length));
+    const fileImports = extractedImports;
     symbols.push(...fileSymbols.map(item => ({ ...item, path: file.path, language })));
     imports.push(...fileImports.map(target => ({ from: file.path, target })));
     if (isTest) tests.push(file.path);
     if (isCfg) config.push(file.path);
-    if (new RegExp('^(?:src|app|lib|server|main|index)/', 'i').test(file.path) || /^(?:index|main|server)\\./i.test(file.path)) entries.push(file.path);
+    if (new RegExp('^(?:src|app|lib|server|main|index)/', 'i').test(file.path) || /^(?:index|main|server)\./i.test(file.path)) entries.push(file.path);
     return Object.freeze({
       path: file.path,
       bytes: Buffer.byteLength(file.content, 'utf8'),
       digest,
       language,
-      kind: classifyWorkspaceFile(file.path),
+      kind,
       symbolCount: fileSymbols.length,
       importCount: fileImports.length,
       test: isTest,
