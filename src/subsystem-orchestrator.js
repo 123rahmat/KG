@@ -89,11 +89,12 @@ function directoryChildren(hierarchy, root) {
 function topLevelRoots(index) {
   const hierarchy = index?.hierarchy;
   const directories = Array.isArray(hierarchy?.directories) ? hierarchy.directories : [];
-  return directories
+  const roots = directories
     .filter(item => depthFor(item?.path) === 1)
     .map(item => text(item.path))
     .filter(Boolean)
     .sort();
+  return roots.length ? roots : [...new Set((index?.plannedRoots ?? []).map(text).filter(Boolean))];
 }
 
 function rootStats(index, root) {
@@ -188,7 +189,25 @@ export function estimateSubsystemCount(index = {}, {
   const bytes = Math.max(0, Number(index?.totals?.bytes) || 0);
   const dependencies = Math.max(0, Number(index?.totals?.dependencies) || Number(index?.dependencies?.length) || 0);
   const roots = topLevelRoots(index);
+  const plannedRoots = [...new Set((Array.isArray(index?.plannedRoots) ? index.plannedRoots : []).map(text).filter(Boolean))];
   const scale = text(index?.scale || index?.hierarchy?.scale) || 'small';
+  if (plannedRoots.length) {
+    const max = boundedInt(maxSubsystems, DEFAULT_MAX_SUBSYSTEMS, ABSOLUTE_MAX_SUBSYSTEMS);
+    const count = Math.max(1, Math.min(max, plannedRoots.length, ABSOLUTE_MAX_SUBSYSTEMS));
+    return {
+      count,
+      scale,
+      score: Number((count + 0.5).toFixed(3)),
+      independentStructure: 1,
+      coupling: 0,
+      rootCount: plannedRoots.length,
+      fileCount: files,
+      bytes,
+      dependencies,
+      reason: 'from-scratch-architectural-scaffold',
+      plannedRoots
+    };
+  }
   if (files <= minFilesPerSubsystem && scale === 'small') {
     return {
       count: 1,
