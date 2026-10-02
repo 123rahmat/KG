@@ -90,7 +90,8 @@ check('workspace-parallel-scheduler', /buildWorkspaceParallelPlan\(/.test(parall
 check('multi-agent-lane-integration', /agentWorkspaceLane\(/.test(multiAgent) && /buildWorkspaceParallelPlan\(/.test(multiAgent), 'multi-agent waves execute through workspace lane contracts');
 const codeWorkflow = await read('src/code-workflow.js');
 check('stale-patch-rejection', /workspace-revision-stale/.test(codeWorkflow) && /expectedBaseHash/.test(codeWorkflow), 'code mutation rejects patches prepared from stale workspace state');
-check('background-job-lease-fencing', /worker_id/.test(jobs) && /attempts\s*=\s*\$5|attempts\s*=\s*\$4/.test(jobs) && /lease_until\s*>\s*now\(\)/.test(jobs), 'background job completion is fenced to the owning worker, attempt and live lease');
+check('background-job-lease-fencing', /worker_id/.test(jobs) && /lease_until\s*>\s*now\(\)/.test(jobs) && /workerId:\s*effectiveWorkerId/.test(jobs), 'background job completion is fenced to the owning worker, attempt and live lease');
+check('background-worker-cycle-bound', /maxPerCycle/.test(jobs) && /cycleLimit/.test(jobs), 'background workers bound queue draining per cycle for fairness and resource control');
 check('fleet-lease-fencing', /renewLease\(/.test(fleet) && /worker_id/.test(fleet) && /lease_until\s*>\s*now\(\)/.test(fleet), 'fleet completion and renewal are lease-owned');
 check('fleet-batch-concurrency-fence', /ROW_NUMBER\(\) OVER \(PARTITION BY d\.project_id/.test(fleet) && /project_rank/.test(fleet) && /project_slots/.test(fleet), 'fleet acquisition limits one batch by each project’s actual concurrency slots');
 check('action-outcome-fencing', /ACTION_LEASE_MS/.test(actions) && /recoverExpired\(/.test(actions) && /status = \'running\'/.test(actions), 'approved side effects carry a lease and abandoned outcomes become explicit uncertainty');
