@@ -137,24 +137,47 @@ with a visible warning. Cost: one extra model call per reviewed run.
 
 The adaptive subsystem planner (src/subsystem-orchestrator.js) extends coding work for medium, large and very-large repositories. It uses project size, dependency density, hierarchical directory structure and coupling to choose a bounded subsystem count, creates non-overlapping path ownership contracts, builds a dependency DAG, and feeds only dependency-ready subsystem contexts to workers. Typed handoffs, blockers and contract messages are revision-bound and bounded, and stale messages are rejected from newer revisions. The subsystem layer is coordination infrastructure; repository mutation and integration remain server-owned.
 
-The specialist panel (`src/multi-agent.js`) adds a domain-agnostic advisory
-layer without changing that authority model. In `MULTI_AGENT_MODE=auto`, the
-server estimates the value of additional independent perspectives from the
-current task and situation, then recruits the smallest useful set up to the
-configured eleven-agent ceiling. Reusable roles include strategist, researcher,
-analyst, architect, critic, communicator and diagnostician. Allocation reacts
-to complexity, decomposition, uncertainty, evidence gaps, comparison needs,
-communication needs, stakes, retries and observed specialist confidence or
-disagreement. Agents have no tools. Their findings are treated as data, usage
-is recorded, and an arbiter is used only when disagreement becomes decision
-relevant. A panel outage or budget/data-policy block falls back to the primary
-workflow. The existing verification reviewer remains separate so verification
-is not accidentally duplicated.
+### Code Workspace multi-agent execution
 
-Independent execution steps are still not run in parallel. The dependency
-planner locks and evaluates stored rows serially, and changing that is a larger,
-riskier change than advisory parallelism; it should be measured against
-load-test data before allowing concurrent execution.
+Code Workspace is the specialized multi-agent surface. When a real workspace
+project and code-intelligence snapshot are present, `src/multi-agent.js`
+switches from the generic cognitive panel to a two-level coding panel:
+
+```
+project
+  -> adaptive subsystem plan
+     -> dependency-ready subsystem panels
+        -> architect / implementer / test-engineer / debugger /
+           security-reviewer / performance-reviewer / critic
+        -> typed A2A handoff
+        -> local reassessment / next iteration
+     -> next dependency wave
+  -> integration review
+  -> primary code generation
+  -> sandbox tests / targeted repair
+  -> verification / delivery
+```
+
+Every subsystem uses the same adaptive control loop, but its agents only receive
+the subsystem's owned files, read set, tests, contract and dependency-scoped A2A
+messages. Raw peer findings are kept out of unrelated agents to reduce herding.
+A2A messages are typed, revision-bound, contract-version-bound and bounded;
+cross-subsystem writes still require server-controlled ownership transfer.
+Independent panels and independent specialists can run concurrently, while the
+workspace scheduler serializes conflicting or stale revision lanes.
+
+This specialization is intentionally limited to Code Workspace coding. The
+generic multi-agent path remains available to other task surfaces without
+taking on repository-specific panel semantics. Agents remain advisory: they
+can propose exact implementation and test changes, but the server retains tool,
+write, integration, approval and verification authority.
+
+The ordinary server task graph still does not execute arbitrary stored
+execution steps concurrently. Parallelism inside Code Workspace is currently
+for bounded specialist reasoning and panel coordination; actual repository
+writes and full-project execution continue through the existing governed
+write,
+sandbox, repair and verification gates.
 
 ## Capability contract and lifecycle
 
