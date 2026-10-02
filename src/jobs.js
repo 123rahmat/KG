@@ -24,6 +24,7 @@ import { runDbScope, transaction } from './db.js';
 
 const LEASE_MS = 5 * 60_000;
 const text = value => String(value ?? '').trim();
+const newWorkerId = () => 'jobs-' + process.pid + '-' + crypto.randomUUID();
 
 /** Request fields a job may carry; everything else is dropped. */
 const JOB_REQUEST_FIELDS = ['approved', 'executionTarget', 'preflight', 'requirements', 'cloudFallbackAllowed', 'payload', 'modelConsent'];
@@ -101,36 +102,57 @@ export class JobStore {
   }
 
   /** Claim the oldest queued job, or one whose lease expired. */
-  async claim() {
+  async claim({ workerId = null, leaseMs = LEASE_MS } = {}) {
+    const owner = text(workerId) || newWorkerId();
+    const safeLease = Math.max(10_000, Math.min(900_000, Number(leaseMs) || LEASE_MS));
     return runDbScope({ principalId: '', workspaceId: '', organizationId: '', jurisdiction: '', role: 'job-worker' }, () =>
       transaction(this.pool, async client => {
         const { rows } = await client.query(
           `UPDATE run_jobs
               SET state = 'running', attempts = attempts + 1,
-                  lease_until = now() + ($1::int * interval '1 millisecond'), updated_at = now()
+                  lease_until = now() + ($1::int * interval '1 millisecond'),
+                  worker_id = $2, updated_at = now()
             WHERE id = (
               SELECT id FROM run_jobs
-               WHERE state = 'queued' OR (state = 'running' AND lease_until < now())
+               WHERE (state = 'queued' OR (state = 'running' AND lease_until < now()))
+                 AND attempts <= max_attempts
                ORDER BY created_at
                FOR UPDATE SKIP LOCKED
                LIMIT 1
             )
             RETURNING *`,
-          [LEASE_MS]
+          [safeLease, owner]
         );
         return rows[0] ?? null;
       }));
   }
 
-  /** Record the outcome and drop the submitted payload. */
-  async finish(job, state, outcome) {
-    await this.pool.query(
+  async renewLease(job, { workerId = job.worker_id, attempts = job.attempts, leaseMs = LEASE_MS } = {}) {
+    const owner = text(workerId);
+    const safeLease = Math.max(10_000, Math.min(900_000, Number(leaseMs) || LEASE_MS));
+    if (!owner) return false;
+    const { rowCount } = await this.pool.query(
+      `UPDATE run_jobs
+          SET lease_until = now() + ($2::int * interval '1 millisecond'), updated_at = now()
+        WHERE id = $1 AND state = 'running' AND worker_id = $3
+          AND attempts = $4 AND lease_until > now()`,
+      [job.id, safeLease, owner, Number(attempts) || 0]
+    );
+    return rowCount > 0;
+  }
+
+  /** Record the outcome only for the worker/attempt that still owns the lease. */
+  async finish(job, state, outcome, { workerId = job.worker_id, attempts = job.attempts } = {}) {
+    const owner = text(workerId);
+    const { rowCount } = await this.pool.query(
       `UPDATE run_jobs
           SET state = $2, outcome = $3::jsonb, request = request - 'payload',
-              lease_until = NULL, finished_at = now(), updated_at = now()
-        WHERE id = $1 AND state = 'running'`,
-      [job.id, state, JSON.stringify(outcome)]
+              lease_until = NULL, worker_id = NULL, finished_at = now(), updated_at = now()
+        WHERE id = $1 AND state = 'running' AND worker_id = $4
+          AND attempts = $5 AND lease_until > now()`,
+      [job.id, state, JSON.stringify(outcome), owner, Number(attempts) || 0]
     );
+    return rowCount > 0;
   }
 }
 
@@ -138,7 +160,9 @@ export class JobStore {
  * The worker. `start()` polls; `runOnce()` drains the queue once and is what
  * tests use to run jobs deterministically.
  */
-export function createJobWorker({ jobs, identity, runs, executeNext, logger, metrics, pollMs = 1_000 }) {
+export function createJobWorker({ jobs, identity, runs, executeNext, logger, metrics, pollMs = 1_000, leaseMs = LEASE_MS, workerId = null }) {
+  const effectiveWorkerId = text(workerId) || newWorkerId();
+  const safeLeaseMs = Math.max(10_000, Math.min(900_000, Number(leaseMs) || LEASE_MS));
   let timer = null;
   let active = null;
   let stopping = false;
@@ -146,7 +170,15 @@ export function createJobWorker({ jobs, identity, runs, executeNext, logger, met
   async function process(job) {
     const scope = { principalId: job.principal_id, workspaceId: job.workspace_id };
     return runDbScope({ ...scope, organizationId: '', jurisdiction: '', role: '' }, async () => {
-      if (job.attempts > job.max_attempts) {
+      let heartbeat = null;
+      try {
+        heartbeat = setInterval(() => {
+          jobs.renewLease(job, { workerId: effectiveWorkerId, attempts: job.attempts, leaseMs: safeLeaseMs })
+            .catch(error => logger?.warn('background job lease renewal failed', { error, jobId: job.id }));
+        }, Math.max(1_000, Math.floor(safeLeaseMs / 3)));
+        heartbeat.unref?.();
+
+        if (job.attempts > job.max_attempts) {
         await jobs.finish(job, 'failed', { code: 'job-attempts-exhausted', error: 'The job was interrupted too many times.' });
         return;
       }
@@ -193,6 +225,8 @@ export function createJobWorker({ jobs, identity, runs, executeNext, logger, met
           code: 'execution-error',
           error: 'Execution failed unexpectedly; nothing was recorded for this task.'
         });
+      } finally {
+        if (heartbeat) clearInterval(heartbeat);
       }
     });
   }
@@ -201,7 +235,7 @@ export function createJobWorker({ jobs, identity, runs, executeNext, logger, met
     let processed = 0;
     for (;;) {
       if (stopping) break;
-      const job = await jobs.claim();
+      const job = await jobs.claim({ workerId: effectiveWorkerId, leaseMs: safeLeaseMs });
       if (!job) break;
       metrics?.increment('background_jobs_total', { phase: 'claimed' });
       await process(job);

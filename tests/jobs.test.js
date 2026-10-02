@@ -119,3 +119,25 @@ test('local execution cannot be queued in the background', () =>
     assert.equal(response.status, 400);
     assert.equal(response.body.code, 'background-not-supported');
   }));
+
+
+test('a stale worker cannot finish a job reclaimed by another worker', () =>
+  withServer(async ({ call, seed, jobs, pool }) => {
+    const { token, workspace } = await seed();
+    const { body: run } = await directRun(call, token, workspace);
+    const queued = await call('POST', `/api/runs/${run.id}/execute`, { token, workspace, body: { background: true } });
+
+    const first = await jobs.claim({ workerId: 'worker-a' });
+    assert.equal(first.worker_id, 'worker-a');
+    await pool.query(`UPDATE run_jobs SET lease_until = now() - interval '1 second' WHERE id = $1`, [first.id]);
+    const second = await jobs.claim({ workerId: 'worker-b' });
+    assert.equal(second.worker_id, 'worker-b');
+    assert.equal(second.attempts, first.attempts + 1);
+
+    assert.equal(await jobs.finish(first, 'succeeded', { code: 'stale' }, { workerId: 'worker-a', attempts: first.attempts }), false);
+    assert.equal(await jobs.finish(second, 'succeeded', { code: 'fresh' }, { workerId: 'worker-b', attempts: second.attempts }), true);
+    const { rows: [row] } = await pool.query('SELECT state, outcome, worker_id FROM run_jobs WHERE id = $1', [queued.body.job.id]);
+    assert.equal(row.state, 'succeeded');
+    assert.equal(row.outcome.code, 'fresh');
+    assert.equal(row.worker_id, null);
+  }, { env: ANTHROPIC, fetchImpl: async () => answer('x') }));
