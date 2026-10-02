@@ -247,8 +247,6 @@ export function workspaceLanesConflict(a = {}, b = {}) {
   if (text(a.branch) && text(b.branch) && text(a.branch) !== text(b.branch)) return false;
 
   const leftReads = new Set(list(a.readSet));
-  const rightWrites = new Set(list(b.writeSet));
-  const leftReads = new Set(list(a.readSet));
   const rightReads = new Set(list(b.readSet));
   // Two read-only lanes can always share a stable project snapshot.
   if (!leftMutates && !rightMutates) return false;
