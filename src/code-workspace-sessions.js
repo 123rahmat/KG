@@ -24,10 +24,10 @@ export class CodeWorkspaceSessionStore {
     if (!input.projectId && !input.sourceId) throw new Error('projectId or sourceId is required');
     if (input.sourceId) {
       const { rows: [source] } = await this.pool.query(
-        'SELECT id FROM workspace_sources WHERE id = $1 AND workspace_id = $2 AND principal_id = $3 AND revoked_at IS NULL LIMIT 1',
+        `SELECT id, kind FROM workspace_sources WHERE id = $1 AND workspace_id = $2 AND principal_id = $3 AND revoked_at IS NULL LIMIT 1`,
         [input.sourceId, scope.workspaceId, scope.principalId]
       );
-      if (!source) { const error = new Error('Workspace source not found or not accessible'); error.status = 404; error.code = 'workspace-source-not-found'; throw error; }
+      if (!source || source.kind !== 'github') { const error = new Error('Only GitHub repositories are supported as Code Workspace sources.'); error.status = 404; error.code = 'github-source-required'; throw error; }
     }
     const id = crypto.randomUUID();
     const { rows: [row] } = await this.pool.query(
