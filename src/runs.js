@@ -891,6 +891,19 @@ export class RunStore {
           ...(conditions ? { conditions } : {}),
           ...(hasChoices ? { planChoices } : {})
         };
+        if (target.metadata?.planAgreement) {
+          // The approved plan is authoritative for the following coding step.
+          // The model proposal remains evidence, but these user choices are
+          // the only plan overrides the coding stage may treat as instructions.
+          adaptiveUpdate.approvedPlan = {
+            sourceTaskId: target.dependsOn?.[0] ?? null,
+            existingCodePlan: target.metadata?.existingCodePlan === true,
+            planChoices,
+            conditions: conditions || null,
+            approvedAt: evidence.approvedAt,
+            actor: principal.id
+          };
+        }
       }
 
       if (status === 'complete' && target.type === 'verify') {
@@ -1051,7 +1064,6 @@ export class RunStore {
       [run.id, JSON.stringify(requirementModel)]
     );
     run.requirements = requirementModel;
-
     let nextState;
     const discovery = target.type === 'discover-capabilities'
       ? normalizeCapabilityDiscovery(structured)
@@ -1110,27 +1122,8 @@ export class RunStore {
       )
     );
 
-    const approvedPlanUpdate = target.type === 'approval'
-      && target.metadata?.planAgreement
-      && evidence?.approved === true
-      ? {
-          sourceTaskId: target.dependsOn?.[0] ?? null,
-          existingCodePlan: target.metadata?.existingCodePlan === true,
-          planChoices: evidence.planChoices ?? {
-            keepExisting: [],
-            removeExisting: [],
-            addNew: [],
-            changeExisting: []
-          },
-          conditions: evidence.conditions ?? null,
-          approvedAt: evidence.approvedAt ?? new Date().toISOString(),
-          actor: evidence.actor ?? run.principal_id ?? run.principalId
-        }
-      : null;
-
     const adaptiveUpdate = {
           ...(run.adaptation ?? {}),
-          ...(approvedPlanUpdate ? { approvedPlan: approvedPlanUpdate } : {}),
           discoveries: [
             ...((run.adaptation?.discoveries ?? [])),
             ...adaptiveDiscoveries
