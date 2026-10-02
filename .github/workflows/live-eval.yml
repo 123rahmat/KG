@@ -1,0 +1,46 @@
+name: Live evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Optional comma-separated scenario ids or areas"
+        required: false
+        default: ""
+  schedule:
+    - cron: "47 7 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  live-eval:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci
+      - name: Run real-model live evaluation
+        env:
+          EVAL_URL: ${{ secrets.EVAL_URL }}
+          EVAL_TOKEN: ${{ secrets.EVAL_TOKEN }}
+          EVAL_WORKSPACE: ${{ secrets.EVAL_WORKSPACE }}
+          EVAL_ONLY: ${{ inputs.only }}
+          EVAL_REPORT: live-eval-report.json
+        run: |
+          test -n "$EVAL_URL"
+          test -n "$EVAL_TOKEN"
+          test -n "$EVAL_WORKSPACE"
+          npm run eval:live
+      - name: Upload live evaluation report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: live-eval-report
+          path: live-eval-report.json
+          if-no-files-found: warn
+          retention-days: 14
