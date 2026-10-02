@@ -237,7 +237,7 @@ test('4-hour and weekly quota usage is universal across a person\'s workspaces',
     assert.equal(usage.body.quotaScope.fourHour, 'principal');
     assert.equal(usage.body.quotaScope.weekly, 'principal');
     assert.equal(usage.body.context.used, 200);
-  }), { env: { USAGE_LIMIT_4H_TOKENS: '1000', USAGE_LIMIT_WEEKLY_TOKENS: '1000' } });
+  }, { env: { USAGE_LIMIT_4H_TOKENS: '1000', USAGE_LIMIT_WEEKLY_TOKENS: '1000' } }));
 
 test('usage windows are universal to the person across workspaces', () =>
   withServer(async ({ call, seed, pool }) => {
@@ -320,7 +320,7 @@ test('the account entitlement is stable when workspaces have different paid plan
     assert.equal(b.body.plan, 'Account-wide entitlement');
     assert.equal(a.body.quotaScope.entitlement, 'principal');
     assert.equal(b.body.quotaScope.entitlement, 'principal');
-  }), {
+  }, {
     env: {
       STRIPE_SECRET_KEY: 'sk_test_abc123',
       STRIPE_WEBHOOK_SECRET: 'whsec_testsecret',
@@ -367,4 +367,4 @@ test('a universal quota cannot be bypassed by switching workspaces', () =>
     });
     assert.equal(blocked.status, 429);
     assert.equal(blocked.body.code, 'usage-limit-reached');
-  }), { env: { USAGE_LIMIT_4H_TOKENS: '800', USAGE_LIMIT_WEEKLY_TOKENS: '1000' } });
+  }, { env: { USAGE_LIMIT_4H_TOKENS: '800', USAGE_LIMIT_WEEKLY_TOKENS: '1000' } }));
