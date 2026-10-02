@@ -131,6 +131,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
    * { status, body } instead of writing a response.
    */
   const actions = new RunActions(pool, { audit });
+  app.locals.recoverExpiredActions = options => actions.recoverExpired(options);
   const rag = config.security?.personalDataEncryptionKey
     ? new RagStore(pool, { encryptionKey: config.security.personalDataEncryptionKey, maxChunkChars: 12000 })
     : null;

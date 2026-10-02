@@ -55,7 +55,8 @@ export class RunActions {
   }
 
   async recoverExpired({ limit = 100 } = {}) {
-    return transaction(this.pool, async client => {
+    return runDbScope({ principalId: '', workspaceId: '', organizationId: '', jurisdiction: '', role: 'job-worker' }, () =>
+      transaction(this.pool, async client => {
       const safeLimit = Math.max(1, Math.min(500, Number(limit) || 100));
       const { rows } = await client.query(
         `WITH expired AS (
@@ -78,7 +79,7 @@ export class RunActions {
         [safeLimit]
       );
       return rows.length;
-    });
+      }));
   }
 
   async list(scope, runId) {

@@ -113,6 +113,7 @@ export async function start({ env = process.env } = {}) {
     await migrationPool?.end();
   }
 
+  await app.locals.recoverExpiredActions?.({ limit: 500 });
   const server = createServer(app);
   const terminalServer = attachTerminalServer(server, { config, identity, pool, objects: app.locals.objects, audit, logger, metrics });
   server.requestTimeout = config.limits.requestTimeoutMs;
@@ -134,13 +135,15 @@ export async function start({ env = process.env } = {}) {
   const sweeper = setInterval(() => {
     Promise.all([
       identity.purgeExpired(),
+      app.locals.recoverExpiredActions?.({ limit: 500 }),
       pool.query(
         'DELETE FROM rate_limit_windows WHERE window_start_ms < $1',
         [Date.now() - 24 * 60 * 60 * 1000]
       )
     ])
-      .then(([identityResult, rateResult]) => logger.debug('purged expired records', {
+      .then(([identityResult, actionResult, rateResult]) => logger.debug('purged expired records', {
         ...identityResult,
+        uncertainActions: actionResult ?? 0,
         rateLimitWindows: rateResult.rowCount
       }))
       .catch(error => logger.error('purge failed', { error }));
