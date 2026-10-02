@@ -10,6 +10,7 @@
 
 import crypto from 'node:crypto';
 import { runDbScope, transaction } from './db.js';
+import { syncWorkspaceAiEntitlements } from './account-entitlements.js';
 
 /** Roles, least to most capable. A role implies every role below it. */
 export const ROLES = Object.freeze(['viewer', 'editor', 'admin']);
@@ -133,6 +134,7 @@ export class Identity {
        RETURNING *`,
       [workspaceId, principalId, role]
     );
+    await syncWorkspaceAiEntitlements(this.pool, workspaceId);
     return rows[0];
   }
 
