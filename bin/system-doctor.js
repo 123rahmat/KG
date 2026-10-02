@@ -145,6 +145,8 @@ check('action-lease-live-finalize', /lease_until > now\(\)/.test(await read('src
 check('postgres-service-image-pinned', /postgres:16-alpine@sha256:[0-9a-f]{64}/.test(await read('.github/workflows/ci.yml')) && /postgres:16-alpine@sha256:[0-9a-f]{64}/.test(await read('.github/workflows/verify.yml')), 'CI database services use an immutable PostgreSQL image digest');
 
 
+check('usage-aggregation-bounded', /FILTER \(WHERE created_at >/.test(await read('src/usage.js')) && !/const \{ rows: globalUsageRows \}/.test(await read('src/usage.js')), 'quota checks use indexed database aggregates instead of loading the full rolling ledger into memory');
+
 const failed = checks.filter(item => !item.ok);
 const passed = checks.length - failed.length;
 console.log(`Kindgleam system doctor: ${passed}/${checks.length} checks passed.`);
@@ -155,4 +157,3 @@ if (failed.length) {
 }
 console.log('\nSystem doctor passed. No release-blocking architecture issue was detected by this deterministic audit.');
 
-check('usage-aggregation-bounded', /FILTER \(WHERE created_at >/.test(await read('src/usage.js')) && !/const \{ rows: globalUsageRows \}/.test(await read('src/usage.js')), 'quota checks use indexed database aggregates instead of loading the full rolling ledger into memory');
