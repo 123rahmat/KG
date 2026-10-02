@@ -386,7 +386,7 @@ test('observed evidence can shrink or expand the next agent allocation', () => {
 });
 
 
-test('coding panel assigns separate subsystem contexts and emits dependency-scoped handoffs', async () => {
+test('Code Workspace gives every subsystem its own multi-agent panel with bounded A2A', async () => {
   const calls = [];
   const project = {
     revisionId: 'rev-9',
@@ -397,8 +397,8 @@ test('coding panel assigns separate subsystem contexts and emits dependency-scop
       ...Array.from({ length: 10 }, (_, i) => ({ path: `auth/file-${i}.js`, bytes: 100, test: i === 9 })),
       ...Array.from({ length: 10 }, (_, i) => ({ path: `orders/file-${i}.js`, bytes: 100, test: i === 9 }))
     ],
-    dependencies: [{ from: 'orders/file-0.js', to: 'auth/file-0.js' }],
-    totals: { bytes: 2000, dependencies: 1 },
+    dependencies: [],
+    totals: { bytes: 2000, dependencies: 0 },
     hierarchy: {
       scale: 'large',
       root: { path: '', depth: 0, fileCount: 20, bytes: 2000, digest: 'root' },
@@ -410,9 +410,10 @@ test('coding panel assigns separate subsystem contexts and emits dependency-scop
     }
   };
   const fakeModel = async (messages, options) => {
-    calls.push({ body: JSON.parse(messages[1].content), options });
+    const body = JSON.parse(messages[1].content);
+    calls.push({ body, options });
     return {
-      text: JSON.stringify(finding('proceed', 'subsystem inspected')),
+      text: JSON.stringify(finding('proceed', `${body.workspacePanel.subsystemId} ${body.workspacePanel.iteration}`)),
       provider: 'google',
       model: options.modelId,
       usage: null
@@ -430,18 +431,24 @@ test('coding panel assigns separate subsystem contexts and emits dependency-scop
     },
     selection,
     primaryModelId: 'google:gemini-3.8-flash',
-    config: { agents: { multiAgent: 'auto', maxAgents: 2 } },
+    config: { agents: { multiAgent: 'auto', maxAgents: 6 } },
     canSpend: async () => true,
     modelCaller: fakeModel
   });
 
-  assert.equal(result.findings.length, 2);
-  assert.equal(new Set(calls.map(item => item.body.subsystemWork?.subsystem?.id)).size, 2);
-  assert.match(calls[0].body.subsystemWork?.subsystem?.id ?? '', /auth/);
-  assert.match(calls[1].body.subsystemWork?.subsystem?.id ?? '', /orders/);
-  assert.equal(calls.every(item => item.body.subsystemPlan?.kind === 'adaptive-subsystem-plan'), true);
-  assert.ok(result.allocation?.subsystemPlan);
-  assert.ok(result.allocation?.subsystemMessages?.length >= 2);
+  assert.equal(result.findings.length, 6);
+  assert.equal(new Set(calls.map(item => item.body.workspacePanel.subsystemId)).size, 2);
+  assert.equal(new Set(calls.map(item => item.body.workspacePanel.panelId)).size, 2);
+  assert.equal(calls.every(item => item.body.workspacePanel.mode === 'code-workspace-subsystem-panel'), true);
+  assert.equal(calls.every(item => item.body.workspacePanel.a2a.rawPeerFindingsHidden === true), true);
+  assert.equal(calls.every(item => item.body.workspacePanel.iteration === 1), true);
+  assert.equal(result.waves[0].parallel, true);
+  assert.equal(result.waves[0].subsystemIds.length, 2);
+  assert.equal(result.waves[0].roles.length, 6);
+  assert.equal(result.allocation.subsystemPanels.length, 2);
+  assert.equal(result.allocation.subsystemPanels.every(item => item.status === 'complete'), true);
+  assert.equal(result.allocation.subsystemPanels.every(item => item.iterations === 1), true);
+  assert.ok(result.allocation.subsystemMessages.length >= 2);
   assert.equal(result.allocation.subsystemMessages.every(item => item.projectRevision === 'rev-9'), true);
   assert.equal(result.allocation.subsystemMessages.every(item => ['handoff', 'blocker'].includes(item.type)), true);
 });
