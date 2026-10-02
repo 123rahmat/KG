@@ -289,121 +289,79 @@ test('code goals go to the code runner, and an unreachable runner records nothin
     fetchImpl: async () => { throw new Error('ECONNREFUSED'); }
   }));
 
-test('coding workspace review is revision-bound and returns safe before/after previews', () =>
+test('Code Workspace is GitHub-only and keeps revision-bound write-back gates', () =>
   withServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
 
-    const connected = await call('POST', '/api/workspace/sources/local', {
+    const local = await call('POST', '/api/workspace/sources/local', {
       ...auth,
-      body: {
-        name: 'review-project',
-        files: [
-          { path: 'src/app.js', content: 'export const value = 1;\\n' },
-          { path: 'README.md', content: '# Review\\n' }
-        ],
-        write: true
-      }
+      body: { name: 'legacy-local', files: [{ path: 'src/app.js', content: 'one' }], write: true }
     });
-    assert.equal(connected.status, 201);
+    assert.equal(local.status, 404);
 
-    const source = connected.body.source;
-    const fileDigest = connected.body.manifest.files.find(item => item.path === 'src/app.js').digest;
+    const github = await call('POST', '/api/workspace/sources/github', {
+      ...auth,
+      body: { token: 'github-token', owner: 'demo', repo: 'app', ref: 'main', write: true }
+    });
+    assert.equal(github.status, 201);
+    const source = github.body.source;
+    assert.equal(source.kind, 'github');
+    assert.equal(source.permissions.write, true);
+
     const reviewed = await call('POST', `/api/workspace/sources/${source.id}/review`, {
       ...auth,
       body: {
-        baseContentHash: source.metadata.contentHash,
+        expectedCommitSha: source.metadata.commitSha,
         changes: [{
-          path: 'src/app.js',
-          content: 'export const value = 2;\\n',
-          beforeDigest: fileDigest
+          path: source.metadata.manifest[0].path,
+          content: 'replacement',
+          beforeDigest: source.metadata.manifest[0].digest
         }]
       }
     });
     assert.equal(reviewed.status, 200);
-    assert.equal(reviewed.body.review.counts.modified, 1);
-    assert.equal(reviewed.body.review.changes[0].path, 'src/app.js');
-    assert.equal(reviewed.body.review.changes[0].kind, 'modified');
-    assert.equal(reviewed.body.review.changes[0].before.content, 'export const value = 1;\\n');
-    assert.equal(reviewed.body.review.changes[0].after.content, 'export const value = 2;\\n');
-    assert.equal(reviewed.body.review.changes[0].beforeDigest, fileDigest);
+    assert.ok(reviewed.body.review.digest);
+    assert.equal(reviewed.body.review.sourceRevision, source.metadata.commitSha);
 
     const stale = await call('POST', `/api/workspace/sources/${source.id}/review`, {
       ...auth,
       body: {
-        baseContentHash: 'stale',
+        expectedCommitSha: 'stale-revision',
         changes: [{
-          path: 'src/app.js',
-          content: 'export const value = 3;\\n',
-          beforeDigest: fileDigest
+          path: source.metadata.manifest[0].path,
+          content: 'replacement',
+          beforeDigest: source.metadata.manifest[0].digest
         }]
       }
     });
     assert.equal(stale.status, 409);
-    assert.equal(stale.body.code, 'stale-local-source');
-  }));
-
-test('local reviewed sync rejects a mismatched review digest', () =>
-  withServer(async ({ call, seed }) => {
-    const { token, workspace } = await seed();
-    const auth = { token, workspace };
-    const connected = await call('POST', '/api/workspace/sources/local', {
-      ...auth,
-      body: { name: 'digest-project', files: [{ path: 'src/app.js', content: 'one' }], write: true }
-    });
-    const source = connected.body.source;
-    const manifest = connected.body.manifest;
-    const reviewed = await call('POST', `/api/workspace/sources/${source.id}/review`, {
-      ...auth,
-      body: {
-        baseContentHash: manifest.contentHash,
-        changes: [{ path: 'src/app.js', content: 'two', beforeDigest: manifest.files[0].digest }]
+    assert.equal(stale.body.code, 'stale-github-revision');
+  }, {
+    fetchImpl: async (url) => {
+      const value = String(url);
+      if (value.endsWith('/repos/demo/app')) {
+        return new Response(JSON.stringify({
+          id: 1, full_name: 'demo/app', default_branch: 'main', private: true,
+          html_url: 'https://github.com/demo/app', owner: { login: 'demo' }, name: 'app'
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
       }
-    });
-    assert.equal(reviewed.status, 200);
-    const stale = await call('POST', `/api/workspace/sources/local/${source.id}/sync`, {
-      ...auth,
-      body: {
-        baseContentHash: manifest.contentHash,
-        manifest: { contentHash: 'x', fileCount: 1, files: [] },
-        changedFiles: [{ path: 'src/app.js', content: 'three' }],
-        deletedPaths: [],
-        reviewDigest: reviewed.body.review.digest
+      if (value.includes('/commits/main')) {
+        return new Response(JSON.stringify({ sha: 'base123', commit: { tree: { sha: 'tree123' } } }), { status: 200, headers: { 'content-type': 'application/json' } });
       }
-    });
-    assert.equal(stale.status, 409);
-    assert.equal(stale.body.code, 'review-stale');
-  }));
-
-
-
-test('local folder full-snapshot syncs require the current server revision', () =>
-  withServer(async ({ call, seed }) => {
-    const { token, workspace } = await seed();
-    const auth = { token, workspace };
-    const connected = await call('POST', '/api/workspace/sources/local', {
-      ...auth,
-      body: { name: 'sync-project', files: [{ path: 'src/app.js', content: 'one' }], write: true }
-    });
-    assert.equal(connected.status, 201);
-
-    const source = connected.body.source;
-    const stale = await call('POST', `/api/workspace/sources/local/${source.id}/sync`, {
-      ...auth,
-      body: { files: [{ path: 'src/app.js', content: 'two' }] }
-    });
-    assert.equal(stale.status, 409);
-    assert.equal(stale.body.code, 'stale-local-source');
-
-    const current = await call('POST', `/api/workspace/sources/local/${source.id}/sync`, {
-      ...auth,
-      body: {
-        baseContentHash: source.metadata.contentHash,
-        files: [{ path: 'src/app.js', content: 'two' }]
+      if (value.includes('/git/trees/base123?recursive=1')) {
+        return new Response(JSON.stringify({
+          truncated: false,
+          tree: [{ type: 'blob', path: 'src/app.js', size: 1, sha: 'blob123' }]
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
       }
-    });
-    assert.equal(current.status, 200);
-    assert.equal(current.body.unchanged, false);
+      if (value.includes('/git/blobs/blob123')) {
+        return new Response(JSON.stringify({
+          encoding: 'base64', content: Buffer.from('one').toString('base64')
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      throw new Error('unexpected GitHub request');
+    }
   }));
 
 test('research searches the web with the AI provider, reads what it found, and keeps the sources', () => {
