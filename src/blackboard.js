@@ -7,6 +7,7 @@
  */
 import crypto from 'node:crypto';
 import { encryptJson, decryptField, keyedDigest } from './data-protection.js';
+import { mergeSubsystemMessages } from './subsystem-orchestrator.js';
 
 const text = value => String(value ?? '').trim();
 const MAX_BYTES = 120_000;
@@ -21,6 +22,8 @@ const emptyBoard = runId => ({
   blockers: [],
   evidence: [],
   openQuestions: [],
+  subsystemPlan: null,
+  subsystemMessages: [],
   updatedAt: null
 });
 
@@ -46,6 +49,8 @@ function normalizeBoard(value = {}, runId = null) {
     blockers: normalizeList(value.blockers),
     evidence: normalizeList(value.evidence),
     openQuestions: normalizeList(value.openQuestions),
+    subsystemPlan: value.subsystemPlan && typeof value.subsystemPlan === 'object' ? value.subsystemPlan : null,
+    subsystemMessages: mergeSubsystemMessages([], value.subsystemMessages, { limit: 120 }),
     updatedAt: value.updatedAt ?? null
   };
   return merged;
@@ -71,6 +76,10 @@ export function mergeBlackboard(current, contribution = {}, runId = null) {
     blockers: mergeUnique(base.blockers, contribution.blockers),
     evidence: mergeUnique(base.evidence, contribution.evidence),
     openQuestions: mergeUnique(base.openQuestions, contribution.openQuestions),
+    subsystemPlan: contribution.subsystemPlan && typeof contribution.subsystemPlan === 'object'
+      ? contribution.subsystemPlan
+      : base.subsystemPlan,
+    subsystemMessages: mergeSubsystemMessages(base.subsystemMessages, contribution.subsystemMessages, { limit: 120 }),
     updatedAt: new Date().toISOString()
   };
   return next;
