@@ -56,7 +56,7 @@ test('past the 4-hour limit, AI steps wait and say when they open again', () =>
     await chatStep(call, auth, 'chat-limit-0001');
     const usage = await call('GET', '/api/usage', auth);
     const session = usage.body.windows[0];
-    assert.equal(session.limit, 60);
+    assert.equal(session.limit, 100);
     assert.equal(session.exceeded, true);
     assert.ok(session.resetsAt);
 
@@ -67,7 +67,7 @@ test('past the 4-hour limit, AI steps wait and say when they open again', () =>
 
     // Work that does not use the AI still works.
     assert.equal((await call('GET', '/api/schedules', auth)).status, 200);
-  }, { env: { ...AI, USAGE_LIMIT_4H_TOKENS: '60' }, fetchImpl: provider }));
+  }, { env: { ...AI, USAGE_LIMIT_4H_TOKENS: '100' }, fetchImpl: provider }));
 
 
 async function delayedProvider() {
@@ -85,10 +85,10 @@ test('concurrent AI requests share one atomic usage reservation', () =>
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const first = await call('POST', '/api/runs', {
-      ...auth, body: { goal: 'Concurrent one', conversationId: 'concurrent-0001', privacyConsent: { modelProvider: true } }
+      ...auth, body: { goal: 'Concurrent one', conversationId: 'concurrent-0001' }
     });
     const second = await call('POST', '/api/runs', {
-      ...auth, body: { goal: 'Concurrent two', conversationId: 'concurrent-0002', privacyConsent: { modelProvider: true } }
+      ...auth, body: { goal: 'Concurrent two', conversationId: 'concurrent-0002' }
     });
 
     const [a, b] = await Promise.all([
