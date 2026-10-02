@@ -1,0 +1,46 @@
+name: Runtime hardening
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kindgleam-runtime-hardening-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  container-hardening:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build production image
+        run: docker build --pull --tag kindgleam:hardening .
+      - name: Assert image hardening metadata
+        run: |
+          test "$(docker image inspect kindgleam:hardening --format '{{.Config.User}}')" = "node"
+          test "$(docker image inspect kindgleam:hardening --format '{{.Config.Env}}' | grep -o 'NODE_ENV=production')" = "NODE_ENV=production"
+      - name: Verify least-privilege read-only runtime
+        run: |
+          docker run --rm \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            --cap-drop=ALL \
+            --security-opt=no-new-privileges:true \
+            --entrypoint node \
+            kindgleam:hardening \
+            -e "const fs=require('node:fs'); if(process.getuid()===0) process.exit(2); try { fs.writeFileSync('/app/.runtime-hardening-probe','blocked'); process.exit(3); } catch (error) { if(!['EROFS','EACCES'].includes(error.code)) { console.error(error); process.exit(4); } console.log('least-privilege read-only runtime OK'); }"
+      - name: Verify temporary workspace remains available only where intended
+        run: |
+          docker run --rm \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            --cap-drop=ALL \
+            --security-opt=no-new-privileges:true \
+            --entrypoint node \
+            kindgleam:hardening \
+            -e "require('node:fs').writeFileSync('/tmp/runtime-probe','ok'); if(require('node:fs').readFileSync('/tmp/runtime-probe','utf8')!=='ok') process.exit(5); console.log('tmpfs runtime OK')"
