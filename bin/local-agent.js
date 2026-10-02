@@ -580,6 +580,11 @@ const server = createServer(async (req, res) => {
   }
 });
 
+server.on('listening', () => {
+  const address = server.address();
+  boundPort = typeof address === 'object' && address ? Number(address.port) : PORT;
+});
+
 server.listen(PORT, HOST, async () => {
   await fs.mkdir(RUN_ROOT, { recursive: true });
   console.log(`Kindgleam local agent ${AGENT_VERSION} listening on http://${HOST}:${PORT}`);
