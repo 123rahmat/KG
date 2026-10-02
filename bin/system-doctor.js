@@ -71,6 +71,7 @@ const projectIndex = await read('src/project-index.js');
 const contextCompiler = await read('src/context-compiler.js');
 const parallel = await read('src/parallel-orchestrator.js');
 const multiAgent = await read('src/multi-agent.js');
+const migrationSource = await read('src/migrations.js');
 
 check('server-owned-workflow', /SELECT[\s\S]*FOR UPDATE/.test(runs), 'run state is expected to be re-read under a row lock');
 check('execution-claim-integrity', /executed\s*[:=]/.test(core + runs), 'execution state is represented explicitly');
@@ -96,8 +97,8 @@ check('terminal-access-recheck', /ACCESS_RECHECK_MS/.test(await read('src/termin
 check('terminal-secret-input-filter', /SENSITIVE_TERMINAL_PATH/.test(await read('src/terminal.js')) && /Credential-bearing files must never enter/.test(await read('src/terminal.js')), 'credential-bearing files are excluded from terminal sandboxes');
 check('usage-reservation-admission', /usage_reservations/.test(await read('src/usage.js')) && /runReserved/.test(await read('src/usage.js')) && /pg_advisory_xact_lock/.test(await read('src/usage.js')), 'model spend is admitted atomically against rolling and per-run token limits');
 check('usage-source-attribution', /multi-agent/.test(await read('src/usage.js')) && /verification-review/.test(await read('src/usage.js')), 'model spend sources remain distinguishable in the usage ledger');
-check('run-action-write-policy-split', /run_actions_select_policy/.test(await read('src/migrations.js')) && /run_actions_update_policy/.test(await read('src/migrations.js')) && !/CREATE POLICY run_actions_policy/.test(await read('src/migrations.js')), 'database policy separates read access from action mutation');
-check('migration-order', (() => { const v = [...String(await read('src/migrations.js')).matchAll(/version:\s*(\d+)/g)].map(m => Number(m[1])); return v.every((n, i) => i === 0 || n > v[i - 1]) && v.at(-1) === 63; })(), 'migrations are strictly increasing and include every hardening migration');
+check('run-action-write-policy-split', /run_actions_select_policy/.test(migrationSource) && /run_actions_update_policy/.test(migrationSource) && !/CREATE POLICY run_actions_policy/.test(migrationSource), 'database policy separates read access from action mutation');
+check('migration-order', (() => { const v = [...migrationSource.matchAll(/version:\s*(\d+)/g)].map(m => Number(m[1])); return v.every((n, i) => i === 0 || n > v[i - 1]) && v.at(-1) === 63; })(), 'migrations are strictly increasing and include every hardening migration');
 check('background-worker-cycle-bound', /maxPerCycle/.test(jobs) && /cycleLimit/.test(jobs), 'background workers bound queue draining per cycle for fairness and resource control');
 check('fleet-lease-fencing', /renewLease\(/.test(fleet) && /worker_id/.test(fleet) && /lease_until\s*>\s*now\(\)/.test(fleet), 'fleet completion and renewal are lease-owned');
 check('fleet-batch-concurrency-fence', /ROW_NUMBER\(\) OVER \(PARTITION BY d\.project_id/.test(fleet) && /project_rank/.test(fleet) && /project_slots/.test(fleet), 'fleet acquisition limits one batch by each project’s actual concurrency slots');
