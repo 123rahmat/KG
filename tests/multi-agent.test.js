@@ -493,7 +493,7 @@ test('Code Workspace gives every subsystem its own multi-agent panel with bounde
   assert.equal(result.findings.length, 6);
   assert.equal(new Set(calls.map(item => item.body.workspacePanel.subsystemId)).size, 2);
   assert.equal(new Set(calls.map(item => item.body.workspacePanel.panelId)).size, 2);
-  assert.equal(calls.every(item => item.body.workspacePanel.mode === 'code-workspace-subsystem-panel'), true);
+  assert.equal(calls.every(item => item.body.workspacePanel.mode === 'unified-adaptive-code-panel'), true);
   assert.equal(calls.every(item => item.body.workspacePanel.a2a.rawPeerFindingsHidden === true), true);
   assert.equal(calls.every(item => item.body.workspacePanel.iteration === 1), true);
   assert.equal(result.waves[0].parallel, true);
@@ -502,6 +502,7 @@ test('Code Workspace gives every subsystem its own multi-agent panel with bounde
   assert.equal(result.allocation.subsystemPanels.length, 2);
   assert.equal(result.allocation.subsystemPanels.every(item => item.status === 'complete'), true);
   assert.equal(result.allocation.subsystemPanels.every(item => item.iterations === 1), true);
+  assert.equal(result.allocation.subsystemPanels.every(item => item.iterationCeiling >= 1), true);
   assert.ok(result.allocation.subsystemMessages.length >= 2);
   assert.equal(result.allocation.subsystemMessages.every(item => item.projectRevision === 'rev-9'), true);
   assert.equal(result.allocation.subsystemMessages.every(item => ['handoff', 'blocker'].includes(item.type)), true);
