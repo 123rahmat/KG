@@ -1032,7 +1032,7 @@ async function runCodeWorkspaceAgentPanels({
     : Math.max(1, Math.min(maxAgents, Math.floor(Math.max(1, Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent) / (AGENT_MAX_OUTPUT_TOKENS * 2))));
 
   for (const dependencyWave of subsystemPlan.waves) {
-    let pendingWave = dependencyWave.subsystemIds.filter(id => subsystemState.get(id)?.status !== 'complete');
+    let pendingWave = dependencyWave.subsystemIds.filter(id => subsystemState.get(id)?.status === 'pending');
 
     while (pendingWave.length) {
       const ready = pendingWave
@@ -1356,10 +1356,7 @@ async function runCodeWorkspaceAgentPanels({
         errorCode: item.parsed ? null : 'agent-unavailable'
       })));
 
-      pendingWave = dependencyWave.subsystemIds.filter(id => {
-        const state = subsystemState.get(id);
-        return state && state.status !== 'complete';
-      });
+      pendingWave = dependencyWave.subsystemIds.filter(id => subsystemState.get(id)?.status === 'pending');
     }
   }
 
