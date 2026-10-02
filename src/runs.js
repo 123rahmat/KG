@@ -892,17 +892,8 @@ export class RunStore {
           ...(hasChoices ? { planChoices } : {})
         };
         if (target.metadata?.planAgreement) {
-          // The approved plan is authoritative for the following coding step.
-          // The model proposal remains evidence, but these user choices are
-          // the only plan overrides the coding stage may treat as instructions.
-          adaptiveUpdate.approvedPlan = {
-            sourceTaskId: target.dependsOn?.[0] ?? null,
-            existingCodePlan: target.metadata?.existingCodePlan === true,
-            planChoices,
-            conditions: conditions || null,
-            approvedAt: evidence.approvedAt,
-            actor: principal.id
-          };
+          // Applied in #settle after the run's adaptive state is constructed.
+          // The approval evidence remains the single authoritative choice set.
         }
       }
 
@@ -1064,6 +1055,22 @@ export class RunStore {
       [run.id, JSON.stringify(requirementModel)]
     );
     run.requirements = requirementModel;
+    if (target.type === 'approval' && target.metadata?.planAgreement && evidence?.approved === true) {
+      adaptiveUpdate.approvedPlan = {
+        sourceTaskId: target.dependsOn?.[0] ?? null,
+        existingCodePlan: target.metadata?.existingCodePlan === true,
+        planChoices: evidence.planChoices ?? {
+          keepExisting: [],
+          removeExisting: [],
+          addNew: [],
+          changeExisting: []
+        },
+        conditions: evidence.conditions ?? null,
+        approvedAt: evidence.approvedAt ?? new Date().toISOString(),
+        actor: evidence.actor ?? run.principal_id ?? run.principalId
+      };
+    }
+
     let nextState;
     const discovery = target.type === 'discover-capabilities'
       ? normalizeCapabilityDiscovery(structured)
