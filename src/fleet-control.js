@@ -15,6 +15,10 @@ const clamp = (value, min, max, fallback = min) => {
 };
 
 export const FLEET_PROJECT_STATES = Object.freeze(['active', 'paused', 'archived']);
+
+export class FleetValidationError extends Error {
+  constructor(message) { super(message); this.name = 'FleetValidationError'; this.code = 'fleet-validation'; }
+}
 export const FLEET_LIMITS = Object.freeze({
   maxProjectConcurrency: 8,
   maxDispatchBatch: 32,
@@ -26,7 +30,7 @@ export const FLEET_LIMITS = Object.freeze({
 export function normalizeProjectSpec(input = {}) {
   const value = input && typeof input === 'object' ? input : {};
   const name = text(value.name).slice(0, 180);
-  if (!name) throw new Error('Project name is required');
+  if (!name) throw new FleetValidationError('Project name is required');
   return {
     name,
     state: FLEET_PROJECT_STATES.includes(text(value.state)) ? text(value.state) : 'active',
@@ -187,7 +191,7 @@ export class FleetStore {
 
   async addDependency(scope, id, dependsOnId) {
     const left = text(id); const right = text(dependsOnId);
-    if (!left || !right || left === right) throw new Error('A project cannot depend on itself');
+    if (!left || !right || left === right) throw new FleetValidationError('A project cannot depend on itself');
     const cycleSql = [
       'WITH RECURSIVE reaches(id) AS (',
       'SELECT depends_on_project_id FROM fleet_project_dependencies WHERE project_id=$1 AND workspace_id=$3',
@@ -196,12 +200,12 @@ export class FleetStore {
       'SELECT 1 FROM reaches WHERE id=$2 LIMIT 1'
     ].join(' ');
     const { rows: cycle } = await this.pool.query(cycleSql, [left, right, scope.workspaceId]);
-    if (cycle.length) throw new Error('Adding this dependency would create a project cycle');
+    if (cycle.length) throw new FleetValidationError('Adding this dependency would create a project cycle');
     const { rows: count } = await this.pool.query(
       'SELECT count(*)::int count FROM fleet_project_dependencies WHERE project_id=$1 AND workspace_id=$2',
       [left, scope.workspaceId]
     );
-    if (Number(count[0]?.count || 0) >= FLEET_LIMITS.maxDependencies) throw new Error('Project dependency limit reached');
+    if (Number(count[0]?.count || 0) >= FLEET_LIMITS.maxDependencies) throw new FleetValidationError('Project dependency limit reached');
     await this.pool.query(
       'INSERT INTO fleet_project_dependencies(workspace_id,project_id,depends_on_project_id) SELECT $3,$1,$2 WHERE EXISTS (SELECT 1 FROM fleet_projects WHERE id=$1 AND workspace_id=$3) AND EXISTS (SELECT 1 FROM fleet_projects WHERE id=$2 AND workspace_id=$3) ON CONFLICT DO NOTHING',
       [left, right, scope.workspaceId]
@@ -211,16 +215,53 @@ export class FleetStore {
 
   async enqueue(scope, projectId, { runId, taskId, request = {}, maxAttempts = 3 } = {}) {
     const project = await this.get(scope, projectId);
-    if (!project) throw new Error('Fleet project not found');
-    if (project.state !== 'active') throw new Error('Project is not active');
-    if (!text(runId) || !text(taskId)) throw new Error('Fleet dispatch requires runId and taskId');
+    if (!project) throw new FleetValidationError('Fleet project not found');
+    if (project.state !== 'active') throw new FleetValidationError('Project is not active');
+    const run = text(runId);
+    const task = text(taskId);
+    if (!run || !task) throw new FleetValidationError('Fleet dispatch requires runId and taskId');
+    const { rows: [target] = [] } = await this.pool.query(
+      `SELECT t.id, t.status, r.state
+         FROM runs r JOIN run_tasks t ON t.run_id = r.id
+        WHERE r.id = $1 AND r.workspace_id = $2 AND t.id = $3
+          AND (r.visibility = 'workspace' OR r.principal_id = $4)
+        LIMIT 1`,
+      [run, scope.workspaceId, task, scope.principalId]
+    );
+    if (!target) throw new FleetValidationError('Fleet dispatch references an inaccessible run or task');
+    if (target.status !== 'pending') throw new FleetValidationError('Fleet dispatch target task is no longer pending');
+    if (['complete','failed','blocked','exhausted'].includes(text(target.state))) throw new FleetValidationError('Fleet dispatch target run is already terminal');
     const { rows: [row] } = await this.pool.query(
       "INSERT INTO fleet_dispatches(id,workspace_id,principal_id,project_id,state,payload,max_attempts,available_at) VALUES($1,$2,$3,$4,'queued',$5::jsonb,$6,now()) RETURNING *",
       [crypto.randomUUID(), scope.workspaceId, scope.principalId, projectId,
-        JSON.stringify({ runId: text(runId), taskId: text(taskId), request: request && typeof request === 'object' ? request : {} }),
+        JSON.stringify({ runId: run, taskId: task, request: request && typeof request === 'object' ? request : {} }),
         Math.max(1, Math.min(8, Number(maxAttempts) || 3))]
     );
     return { id: row.id, projectId: row.project_id, state: row.state, attempts: row.attempts, availableAt: row.available_at, createdAt: row.created_at };
+  }
+
+  async reapExpired({ workspaceId = '', limit = 100 } = {}) {
+    return transaction(this.pool, async client => {
+      const params = [];
+      const conditions = ["state='running'", "lease_until IS NOT NULL", "lease_until < now()", "attempts >= max_attempts"];
+      if (workspaceId) { params.push(workspaceId); conditions.push('workspace_id=$' + params.length); }
+      const limitParam = params.length + 1;
+      params.push(Math.max(1, Math.min(500, Number(limit) || 100)));
+      const sql = [
+        'WITH expired AS (SELECT id,project_id FROM fleet_dispatches WHERE',
+        conditions.join(' AND '),
+        'ORDER BY lease_until ASC,id ASC FOR UPDATE SKIP LOCKED LIMIT $' + limitParam + ')',
+        "UPDATE fleet_dispatches d SET state='failed',error='lease-expired-attempt-budget-exhausted',lease_until=NULL,worker_id=NULL,finished_at=now(),updated_at=now() FROM expired e WHERE d.id=e.id RETURNING d.project_id"
+      ].join(' ');
+      const { rows } = await client.query(sql, params);
+      if (!rows.length) return 0;
+      const ids = [...new Set(rows.map(row => row.project_id))];
+      await client.query(
+        "UPDATE fleet_projects p SET in_flight=(SELECT count(*) FROM fleet_dispatches d WHERE d.project_id=p.id AND d.state='running'),failure_count=failure_count+1,consecutive_failures=consecutive_failures+1,updated_at=now() WHERE p.id=ANY($1::text[])",
+        [ids]
+      );
+      return rows.length;
+    });
   }
 
   async acquireBatch({
@@ -269,14 +310,37 @@ export class FleetStore {
     });
   }
 
+  async renewLease(scope, dispatchId, { workerId, attempts, leaseMs = 300000 } = {}) {
+    const safeLease = Math.max(10000, Math.min(900000, Number(leaseMs) || 300000));
+    const { rows: [row] = [] } = await this.pool.query(
+      "UPDATE fleet_dispatches SET lease_until=now()+($3::bigint * interval '1 millisecond'),updated_at=now() WHERE id=$1 AND workspace_id=$2 AND state='running' AND worker_id=$4 AND attempts=$5 AND lease_until>now() RETURNING id,lease_until",
+      [text(dispatchId), scope.workspaceId, safeLease, text(workerId), Number(attempts) || 0]
+    );
+    return row ? { id: row.id, leaseUntil: row.lease_until } : null;
+  }
+
+  async release(scope, dispatchId, { workerId, attempts, delayMs = 5000, error = null } = {}) {
+    const delay = Math.max(1000, Math.min(300000, Number(delayMs) || 5000));
+    const { rows: [row] = [] } = await this.pool.query(
+      "UPDATE fleet_dispatches SET state='queued',lease_until=NULL,worker_id=NULL,available_at=now()+($3::bigint * interval '1 millisecond'),error=$6,updated_at=now() WHERE id=$1 AND workspace_id=$2 AND state='running' AND worker_id=$4 AND attempts=$5 RETURNING id,state,available_at",
+      [text(dispatchId), scope.workspaceId, delay, text(workerId), Number(attempts) || 0, error ? text(error).slice(0,1000) : null]
+    );
+    return row ? { id: row.id, state: row.state, availableAt: row.available_at } : null;
+  }
+
   async finish(scope, dispatchId, {
-    state = 'succeeded', costTokens = 0, costComputeMs = 0, error = null, metadata = {}
+    state = 'succeeded', healthOutcome = null, workerId = null, attempts = null,
+    costTokens = 0, costComputeMs = 0, error = null, metadata = {}
   } = {}) {
-    if (!['succeeded','failed','cancelled'].includes(text(state))) throw new Error('Invalid terminal dispatch state');
+    if (!['succeeded','failed','cancelled'].includes(text(state))) throw new FleetValidationError('Invalid terminal dispatch state');
     return transaction(this.pool, async client => {
+      const fenceParams = [text(dispatchId), scope.workspaceId];
+      const fence = ['id=$1', 'workspace_id=$2', "state='running'"];
+      if (text(workerId)) { fenceParams.push(text(workerId)); fence.push('worker_id=$' + fenceParams.length); }
+      if (attempts !== null && attempts !== undefined) { fenceParams.push(Number(attempts) || 0); fence.push('attempts=$' + fenceParams.length); }
       const { rows: [dispatch] = [] } = await client.query(
-        'SELECT * FROM fleet_dispatches WHERE id=$1 AND workspace_id=$2 FOR UPDATE',
-        [text(dispatchId), scope.workspaceId]
+        'SELECT * FROM fleet_dispatches WHERE ' + fence.join(' AND ') + ' FOR UPDATE',
+        fenceParams
       );
       if (!dispatch) return null;
       const { rows: [project] = [] } = await client.query(
@@ -284,15 +348,16 @@ export class FleetStore {
         [dispatch.project_id, scope.workspaceId]
       );
       if (!project) return null;
-      const succeeded = state === 'succeeded';
-      const failed = state === 'failed';
+      const outcome = text(healthOutcome) || state;
+      const succeeded = outcome === 'succeeded';
+      const failed = outcome === 'failed';
       const oldScore = Number(project.health?.score ?? 1);
       const score = succeeded ? oldScore * 0.9 + 0.1 : failed ? oldScore * 0.8 : oldScore;
       const failures = failed ? Number(project.consecutive_failures || 0) + 1 : succeeded ? 0 : Number(project.consecutive_failures || 0);
       const tokenSpent = Math.max(0, Number(costTokens) || 0);
       const computeSpent = Math.max(0, Number(costComputeMs) || 0);
       await client.query(
-        "UPDATE fleet_dispatches SET state=$2,lease_until=NULL,finished_at=now(),updated_at=now(),cost_tokens=$3,cost_compute_ms=$4,error=$5,metadata=$6::jsonb WHERE id=$1 AND state='running'",
+        "UPDATE fleet_dispatches SET state=$2,lease_until=NULL,worker_id=NULL,finished_at=now(),updated_at=now(),cost_tokens=$3,cost_compute_ms=$4,error=$5,metadata=$6::jsonb WHERE id=$1 AND state='running'",
         [dispatch.id, state, tokenSpent, computeSpent, error ? text(error).slice(0,1000) : null, JSON.stringify(metadata && typeof metadata === 'object' ? metadata : {})]
       );
       await client.query(
