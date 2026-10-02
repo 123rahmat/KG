@@ -10,29 +10,34 @@ test('private-run actions are not visible to another workspace member', () =>
   withServer(async ({ call, seed, pool }) => {
     const owner = await seed({ workspace: 'shared', role: 'editor', name: 'Owner' });
     const peer = await seed({ workspace: 'shared', role: 'viewer', name: 'Peer' });
-    const { body: run } = await call('POST', '/api/runs', {
-      token: owner.token,
-      workspace: 'shared',
-      body: { goal: 'Private task', privacyConsent: { modelProvider: true } }
-    });
-    assert.ok(run.id);
+    const runId = 'run-private-action-test';
     await runDbScope(
       { principalId: owner.principal.id, workspaceId: 'shared', role: 'editor' },
       () => pool.query(
+        `INSERT INTO runs
+           (id, workspace_id, principal_id, goal, surface, state, intent, capabilities, governance,
+            adaptation, situation, requirements, visibility, attempt, max_attempts, max_tokens)
+         VALUES
+           ($1, 'shared', $2, 'Private task', 'chat', 'respond',
+            '{"kind":"chat"}', '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb,
+            '{"version":1,"items":[],"overallProgress":0,"completionReady":false}'::jsonb,
+            'private', 1, 5, NULL)`,
+        [runId, owner.principal.id]
+      ).then(() => pool.query(
         `INSERT INTO run_actions (id,run_id,task_id,workspace_id,principal_id,tool,input,summary)
          VALUES ('act-private-test',$1,'respond','shared',$2,'memory.save','{}','private action')`,
-        [run.id, owner.principal.id]
-      )
+        [runId, owner.principal.id]
+      ))
     );
 
     const actions = new RunActions(pool);
     const ownerView = await runDbScope(
       { principalId: owner.principal.id, workspaceId: 'shared', role: 'editor' },
-      () => actions.list({ principalId: owner.principal.id, workspaceId: 'shared' }, run.id)
+      () => actions.list({ principalId: owner.principal.id, workspaceId: 'shared' }, runId)
     );
     const peerView = await runDbScope(
       { principalId: peer.principal.id, workspaceId: 'shared', role: 'viewer' },
-      () => actions.list({ principalId: peer.principal.id, workspaceId: 'shared' }, run.id)
+      () => actions.list({ principalId: peer.principal.id, workspaceId: 'shared' }, runId)
     );
     assert.equal(ownerView.length, 1);
     assert.equal(peerView.length, 0);
@@ -62,7 +67,7 @@ test('expired approved actions become explicitly uncertain instead of hanging fo
       assert.equal(await actions.recoverExpired({ limit: 10 }), 1);
       const seen = await runDbScope(
         { principalId: owner.principal.id, workspaceId: 'shared', role: 'editor' },
-        () => actions.list({ principalId: owner.principal.id, workspaceId: 'shared' }, run.id)
+        () => actions.list({ principalId: owner.principal.id, workspaceId: 'shared' }, runId)
       );
       assert.equal(seen[0].status, 'uncertain');
       assert.equal(seen[0].result.code, 'execution-outcome-uncertain');
