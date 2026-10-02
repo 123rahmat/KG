@@ -198,7 +198,12 @@ export async function usageSummary(pool, { principalId, workspaceId = null, conf
       ORDER BY day ASC`,
     [principalId, weekStart]
   );
-  const dayMap = new Map(dayRows.map(row => [String(row.day), Number(row.tokens || 0)]));
+  const dayMap = new Map(dayRows.map(row => {
+    const key = row.day instanceof Date
+      ? row.day.toISOString().slice(0, 10)
+      : String(row.day ?? '').slice(0, 10);
+    return [key, Number(row.tokens || 0)];
+  }));
   const days = [];
   for (let back = 6; back >= 0; back -= 1) {
     const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - back));
