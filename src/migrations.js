@@ -2690,4 +2690,24 @@ export const MIGRATIONS = [
         ALTER COLUMN billing_storage_version SET DEFAULT 1;
     `
   }
+  ,{
+    version: 67,
+    name: 'github-only-code-workspace-sources',
+    sql: `
+      -- Code Workspace is a GitHub-only product surface. Existing local-folder
+      -- sources are revoked so legacy browser-held folder access cannot remain active.
+      UPDATE workspace_sources
+         SET revoked_at = COALESCE(revoked_at, now()),
+             credentials_enc = NULL,
+             updated_at = now()
+       WHERE kind = 'local-folder';
+
+      ALTER TABLE workspace_sources
+        DROP CONSTRAINT IF EXISTS workspace_sources_kind_check;
+
+      ALTER TABLE workspace_sources
+        ADD CONSTRAINT workspace_sources_kind_check CHECK (kind = 'github');
+    `
+  }
+
 ];
