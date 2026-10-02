@@ -491,15 +491,19 @@ test('Code Workspace gives every subsystem its own multi-agent panel with bounde
     modelCaller: fakeModel
   });
 
-  assert.equal(result.findings.length, 6);
+  assert.equal(result.findings.length, 10);
   assert.equal(new Set(calls.map(item => item.body.workspacePanel.subsystemId)).size, 2);
   assert.equal(new Set(calls.map(item => item.body.workspacePanel.panelId)).size, 2);
   assert.equal(calls.every(item => item.body.workspacePanel.mode === 'unified-adaptive-code-panel'), true);
   assert.equal(calls.every(item => item.body.workspacePanel.a2a.rawPeerFindingsHidden === true), true);
+  assert.equal(calls.every(item => item.body.workspacePanel.lifecycle.researchEveryCycle === true), true);
+  assert.equal(calls.every(item => item.body.workspacePanel.lifecycle.explanationEveryCycle === true), true);
+  assert.equal(calls.every(item => item.body.workspacePanel.lifecycle.replanEveryCycle === true), true);
+  assert.deepEqual(result.allocation.codingEconomy.panelCoverage, ['research', 'explain', 'replan', 'implement', 'test', 'critique', 'verify', 'handoff']);
   assert.equal(calls.every(item => item.body.workspacePanel.iteration === 1), true);
   assert.equal(result.waves[0].parallel, true);
   assert.equal(result.waves[0].subsystemIds.length, 2);
-  assert.equal(result.waves[0].roles.length, 6);
+  assert.equal(result.waves[0].roles.length, 10);
   assert.equal(result.allocation.subsystemPanels.length, 2);
   assert.equal(result.allocation.subsystemPanels.every(item => item.status === 'complete'), true);
   assert.equal(result.allocation.subsystemPanels.every(item => item.iterations === 1), true);
@@ -588,6 +592,8 @@ test('normal-chat ZIP projects use exactly one adaptive coding panel', async () 
   assert.equal(calls.every(item => item.body.subsystemWork?.subsystem?.id), true);
   assert.equal(calls.every(item => item.body.workspacePanel.engine === 'unified-adaptive-code-panel-v1'), true);
   assert.equal(calls.every(item => item.body.workspacePanel.topology === 'single-project'), true);
+  assert.equal(calls.every(item => item.body.workspacePanel.lifecycle.coverage.includes('research')), true);
+  assert.equal(calls.every(item => item.body.workspacePanel.communication.internal === 'independent-first-then-typed-summary'), true);
   assert.equal(calls.every(item => item.body.codeIntelligence.files.length === 80), true);
   assert.equal(calls.every(item => item.body.subsystemPlan.subsystems.length === 1), true);
   assert.equal(result.brief.findings.every(item => item.role !== 'subsystem-worker'), true);
