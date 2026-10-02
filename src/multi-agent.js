@@ -786,6 +786,35 @@ function buildBrief(findings, arbiter, decision, states = [], allocation = null)
         ? 'unanimous'
         : 'no-findings';
   const implementationFinding = findings.find(item => item.role === 'implementer' && item.implementation);
+  // Code Workspace always has a server-owned subsystem scope. When the
+  // advisory implementer omits a structured patch, expose that scope as a
+  // clearly labeled derived implementation plan rather than losing it.
+  const derivedImplementationPlan = !implementationFinding?.implementation
+    && allocation?.panelEngine === 'unified-adaptive-code-panel-v1'
+    && Array.isArray(allocation?.subsystemPlan?.subsystems)
+    ? (() => {
+        const subsystems = allocation.subsystemPlan.subsystems;
+        const targets = subsystems.flatMap(subsystem => {
+          const paths = Array.isArray(subsystem.files) && subsystem.files.length
+            ? subsystem.files
+            : (Array.isArray(subsystem.roots) ? subsystem.roots : []);
+          return paths.slice(0, 8).map(path => ({
+            path,
+            change: 'Review and improve only when required by verified panel evidence; keep the change inside the assigned subsystem scope.',
+            reason: 'Server-derived subsystem boundary; no model-generated patch was accepted.'
+          }));
+        }).slice(0, 32);
+        const tests = subsystems.flatMap(subsystem => Array.isArray(subsystem.tests) ? subsystem.tests.slice(0, 8) : []).slice(0, 32);
+        return {
+          objective: 'make the assigned subsystem reliable',
+          targets,
+          tests,
+          contractChanges: [],
+          patchProposal: null,
+          source: 'server-derived-subsystem-scope'
+        };
+      })()
+    : null;
   return {
     enabled: true,
     reason: decision.reason,
@@ -802,7 +831,7 @@ function buildBrief(findings, arbiter, decision, states = [], allocation = null)
     actions,
     evidence,
     assumptions,
-        implementationPlan: implementationFinding?.implementation ?? null,
+    implementationPlan: implementationFinding?.implementation ?? derivedImplementationPlan,
     consensus: arbiter ? arbiter.summary : null,
     arbiterRecommendation: arbiter?.recommendation ?? null,
     findings: findings.map(item => ({
@@ -1884,6 +1913,13 @@ export async function runAdaptiveAgentPanel({
     });
   }
   let allocationResult = rolesFor(run, task, { maxAgents, mode });
+  // Preserve the initial specialist commitment long enough to obtain the
+  // independent evidence that justified it. Adaptive evidence may still stop
+  // the panel early, but it must not shrink the committed floor after one result.
+  const initialPanelFloor = Math.max(
+    minimumSubsystemAgents,
+    Number(allocationResult.agentCount ?? allocationResult.roles?.length) || 1
+  );
   if (!allocationResult.decision.enabled) return { enabled: false, decision: allocationResult.decision, brief: null, agents: [], findings: [], arbiter: null };
 
   const usedModels = [];
@@ -1951,7 +1987,7 @@ export async function runAdaptiveAgentPanel({
       evidenceSoFar: basePayload?.evidenceSoFar,
       findings
     };
-    allocationResult = rolesFor(run, task, { maxAgents, mode, progress, minimumAgents: minimumSubsystemAgents });
+    allocationResult = rolesFor(run, task, { maxAgents, mode, progress, minimumAgents: initialPanelFloor });
     lastAllocation = allocationResult.allocation ?? lastAllocation;
 
     const pendingRoles = allocationResult.roles.filter(role =>
@@ -2142,7 +2178,12 @@ export async function runAdaptiveAgentPanel({
       risk: run?.situation?.risk ?? 'ordinary',
       benefit: Number(lastAllocation?.dimensions?.concurrencyOpportunity ?? 0)
     });
-    effectiveMaxParallel = concurrency.next;
+    // A tokenless caller has no safe reservation mechanism for parallel calls.
+    // Keep its execution strictly serial, but continue with later waves when
+    // the adaptive floor still calls for additional independent evidence.
+    effectiveMaxParallel = run?.maxTokens == null
+      ? 1
+      : concurrency.next;
     waveRecord.concurrency = concurrency;
     waves.push(waveRecord);
     await recordWave({ run, task, wave: waveRecord });
@@ -2182,7 +2223,7 @@ export async function runAdaptiveAgentPanel({
     allocationResult = rolesFor(run, task, {
       maxAgents,
       mode,
-      minimumAgents: minimumSubsystemAgents,
+      minimumAgents: initialPanelFloor,
       progress: {
         completedRoles,
         failedRoles,
@@ -2195,11 +2236,10 @@ export async function runAdaptiveAgentPanel({
     lastAllocation = allocationResult.allocation ?? lastAllocation;
     const earlyStop = panelEarlyConvergence({ run, task, findings, iteration: allocationRounds });
     earlyConvergence = earlyStop;
-    // A generic panel without an explicit run-level token ceiling is
-    // intentionally one-at-a-time: there is no safe way for the caller's
-    // canSpend probe to reserve multiple parallel calls. Live Code Workspace
-    // panels use their own bounded scheduler and remain parallel-capable.
-    if (earlyStop.stop || run?.maxTokens == null) {
+    // A generic panel without an explicit run-level token ceiling remains
+    // one-at-a-time, but later serial waves are still allowed when the
+    // adaptive floor requires more independent evidence.
+    if (earlyStop.stop) {
       break;
     }
   }
