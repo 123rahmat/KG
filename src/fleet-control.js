@@ -223,6 +223,424 @@ export class FleetStore {
     return { id: row.id, projectId: row.project_id, state: row.state, attempts: row.attempts, availableAt: row.available_at, createdAt: row.created_at };
   }
 
+  async reapExpired({ workspaceId = '', limit = 100 } = {}) {
+    return transaction(this.pool, async client => {
+      const params = [];
+      const conditions = ["state='running'", "lease_until IS NOT NULL", "lease_until < now()", "attempts >= max_attempts"];
+      if (workspaceId) {
+        params.push(workspaceId);
+        conditions.push('workspace_id=    limit = 8, workerId = 'worker', leaseMs = 300000, partition = null, partitions = 1, workspaceId = ''
+  } = {}) {
+    const safeLimit = Math.max(1, Math.min(FLEET_LIMITS.maxDispatchBatch, Number(limit) || 8));
+    const safeLease = Math.max(10000, Math.min(900000, Number(leaseMs) || 300000));
+    const count = Math.max(1, Number(partitions) || 1);
+    const shard = partition == null ? null : Math.max(0, Math.min(count - 1, Number(partition) || 0));
+    return transaction(this.pool, async client => {
+      const params = [];
+      const conditions = [
+"((d.state='queued' AND d.available_at<=now() AND d.attempts<d.max_attempts) OR (d.state='running' AND d.lease_until<now()))",
+        'd.attempts<d.max_attempts',
+        "p.state='active'",
+        "(p.next_dispatch_at IS NULL OR p.next_dispatch_at<=now())",
+        '(p.budget_tokens IS NULL OR p.budget_tokens>0)',
+        '(p.budget_compute_ms IS NULL OR p.budget_compute_ms>0)',
+        "p.max_concurrency>(SELECT count(*) FROM fleet_dispatches r WHERE r.project_id=d.project_id AND r.state='running')",
+        "NOT EXISTS (SELECT 1 FROM fleet_project_dependencies dep WHERE dep.project_id=d.project_id AND NOT EXISTS (SELECT 1 FROM fleet_dispatches latest WHERE latest.project_id=dep.depends_on_project_id AND latest.id=(SELECT l2.id FROM fleet_dispatches l2 WHERE l2.project_id=dep.depends_on_project_id ORDER BY l2.updated_at DESC,l2.id DESC LIMIT 1) AND latest.state='succeeded'))"
+      ];
+      if (workspaceId) { params.push(workspaceId); conditions.unshift('d.workspace_id=$' + params.length); }
+      if (shard != null) {
+        params.push(count);
+        const countParam = params.length;
+        params.push(shard);
+        const shardParam = params.length;
+        conditions.push('mod(abs(hashtext(d.project_id)),$' + countParam + '::int)=$' + shardParam);
+      }
+      const limitParam = params.length + 1; params.push(safeLimit);
+      const sql = [
+        'WITH candidates AS (SELECT d.id FROM fleet_dispatches d JOIN fleet_projects p ON p.id=d.project_id',
+        'WHERE ' + conditions.join(' AND '),
+        'ORDER BY (p.priority*10 + LEAST(120,EXTRACT(EPOCH FROM (now()-COALESCE(p.last_dispatch_at,p.created_at)))/60)*0.75 + COALESCE((p.health->>\'score\')::double precision,1)*20 - LEAST(80,p.consecutive_failures*p.consecutive_failures*4)) DESC,d.created_at ASC,d.id ASC',
+        'FOR UPDATE OF d SKIP LOCKED LIMIT $' + limitParam + ')',
+        "UPDATE fleet_dispatches d SET state='running',attempts=d.attempts+1,lease_until=now()+(" + (limitParam + 1) + "::bigint*interval '1 millisecond'),worker_id=$" + (limitParam + 2) + ",started_at=COALESCE(d.started_at,now()),updated_at=now() FROM candidates c WHERE d.id=c.id RETURNING d.*"
+      ].join(' ');
+      params.push(safeLease, text(workerId) || 'worker');
+      const { rows } = await client.query(sql, params);
+      if (!rows.length) return [];
+      return rows.map(row => ({
+        id: row.id, projectId: row.project_id, workspaceId: row.workspace_id,
+        principalId: row.principal_id, state: row.state, attempts: row.attempts,
+        maxAttempts: row.max_attempts, payload: row.payload ?? {}, leaseUntil: row.lease_until
+      }));
+    });
+  }
+
+  async finish(scope, dispatchId, {
+    state = 'succeeded', costTokens = 0, costComputeMs = 0, error = null, metadata = {}
+  } = {}) {
+    if (!['succeeded','failed','cancelled'].includes(text(state))) throw new Error('Invalid terminal dispatch state');
+    return transaction(this.pool, async client => {
+      const { rows: [dispatch] = [] } = await client.query(
+        'SELECT * FROM fleet_dispatches WHERE id=$1 AND workspace_id=$2 FOR UPDATE',
+        [text(dispatchId), scope.workspaceId]
+      );
+      if (!dispatch) return null;
+      const { rows: [project] = [] } = await client.query(
+        'SELECT * FROM fleet_projects WHERE id=$1 AND workspace_id=$2 FOR UPDATE',
+        [dispatch.project_id, scope.workspaceId]
+      );
+      if (!project) return null;
+      const succeeded = state === 'succeeded';
+      const failed = state === 'failed';
+      const oldScore = Number(project.health?.score ?? 1);
+      const score = succeeded ? oldScore * 0.9 + 0.1 : failed ? oldScore * 0.8 : oldScore;
+      const failures = failed ? Number(project.consecutive_failures || 0) + 1 : succeeded ? 0 : Number(project.consecutive_failures || 0);
+      const tokenSpent = Math.max(0, Number(costTokens) || 0);
+      const computeSpent = Math.max(0, Number(costComputeMs) || 0);
+      await client.query(
+        "UPDATE fleet_dispatches SET state=$2,lease_until=NULL,finished_at=now(),updated_at=now(),cost_tokens=$3,cost_compute_ms=$4,error=$5,metadata=$6::jsonb WHERE id=$1 AND state='running'",
+        [dispatch.id, state, tokenSpent, computeSpent, error ? text(error).slice(0,1000) : null, JSON.stringify(metadata && typeof metadata === 'object' ? metadata : {})]
+      );
+      await client.query(
+        "UPDATE fleet_projects SET in_flight=(SELECT count(*) FROM fleet_dispatches d WHERE d.project_id=$1 AND d.state='running'),consecutive_failures=$2,success_count=success_count+$3,failure_count=failure_count+$4,health=$5::jsonb,last_dispatch_at=now(),next_dispatch_at=CASE WHEN $4>0 AND $2>=2 THEN now()+interval '5 minutes' ELSE next_dispatch_at END,budget_tokens=CASE WHEN budget_tokens IS NULL THEN NULL ELSE GREATEST(0,budget_tokens-$6) END,budget_compute_ms=CASE WHEN budget_compute_ms IS NULL THEN NULL ELSE GREATEST(0,budget_compute_ms-$7) END,updated_at=now() WHERE id=$1 AND workspace_id=$8",
+        [dispatch.project_id, failures, succeeded ? 1 : 0, failed ? 1 : 0,
+          JSON.stringify({ score: Number(score.toFixed(4)), lastOutcome: succeeded ? 'succeeded' : failed ? 'failed' : state }),
+          tokenSpent, computeSpent, scope.workspaceId]
+      );
+      return { id: dispatch.id, state, projectId: dispatch.project_id };
+    });
+  }
+}
+
+export function fleetStatus(projects = [], { capacity = 1, workerCount = 1 } = {}) {
+  const items = Array.isArray(projects) ? projects : [];
+  return {
+    projects: items.length,
+    activeProjects: items.filter(item => item.state === 'active').length,
+    queuedDispatches: items.reduce((n, item) => n + Number(item.queued || 0), 0),
+    runningDispatches: items.reduce((n, item) => n + Number(item.inFlight || 0), 0),
+    unhealthyProjects: items.filter(item => Number(item.health?.score ?? 1) < 0.5).length,
+    capacity: Math.max(1, Number(capacity) || 1),
+    workers: Math.max(1, Number(workerCount) || 1)
+  };
+}
+
+export function createFleetWorker({
+  fleet, identity, runs, executeNext, logger, metrics,
+  pollMs = 1000, batchSize = 8, maxConcurrency = 4, workerId = 'fleet-' + process.pid,
+  partition = null, partitions = 1
+} = {}) {
+  let timer = null; let active = null; let stopping = false;
+
+  async function process(dispatch) {
+    const startedAt = Date.now();
+    const scope = { principalId: dispatch.principalId, workspaceId: dispatch.workspaceId };
+    return runDbScope({ ...scope, organizationId: '', jurisdiction: '', role: 'job-worker' }, async () => {
+      try {
+        let access;
+        try {
+          access = await identity.requireAccess({ id: dispatch.principalId }, dispatch.workspaceId, 'editor');
+        } catch {
+          await fleet.finish(scope, dispatch.id, { state: 'failed', error: 'Fleet dispatch access was revoked' });
+          return false;
+        }
+        access.principalId = dispatch.principalId;
+        const payload = dispatch.payload ?? {};
+        const run = await runs.get(access, payload.runId);
+        const task = run?.tasks.find(item => item.id === payload.taskId);
+        if (!run || !task) {
+          await fleet.finish(scope, dispatch.id, { state: 'failed', error: 'Fleet dispatch references a missing run or task' });
+          return false;
+        }
+        if (task.status === 'complete') {
+          await fleet.finish(scope, dispatch.id, { state: 'succeeded', metadata: { code: 'completed-earlier' } });
+          return true;
+        }
+        const reply = await executeNext({
+          scope: access, principal: { id: dispatch.principalId }, runId: payload.runId,
+          body: payload.request ?? {}, requestId: null, expectedTaskId: payload.taskId
+        });
+        await fleet.finish(scope, dispatch.id, {
+          state: reply.status < 400 ? 'succeeded' : 'failed',
+          error: reply.status < 400 ? null : text(reply.body?.error),
+          costComputeMs: Date.now() - startedAt,
+          metadata: { status: reply.status }
+        });
+        return reply.status < 400;
+      } catch (error) {
+        await fleet.finish(scope, dispatch.id, {
+          state: 'failed', error: text(error?.message) || 'Fleet execution failed',
+          costComputeMs: Date.now() - startedAt
+        }).catch(() => {});
+        logger?.error('fleet dispatch failed', { error, dispatchId: dispatch.id });
+        metrics?.increment('fleet_dispatch_execution_errors_total');
+        return false;
+      }
+    });
+  }
+
+  async function runOnce() {
+    if (stopping) return 0;
+    await runDbScope({ principalId: '', workspaceId: '', organizationId: '', jurisdiction: '', role: 'job-worker' }, () => fleet.reapExpired({ limit: 100 }));
+    const batch = await fleet.acquireBatch({
+      limit: batchSize, workerId, partition, partitions
+    });
+    if (!batch.length) return 0;
+    const ceiling = Math.max(1, Math.min(16, Number(maxConcurrency) || 1));
+    const adaptive = adaptFleetCapacity({
+      current: runOnce.currentWidth || ceiling,
+      max: ceiling,
+      queueDepth: batch.length,
+      usefulParallelism: batch.length > 1 ? 1 : 0,
+      remainingBudgetRatio: 1
+    });
+    const width = adaptive.next;
+    runOnce.currentWidth = width;
+    let processed = 0;
+    for (let i = 0; i < batch.length; i += width) {
+      await Promise.all(batch.slice(i, i + width).map(process));
+      processed += Math.min(width, batch.length - i);
+    }
+    metrics?.increment('fleet_dispatches_total', { action: 'processed' });
+    return processed;
+  }
+
+  runOnce.currentWidth = Math.max(1, Math.min(16, Number(maxConcurrency) || 1));
+
+  const tick = async () => {
+    if (active || stopping) return;
+    active = runOnce().catch(error => logger?.error('fleet worker cycle failed', { error })).finally(() => { active = null; });
+  };
+
+  return {
+    runOnce,
+    start() {
+      stopping = false;
+      if (!timer) { timer = setInterval(tick, pollMs); timer.unref?.(); }
+    },
+    async stop() {
+      stopping = true;
+      if (timer) clearInterval(timer);
+      timer = null;
+      await active;
+    }
+  };
+}
+ + params.length);
+      }
+      params.push(Math.max(1, Math.min(500, Number(limit) || 100)));
+      const limitParam = '    limit = 8, workerId = 'worker', leaseMs = 300000, partition = null, partitions = 1, workspaceId = ''
+  } = {}) {
+    const safeLimit = Math.max(1, Math.min(FLEET_LIMITS.maxDispatchBatch, Number(limit) || 8));
+    const safeLease = Math.max(10000, Math.min(900000, Number(leaseMs) || 300000));
+    const count = Math.max(1, Number(partitions) || 1);
+    const shard = partition == null ? null : Math.max(0, Math.min(count - 1, Number(partition) || 0));
+    return transaction(this.pool, async client => {
+      const params = [];
+      const conditions = [
+"((d.state='queued' AND d.available_at<=now() AND d.attempts<d.max_attempts) OR (d.state='running' AND d.lease_until<now()))",
+        'd.attempts<d.max_attempts',
+        "p.state='active'",
+        "(p.next_dispatch_at IS NULL OR p.next_dispatch_at<=now())",
+        '(p.budget_tokens IS NULL OR p.budget_tokens>0)',
+        '(p.budget_compute_ms IS NULL OR p.budget_compute_ms>0)',
+        "p.max_concurrency>(SELECT count(*) FROM fleet_dispatches r WHERE r.project_id=d.project_id AND r.state='running')",
+        "NOT EXISTS (SELECT 1 FROM fleet_project_dependencies dep WHERE dep.project_id=d.project_id AND NOT EXISTS (SELECT 1 FROM fleet_dispatches latest WHERE latest.project_id=dep.depends_on_project_id AND latest.id=(SELECT l2.id FROM fleet_dispatches l2 WHERE l2.project_id=dep.depends_on_project_id ORDER BY l2.updated_at DESC,l2.id DESC LIMIT 1) AND latest.state='succeeded'))"
+      ];
+      if (workspaceId) { params.push(workspaceId); conditions.unshift('d.workspace_id=$' + params.length); }
+      if (shard != null) {
+        params.push(count);
+        const countParam = params.length;
+        params.push(shard);
+        const shardParam = params.length;
+        conditions.push('mod(abs(hashtext(d.project_id)),$' + countParam + '::int)=$' + shardParam);
+      }
+      const limitParam = params.length + 1; params.push(safeLimit);
+      const sql = [
+        'WITH candidates AS (SELECT d.id FROM fleet_dispatches d JOIN fleet_projects p ON p.id=d.project_id',
+        'WHERE ' + conditions.join(' AND '),
+        'ORDER BY (p.priority*10 + LEAST(120,EXTRACT(EPOCH FROM (now()-COALESCE(p.last_dispatch_at,p.created_at)))/60)*0.75 + COALESCE((p.health->>\'score\')::double precision,1)*20 - LEAST(80,p.consecutive_failures*p.consecutive_failures*4)) DESC,d.created_at ASC,d.id ASC',
+        'FOR UPDATE OF d SKIP LOCKED LIMIT $' + limitParam + ')',
+        "UPDATE fleet_dispatches d SET state='running',attempts=d.attempts+1,lease_until=now()+(" + (limitParam + 1) + "::bigint*interval '1 millisecond'),worker_id=$" + (limitParam + 2) + ",started_at=COALESCE(d.started_at,now()),updated_at=now() FROM candidates c WHERE d.id=c.id RETURNING d.*"
+      ].join(' ');
+      params.push(safeLease, text(workerId) || 'worker');
+      const { rows } = await client.query(sql, params);
+      if (!rows.length) return [];
+      return rows.map(row => ({
+        id: row.id, projectId: row.project_id, workspaceId: row.workspace_id,
+        principalId: row.principal_id, state: row.state, attempts: row.attempts,
+        maxAttempts: row.max_attempts, payload: row.payload ?? {}, leaseUntil: row.lease_until
+      }));
+    });
+  }
+
+  async finish(scope, dispatchId, {
+    state = 'succeeded', costTokens = 0, costComputeMs = 0, error = null, metadata = {}
+  } = {}) {
+    if (!['succeeded','failed','cancelled'].includes(text(state))) throw new Error('Invalid terminal dispatch state');
+    return transaction(this.pool, async client => {
+      const { rows: [dispatch] = [] } = await client.query(
+        'SELECT * FROM fleet_dispatches WHERE id=$1 AND workspace_id=$2 FOR UPDATE',
+        [text(dispatchId), scope.workspaceId]
+      );
+      if (!dispatch) return null;
+      const { rows: [project] = [] } = await client.query(
+        'SELECT * FROM fleet_projects WHERE id=$1 AND workspace_id=$2 FOR UPDATE',
+        [dispatch.project_id, scope.workspaceId]
+      );
+      if (!project) return null;
+      const succeeded = state === 'succeeded';
+      const failed = state === 'failed';
+      const oldScore = Number(project.health?.score ?? 1);
+      const score = succeeded ? oldScore * 0.9 + 0.1 : failed ? oldScore * 0.8 : oldScore;
+      const failures = failed ? Number(project.consecutive_failures || 0) + 1 : succeeded ? 0 : Number(project.consecutive_failures || 0);
+      const tokenSpent = Math.max(0, Number(costTokens) || 0);
+      const computeSpent = Math.max(0, Number(costComputeMs) || 0);
+      await client.query(
+        "UPDATE fleet_dispatches SET state=$2,lease_until=NULL,finished_at=now(),updated_at=now(),cost_tokens=$3,cost_compute_ms=$4,error=$5,metadata=$6::jsonb WHERE id=$1 AND state='running'",
+        [dispatch.id, state, tokenSpent, computeSpent, error ? text(error).slice(0,1000) : null, JSON.stringify(metadata && typeof metadata === 'object' ? metadata : {})]
+      );
+      await client.query(
+        "UPDATE fleet_projects SET in_flight=(SELECT count(*) FROM fleet_dispatches d WHERE d.project_id=$1 AND d.state='running'),consecutive_failures=$2,success_count=success_count+$3,failure_count=failure_count+$4,health=$5::jsonb,last_dispatch_at=now(),next_dispatch_at=CASE WHEN $4>0 AND $2>=2 THEN now()+interval '5 minutes' ELSE next_dispatch_at END,budget_tokens=CASE WHEN budget_tokens IS NULL THEN NULL ELSE GREATEST(0,budget_tokens-$6) END,budget_compute_ms=CASE WHEN budget_compute_ms IS NULL THEN NULL ELSE GREATEST(0,budget_compute_ms-$7) END,updated_at=now() WHERE id=$1 AND workspace_id=$8",
+        [dispatch.project_id, failures, succeeded ? 1 : 0, failed ? 1 : 0,
+          JSON.stringify({ score: Number(score.toFixed(4)), lastOutcome: succeeded ? 'succeeded' : failed ? 'failed' : state }),
+          tokenSpent, computeSpent, scope.workspaceId]
+      );
+      return { id: dispatch.id, state, projectId: dispatch.project_id };
+    });
+  }
+}
+
+export function fleetStatus(projects = [], { capacity = 1, workerCount = 1 } = {}) {
+  const items = Array.isArray(projects) ? projects : [];
+  return {
+    projects: items.length,
+    activeProjects: items.filter(item => item.state === 'active').length,
+    queuedDispatches: items.reduce((n, item) => n + Number(item.queued || 0), 0),
+    runningDispatches: items.reduce((n, item) => n + Number(item.inFlight || 0), 0),
+    unhealthyProjects: items.filter(item => Number(item.health?.score ?? 1) < 0.5).length,
+    capacity: Math.max(1, Number(capacity) || 1),
+    workers: Math.max(1, Number(workerCount) || 1)
+  };
+}
+
+export function createFleetWorker({
+  fleet, identity, runs, executeNext, logger, metrics,
+  pollMs = 1000, batchSize = 8, maxConcurrency = 4, workerId = 'fleet-' + process.pid,
+  partition = null, partitions = 1
+} = {}) {
+  let timer = null; let active = null; let stopping = false;
+
+  async function process(dispatch) {
+    const startedAt = Date.now();
+    const scope = { principalId: dispatch.principalId, workspaceId: dispatch.workspaceId };
+    return runDbScope({ ...scope, organizationId: '', jurisdiction: '', role: 'job-worker' }, async () => {
+      try {
+        let access;
+        try {
+          access = await identity.requireAccess({ id: dispatch.principalId }, dispatch.workspaceId, 'editor');
+        } catch {
+          await fleet.finish(scope, dispatch.id, { state: 'failed', error: 'Fleet dispatch access was revoked' });
+          return false;
+        }
+        access.principalId = dispatch.principalId;
+        const payload = dispatch.payload ?? {};
+        const run = await runs.get(access, payload.runId);
+        const task = run?.tasks.find(item => item.id === payload.taskId);
+        if (!run || !task) {
+          await fleet.finish(scope, dispatch.id, { state: 'failed', error: 'Fleet dispatch references a missing run or task' });
+          return false;
+        }
+        if (task.status === 'complete') {
+          await fleet.finish(scope, dispatch.id, { state: 'succeeded', metadata: { code: 'completed-earlier' } });
+          return true;
+        }
+        const reply = await executeNext({
+          scope: access, principal: { id: dispatch.principalId }, runId: payload.runId,
+          body: payload.request ?? {}, requestId: null, expectedTaskId: payload.taskId
+        });
+        await fleet.finish(scope, dispatch.id, {
+          state: reply.status < 400 ? 'succeeded' : 'failed',
+          error: reply.status < 400 ? null : text(reply.body?.error),
+          costComputeMs: Date.now() - startedAt,
+          metadata: { status: reply.status }
+        });
+        return reply.status < 400;
+      } catch (error) {
+        await fleet.finish(scope, dispatch.id, {
+          state: 'failed', error: text(error?.message) || 'Fleet execution failed',
+          costComputeMs: Date.now() - startedAt
+        }).catch(() => {});
+        logger?.error('fleet dispatch failed', { error, dispatchId: dispatch.id });
+        metrics?.increment('fleet_dispatch_execution_errors_total');
+        return false;
+      }
+    });
+  }
+
+  async function runOnce() {
+    if (stopping) return 0;
+    const batch = await fleet.acquireBatch({
+      limit: batchSize, workerId, partition, partitions
+    });
+    if (!batch.length) return 0;
+    const ceiling = Math.max(1, Math.min(16, Number(maxConcurrency) || 1));
+    const adaptive = adaptFleetCapacity({
+      current: runOnce.currentWidth || ceiling,
+      max: ceiling,
+      queueDepth: batch.length,
+      usefulParallelism: batch.length > 1 ? 1 : 0,
+      remainingBudgetRatio: 1
+    });
+    const width = adaptive.next;
+    runOnce.currentWidth = width;
+    let processed = 0;
+    for (let i = 0; i < batch.length; i += width) {
+      await Promise.all(batch.slice(i, i + width).map(process));
+      processed += Math.min(width, batch.length - i);
+    }
+    metrics?.increment('fleet_dispatches_total', { action: 'processed' });
+    return processed;
+  }
+
+  runOnce.currentWidth = Math.max(1, Math.min(16, Number(maxConcurrency) || 1));
+
+  const tick = async () => {
+    if (active || stopping) return;
+    active = runOnce().catch(error => logger?.error('fleet worker cycle failed', { error })).finally(() => { active = null; });
+  };
+
+  return {
+    runOnce,
+    start() {
+      stopping = false;
+      if (!timer) { timer = setInterval(tick, pollMs); timer.unref?.(); }
+    },
+    async stop() {
+      stopping = true;
+      if (timer) clearInterval(timer);
+      timer = null;
+      await active;
+    }
+  };
+}
+ + params.length;
+      const sql = [
+        'WITH expired AS (SELECT id,project_id FROM fleet_dispatches WHERE',
+        conditions.join(' AND '),
+        'ORDER BY lease_until ASC,id ASC FOR UPDATE SKIP LOCKED LIMIT ' + limitParam + ')',
+        "UPDATE fleet_dispatches d SET state='failed',error='lease-expired-attempt-budget-exhausted',lease_until=NULL,finished_at=now(),updated_at=now() FROM expired e WHERE d.id=e.id RETURNING d.project_id"
+      ].join(' ');
+      const { rows } = await client.query(sql, params);
+      if (!rows.length) return 0;
+      const ids = [...new Set(rows.map(row => row.project_id))];
+      await client.query(
+        "UPDATE fleet_projects p SET in_flight=(SELECT count(*) FROM fleet_dispatches d WHERE d.project_id=p.id AND d.state='running'),failure_count=failure_count+1,consecutive_failures=consecutive_failures+1,updated_at=now() WHERE p.id=ANY($1::text[])",
+        [ids]
+      );
+      return rows.length;
+    });
+  }
+
   async acquireBatch({
     limit = 8, workerId = 'worker', leaseMs = 300000, partition = null, partitions = 1, workspaceId = ''
   } = {}) {
