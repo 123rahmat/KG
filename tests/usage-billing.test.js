@@ -270,3 +270,40 @@ test('usage windows are universal to the person across workspaces', () =>
     assert.equal(a.body.context.used, 40);
     assert.equal(b.body.context.used, 400);
   }));
+
+
+test('a universal quota cannot be bypassed by switching workspaces', () =>
+  withServer(async ({ call, seed, pool }) => {
+    const first = await seed({ workspace: 'quota-a' });
+    const secondWorkspace = 'quota-b';
+    await pool.query(
+      'INSERT INTO organizations (id, name, type) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+      ['org-quota-b', 'quota-b', 'personal']
+    );
+    await pool.query(
+      'INSERT INTO workspaces (id, name, max_bytes, max_objects, organization_id) VALUES ($1, $2, $3, $4, $5)',
+      [secondWorkspace, secondWorkspace, 1000000, 1000, 'org-quota-b']
+    );
+    await pool.query(
+      'INSERT INTO memberships (workspace_id, principal_id, role) VALUES ($1, $2, $3)',
+      [secondWorkspace, first.principal.id, 'editor']
+    );
+    await pool.query(
+      `INSERT INTO usage_events
+        (principal_id, workspace_id, conversation_id, source, provider, model, input_tokens, output_tokens)
+        VALUES ($1, $2, 'chat-quota-a', 'chat', 'google', 'gemini-test', 700, 100)`,
+      [first.principal.id, first.workspace]
+    );
+
+    const blocked = await call('POST', '/api/runs', {
+      token: first.token,
+      workspace: secondWorkspace,
+      body: {
+        goal: 'This must not bypass the account-wide quota',
+        conversationId: 'chat-quota-b',
+        privacyConsent: { modelProvider: true }
+      }
+    });
+    assert.equal(blocked.status, 429);
+    assert.equal(blocked.body.code, 'usage-limit-reached');
+  }), { env: { USAGE_LIMIT_4H_TOKENS: '800', USAGE_LIMIT_WEEKLY_TOKENS: '1000' } });
