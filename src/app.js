@@ -39,7 +39,7 @@ import { providerConcurrencyStats } from './runtime.js';
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
-export const VERSION = '10.4.0';
+export const VERSION = '10.4.1';
 
 export function createApp({ config, pool, identity, governance, capabilities, objects, runs, jobs = null, scheduler = null, audit, logger, metrics, fetchImpl = fetch }) {
   const app = express();
