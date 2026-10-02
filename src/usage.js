@@ -360,8 +360,8 @@ export async function reserveUsage(pool, {
         limit: exhausted.limit,
         percent: 100,
         exceeded: true,
-        resetsAt: exhausted.rows.length && exhausted.window.ms
-          ? new Date(new Date(exhausted.rows[0].created_at).getTime() + exhausted.window.ms).toISOString()
+        resetsAt: exhausted.oldest && exhausted.window.ms
+          ? new Date(new Date(exhausted.oldest).getTime() + exhausted.window.ms).toISOString()
           : null,
         reserved: exhausted.window.id === 'session' || exhausted.window.id === 'week' ? globalReserved : 0
       }, { canUpgrade: exhausted.window.id !== 'run' && Boolean(config.stripe) });
@@ -381,8 +381,8 @@ export async function reserveUsage(pool, {
         limit: constrained.limit,
         percent: Math.min(100, Math.round((constrained.used / Math.max(1, constrained.limit)) * 1000) / 10),
         exceeded: true,
-        resetsAt: constrained.rows.length && constrained.window.ms
-          ? new Date(new Date(constrained.rows[0].created_at).getTime() + constrained.window.ms).toISOString()
+        resetsAt: constrained.oldest && constrained.window.ms
+          ? new Date(new Date(constrained.oldest).getTime() + constrained.window.ms).toISOString()
           : null,
         reserved: constrained.window.id === 'session' || constrained.window.id === 'week' ? globalReserved : 0
       }, { canUpgrade: constrained.window.id !== 'run' && Boolean(config.stripe) });
