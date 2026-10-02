@@ -7,7 +7,7 @@ import { renderMarkdown } from './markdown.js';
 import { state, $, element, button, api, notify, guard, aiConnected, clearNotice, updateConnectionUI } from './ui-core.js';
 import { autoDrive, browserAdaptationContext, bytes, heading, runStatus, svgIcon, timeAgo } from './app.js';
 import { assistantMessage, userMessage, welcome } from './app-actions.js';
-import { loadUsage, selectTab } from './app-account.js';
+import { loadUsage, renderUsageLimitLock, usageLimitStatus, selectTab } from './app-account.js';
 import { clearDraft, deleteOfflineFiles, loadOfflineFiles, storeOfflineFiles, writeOfflineQueue } from './app-settings.js';
 import { syncAdaptiveWorkspace } from './adaptive-workspace.js';
 import { syncActiveWorkspaceSource } from './workspace-sources.js';
@@ -177,6 +177,7 @@ export function newChat() {
   clearDraft();
   state.run = null;
   clearNotice('runNotice');
+  renderUsageLimitLock();
   document.body.classList.remove('chats-open');
   renderThread();
   $('goal').focus({ preventScroll: true });
@@ -439,6 +440,10 @@ async function flushQueuedItems() {
 }
 
 export async function sendMessage(text) {
+  if (usageLimitStatus()) {
+    renderUsageLimitLock();
+    return;
+  }
   const files = [...state.attachments];
   const goal = String(text ?? '').trim()
     || (files.length ? `Please look at the attached file${files.length > 1 ? 's' : ''}.` : '');
@@ -506,6 +511,14 @@ export async function sendMessage(text) {
     await autoDrive(run);
     loadRuns().catch(() => {});
   } catch (error) {
+    if (error.code === 'usage-limit-reached') {
+      state.chat.pending = null;
+      $('goal').value = goal;
+      renderThread();
+      await loadUsage();
+      renderUsageLimitLock();
+      return;
+    }
     if ((error.code === 'offline' || error.transient || navigator.onLine === false) && state.settings.offlineQueue) {
       // Same key as the attempt: if the server did get it, the retry
       // returns that chat turn instead of starting a second one.
