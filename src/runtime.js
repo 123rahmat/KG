@@ -435,7 +435,6 @@ export async function callModel(messages, {
     // rather than fail a step that no retry soon would complete.
     if (!webSearch || !(error instanceof ModelProviderError) || !SEARCH_FALLBACK_CODES.has(error.code)) {
       if (usageReservation) await usageGate.release(usageReservation).catch(() => {});
-      usageReservation = null;
       throw error;
     }
     outcome = await attempt(false);
@@ -471,7 +470,6 @@ export async function callModel(messages, {
       usageReservation = null;
     } catch (error) {
       await usageGate.release(usageReservation).catch(() => {});
-      usageReservation = null;
       throw error;
     }
   }
