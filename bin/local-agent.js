@@ -84,7 +84,7 @@ function authorizedOrigin(req) {
   if (!ALLOWED_ORIGIN) return false;
   // Only a loopback Host is served, so a DNS-rebound name cannot reach us.
   const host = text(req.headers.host).toLowerCase();
-  const loopback = [`127.0.0.1:${PORT}`, `localhost:${PORT}`, `[::1]:${PORT}`];
+  const loopback = [`127.0.0.1:${boundPort}`, `localhost:${boundPort}`, `[::1]:${boundPort}`];
   if (!loopback.includes(host)) return false;
   return text(req.headers.origin) === ALLOWED_ORIGIN;
 }
