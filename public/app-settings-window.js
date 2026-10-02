@@ -4,7 +4,7 @@
  */
 
 import { state, $, element, api, notify, guard, capabilities } from './ui-core.js';
-import { loadUsage, openBillingPortal, renderBillingSection, renderMemories, renderSchedules, renderSecuritySection, renderUsageSection, renderWorkspaceTools, revokeOtherSessions, saveBilling, selectTab, syncScheduleForm } from './app-account.js';
+import { loadUsage, openBillingPortal, renderBillingSection, renderMemories, renderSchedules, renderSecuritySection, renderUsageSection, renderWorkspaceTools, revokeOtherSessions, selectTab, syncScheduleForm } from './app-account.js';
 import { setupVoiceInput, svgIcon } from './app.js';
 import { DEFAULT_SETTINGS, applyTheme, persistPreferencePatch, saveSettings } from './app-settings.js';
 import { renderReports } from './app-actions.js';
@@ -331,7 +331,6 @@ export function initSettingsWindow() {
   });
   $('openSettings').addEventListener('click', openSettings);
   $('usageRing').addEventListener('click', () => { openSettings(); activateSettingsSection('usage'); });
-  $('billingSave').addEventListener('click', saveBilling);
   $('userModelSelect').addEventListener('change', () => guard(savePreferredModel, 'userModelSaved'));
   $('modelSettingsSave').addEventListener('click', () => guard(saveAdminModelSettings, 'modelSettingsSaved'));
   $('billingPortal').addEventListener('click', openBillingPortal);
