@@ -482,9 +482,24 @@ function scopedCodeIntelligence(codeIntelligence, subsystem) {
       ).slice(0, 120)
     : [];
   return {
-    ...codeIntelligence,
-    files,
+    version: codeIntelligence.version ?? 1,
+    strategy: 'subsystem-minimum-sufficient-context',
+    sourceOfTruth: codeIntelligence.sourceOfTruth ?? 'workspace',
+    project: codeIntelligence.project ?? null,
+    task: codeIntelligence.task ?? null,
+    focus: {
+      changedFiles: (codeIntelligence.focus?.changedFiles ?? []).filter(path => allowed.has(text(path))).slice(0, 80),
+      impactedFiles: (codeIntelligence.focus?.impactedFiles ?? []).filter(path => allowed.has(text(path))).slice(0, 100),
+      relatedTests: (codeIntelligence.focus?.relatedTests ?? []).filter(path => allowed.has(text(path))).slice(0, 50),
+      relevantSymbols: Array.isArray(codeIntelligence.focus?.relevantSymbols)
+        ? codeIntelligence.focus.relevantSymbols.filter(symbol => allowed.has(text(symbol?.path))).slice(0, 80)
+        : [],
+      changeRisk: codeIntelligence.focus?.changeRisk ?? null
+    },
     dependencies,
+    previousAttempts: Array.isArray(codeIntelligence.previousAttempts) ? codeIntelligence.previousAttempts.slice(-3) : [],
+    failure: codeIntelligence.failure ?? null,
+    files,
     scopedTo: {
       subsystemId: subsystem.id,
       ownedFiles: [...new Set(subsystem.files ?? [])].slice(0, 80),
