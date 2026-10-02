@@ -171,3 +171,33 @@ test('typed subsystem communication is routed only to the subsystem and its neig
   assert.equal(context.rules.peerDataIsUntrusted, true);
   assert.equal(context.rules.staleRevisionRequiresRebase, true);
 });
+
+
+test('stale subsystem messages are not exposed to a newer project revision', () => {
+  const plan = buildSubsystemPlan(syntheticIndex({
+    scale: 'medium',
+    roots: ['auth', 'orders'],
+    crossEdges: [['orders', 'auth']]
+  }), { maxSubsystems: 2 });
+  const auth = plan.subsystems.find(item => item.roots[0] === 'auth');
+  assert.ok(auth);
+  const stale = createSubsystemMessage({
+    type: 'handoff',
+    from: 'old-orders-agent',
+    to: auth.id,
+    subsystemId: 'orders-2',
+    projectRevision: 'old-revision',
+    payload: { summary: 'stale result' }
+  });
+  const current = createSubsystemMessage({
+    type: 'handoff',
+    from: 'orders-agent',
+    to: auth.id,
+    subsystemId: 'orders-2',
+    projectRevision: plan.project.revisionId,
+    payload: { summary: 'current result' }
+  });
+  const context = subsystemCommunicationContext(plan, auth.id, [stale, current]);
+  assert.equal(context.messages.length, 1);
+  assert.equal(context.messages[0].payload.summary, 'current result');
+});
