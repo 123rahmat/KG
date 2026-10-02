@@ -289,9 +289,17 @@ export function buildSubsystemPlan(index = {}, {
   maxSubsystems = DEFAULT_MAX_SUBSYSTEMS,
   minFilesPerSubsystem = 8,
   risk = 'ordinary',
-  revisionId = null
+  revisionId = null,
+  adaptivePressure = 0,
+  pressureTrend = 'stable'
 } = {}) {
-  const decision = estimateSubsystemCount(index, { maxSubsystems, minFilesPerSubsystem, risk });
+  const decision = estimateSubsystemCount(index, {
+    maxSubsystems,
+    minFilesPerSubsystem,
+    risk,
+    adaptivePressure,
+    pressureTrend
+  });
   const roots = chooseUnitRoots(index, decision.count);
   const effectiveRoots = roots.length ? roots : ['__root__'];
   const files = Array.isArray(index?.files) ? index.files : [];
