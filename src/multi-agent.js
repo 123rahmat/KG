@@ -13,6 +13,7 @@ import { callModel } from './runtime.js';
 import { clip } from './reasoning-context.js';
 import { mergeBlackboard } from './blackboard.js';
 import { adaptConcurrency, agentWorkspaceLane, buildWorkspaceParallelPlan } from './parallel-orchestrator.js';
+import { buildSubsystemPlan, createSubsystemMessage, subsystemAssignment, subsystemCommunicationContext } from './subsystem-orchestrator.js';
 
 export const MULTI_AGENT_MODES = Object.freeze(['auto', 'always', 'off']);
 export const DEFAULT_MULTI_AGENT_MAX_AGENTS = 11;
@@ -458,6 +459,8 @@ skills: Array.isArray(basePayload?.skills) ? basePayload.skills.slice(0, 6).map(
           instructions: String(skill.instructions ?? '').slice(0, 5000), fingerprint: skill.fingerprint ?? null
         })) : [],
         blackboard: basePayload?.blackboard ?? null,
+        subsystemPlan: basePayload?.subsystemPlan ?? null,
+        subsystemWork: basePayload?.subsystemWork ?? null,
         // Every workspace chat uses the same server-selected chat context as
         // the primary model: local memory, recent turns and the current
         // workspace state. Peer findings remain excluded to prevent herding.
@@ -548,7 +551,7 @@ function disagreementProfile(findings) {
   };
 }
 
-function mergeBlackboardForPanel(current, results) {
+function mergeBlackboardForPanel(current, results, subsystemMessages = []) {
   let board = current ?? null;
   for (const item of results) {
     if (!item.parsed) continue;
@@ -650,6 +653,14 @@ export async function runAdaptiveAgentPanel({
   let lastAllocation = allocationResult.allocation;
   let allocationRounds = 0;
   let blackboard = await loadBlackboard({ run, task });
+  const isCodingProject = task?.id === 'build-code' || task?.metadata?.buildPlan === true || task?.type === 'code';
+  const subsystemPlan = isCodingProject && basePayload?.codeIntelligence?.project
+    ? buildSubsystemPlan(basePayload.codeIntelligence.project, {
+        maxSubsystems: Math.max(1, Math.min(12, maxAgents)),
+        risk: run?.situation?.risk ?? 'ordinary',
+        revisionId: basePayload?.codeIntelligence?.project?.revisionId ?? basePayload?.workspace?.revisionId ?? null
+      })
+    : null;
   let tokensSpent = 0;
   const remainingBudgetRatio = () => run?.maxTokens === null || run?.maxTokens === undefined
     ? 1
@@ -698,6 +709,13 @@ export async function runAdaptiveAgentPanel({
         agentStates.push({ role, status: 'budget-blocked', wave: waveIndex });
         continue;
       }
+      const subsystem = subsystemPlan
+        ? subsystemAssignment(subsystemPlan, {
+            role,
+            ordinal: completedRoles.length + jobs.length,
+            preferredId: subsystemPlan.subsystems.find(item => !completedRoles.includes(item.id))?.id ?? null
+          })
+        : null;
       const modelId = agentModelFor(selection, primaryModelId, role, {
         used: usedModels,
         allows: allowsModel
@@ -710,11 +728,16 @@ export async function runAdaptiveAgentPanel({
         projectId: basePayload?.workspace?.projectId ?? null,
         branch: basePayload?.workspace?.branch ?? null,
         revisionId: basePayload?.workspace?.revisionId ?? basePayload?.codeIntelligence?.project?.revisionId ?? basePayload?.codeIntelligence?.project?.contentHash ?? null,
-        readSet: basePayload?.codeIntelligence?.files?.map(file => file.path) ?? basePayload?.workspace?.paths ?? [],
+        readSet: subsystem
+          ? [...new Set([...(subsystem.files ?? []), ...(subsystem.readSet ?? [])])]
+          : (basePayload?.codeIntelligence?.files?.map(file => file.path) ?? basePayload?.workspace?.paths ?? []),
         writeSet: [],
         conversationId: basePayload?.chat?.conversationId ?? null
       });
-      jobs.push({ role, modelId, wave: waveIndex, lane });
+      const subsystemWork = subsystem && subsystemPlan
+        ? subsystemCommunicationContext(subsystemPlan, subsystem.id, blackboard?.subsystemMessages ?? [])
+        : null;
+      jobs.push({ role, modelId, wave: waveIndex, lane, subsystem, subsystemWork });
     }
 
     if (!jobs.length) break;
@@ -746,7 +769,13 @@ export async function runAdaptiveAgentPanel({
       // updated from peer findings for orchestration/audit, but those findings
       // must not be fed back into another specialist and create anchoring.
       const specialistBlackboard = basePayload?.blackboard ?? null;
-      const result = await modelCaller(agentMessages(job.role, { ...basePayload, harness, blackboard: specialistBlackboard }), {
+      const result = await modelCaller(agentMessages(job.role, {
+        ...basePayload,
+        harness,
+        blackboard: specialistBlackboard,
+        subsystemPlan,
+        subsystemWork: job.subsystemWork
+      }), {
         config,
         fetchImpl,
         modelId: job.modelId,
@@ -783,7 +812,8 @@ export async function runAdaptiveAgentPanel({
         summary: item.parsed.summary,
         confidence: item.parsed.confidence,
         wave: item.wave,
-        lane: item.lane
+        lane: item.lane,
+        subsystemId: item.subsystem?.id ?? null
       });
     }
 
@@ -815,7 +845,27 @@ export async function runAdaptiveAgentPanel({
     waveRecord.concurrency = concurrency;
     waves.push(waveRecord);
     await recordWave({ run, task, wave: waveRecord });
-    blackboard = mergeBlackboardForPanel(blackboard, results);
+    const subsystemMessages = results.flatMap(item => {
+      if (!item.parsed || !item.subsystem) return [];
+      const targets = item.subsystem.consumers?.length ? item.subsystem.consumers : ['shared-integration'];
+      return targets.map(to => createSubsystemMessage({
+        type: item.parsed.recommendation === 'stop' ? 'blocker' : 'handoff',
+        from: item.role,
+        to,
+        subsystemId: item.subsystem.id,
+        projectRevision: item.lane?.revisionId ?? subsystemPlan?.project?.revisionId ?? null,
+        contractVersion: item.subsystem.contract?.version ?? null,
+        payload: {
+          summary: item.parsed.summary,
+          recommendation: item.parsed.recommendation,
+          risks: item.parsed.risks,
+          actions: item.parsed.actions,
+          evidence: item.parsed.evidence,
+          unknowns: item.parsed.unknowns
+        }
+      })).filter(Boolean);
+    });
+    blackboard = mergeBlackboardForPanel(blackboard, results, subsystemMessages);
     await recordBlackboard({ run, task, blackboard });
     await Promise.all(results.map(item => recordAgent({
       run,
