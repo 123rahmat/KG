@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 test('unified runtime modules import cleanly', async () => {
   const modules = [
+    '../src/fleet-control.js',
     '../src/parallel-orchestrator.js',
     '../src/skills.js',
     '../src/rag.js',
