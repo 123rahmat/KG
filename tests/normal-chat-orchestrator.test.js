@@ -14,9 +14,9 @@ const run = extra => ({
 });
 
 const task = {
-  id: 'build-code',
-  type: 'code',
-  purpose: 'Implement the requested application'
+  id: 'respond',
+  type: 'respond',
+  purpose: 'Analyze the attached dataset and summarize the result'
 };
 
 test('normal chat identifies the three logical agents without forcing three model calls', () => {
@@ -48,8 +48,7 @@ test('control managers run independently in parallel and cannot mutate server au
       attachments: [{ name: 'data.csv', kind: 'text', format: 'csv' }],
       adaptation: { resourcePlan: { selected: { tools: ['file.read'] } } },
       capabilities: { granted: ['files'] },
-      codeIntelligence: { project: { fileCount: 4, revisionId: 'r1' }, dependencies: ['src/api.js'] },
-      workspace: { projectId: 'p1', revisionId: 'r1' }
+      capabilities: { granted: ['files'] }
     },
     modelId: 'google:gemini-3.8-flash',
     config: { ai: true },
