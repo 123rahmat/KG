@@ -1270,11 +1270,12 @@ async function runCodeWorkspaceAgentPanels({
         maxParallel: Math.min(effectiveMaxParallel, budgetParallelLimit())
       });
 
-      const scheduledJobs = lanePlan.waves
-        .flatMap(wave => wave.lanes.map(lane => jobs.find(job => job.lane.agentId === lane.agentId)))
-        .filter(Boolean);
-
-      const results = await Promise.all(scheduledJobs.map(async job => {
+      const results = [];
+      for (const schedulerWave of lanePlan.waves) {
+        const waveJobs = schedulerWave.lanes
+          .map(lane => jobs.find(job => job.lane.agentId === lane.agentId))
+          .filter(Boolean);
+        const waveResults = await Promise.all(waveJobs.map(async job => {
         const startedAt = Date.now();
         const result = await modelCaller(agentMessages(job.role, {
           ...basePayload,
@@ -1348,7 +1349,9 @@ async function runCodeWorkspaceAgentPanels({
           } : null,
           elapsedMs: Date.now() - startedAt
         };
-      }));
+        }));
+        results.push(...waveResults);
+      }
 
       for (const item of results) {
         const state = subsystemState.get(item.subsystem.id);
