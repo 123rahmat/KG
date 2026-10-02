@@ -9,7 +9,7 @@ import { callModel, callRunner, SANDBOX_TIMEOUT_MS } from '../runtime.js';
 import { chooseExecutionTarget, executionTargetsFor, verifyExecutionReceipt, signExecutionChallenge, executionPayloadDigest, executionSucceeded, executionIdFor, RECEIPT_ALGORITHM } from '../execution.js';
 import { text } from '../http/context.js';
 import { configuredExecutionTargets, runnerForTarget, planPolicyAllows, dataPolicyAllows, dataPolicyDecision, modelPolicyAllows } from '../http/policy.js';
-import { assertUsageAllowed, UsageLimitError } from '../usage.js';
+import { assertUsageAllowed, createUsageGate, UsageLimitError } from '../usage.js';
 import { attachmentContext, projectFiles } from '../attachments.js';
 import { answerWithTools } from '../toolbox.js';
 import { RunActions, ActionError } from '../run-actions.js';
@@ -1244,6 +1244,12 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     const blocked = await usageBlock(scope);
     if (blocked) return blocked;
 
+    const usageGate = createUsageGate(pool, {
+      principalId: scope?.principalId ?? run.principalId,
+      workspaceId: scope?.workspaceId ?? run.workspaceId,
+      runId: run.id,
+      config
+    });
     const selection = await resolveModelSelection(pool, config, { workspaceId: scope?.workspaceId ?? run.workspaceId, principalId: scope?.principalId ?? run.principalId });
     const requestedModelId = run.adaptation?.modelSelection || selection.selectedModelId || null;
     const model = (requestedModelId && selection.planModelIds.includes(requestedModelId) && selection.enabledModelIds.includes(requestedModelId) && selection.configuredModelIds.includes(requestedModelId))
@@ -1440,6 +1446,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       allowBackup,
       allowsModel: id => modelPolicyAllows(run, id, 'medium'),
       dataAllowed,
+      usageGate,
       canSpend: async () => !(await usageBlock(scope)),
       recordUsage: async (usage, provider, model) => {
         await runs.addTokens(run.id, { ...usage, provider, model }, { source: 'multi-agent' });
@@ -1493,9 +1500,21 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     let answer = (managedTarget || TOOL_TASKS.has(task.type)) && !task.metadata?.declined && !task.metadata?.conversational
       ? await answerWithTools(messages, await toolContext(run, task, scope), {
           config, fetchImpl, modelId: effectiveModelId, allowBackup, effort,
+          usageGate,
+          usageSource: 'chat',
           maxRounds: Math.max(0, Number(run.adaptation?.resourcePlan?.budget?.maxDiscoveryRounds ?? run.adaptation?.resourcePlan?.budget?.maxToolCalls ?? 6))
         })
-      : await callModel(messages, { config, fetchImpl, modelId: effectiveModelId, allowBackup, webSearch: grounding?.grounded === true, effort, json: answersInJson(task) });
+      : await callModel(messages, {
+          config,
+          fetchImpl,
+          modelId: effectiveModelId,
+          allowBackup,
+          webSearch: grounding?.grounded === true,
+          effort,
+          json: answersInJson(task),
+          usageGate,
+          usageSource: 'chat'
+        });
 
     if (!answer) {
       return {
@@ -1554,7 +1573,16 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         ...messages,
         { role: 'assistant', content: answer.text },
         { role: 'user', content: TESTS_REQUIRED_PROMPT }
-      ], { config, fetchImpl, modelId: effectiveModelId, allowBackup, effort, json: true });
+      ], {
+        config,
+        fetchImpl,
+        modelId: effectiveModelId,
+        allowBackup,
+        effort,
+        json: true,
+        usageGate,
+        usageSource: 'chat-retry'
+      });
       if (retry?.usage) {
         answer.usage = {
           ...answer.usage,
@@ -1593,7 +1621,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       });
       const spent = answer.usage ? (answer.usage.inputTokens ?? 0) + (answer.usage.outputTokens ?? 0) : 0;
       if (!verdict) {
-        if (spent) await runs.addTokens(run.id, { ...answer.usage, provider: answer.provider, model: answer.model });
+        if (spent && !answer.usageRecorded) await runs.addTokens(run.id, { ...answer.usage, provider: answer.provider, model: answer.model });
         return {
           configured: true, executed: false, status: 'verification-inconclusive',
           message: 'The verifier did not return a readable verdict; nothing was recorded.',
@@ -1611,9 +1639,17 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         let reviewed = null;
         if (!capped) {
           reviewed = await callModel(reviewMessages(run, { criteria: plannedCriteria, verdict }), {
-            config, fetchImpl, modelId: reviewerId, allowBackup, effort: 'medium', json: true, maxOutputTokens: REVIEW_MAX_OUTPUT_TOKENS
+            config,
+            fetchImpl,
+            modelId: reviewerId,
+            allowBackup,
+            effort: 'medium',
+            json: true,
+            maxOutputTokens: REVIEW_MAX_OUTPUT_TOKENS,
+            usageGate,
+            usageSource: 'verification-review'
           }).catch(() => null);
-          if (reviewed?.usage) await runs.addTokens(run.id, { ...reviewed.usage, provider: reviewed.provider, model: reviewed.model });
+          if (reviewed?.usage && !reviewed.usageRecorded) await runs.addTokens(run.id, { ...reviewed.usage, provider: reviewed.provider, model: reviewed.model });
         }
         const review = reviewed && !reviewed.incomplete ? readReview(parseJsonObject(reviewed.text)) : null;
         verdict = mergeReview(verdict, review, { reason: second.reason, model: reviewed?.model ?? null });
@@ -1622,7 +1658,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       // human, or code that ran without tests of its own.
       const untested = untestedCode(run);
       if (verdict.verdict === 'pass' && (task.metadata?.verification?.humanReviewRequired === true || untested)) {
-        if (spent) await runs.addTokens(run.id, { ...answer.usage, provider: answer.provider, model: answer.model });
+        if (spent && !answer.usageRecorded) await runs.addTokens(run.id, { ...answer.usage, provider: answer.provider, model: answer.model });
         return {
           configured: true, executed: false, status: 'human-verification-required',
           message: task.metadata?.verification?.humanReviewRequired === true

@@ -117,7 +117,16 @@ const BUILT_IN = [
       const found = await callModel([
         { role: 'system', content: 'Search the web and report what you find for the query: the facts and numbers, each with its source URL, and say plainly when sources disagree or nothing reliable was found. Do not answer from memory.' },
         { role: 'user', content: JSON.stringify({ query, purpose: text(input.why).slice(0, 300) }) }
-      ], { config: ctx.config, fetchImpl: ctx.fetchImpl, webSearch: true, retries: 0, modelId: ctx.modelId || null, effort: 'low' });
+      ], {
+        config: ctx.config,
+        fetchImpl: ctx.fetchImpl,
+        webSearch: true,
+        retries: 0,
+        modelId: ctx.modelId || null,
+        effort: 'low',
+        usageGate: ctx.usageGate,
+        usageSource: 'web-search'
+      });
       if (!found) return { error: 'Search is not available.' };
       ctx.onUsage?.(found.usage, 'web.search');
       // An answer from memory is not a search result: say search is down.
@@ -335,7 +344,7 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
   const reach = createReach(messages);
   const usage = { inputTokens: 0, outputTokens: 0 };
   // Tools that call the model themselves (web.search) add to this step's usage.
-  const toolCtx = { ...ctx, onUsage: (used, source) => {
+  const toolCtx = { ...ctx, usageGate: ctx.usageGate, onUsage: (used, source) => {
     usage.inputTokens += used?.inputTokens ?? 0;
     usage.outputTokens += used?.outputTokens ?? 0;
     ctx.onUsage?.(used, source);

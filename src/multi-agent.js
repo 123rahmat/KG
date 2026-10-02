@@ -627,6 +627,7 @@ export async function runAdaptiveAgentPanel({
   allowsModel = () => true,
   dataAllowed = true,
   canSpend = async () => true,
+  usageGate = null,
   recordUsage = async () => {},
   modelCaller = callModel,
   recordWave = async () => {},
@@ -752,11 +753,13 @@ export async function runAdaptiveAgentPanel({
         allowBackup,
         effort: lastAllocation?.pressure >= 0.72 ? 'high' : 'medium',
         json: true,
-        maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS
+        maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
+        usageGate,
+        usageSource: 'multi-agent'
       }).catch(() => null);
       if (result?.usage) {
         tokensSpent += Number(result.usage.inputTokens ?? 0) + Number(result.usage.outputTokens ?? 0);
-        await recordUsage(result.usage, result.provider, result.model);
+        if (!result.usageRecorded) await recordUsage(result.usage, result.provider, result.model);
       }
       const parsed = result && !result.incomplete
         ? normalizedRoleFinding(parseJsonObject(result.text), job.role)
@@ -850,9 +853,11 @@ export async function runAdaptiveAgentPanel({
       allowBackup,
       effort: lastAllocation?.pressure >= 0.72 ? 'high' : 'medium',
       json: true,
-      maxOutputTokens: ARBITER_MAX_OUTPUT_TOKENS
+      maxOutputTokens: ARBITER_MAX_OUTPUT_TOKENS,
+      usageGate,
+      usageSource: 'multi-agent'
     }).catch(() => null);
-    if (result?.usage) await recordUsage(result.usage, result.provider, result.model);
+    if (result?.usage && !result.usageRecorded) await recordUsage(result.usage, result.provider, result.model);
     const parsed = result && !result.incomplete
       ? normalizedRoleFinding(parseJsonObject(result.text), 'arbiter')
       : null;
