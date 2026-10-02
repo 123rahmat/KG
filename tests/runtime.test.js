@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MODEL_CASCADE_MS, OVERLOAD_PAUSE_MS, callModel, callRunner, effectiveEffort, ModelProviderError, retryAfterMs, resetModelRest } from '../src/runtime.js';
+import { MODEL_CASCADE_MS, OVERLOAD_PAUSE_MS, callModel, callRunner, effectiveEffort, ModelProviderError, retryAfterMs, resetModelRest, resetProviderConcurrency } from '../src/runtime.js';
 import { thinkingFor, answersInJson } from '../src/routes/execution.js';
 
 function jsonResponse(body, status = 200) {
@@ -481,4 +481,38 @@ test('a quick 503 does not demote the chosen model for the next request', async 
   asked.length = 0;
   assert.equal((await call()).model, 'gemini-3.8-flash', 'the better model is asked first again');
   assert.deepEqual(asked, ['gemini-3.8-flash']);
+});
+
+
+test('model calls are bounded by the adaptive provider concurrency governor', async () => {
+  resetModelRest();
+  resetProviderConcurrency();
+  const config = {
+    ...base,
+    ai: { provider: 'google', apiKey: 'key', model: 'gemini-3.8-flash' },
+    providerConcurrency: { min: 1, max: 1, initial: 1, queueTimeoutMs: 1000 }
+  };
+  let active = 0;
+  let peak = 0;
+  let calls = 0;
+  const answer = () => callModel([{ role: 'user', content: 'x' }], {
+    config,
+    retries: 0,
+    fetchImpl: async () => {
+      calls += 1;
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise(resolve => setTimeout(resolve, 35));
+      active -= 1;
+      return jsonResponse({
+        candidates: [{ content: { role: 'model', parts: [{ text: 'ok' }] }, finishReason: 'STOP' }]
+      });
+    }
+  });
+  const [first, second] = await Promise.all([answer(), answer()]);
+  assert.equal(first.text, 'ok');
+  assert.equal(second.text, 'ok');
+  assert.equal(calls, 2);
+  assert.equal(peak, 1, 'the request boundary must enforce the configured model concurrency');
+  resetProviderConcurrency();
 });
