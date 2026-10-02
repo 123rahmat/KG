@@ -234,13 +234,105 @@ export function workspaceLane({
 }
 
 export function workspaceLanesConflict(a = {}, b = {}) {
-  if (!text(a.projectId) || !text(b.projectId)) return false;
   if (text(a.projectId) !== text(b.projectId)) return false;
   if (text(a.branch) && text(b.branch) && text(a.branch) !== text(b.branch)) return false;
-  if (text(a.revisionId) && text(b.revisionId) && text(a.revisionId) !== text(b.revisionId)) return true;
 
-  const left = new Set(list(a.writeSet));
-  const right = new Set(list(b.writeSet));
-  for (const path of left) if (right.has(path)) return true;
-  return !left.size || !right.size;
+  const leftWrites = new Set(list(a.writeSet));
+  const rightWrites = new Set(list(b.writeSet));
+  const leftReads = new Set(list(a.readSet));
+  const rightReads = new Set(list(b.readSet));
+  const leftMutates = leftWrites.size > 0;
+  const rightMutates = rightWrites.size > 0;
+
+  // Two read-only lanes can always share a stable project snapshot.
+  if (!leftMutates && !rightMutates) return false;
+
+  // A mutation is only parallel-safe against a lane anchored to the same
+  // immutable revision. Unknown revisions fail closed rather than racing.
+  const leftRevision = text(a.revisionId);
+  const rightRevision = text(b.revisionId);
+  if (!leftRevision || !rightRevision || leftRevision !== rightRevision) return true;
+
+  // Writes conflict with writes and with reads of the same path. This keeps
+  // analysis lanes from observing a partially integrated mutation.
+  for (const path of leftWrites) {
+    if (rightWrites.has(path) || rightReads.has(path)) return true;
+  }
+  for (const path of rightWrites) {
+    if (leftReads.has(path)) return true;
+  }
+
+  // A writer with no explicit read set is still safe against disjoint writers;
+  // the exact write set is the isolation boundary. Empty writer sets are not.
+  return false;
+}
+
+/** Explicit lane contract used by server-owned coding orchestration. */
+export function agentWorkspaceLane({
+  agentId = null,
+  role = null,
+  authority = 'advisory',
+  projectId = null,
+  branch = null,
+  revisionId = null,
+  readSet = [],
+  writeSet = [],
+  conversationId = null
+} = {}) {
+  const writes = list(writeSet);
+  const reads = list(readSet);
+  const mode = text(authority) === 'mutation' ? 'mutation' : 'advisory';
+  const valid = mode === 'advisory' || (text(projectId) && text(revisionId) && writes.length > 0);
+  return {
+    ...workspaceLane({
+      workspaceSessionId: agentId,
+      projectId,
+      branch,
+      revisionId,
+      writeSet: writes,
+      readSet: reads,
+      conversationId
+    }),
+    agentId: text(agentId) || null,
+    role: text(role) || null,
+    authority: mode,
+    valid,
+    mutation: mode === 'mutation'
+  };
+}
+
+/**
+ * Build deterministic waves for coding lanes. The server may run disjoint
+ * writers concurrently, while readers serialize around mutations and stale
+ * revisions are rejected rather than guessed at.
+ */
+export function buildWorkspaceParallelPlan({
+  lanes = [],
+  maxParallel = DEFAULT_MAX_PARALLEL
+} = {}) {
+  const selected = Array.isArray(lanes) ? lanes.filter(Boolean) : [];
+  const waves = parallelWaves(selected, {
+    maxParallel,
+    eligible: lane => lane.valid !== false,
+    conflict: workspaceLanesConflict
+  });
+  return {
+    version: '1',
+    maxParallel: boundedInt(maxParallel, DEFAULT_MAX_PARALLEL),
+    waveCount: waves.length,
+    waves: waves.map((wave, index) => ({
+      index,
+      parallel: wave.length > 1,
+      lanes: wave.map(lane => ({
+        agentId: lane.agentId ?? lane.id ?? null,
+        role: lane.role ?? null,
+        projectId: lane.projectId ?? null,
+        revisionId: lane.revisionId ?? null,
+        authority: lane.authority ?? 'advisory',
+        readSet: list(lane.readSet),
+        writeSet: list(lane.writeSet)
+      }))
+    })),
+    rule: 'Run only independent lanes from the same immutable revision; serialize read/write and conflicting mutations.'
+  };
 }
