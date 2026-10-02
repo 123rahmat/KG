@@ -645,6 +645,9 @@ skills: Array.isArray(basePayload?.skills) ? basePayload.skills.slice(0, 6).map(
         workspace: basePayload?.workspace ?? basePayload?.unifiedWorkContext?.workspace ?? null,
         chat: basePayload?.chat ?? basePayload?.unifiedWorkContext?.chat ?? null,
         codeContext: basePayload?.codeIntelligence ?? null,
+        // Keep the explicit field name available to coding-panel consumers;
+        // codeContext remains the generic compatibility alias.
+        codeIntelligence: basePayload?.codeIntelligence ?? null,
         // A user-approved plan is binding for subsequent coding. Specialists
         // may identify a necessary safety/verification issue, but they must
         // not silently replace the person's keep/remove/add/change choices.
@@ -1066,7 +1069,7 @@ function subsystemPanelStability(results) {
     (item.risks ?? []).length >= 2 || (item.unknowns ?? []).length >= 3
   );
   return {
-    stable: !blocking && !profile.disagreement && !materialRisk && meanConfidence >= 0.82,
+    stable: !blocking && !profile.disagreement && !materialRisk && meanConfidence >= 0.80,
     blocked: parsed.some(item => item.recommendation === 'stop'),
     confidence: Number(meanConfidence.toFixed(3)),
     disagreement: profile.disagreement,
@@ -1940,7 +1943,10 @@ export async function runAdaptiveAgentPanel({
     // role forever. Once the completed specialists satisfy the current target,
     // stop; only a newly justified expansion or failed slot can recruit more.
     const neededRoles = Math.max(0, Number(allocationResult.agentCount ?? allocationResult.roles.length) - completedRoles.length);
-    if (!pendingRoles.length || neededRoles === 0) break;
+    if (!pendingRoles.length || neededRoles === 0) {
+      earlyConvergence = panelEarlyConvergence({ run, task, findings, iteration: allocationRounds });
+      break;
+    }
 
     const readySubsystems = subsystemParallelMode
       ? subsystemPlan.subsystems
