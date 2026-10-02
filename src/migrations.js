@@ -2695,7 +2695,7 @@ export const MIGRATIONS = [
     name: 'github-only-code-workspace-sources',
     sql: `
       -- Code Workspace is a GitHub-only product surface. Existing local-folder
-      -- sources are revoked so legacy browser-held folder access cannot remain active.
+      -- sources are removed so legacy browser-held folder access cannot remain active.
       DELETE FROM workspace_sources
        WHERE kind = 'local-folder';
 
