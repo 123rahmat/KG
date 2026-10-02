@@ -466,6 +466,51 @@ export function agentModelFor(selection, primaryModelId, role, { used = [], allo
   return preferred ?? available[0] ?? pool[0] ?? primaryModelId;
 }
 
+function scopedCodeIntelligence(codeIntelligence, subsystem) {
+  if (!codeIntelligence || typeof codeIntelligence !== 'object' || !subsystem) return codeIntelligence ?? null;
+  const allowed = new Set([
+    ...(Array.isArray(subsystem.files) ? subsystem.files : []),
+    ...(Array.isArray(subsystem.readSet) ? subsystem.readSet : []),
+    ...(Array.isArray(subsystem.tests) ? subsystem.tests : [])
+  ].map(value => text(value)).filter(Boolean));
+  const files = Array.isArray(codeIntelligence.files)
+    ? codeIntelligence.files.filter(file => allowed.has(text(file?.path ?? file?.name)))
+    : [];
+  const dependencies = Array.isArray(codeIntelligence.dependencies)
+    ? codeIntelligence.dependencies.filter(edge =>
+        allowed.has(text(edge?.from)) || allowed.has(text(edge?.to))
+      ).slice(0, 120)
+    : [];
+  return {
+    ...codeIntelligence,
+    files,
+    dependencies,
+    scopedTo: {
+      subsystemId: subsystem.id,
+      ownedFiles: [...new Set(subsystem.files ?? [])].slice(0, 80),
+      readSet: [...new Set(subsystem.readSet ?? [])].slice(0, 80),
+      tests: [...new Set(subsystem.tests ?? [])].slice(0, 50)
+    }
+  };
+}
+
+function scopedSubsystemPlan(plan, subsystem) {
+  if (!plan || !subsystem) return plan ?? null;
+  return {
+    version: plan.version ?? 1,
+    scale: plan.scale ?? null,
+    project: plan.project ?? null,
+    policy: plan.policy ?? null,
+    subsystems: [subsystem],
+    waves: (plan.waves ?? [])
+      .map(wave => ({
+        index: wave.index,
+        subsystemIds: (wave.subsystemIds ?? []).filter(id => id === subsystem.id)
+      }))
+      .filter(wave => wave.subsystemIds.length)
+  };
+}
+
 function rolePrompt(role) {
   const definition = ROLE_CATALOG[role] ?? ROLE_CATALOG.critic;
   return [
