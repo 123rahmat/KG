@@ -330,7 +330,7 @@ test('the account entitlement is stable when workspaces have different paid plan
         { id: 'pro', name: 'Pro', priceId: 'price_pro123', fourHourTokens: 4000, weeklyTokens: 40000 }
       ])
     }
-  });
+  }));
 
 
 test('a universal quota cannot be bypassed by switching workspaces', () =>
