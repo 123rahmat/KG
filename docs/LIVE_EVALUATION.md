@@ -1,7 +1,7 @@
 # Live evaluation with the real AI model
 
 The test suite scripts every AI reply. That proves the app works, but not
-that the real model chooses well. `npm run eval:live` sends 32 real requests
+that the real model chooses well. `npm run eval:live` sends 35 real requests
 to a running Kindgleam, answered by the real model, and checks each one.
 
 ## Run it
