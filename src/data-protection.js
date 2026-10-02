@@ -43,7 +43,12 @@ export function decryptField(masterKey, purpose, encoded) {
   const nonce = Buffer.from(nonceText, 'base64url');
   const tag = Buffer.from(tagText, 'base64url');
   const ciphertext = Buffer.from(ciphertextText, 'base64url');
-  if (nonce.length !== NONCE_BYTES || tag.length !== TAG_BYTES) throw new Error('Invalid encrypted field');
+  if (nonce.length !== NONCE_BYTES || tag.length !== TAG_BYTES
+      || nonce.toString('base64url') !== nonceText
+      || tag.toString('base64url') !== tagText
+      || ciphertext.toString('base64url') !== ciphertextText) {
+    throw new Error('Invalid encrypted field');
+  }
   const decipher = crypto.createDecipheriv('aes-256-gcm', purposeKey(masterKey, purpose), nonce);
   decipher.setAAD(Buffer.from(String(purpose), 'utf8'));
   decipher.setAuthTag(tag);
