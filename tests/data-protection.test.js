@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { encryptField, decryptField, encryptJson, decryptJson, keyedDigest } from '../src/data-protection.js';
+import { encryptField, decryptField, encryptJson, decryptJson, keyedDigest, stripeBillingPrivateState } from '../src/data-protection.js';
 
 const billingKey = Buffer.from('billing-key-32-bytes-long-000000');
 const personalKey = Buffer.from('personal-key-32-bytes-long-00000');
