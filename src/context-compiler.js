@@ -230,6 +230,13 @@ export function compileCodeContext({
         root: hierarchyScope.root ?? index?.hierarchy?.root ?? null,
         changedSubtrees: (hierarchyScope.changedSubtrees ?? []).slice(0, 40),
         subtrees: (hierarchyScope.subtrees ?? []).slice(0, 16)
+      },
+      mutation: {
+        mode: projectScale(index) === 'very-large' ? 'surgical-patch-preferred' : 'patch-or-file-replacement',
+        baseRevisionId: index?.revisionId ?? null,
+        baseContentHash: workspaceContentHash(normalized),
+        exactBaseRequired: true,
+        rule: 'Every code mutation is bound to the exact workspace snapshot used for reasoning; stale patches must be rejected.'
       }
     },
     task:{ id:clean(task?.id), type:clean(task?.type), goal:clean(goal).slice(0,2000) },
