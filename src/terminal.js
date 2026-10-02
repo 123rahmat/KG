@@ -14,6 +14,7 @@ import * as pty from 'node-pty';
 import { parseCookies, sessionCookieName } from './http/context.js';
 import { assertSourceId, normalizeSourceFiles, sourceManifest } from './workspace-sources.js';
 import { contentDigest } from './workspace-patch.js';
+import { isSensitiveWorkspacePath } from './workspace-path.js';
 
 const TERMINAL_PATH = '/terminal';
 const MAX_WS_MESSAGE_BYTES = 128 * 1024;
@@ -25,7 +26,6 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_OUTPUT_CHUNK = 64 * 1024;
 const MAX_CONTROL_MESSAGES_PER_SECOND = 30;
 const ACCESS_RECHECK_MS = 30_000;
-const SENSITIVE_TERMINAL_PATH = /(?:^|\/)(?:\.env(?:\.(?!example$|sample$|template$)[^/]*)?|\.npmrc|\.netrc|\.pypirc|id_rsa(?:\.[^/]*)?|[^/]+\.(?:pem|key|p12|pfx))$/i;
 const EXCLUDED_DIRS = new Set([
   '.git', 'node_modules', '.next', '.cache', 'dist', 'build', 'coverage',
   '.venv', 'venv', '__pycache__', '.pytest_cache', 'target', '.cargo',
@@ -101,7 +101,7 @@ async function writeSnapshot(workdir, files) {
   for (const file of files) {
     // Credential-bearing files must never enter the interactive execution
     // container, even when they are present in a source snapshot.
-    if (SENSITIVE_TERMINAL_PATH.test(String(file.path ?? ''))) continue;
+    if (isSensitiveWorkspacePath(String(file.path ?? ''))) continue;
     const safe = file.path;
     const destination = path.join(workdir, safe);
     if (!destination.startsWith(workdir + path.sep)) throw new Error('Invalid workspace path');
@@ -144,7 +144,7 @@ async function walkTextFiles(root) {
       const content = await fs.readFile(target, 'utf8');
       if (content.includes('\0')) continue;
       const safeRelative = relative.replaceAll('\\\\', '/');
-      if (SENSITIVE_TERMINAL_PATH.test(safeRelative)) continue;
+      if (isSensitiveWorkspacePath(safeRelative)) continue;
       files.push({ path: safeRelative, content });
       if (files.length > 250) return;
     }

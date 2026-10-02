@@ -19,6 +19,7 @@ import { readAttachment, withOverlay } from './attachments.js';
 import { describeTable } from './documents.js';
 import { readDocumentIsolated } from './document-runner.js';
 import { screenToolInput, recordRefusal, blockedTopicsFrom } from './safety.js';
+import { isSensitiveWorkspacePath } from './workspace-path.js';
 
 const text = value => String(value ?? '').trim();
 const MAX_TOOL_CHARS = 30_000;
@@ -56,6 +57,7 @@ const BUILT_IN = [
     async run(input, ctx) {
       const file = findAttachment(ctx, input.file);
       if (!file) return { error: `No attached file matches "${text(input.file)}". Attached: ${(ctx.attachments ?? []).map(item => item.name).join(', ') || 'none'}.` };
+      if (isSensitiveWorkspacePath(file.name)) return { error: 'Credential-bearing files cannot be exposed to the AI through the file tool.', code: 'sensitive-file-blocked' };
       const read = await readAttachment(ctx.objects, ctx.scope, file);
       if (read.error) return { error: read.error };
       if (read.kind === 'image') return { file: read.name, kind: 'image', note: 'This image is shown to you with the next message.', showImage: read.image };
@@ -83,6 +85,7 @@ const BUILT_IN = [
     async run(input, ctx) {
       const file = findAttachment(ctx, input.file);
       if (!file) return { error: `No attached file matches "${text(input.file)}".` };
+      if (isSensitiveWorkspacePath(file.name)) return { error: 'Credential-bearing files cannot be exposed to the AI through the file tool.', code: 'sensitive-file-blocked' };
       const read = await readAttachment(ctx.objects, ctx.scope, file);
       if (read.error) return { error: read.error };
       if (!read.tables?.length) return { error: `${read.name} is not a table.` };

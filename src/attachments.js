@@ -7,6 +7,7 @@
 
 import { readDocumentIsolated } from './document-runner.js';
 import { projectView } from './project-view.js';
+import { isSensitiveWorkspacePath } from './workspace-path.js';
 
 const CACHE_LIMIT = 64;
 const cache = new Map();
@@ -76,6 +77,10 @@ export async function attachmentContext(objects, scope, attachments, { maxChars 
     }
     const read = await readAttachment(objects, scope, file);
     if (read.error) { files.push({ name: file.name, readable: false, note: read.error }); continue; }
+    if (isSensitiveWorkspacePath(file.name)) {
+      files.push({ name: file.name, readable: false, note: 'Sensitive credential-bearing files are never sent to the AI model.' });
+      continue;
+    }
     if (read.kind === 'image') {
       if (images.length < maxImages) {
         images.push(read.image);
@@ -148,8 +153,14 @@ export async function projectFiles(objects, scope, attachments, { overlay = null
     if (!file.readable) continue;
     const read = await readAttachment(objects, scope, file);
     if (read.error) continue;
-    if (read.format === 'project') for (const item of read.files ?? []) files.set(item.path, item.content);
-    else if (['text', 'csv'].includes(read.format) && CODE_FILE.test(String(file.name)) && !read.truncated) files.set(String(file.name).split('/').pop(), read.text ?? '');
+    if (read.format === 'project') {
+      for (const item of read.files ?? []) {
+        if (!isSensitiveWorkspacePath(item.path)) files.set(item.path, item.content);
+      }
+    } else if (['text', 'csv'].includes(read.format) && CODE_FILE.test(String(file.name)) && !read.truncated) {
+      const name = String(file.name).split('/').pop();
+      if (!isSensitiveWorkspacePath(name)) files.set(name, read.text ?? '');
+    }
   }
   return withOverlay([...files].map(([path, content]) => ({ path, content })), overlay);
 }

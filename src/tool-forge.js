@@ -14,6 +14,7 @@ import crypto from 'node:crypto';
 import { callRunner, SANDBOX_TIMEOUT_MS } from './runtime.js';
 import { registerTools } from './toolbox.js';
 import { validateJob, SandboxError } from './sandbox.js';
+import { isSensitiveWorkspacePath } from './workspace-path.js';
 
 const text = value => String(value ?? '').trim();
 const TOOL_NAME = /^[a-z][a-z0-9-]{1,39}$/;
@@ -47,6 +48,7 @@ async function attachedFiles(ctx, names) {
   for (const wanted of Array.isArray(names) ? names.slice(0, 10) : []) {
     const file = (ctx.attachments ?? []).find(item => text(item.name).toLowerCase() === text(wanted).toLowerCase());
     if (!file) return { error: `No attached file is called "${text(wanted)}".` };
+    if (isSensitiveWorkspacePath(file.name)) return { error: 'Credential-bearing files cannot be copied into the code sandbox.', code: 'sensitive-file-blocked' };
     const object = await ctx.objects?.read(ctx.scope, file.id).catch(() => null);
     if (!object) return { error: `"${file.name}" is no longer available.` };
     files[`in/${file.name.replace(/[^A-Za-z0-9._-]/g, '_')}`] = { base64: Buffer.from(object.content).toString('base64') };

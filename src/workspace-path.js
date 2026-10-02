@@ -7,6 +7,7 @@
  */
 const SEGMENT = /^(?![ -])[\p{L}\p{N}._ +@-]+$/u;
 const MAX_PATH_LENGTH = 240;
+const SENSITIVE_NAME = /^(?:\.env(?:\.(?!example$|sample$|template$)[^/]*)?|\.npmrc|\.netrc|\.pypirc|credentials?(?:\.[^/]*)?|id_rsa(?:\.[^/]*)?|service-account(?:\.[^/]*)?|[^/]+\.(?:pem|key|p12|pfx|jks))$/i;
 
 export function workspacePath(value) {
   const raw = String(value ?? '');
@@ -17,6 +18,11 @@ export function workspacePath(value) {
   const parts = raw.split('/');
   if (parts.some(part => part === '' || part === '.' || part === '..' || !SEGMENT.test(part))) return null;
   return raw;
+}
+
+export function isSensitiveWorkspacePath(value) {
+  const safe = workspacePath(value);
+  return Boolean(safe && safe.split('/').some(segment => SENSITIVE_NAME.test(segment)));
 }
 
 export const isWorkspacePath = value => workspacePath(value) !== null;
