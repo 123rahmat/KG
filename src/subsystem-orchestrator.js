@@ -94,7 +94,14 @@ function topLevelRoots(index) {
     .map(item => text(item.path))
     .filter(Boolean)
     .sort();
-  return roots.length ? roots : [...new Set((index?.plannedRoots ?? []).map(text).filter(Boolean))];
+  if (roots.length) return roots;
+  const planned = [...new Set((index?.plannedRoots ?? []).map(text).filter(Boolean))];
+  if (planned.length) return planned;
+  // Compact indexes and fixtures may omit hierarchy metadata. Derive stable
+  // subsystem candidates from the first path segment without reading content.
+  return [...new Set((Array.isArray(index?.files) ? index.files : [])
+    .map(file => fileGroup(file?.path))
+    .filter(root => root && root !== '__root__'))].sort();
 }
 
 function rootStats(index, root) {
