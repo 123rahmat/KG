@@ -438,6 +438,8 @@ test('coding panel assigns separate subsystem contexts and emits dependency-scop
 
   assert.equal(result.findings.length, 2);
   assert.equal(new Set(calls.map(item => item.body.subsystemWork?.subsystem?.id)).size, 2);
+  assert.match(calls[0].body.subsystemWork?.subsystem?.id ?? '', /auth/);
+  assert.match(calls[1].body.subsystemWork?.subsystem?.id ?? '', /orders/);
   assert.equal(calls.every(item => item.body.subsystemPlan?.kind === 'adaptive-subsystem-plan'), true);
   assert.ok(result.allocation?.subsystemPlan);
   assert.ok(result.allocation?.subsystemMessages?.length >= 2);
