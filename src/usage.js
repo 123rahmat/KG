@@ -110,7 +110,7 @@ export async function usageSummary(pool, { principalId, workspaceId = null, conf
     return {
       id: window.id,
       label: window.label,
-      scope: window.id === 'session' ? 'principal' : 'workspace',
+      scope: 'principal',
       hours: window.ms / HOUR,
       used,
       input,
@@ -389,7 +389,7 @@ export function createUsageGate(pool, { principalId, workspaceId, runId = null, 
 export class UsageLimitError extends Error {
   constructor(window, { canUpgrade = false } = {}) {
     const when = window.resetsAt ? new Date(window.resetsAt) : null;
-    super(`You have reached your ${window.id === 'week' ? 'weekly' : '4-hour'} AI usage limit.${when ? ` It opens again at ${when.toISOString().slice(11, 16)} UTC${window.id === 'week' ? ` on ${when.toISOString().slice(0, 10)}` : ''}.` : ''}${canUpgrade ? ' A bigger plan in Settings → Billing raises it.' : ''} Work that does not use the AI still works.`);
+    super(`You have reached your ${window.id === 'run' ? 'run' : window.id === 'week' ? 'weekly' : '4-hour'} AI usage limit.${when ? ` It opens again at ${when.toISOString().slice(11, 16)} UTC${window.id === 'week' ? ` on ${when.toISOString().slice(0, 10)}` : ''}.` : ''}${canUpgrade ? ' A bigger plan in Settings → Billing raises it.' : ''} Work that does not use the AI still works.`);
     this.code = 'usage-limit-reached';
     this.status = 429;
     this.window = window;
