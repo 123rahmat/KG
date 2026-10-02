@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyWorkspacePatch, classifyWorkspaceFile, createWorkspaceState, createWorkspaceChatContext, normalizeWorkspaceFiles, selectWorkspaceContext, workspaceDiff, workspaceImpact, workspaceRevision, workspaceContentHash, WORKSPACE_LIMITS } from '../src/code-workspace.js';
+import { applyWorkspacePatch, classifyWorkspaceFile, createWorkspaceState, createWorkspaceChatContext, normalizeWorkspaceFiles, selectWorkspaceContext, workspaceDiff, workspaceImpact, workspaceRevision } from '../src/code-workspace.js';
 
 test('workspace revisions are deterministic for the same project state', () => {
   const files = [{ path: 'src/app.js', content: 'export const x = 1;' }];
