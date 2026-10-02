@@ -503,6 +503,10 @@ test('Code Workspace gives every subsystem its own multi-agent panel with bounde
   assert.equal(result.allocation.subsystemPanels.every(item => item.status === 'complete'), true);
   assert.equal(result.allocation.subsystemPanels.every(item => item.iterations === 1), true);
   assert.equal(result.allocation.subsystemPanels.every(item => item.iterationCeiling >= 1), true);
+  assert.equal(result.brief.implementationPlan.objective, 'make the assigned subsystem reliable');
+  assert.equal(result.brief.implementationPlan.targets.length > 0, true);
+  assert.equal(calls.every(item => item.body.codeIntelligence.scopedTo.subsystemId === item.body.workspacePanel.subsystemId), true);
+  assert.equal(calls.every(item => item.body.subsystemPlan.subsystems.length === 1), true);
   assert.ok(result.allocation.subsystemMessages.length >= 2);
   assert.equal(result.allocation.subsystemMessages.every(item => item.projectRevision === 'rev-9'), true);
   assert.equal(result.allocation.subsystemMessages.every(item => ['handoff', 'blocker'].includes(item.type)), true);
@@ -538,8 +542,16 @@ test('normal-chat ZIP projects use exactly one adaptive coding panel', async () 
   const fakeModel = async (messages, options) => {
     const body = JSON.parse(messages[1].content);
     calls.push({ body, options });
+    const isImplementer = messages[0]?.content?.includes('implementer agent');
     return {
-      text: JSON.stringify(finding('proceed', `panel=${body.workspacePanel ?? 'none'}`)),
+      text: JSON.stringify(finding('proceed', 'panel=' + (body.workspacePanel ?? 'none'), isImplementer ? {
+        implementation: {
+          objective: 'make the assigned subsystem reliable',
+          targets: [{ path: body.workspacePanel.ownedFiles[0], change: 'apply the minimal justified change', reason: 'required by task' }],
+          tests: body.workspacePanel.ownedFiles.filter(path => /test|spec/i.test(path)).slice(0, 2),
+          contractChanges: []
+        }
+      } : {})),
       provider: 'google',
       model: options.modelId,
       usage: null
@@ -575,5 +587,7 @@ test('normal-chat ZIP projects use exactly one adaptive coding panel', async () 
   assert.equal(calls.every(item => item.body.subsystemWork?.subsystem?.id), true);
   assert.equal(calls.every(item => item.body.workspacePanel.engine === 'unified-adaptive-code-panel-v1'), true);
   assert.equal(calls.every(item => item.body.workspacePanel.topology === 'single-project'), true);
+  assert.equal(calls.every(item => item.body.codeIntelligence.files.length === 80), true);
+  assert.equal(calls.every(item => item.body.subsystemPlan.subsystems.length === 1), true);
   assert.equal(result.brief.findings.every(item => item.role !== 'subsystem-worker'), true);
 });
