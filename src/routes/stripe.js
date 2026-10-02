@@ -10,6 +10,7 @@ import express from 'express';
 import { runDbScope, transaction } from '../db.js';
 import { stripeRequest, verifyWebhook, subscriptionState, StripeError, ACTIVE_STATUSES } from '../stripe.js';
 import { encryptJson, decryptJson } from '../data-protection.js';
+import { syncWorkspaceAiEntitlements } from '../account-entitlements.js';
 
 const text = value => String(value ?? '').trim();
 export const STRIPE_WEBHOOK_PATH = '/api/stripe/webhook';
@@ -117,6 +118,7 @@ export function registerStripeWebhook(app, { config, pool, audit, logger, metric
         eventCreated: Number(event.created),
         eventId: event.id
       });
+      await syncWorkspaceAiEntitlements(client, workspaceId);
       await audit?.record({
         principalId: null, workspaceId, action: 'billing.subscription', target: state.subscriptionId || workspaceId,
         outcome: 'allowed', critical: true, detail: { event: event.type, status: state.status, plan: state.planId, eventId: event.id }
