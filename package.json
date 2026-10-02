@@ -1,6 +1,6 @@
 {
   "name": "kindgleam",
-  "version": "10.4.1",
+  "version": "10.4.2",
   "private": true,
   "description": "Open-world adaptive workflow for known, unknown and future goals.",
   "type": "module",
