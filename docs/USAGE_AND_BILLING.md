@@ -51,18 +51,18 @@ Work that does not use the AI (files, schedules, settings) keeps working. Checki
 
 ## Billing
 
-**Settings → Billing** shows:
+**Settings → Billing** shows the current Kindgleam entitlement and a
+**Manage payment** link to Stripe's hosted customer portal.
 
-- the plan (`BILLING_PLAN_NAME`) and its limits;
-- a **Manage payment** link to the payment provider's customer portal
-  (`BILLING_PORTAL_URL`, which must be HTTPS in production), where the card
-  and invoices are managed;
-- the workspace's billing details (email, company, tax ID, country,
-  address). Only admins can see or change them (`GET` / `PUT /api/billing`),
-  and each change is recorded in Activity.
+Stripe is the system of record for payment and billing-profile data:
+payment methods, invoices, customer billing information and tax details remain
+on Stripe. Kindgleam does not expose an API or form for storing those fields
+locally.
 
-Kindgleam never collects or stores card data. A billing detail that looks
-like a card number is rejected.
+Kindgleam keeps only the minimum application state needed to authorize service:
+an encrypted opaque Stripe customer reference, Stripe subscription reference,
+signed webhook/event bookkeeping and the derived plan/entitlement projection.
+Those references are not payment credentials.
 
 ## Stripe
 
@@ -74,10 +74,7 @@ missing or invalid, or if a test key is used in production.
   `POST /api/billing/checkout` creates the workspace's Stripe customer (once)
   and a Checkout session, and the browser goes to Stripe's page. Price IDs
   stay on the server.
-- **Manage payment:** `POST /api/billing/portal` opens a Stripe customer
-  portal session. There you change the card, switch or cancel the plan,
-  and download invoices. Plan switching must be turned on in Stripe's portal
-  settings.
+- **Manage payment:** `POST /api/billing/portal` opens a Stripe customer portal session. Payment methods, billing-profile details, subscription changes and invoice access happen on Stripe. Plan switching must be turned on in Stripe's portal settings.
 - **The webhook is the source of truth.** Point a Stripe webhook at
   `<PUBLIC_URL>/api/stripe/webhook` for `checkout.session.completed` and
   `customer.subscription.*`. Each event is verified against the signing
