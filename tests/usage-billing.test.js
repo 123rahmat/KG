@@ -189,6 +189,47 @@ test('a person can see their signed-in sessions and sign out everywhere else', (
   }));
 
 
+test('4-hour and weekly quota usage is universal across a person\'s workspaces', () =>
+  withServer(async ({ call, seed, pool }) => {
+    const first = await seed({ workspace: 'global-quota-a' });
+    const secondWorkspace = 'global-quota-b';
+    await pool.query(
+      'INSERT INTO organizations (id, name, type) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+      ['org-global-quota-b', 'global-quota-b', 'personal']
+    );
+    await pool.query(
+      'INSERT INTO workspaces (id, name, max_bytes, max_objects, organization_id) VALUES ($1, $2, $3, $4, $5)',
+      [secondWorkspace, secondWorkspace, 1000000, 1000, 'org-global-quota-b']
+    );
+    await pool.query(
+      'INSERT INTO memberships (workspace_id, principal_id, role) VALUES ($1, $2, $3)',
+      [secondWorkspace, first.principal.id, 'editor']
+    );
+
+    await pool.query(
+      `INSERT INTO usage_events
+        (principal_id, workspace_id, conversation_id, source, provider, model, input_tokens, output_tokens)
+        VALUES
+        ($1, $2, 'chat-global-a', 'chat', 'google', 'gemini-test', 400, 100),
+        ($1, $3, 'chat-global-b', 'chat', 'google', 'gemini-test', 200, 50)`,
+      [first.principal.id, first.workspace, secondWorkspace]
+    );
+
+    const usage = await call('GET', '/api/usage?conversationId=chat-global-b', {
+      token: first.token,
+      workspace: secondWorkspace
+    });
+
+    assert.equal(usage.status, 200);
+    assert.equal(usage.body.windows.find(item => item.id === 'session').used, 750);
+    assert.equal(usage.body.windows.find(item => item.id === 'week').used, 750);
+    assert.equal(usage.body.windows.find(item => item.id === 'session').scope, 'principal');
+    assert.equal(usage.body.windows.find(item => item.id === 'week').scope, 'principal');
+    assert.equal(usage.body.quotaScope.fourHour, 'principal');
+    assert.equal(usage.body.quotaScope.weekly, 'principal');
+    assert.equal(usage.body.context.used, 200);
+  }), { env: { USAGE_LIMIT_4H_TOKENS: '1000', USAGE_LIMIT_WEEKLY_TOKENS: '1000' } });
+
 test('usage windows are isolated to the active workspace for the same person', () =>
   withServer(async ({ call, seed, pool }) => {
     const first = await seed({ workspace: 'usage-ws-a' });
