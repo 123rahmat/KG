@@ -110,7 +110,7 @@ test('concurrent AI requests share one atomic usage reservation', () =>
     const first = await call('POST', '/api/runs', {
       ...auth,
       body: {
-        goal: 'Concurrent one',
+        goal: 'Explain how a heat pump works in winter',
         conversationId: 'concurrent-0001',
         privacyConsent: { modelProvider: true }
       }
@@ -118,7 +118,7 @@ test('concurrent AI requests share one atomic usage reservation', () =>
     const second = await call('POST', '/api/runs', {
       ...auth,
       body: {
-        goal: 'Concurrent two',
+        goal: 'Explain how a heat pump works in winter',
         conversationId: 'concurrent-0002',
         privacyConsent: { modelProvider: true }
       }
