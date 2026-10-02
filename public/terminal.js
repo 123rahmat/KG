@@ -1,5 +1,4 @@
 import { state, $, api, notify } from './ui-core.js';
-import { applyLocalWorkspaceChanges } from './workspace-sources.js';
 
 let TerminalCtor = null;
 let FitAddonCtor = null;
@@ -35,7 +34,7 @@ function setChangeStatus(message) {
 function updateApplyButton() {
   const button = $('terminalApply');
   if (!button) return;
-  const writable = currentSource?.kind === 'local-folder' || currentSource?.permissions?.write === true;
+  const writable = currentSource?.kind === 'github' && currentSource?.permissions?.write === true;
   button.disabled = !capturedChanges.length || !writable;
   button.title = !writable && currentSource?.kind === 'github'
     ? 'GitHub source is read-only'
@@ -76,17 +75,6 @@ async function applyCapturedChanges() {
   const changes = capturedChanges;
   if (!confirm('Apply the captured terminal changes to the connected project?')) return;
   const source = currentSource;
-  if (source.kind === 'local-folder') {
-    try {
-      await applyLocalWorkspaceChanges(changes);
-      setChangeStatus('Changes applied to the local project.');
-      closeSocket();
-      $('terminalDialog')?.close();
-    } catch (error) {
-      setChangeStatus(error.message || 'Local changes could not be applied.');
-    }
-    return;
-  }
   if (source.kind !== 'github' || source.permissions?.write !== true) {
     setChangeStatus('This GitHub source is read-only. Reconnect with explicit write permission to enable write-back.');
     return;
@@ -148,8 +136,9 @@ async function openTerminal() {
     capturedChanges = [];
     currentSource = state.workspaceSource || null;
     updateApplyButton();
-    setChangeStatus('Changes are local to this sandbox until you apply them.');
-    setStatus(currentSource ? 'Sandboxed project terminal · ' + currentSource.name : 'Empty sandbox terminal');
+    setChangeStatus('Changes stay in the temporary sandbox until you explicitly commit them to GitHub.');
+    if (!currentSource || currentSource.kind !== 'github') throw new Error('Connect a GitHub repository before opening the Code Workspace terminal.');
+    setStatus('GitHub project terminal · ' + currentSource.name);
     dialog.showModal();
     fitAddon.fit();
 
@@ -157,7 +146,7 @@ async function openTerminal() {
     socket = new WebSocket(websocketUrl());
     socket.binaryType = 'arraybuffer';
     socket.addEventListener('open', () => {
-      setStatus(currentSource ? 'Connected · ' + currentSource.name : 'Connected · empty sandbox');
+      setStatus('Connected · GitHub · ' + currentSource.name);
       terminal.focus();
     });
     socket.addEventListener('message', event => {
@@ -170,7 +159,7 @@ async function openTerminal() {
         const sandbox = message.sandbox || {};
         terminal?.writeln('\r\nKindgleam sandbox terminal ready.\r');
         terminal?.writeln('Environment: ' + (sandbox.image || 'sandbox') + ' · network ' + (sandbox.network || 'restricted') + ' · user ' + (sandbox.user || 'unprivileged') + ' · ' + (sandbox.workspace || '/work') + '\r');
-        if (!currentSource) terminal?.writeln('No project source is connected; this session starts with an empty /work.\r');
+        terminal?.writeln('Project source: GitHub · temporary sandbox at /work; local folder access is disabled.\r');
         return;
       }
       if (message.type === 'output') {
