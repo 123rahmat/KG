@@ -94,6 +94,38 @@ export function adaptFleetCapacity({
       : next > cur ? 'increase-fleet-capacity-when-healthy-and-useful' : 'hold-fleet-capacity'
   };
 }
+ 
+/**
+ * Update a project's health state from an observed dispatch outcome.
+ * Health is bounded and deliberately monotonic per observation: failures
+ * reduce confidence and reset only on a successful, owned completion.
+ */
+export function fleetHealthUpdate(state = {}, { failed = false, succeeded = false } = {}) {
+  const previous = clamp(
+    state?.healthScore ?? state?.score ?? state?.health?.score ?? 1,
+    0, 1, 1
+  );
+  const failures = Math.max(
+    0,
+    Number(state?.consecutiveFailures ?? state?.consecutive_failures ?? 0) || 0
+  );
+  let score = previous;
+  let consecutiveFailures = failures;
+  if (failed === true) {
+    consecutiveFailures += 1;
+    score = Math.max(0, previous * 0.8);
+  } else if (succeeded === true) {
+    consecutiveFailures = 0;
+    score = Math.min(1, previous * 0.9 + 0.1);
+  }
+  const rounded = Number(score.toFixed(6));
+  return {
+    ...state,
+    score: rounded,
+    healthScore: rounded,
+    consecutiveFailures
+  };
+}
 
 export function fleetPartition(projectId, partitions = 1) {
   const count = Math.max(1, Math.floor(Number(partitions) || 1));
