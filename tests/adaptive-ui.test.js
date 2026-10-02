@@ -71,6 +71,18 @@ test('adaptive UI keeps execution approval and evidence boundaries visible', asy
   assert.match(js, /evidence/);
 });
 
+test('coding plan approval exposes user keep/remove/add/change inputs before approval', async () => {
+  const js = await client();
+  assert.match(js, /What do you want to keep\? \(optional\)/);
+  assert.match(js, /What do you want to remove\? \(optional\)/);
+  assert.match(js, /What do you want to add\? \(optional\)/);
+  assert.match(js, /What do you want to change\? \(optional\)/);
+  assert.match(js, /Approve these changes and code/);
+  assert.match(js, /planChoices/);
+  assert.match(js, /existingCodePlan/);
+});
+
+
 
 test('adaptive workspace presentation follows the same live run state', async () => {
   const html = await read('public/index.html');
