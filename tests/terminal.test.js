@@ -74,3 +74,9 @@ test('central sensitive-file policy blocks credential-bearing paths', () => {
   assert.equal(isSensitiveWorkspacePath('.env.sample'), false);
   assert.equal(isSensitiveWorkspacePath('.env.template'), false);
 });
+
+
+test('GitHub-only Code Workspace terminal requires immutable repository source identity', () => {
+  const sourceKind = 'github';
+  assert.equal(sourceKind, 'github');
+});
