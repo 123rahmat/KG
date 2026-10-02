@@ -37,6 +37,147 @@ const CONFIG_NAMES = new Set([
 ]);
 
 const IDENT = '[A-Za-z_$][A-Za-z0-9_$-]*';
+const PROJECT_SCALE_LIMITS = Object.freeze({
+  small: { files: 50, bytes: 1_000_000 },
+  medium: { files: 500, bytes: 10_000_000 },
+  large: { files: 5_000, bytes: 100_000_000 }
+});
+
+const directoryOf = path => {
+  const parts = safeWorkspacePath(path)?.split('/') ?? [];
+  parts.pop();
+  return parts.join('/');
+};
+
+function directoryAncestors(path) {
+  const parts = text(path).split('/').filter(Boolean);
+  const result = [''];
+  let current = '';
+  for (const part of parts) {
+    current = current ? current + '/' + part : part;
+    result.push(current);
+  }
+  return result;
+}
+
+function projectSizeClass(fileCount, bytes) {
+  const count = Number(fileCount) || 0;
+  const size = Number(bytes) || 0;
+  if (count <= PROJECT_SCALE_LIMITS.small.files && size <= PROJECT_SCALE_LIMITS.small.bytes) return 'small';
+  if (count <= PROJECT_SCALE_LIMITS.medium.files && size <= PROJECT_SCALE_LIMITS.medium.bytes) return 'medium';
+  if (count <= PROJECT_SCALE_LIMITS.large.files && size <= PROJECT_SCALE_LIMITS.large.bytes) return 'large';
+  return 'very-large';
+}
+
+/**
+ * Deterministic hierarchical repository intelligence. Directory digests are
+ * derived from direct file digests and child-directory digests, so a caller
+ * can scope a huge repository without loading all source text into a model.
+ */
+export function buildProjectHierarchy(fileRecords = []) {
+  const nodes = new Map();
+  const ensure = path => {
+    const key = text(path);
+    if (!nodes.has(key)) nodes.set(key, {
+      path: key, depth: key ? key.split('/').length : 0,
+      fileCount: 0, bytes: 0, files: [], children: new Set()
+    });
+    return nodes.get(key);
+  };
+  ensure('');
+
+  for (const file of Array.isArray(fileRecords) ? fileRecords : []) {
+    const path = safeWorkspacePath(file?.path);
+    if (!path) continue;
+    const ancestors = directoryAncestors(path);
+    for (let i = 0; i < ancestors.length; i += 1) {
+      const node = ensure(ancestors[i]);
+      node.fileCount += 1;
+      node.bytes += Math.max(0, Number(file?.bytes) || 0);
+      if (i < ancestors.length - 1) node.children.add(ancestors[i + 1]);
+    }
+    ensure(directoryOf(path)).files.push({
+      path, digest: text(file?.digest), bytes: Math.max(0, Number(file?.bytes) || 0)
+    });
+  }
+
+  const digestCache = new Map();
+  const subtreeDigest = path => {
+    if (digestCache.has(path)) return digestCache.get(path);
+    const node = nodes.get(path);
+    if (!node) return crypto.createHash('sha256').update('', 'utf8').digest('hex');
+    const hash = crypto.createHash('sha256');
+    for (const file of [...node.files].sort((a, b) => a.path.localeCompare(b.path))) {
+      hash.update('f\\0').update(file.path).update('\\0').update(file.digest).update('\\0');
+    }
+    for (const child of [...node.children].sort()) {
+      hash.update('d\\0').update(child).update('\\0').update(subtreeDigest(child)).update('\\0');
+    }
+    const digest = hash.digest('hex');
+    digestCache.set(path, digest);
+    return digest;
+  };
+
+  const directories = [...nodes.values()]
+    .map(node => Object.freeze({
+      path: node.path, depth: node.depth, fileCount: node.fileCount,
+      bytes: node.bytes, digest: subtreeDigest(node.path)
+    }))
+    .sort((a, b) => a.path.localeCompare(b.path));
+  const root = directories.find(item => item.path === '') ?? {
+    path: '', depth: 0, fileCount: 0, bytes: 0, digest: subtreeDigest('')
+  };
+  return Object.freeze({
+    version: 1,
+    scale: projectSizeClass(root.fileCount, root.bytes),
+    root,
+    directories
+  });
+}
+
+export function projectScale(index) {
+  return text(index?.hierarchy?.scale) || projectSizeClass(index?.fileCount, index?.totals?.bytes);
+}
+
+/** Return directory-level scope for a coding task; file contents remain external. */
+export function hierarchicalProjectScope(index, changedPaths = [], { query = '', maxSubtrees = 12 } = {}) {
+  const directories = Array.isArray(index?.hierarchy?.directories) ? index.hierarchy.directories : [];
+  if (!directories.length) return { scale: projectScale(index), subtrees: [], changedSubtrees: [] };
+
+  const impacted = impactClosure(index, changedPaths, { maxFiles: 500 });
+  const targets = [...new Set([
+    ...(Array.isArray(changedPaths) ? changedPaths : []), ...impacted
+  ].map(safeWorkspacePath).filter(Boolean))];
+  const terms = [...new Set(trim(query).toLowerCase().match(/[a-zA-Z0-9_$-]{2,}/g) ?? [])];
+  const scores = new Map(directories.map(node => [node.path, 0]));
+
+  for (const path of targets) {
+    const ancestors = directoryAncestors(path);
+    for (const ancestor of ancestors.slice(0, -1)) {
+      if (scores.has(ancestor)) {
+        scores.set(ancestor, scores.get(ancestor) + (ancestor === directoryOf(path) ? 8 : 3));
+      }
+    }
+  }
+  for (const node of directories) {
+    const lower = node.path.toLowerCase();
+    scores.set(node.path, (scores.get(node.path) ?? 0)
+      + terms.reduce((sum, term) => sum + (lower.includes(term) ? 4 : 0), 0));
+  }
+
+  const ranked = directories
+    .map(node => ({ ...node, score: scores.get(node.path) ?? 0 }))
+    .filter(node => node.score > 0)
+    .sort((a, b) => b.score - a.score || b.fileCount - a.fileCount || a.path.localeCompare(b.path))
+    .slice(0, Math.max(1, Math.min(50, Number(maxSubtrees) || 12)));
+  return {
+    scale: projectScale(index),
+    root: index.hierarchy.root,
+    subtrees: ranked.map(({ score: _score, ...node }) => node),
+    changedSubtrees: [...new Set(targets.map(directoryOf).filter(Boolean))].sort()
+  };
+}
+
 
 function languageOf(path) {
   const match = /\.([^./]+)$/.exec(path.toLowerCase());
@@ -280,11 +421,13 @@ export function buildProjectIndex(files = [], { revisionId = null, maxSymbols = 
   const contentHash = crypto.createHash('sha256');
   for (const file of fileRecords) contentHash.update(file.path).update('\\0').update(file.digest).update('\\0');
 
+  const hierarchy = buildProjectHierarchy(fileRecords);
   const result = Object.freeze({
     version: 1,
     revisionId: trim(revisionId) || null,
     contentHash: contentHash.digest('hex'),
     fileCount: fileRecords.length,
+    scale: hierarchy.scale,
     totals: {
       bytes: fileRecords.reduce((sum, item) => sum + item.bytes, 0),
       symbols: symbols.length,
@@ -299,6 +442,7 @@ export function buildProjectIndex(files = [], { revisionId = null, maxSymbols = 
     tests: [...new Set(tests)].slice(0, MAX_TESTS),
     config: [...new Set(config)].sort().slice(0, 500),
     entryPoints: [...new Set(entries)].sort().slice(0, 200),
+    hierarchy,
     profile: projectProfile(normalized)
   });
   indexCache.set(cacheKey, result);
