@@ -29,7 +29,8 @@ const boolean = (value, fallback = false) => {
 };
 
 const HOST = text(process.env.LOCAL_AGENT_HOST) || '127.0.0.1';
-const PORT = Number(process.env.LOCAL_AGENT_PORT) || 8765;
+const configuredPort = Number(process.env.LOCAL_AGENT_PORT);
+const PORT = Number.isInteger(configuredPort) && configuredPort >= 0 && configuredPort <= 65_535 ? configuredPort : 8765;
 const ALLOWED_ORIGIN = text(process.env.LOCAL_AGENT_ALLOWED_ORIGIN);
 // A workspace made under the earlier product name is kept in use rather than orphaned.
 const DEFAULT_RUN_ROOT = path.join(process.cwd(), '.kindgleam-local-workspace');
