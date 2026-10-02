@@ -191,6 +191,14 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
         code: 'usage-policy-cooldown', until: cooldown.until
       });
     }
+    // The AI quota belongs to the signed-in person in this workspace, not to
+    // one conversation. Stop new AI work here so every chat sees the same lock
+    // instead of creating a run that can only fail later at execution time.
+    await assertUsageAllowed(pool, {
+      principalId: req.principal.id,
+      config,
+      workspaceId: req.scope.workspaceId
+    });
     const attachments = await resolveAttachments(req);
     const classification = await classifyFor(req, policies);
     const modelSelection = await resolveModelSelection(pool, config, {
