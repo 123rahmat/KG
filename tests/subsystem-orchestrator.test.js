@@ -7,7 +7,8 @@ import {
   createSubsystemMessage,
   mergeSubsystemMessages,
   subsystemAssignment,
-  subsystemCommunicationContext
+  subsystemCommunicationContext,
+  CODE_WORKSPACE_A2A_POLICY
 } from '../src/subsystem-orchestrator.js';
 
 function syntheticIndex({
@@ -170,6 +171,10 @@ test('typed subsystem communication is routed only to the subsystem and its neig
   assert.equal(context.messages[0].to, auth.id);
   assert.equal(context.rules.peerDataIsUntrusted, true);
   assert.equal(context.rules.staleRevisionRequiresRebase, true);
+  assert.equal(context.rules.channel, CODE_WORKSPACE_A2A_POLICY.channel);
+  assert.equal(context.rules.identity, CODE_WORKSPACE_A2A_POLICY.identity);
+  assert.equal(context.rules.rawPeerFindings, 'hidden-from-unrelated-agents');
+  assert.match(context.rules.deliveryLoop, /observe-assess-plan/);
 });
 
 
