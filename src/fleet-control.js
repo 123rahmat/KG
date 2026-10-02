@@ -385,6 +385,19 @@ export function fleetStatus(projects = [], { capacity = 1, workerCount = 1 } = {
   };
 }
 
+
+export function updateFleetTelemetry(state = {}, { ok = false, latencyMs = 0, alpha = 0.2 } = {}) {
+  const weight = Math.max(0.05, Math.min(1, Number(alpha) || 0.2));
+  const latency = Math.max(0, Number(latencyMs) || 0);
+  const previousLatency = Math.max(0, Number(state.averageLatencyMs) || 0);
+  const previousErrors = Math.max(0, Math.min(1, Number(state.errorRate) || 0));
+  const samples = Math.max(0, Number(state.samples) || 0);
+  return {
+    averageLatencyMs: samples ? previousLatency * (1 - weight) + latency * weight : latency,
+    errorRate: samples ? previousErrors * (1 - weight) + (ok ? 0 : 1) * weight : (ok ? 0 : 1),
+    samples: samples + 1
+  };
+}
 export function createFleetWorker({
   fleet, identity, runs, executeNext, logger, metrics,
   pollMs = 1000, batchSize = 8, maxConcurrency = 4, workerId = null, leaseMs = 300000,
@@ -393,6 +406,7 @@ export function createFleetWorker({
   const effectiveWorkerId = text(workerId) || ('fleet-' + process.pid + '-' + crypto.randomUUID());
   const safeLeaseMs = Math.max(10000, Math.min(900000, Number(leaseMs) || 300000));
   let timer = null; let active = null; let stopping = false;
+  let telemetry = { averageLatencyMs: 0, errorRate: 0, samples: 0 };
 
   async function process(dispatch) {
     const startedAt = Date.now();
@@ -563,6 +577,10 @@ export function createFleetWorker({
 
   async function runOnce() {
     if (stopping) return 0;
+    await runDbScope(
+      { principalId: '', workspaceId: '', organizationId: '', jurisdiction: '', role: 'job-worker' },
+      () => fleet.reapExpired({ limit: 100 })
+    );
     const batch = await fleet.acquireBatch({
       limit: batchSize, workerId: effectiveWorkerId, leaseMs: safeLeaseMs, partition, partitions
     });
@@ -572,15 +590,23 @@ export function createFleetWorker({
       current: runOnce.currentWidth || ceiling,
       max: ceiling,
       queueDepth: batch.length,
-      usefulParallelism: batch.length > 1 ? 1 : 0,
-      remainingBudgetRatio: 1
+      errorRate: telemetry.errorRate,
+      dbWaiting: Number(fleet.pool?.waitingCount) || 0,
+      remainingBudgetRatio: 1,
+      averageLatencyMs: telemetry.averageLatencyMs,
+      usefulParallelism: batch.length > 1 ? 1 : 0
     });
     const width = adaptive.next;
     runOnce.currentWidth = width;
     let processed = 0;
     for (let i = 0; i < batch.length; i += width) {
-      await Promise.all(batch.slice(i, i + width).map(process));
-      processed += Math.min(width, batch.length - i);
+      const wave = await Promise.all(batch.slice(i, i + width).map(async dispatch => {
+        const startedAt = Date.now();
+        const ok = await process(dispatch);
+        telemetry = updateFleetTelemetry(telemetry, { ok, latencyMs: Date.now() - startedAt });
+        return ok;
+      }));
+      processed += wave.length;
     }
     metrics?.increment('fleet_dispatches_total', { action: 'processed' });
     return processed;
