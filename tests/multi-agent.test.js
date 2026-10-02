@@ -591,3 +591,62 @@ test('normal-chat ZIP projects use exactly one adaptive coding panel', async () 
   assert.equal(calls.every(item => item.body.subsystemPlan.subsystems.length === 1), true);
   assert.equal(result.brief.findings.every(item => item.role !== 'subsystem-worker'), true);
 });
+
+test('coding panels stop at the adaptive ceiling when evidence never converges', async () => {
+  const project = {
+    revisionId: 'rev-ceiling',
+    contentHash: 'hash-ceiling',
+    scale: 'complex',
+    fileCount: 30,
+    files: Array.from({ length: 30 }, (_, i) => ({
+      path: `src/file-${i}.js`,
+      bytes: 100,
+      test: i === 29
+    })),
+    dependencies: [],
+    totals: { bytes: 3000, dependencies: 0 },
+    hierarchy: {
+      scale: 'complex',
+      root: { path: '', depth: 0, fileCount: 30, bytes: 3000, digest: 'root' },
+      directories: [{ path: '', depth: 0, fileCount: 30, bytes: 3000, digest: 'root' }]
+    }
+  };
+  let calls = 0;
+  const fakeModel = async (messages, options) => {
+    calls += 1;
+    return {
+      text: JSON.stringify(finding('revise', 'evidence remains unresolved', {
+        confidence: 0.4,
+        risks: ['material risk'],
+        unknowns: ['unknown one', 'unknown two', 'unknown three']
+      })),
+      provider: 'google',
+      model: options.modelId,
+      usage: null
+    };
+  };
+  const result = await runAdaptiveAgentPanel({
+    run: run({ adaptation: { scale: 'complex' } }),
+    task: { id: 'build-code', type: 'code' },
+    basePayload: {
+      goal: 'Build a complex multi-file system',
+      task: { id: 'build-code', type: 'code' },
+      workspace: { projectId: 'p-ceiling', revisionId: 'rev-ceiling', paths: project.files.map(file => file.path) },
+      codeIntelligence: {
+        project: { ...project, workspaceContentHash: 'workspace-ceiling' },
+        files: project.files
+      }
+    },
+    selection,
+    primaryModelId: 'google:gemini-3.8-flash',
+    config: { agents: { multiAgent: 'always', maxAgents: 2 } },
+    canSpend: async () => true,
+    modelCaller: fakeModel
+  });
+
+  assert.equal(result.allocation.subsystemPanels.length, 1);
+  assert.equal(result.allocation.subsystemPanels[0].iterations, 4);
+  assert.equal(result.allocation.subsystemPanels[0].status, 'needs-integration-review');
+  assert.equal(result.waves.length, 4);
+  assert.equal(calls, 8);
+});
