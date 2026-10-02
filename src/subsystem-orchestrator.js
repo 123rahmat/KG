@@ -11,6 +11,21 @@ import { safeWorkspacePath } from './code-workspace.js';
 
 const text = value => String(value ?? '').trim();
 const list = value => Array.isArray(value) ? [...new Set(value.map(text).filter(Boolean))] : [];
+const clip = (value, max) => text(value).slice(0, max);
+const normalizeMessagePayload = value => {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const result = {};
+  for (const [key, raw] of Object.entries(source).slice(0, 16)) {
+    const safeKey = clip(key, 80);
+    if (!safeKey) continue;
+    if (Array.isArray(raw)) result[safeKey] = raw.slice(0, 12).map(item => clip(typeof item === 'string' ? item : JSON.stringify(item), 700)).filter(Boolean);
+    else if (raw && typeof raw === 'object') result[safeKey] = clip(JSON.stringify(raw), 1800);
+    else if (typeof raw === 'string') result[safeKey] = clip(raw, 1600);
+    else if (typeof raw === 'number' || typeof raw === 'boolean') result[safeKey] = raw;
+  }
+  const packed = JSON.stringify(result);
+  return packed.length <= 7000 ? result : { summary: clip(packed, 6800), truncated: true };
+};
 const boundedInt = (value, fallback, max) => {
   const n = Number(value);
   return Number.isFinite(n) ? Math.max(1, Math.min(max, Math.floor(n))) : fallback;
@@ -424,7 +439,7 @@ export function createSubsystemMessage({
   payload = {}
 } = {}) {
   const normalizedType = SUBSYSTEM_MESSAGE_TYPES.includes(text(type)) ? text(type) : null;
-  const messagePayload = payload && typeof payload === 'object' ? payload : {};
+  const messagePayload = normalizeMessagePayload(payload);
   const body = {
     type: normalizedType,
     from: text(from) || null,
@@ -473,7 +488,7 @@ export function subsystemCommunicationContext(plan, subsystemId, messages = []) 
   if (!subsystem) return null;
   const currentRevision = text(subsystem.baseRevision);
   const relevantMessages = mergeSubsystemMessages([], messages)
-    .filter(item => (!currentRevision || !item.projectRevision || item.projectRevision === currentRevision))
+    .filter(item => (!currentRevision || item.projectRevision === currentRevision))
     .filter(item => !item.to || item.to === subsystemId || item.subsystemId === subsystemId)
     .slice(-24);
   return {
