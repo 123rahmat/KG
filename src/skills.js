@@ -402,7 +402,9 @@ export function selectSkillDescriptors(goal, {
     text(intent).toLowerCase(),
     ...capabilities.map(item => text(item).toLowerCase())
   ]);
-  const profiles = (Array.isArray(learnedSkills) ? learnedSkills : []).map(normalizedSkillProfile);
+  // hierarchicalSkillEvidence normalizes its input; keep the raw stored
+  // profile shape here so learned counters are not normalized twice.
+  const profiles = Array.isArray(learnedSkills) ? learnedSkills : [];
   return builtinSkillDescriptors()
     .map(skill => {
       let score = 0;
