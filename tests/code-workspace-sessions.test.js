@@ -8,3 +8,11 @@ test('workspace session input is bounded', () => {
 test('workspace session rejects malformed conversation id', () => {
   assert.throws(() => normalizeWorkspaceSessionInput({ projectId: 'p', conversationId: 'bad' }), /Invalid conversationId/);
 });
+
+test('Code Workspace session input requires a GitHub source id', () => {
+  assert.throws(
+    () => normalizeWorkspaceSessionInput({ projectId: 'p' }),
+    /sourceId/
+  );
+  assert.equal(normalizeWorkspaceSessionInput({ sourceId: 'github-source-1', projectId: 'p' }).sourceId, 'github-source-1');
+});
