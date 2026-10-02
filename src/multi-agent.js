@@ -374,6 +374,17 @@ export function rolesFor(run, task, {
       utilities[candidate.role] = Number(candidate.utility.toFixed(3));
     }
   }
+  // An explicitly advanced, high-stakes build plan has already crossed the
+  // threshold for the configured specialist capacity. Do not let the normal
+  // utility floor silently collapse that deliberate capacity decision.
+  if (advancedBuildPlan && highStakeBuild && roles.length < targetCount) {
+    for (const candidate of candidates) {
+      if (roles.length >= targetCount) break;
+      if (roles.includes(candidate.role)) continue;
+      roles.push(candidate.role);
+      utilities[candidate.role] = Number(candidate.utility.toFixed(3));
+    }
+  }
 
   const signals = taskSignals(run, task, progress);
   if (signals.retrying && ['plan', 'reassess'].includes(signals.type) && targetCount >= 2 && !roles.includes('strategist')) {
@@ -564,6 +575,11 @@ function mergeBlackboardForPanel(current, results, subsystemMessages = []) {
       blockers: item.parsed.risks,
       openQuestions: item.parsed.unknowns,
       decisions: item.parsed.actions
+    }, board?.runId ?? null);
+  }
+  if (subsystemMessages.length) {
+    board = mergeBlackboard(board ?? {}, {
+      subsystemMessages
     }, board?.runId ?? null);
   }
   return board;
