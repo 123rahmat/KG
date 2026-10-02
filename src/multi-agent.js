@@ -1095,8 +1095,9 @@ async function runCodeWorkspaceAgentPanels({
           ...basePayload,
           harness,
           blackboard: blackboard ?? basePayload?.blackboard ?? null,
-          subsystemPlan: subsystemPlanContext,
+          subsystemPlan: scopedSubsystemPlan(subsystemPlanContext, job.subsystem),
           subsystemWork: job.subsystemWork,
+          codeIntelligence: scopedCodeIntelligence(basePayload?.codeIntelligence, job.subsystem),
           workspacePanel: {
             mode: 'unified-adaptive-code-panel',
             panelId: job.panelId,
@@ -1616,8 +1617,9 @@ export async function runAdaptiveAgentPanel({
         ...basePayload,
         harness,
         blackboard: specialistBlackboard,
-        subsystemPlan: subsystemPlanContext,
-        subsystemWork: job.subsystemWork
+        subsystemPlan: scopedSubsystemPlan(subsystemPlanContext, job.subsystem),
+        subsystemWork: job.subsystemWork,
+        codeIntelligence: scopedCodeIntelligence(basePayload?.codeIntelligence, job.subsystem)
       }), {
         config,
         fetchImpl,
