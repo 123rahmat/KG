@@ -7,9 +7,10 @@ import { AuthError } from '../identity.js';
 import { QuotaError } from '../objects.js';
 import { RunError } from '../runs.js';
 import { ModelProviderError } from '../runtime.js';
+import { UsageLimitError } from '../usage.js';
 
 export function errorHandler(error, req, res, _next) {
-  const known = error instanceof AuthError || error instanceof QuotaError || error instanceof RunError;
+  const known = error instanceof AuthError || error instanceof QuotaError || error instanceof RunError || error instanceof UsageLimitError;
   const status = known ? error.status : error.status ?? (error.type === 'entity.parse.failed' ? 400 : 500);
 
   // Gemini being busy, down or refusing the key is the service's state, not
