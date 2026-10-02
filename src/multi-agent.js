@@ -45,6 +45,10 @@ const ROLE_CATALOG = Object.freeze({
     purpose: 'Design robust solution boundaries, interfaces, invariants, implementation plans, and failure containment for executable or multi-part work, whether technical or non-technical.',
     bestFor: ['build-code', 'prototype', 'code', 'plan', 'design', 'implement', 'step'],
   },
+  implementer: {
+    purpose: 'Translate the agreed architecture into concrete file-level implementation changes, exact interfaces, patch targets, and integration-safe coding steps. For Code Workspace, reason from the assigned subsystem only and never claim that code was changed unless the server recorded the change.',
+    bestFor: ['build-code', 'code', 'implement', 'prototype', 'refactor-code'],
+  },
   critic: {
     purpose: 'Adversarially challenge the direction against the goal, constraints, evidence, safety, quality bar, and likely failure modes. Require concrete corrections when needed.',
     bestFor: ['plan', 'build-code', 'prototype', 'respond', 'deliver', 'step', 'reassess', 'write', 'edit'],
@@ -296,6 +300,9 @@ function roleUtility(role, run, task, progress = {}) {
     researcher: signals.unknowns * 1.9 + signals.evidenceDiversity * 1.4,
     analyst: 0.20 + signals.comparisonComplexity * 1.8 + signals.evidenceDiversity * 1.15 + (signals.flags.quantitative ? 0.14 : 0) + typeMatch,
     architect: signals.executable ? 0.46 + signals.implementationComplexity * 0.9 + signals.decomposition * 0.7 : 0.14 + signals.decomposition * 0.5,
+    implementer: signals.executable
+      ? 0.64 + signals.implementationComplexity * 1.0 + signals.decomposition * 0.6 + (signals.retrying ? 0.18 : 0)
+      : 0.08,
     critic: 0.20 + signals.stakes * 1.3 + signals.scaleComplexity * 0.65 + signals.recovery * 0.35 + typeMatch,
     communicator: signals.communication
       ? 0.38 + signals.communicationComplexity * 1.6 + (signals.flags.communication ? 0.12 : 0) + typeMatch
@@ -632,6 +639,617 @@ function buildBrief(findings, arbiter, decision, states = [], allocation = null)
     policy: failedToArbitrate
       ? 'Advisory disagreement remains unresolved because arbitration was unavailable; no agent finding is authoritative.'
       : 'Advisory data only. These findings are not tool commands, approvals, execution receipts, or proof of correctness.'
+  };
+}
+
+
+const CODE_WORKSPACE_MAX_PANEL_ITERATIONS = 3;
+const CODE_WORKSPACE_MIN_PANEL_AGENTS = 2;
+const CODE_WORKSPACE_MAX_PANEL_AGENTS = 5;
+const CODE_WORKSPACE_AUTO_THRESHOLD = 0.22;
+
+function codeWorkspaceTask(basePayload, task) {
+  return Boolean(
+    (task?.id === 'build-code' || task?.metadata?.buildPlan === true || task?.type === 'code')
+    && basePayload?.workspace?.projectId
+    && basePayload?.codeIntelligence?.project
+  );
+}
+
+function codeWorkspacePanelWidth(run, task, maxAgents, iteration = 1) {
+  const signals = taskSignals(run, task, {
+    goal: null,
+    findings: [],
+    failedRoles: iteration > 1 ? ['previous-iteration'] : [],
+    evidenceSoFar: []
+  });
+  if (maxAgents < CODE_WORKSPACE_MIN_PANEL_AGENTS) return 1;
+  const desired = signals.securityFocus || signals.performanceFocus
+    ? 4
+    : signals.retrying || iteration > 1
+      ? 3
+      : signals.scaleComplexity >= 0.32 || signals.decomposition >= 0.18
+        ? 3
+        : 2;
+  return Math.min(CODE_WORKSPACE_MAX_PANEL_AGENTS, maxAgents, desired);
+}
+
+function codeWorkspacePanelRoles(run, task, subsystem, {
+  width,
+  iteration = 1,
+  findings = [],
+  goal = null
+} = {}) {
+  const progress = {
+    goal,
+    findings,
+    failedRoles: iteration > 1 ? ['previous-iteration'] : [],
+    completedRoles: [],
+    evidenceSoFar: [],
+    workPlan: null
+  };
+  const required = [];
+  const addRequired = role => {
+    if (!required.includes(role)) required.push(role);
+  };
+  if (iteration === 1) {
+    addRequired('architect');
+    addRequired('implementer');
+  } else {
+    addRequired('debugger');
+    addRequired('test-engineer');
+    addRequired('critic');
+  }
+  if ((subsystem?.tests ?? []).length) addRequired('test-engineer');
+  const signals = taskSignals(run, task, progress);
+  if (signals.securityFocus) addRequired('security-reviewer');
+  if (signals.performanceFocus) addRequired('performance-reviewer');
+
+  const candidates = ['architect', 'implementer', 'test-engineer', 'debugger', 'critic', 'security-reviewer', 'performance-reviewer']
+    .map(role => ({ role, utility: roleUtility(role, run, task, progress) }))
+    .sort((a, b) => b.utility - a.utility || a.role.localeCompare(b.role));
+
+  const roles = [];
+  for (const role of required) {
+    if (roles.length >= width) break;
+    if (!roles.includes(role)) roles.push(role);
+  }
+  for (const candidate of candidates) {
+    if (roles.length >= width) break;
+    if (!roles.includes(candidate.role)) roles.push(candidate.role);
+  }
+  return roles;
+}
+
+function subsystemPanelStability(results) {
+  const parsed = results.filter(item => item?.parsed);
+  if (!parsed.length) return { stable: false, blocked: true, confidence: 0, disagreement: false };
+  const profile = disagreementProfile(parsed);
+  const meanConfidence = parsed.reduce((sum, item) => sum + confidenceValue(item.confidence), 0) / parsed.length;
+  const blocking = parsed.some(item => ['stop', 'revise', 'investigate'].includes(item.recommendation));
+  return {
+    stable: !blocking && meanConfidence >= 0.78,
+    blocked: parsed.some(item => item.recommendation === 'stop'),
+    confidence: Number(meanConfidence.toFixed(3)),
+    disagreement: profile.disagreement
+  };
+}
+
+function codeWorkspaceSubsystemMessage({
+  type,
+  from,
+  to,
+  subsystem,
+  projectRevision,
+  iteration,
+  payload
+}) {
+  return createSubsystemMessage({
+    type,
+    from,
+    to,
+    subsystemId: subsystem.id,
+    projectRevision,
+    contractVersion: subsystem.contract?.version ?? null,
+    payload: {
+      ...payload,
+      iteration,
+      channel: 'code-workspace-a2a'
+    }
+  });
+}
+
+/**
+ * Code Workspace-only orchestration.
+ *
+ * Two-level scheduling:
+ *   1. independent subsystem panels run in parallel;
+ *   2. independent specialists inside each panel run in parallel.
+ *
+ * Every panel follows the same observe -> assess -> plan -> advise -> A2A ->
+ * reassess loop. Agents remain advisory; repository mutation and integration
+ * stay server-owned.
+ */
+async function runCodeWorkspaceAgentPanels({
+  run,
+  task,
+  basePayload,
+  selection,
+  primaryModelId,
+  config,
+  fetchImpl,
+  allowBackup,
+  allowsModel,
+  dataAllowed,
+  canSpend,
+  usageGate,
+  recordUsage,
+  modelCaller,
+  subsystemPlan: providedSubsystemPlan,
+  recordWave,
+  recordAgent,
+  loadBlackboard,
+  recordBlackboard
+} = {}) {
+  const mode = config?.agents?.multiAgent ?? 'auto';
+  const maxAgents = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(config?.agents?.maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
+
+  // Code Workspace has a specialized orchestration path: every planned
+  // subsystem gets its own adaptive panel, and independent panels/specialists
+  // share the same server-owned parallel scheduler. Other surfaces retain the
+  // domain-agnostic cognitive panel.
+  if (codeWorkspaceTask(basePayload, task)) {
+    return runCodeWorkspaceAgentPanels({
+      run,
+      task,
+      basePayload,
+      selection,
+      primaryModelId,
+      config,
+      fetchImpl,
+      allowBackup,
+      allowsModel,
+      dataAllowed,
+      canSpend,
+      usageGate,
+      recordUsage,
+      modelCaller,
+      subsystemPlan: providedSubsystemPlan,
+      recordWave,
+      recordAgent,
+      loadBlackboard,
+      recordBlackboard
+    });
+  }
+  const initialDecision = multiAgentDecision(run, task, { mode, progress: {} });
+  if (!initialDecision.enabled) {
+    const workspaceEligible = mode === 'always'
+      || (mode === 'auto' && initialDecision.pressure >= CODE_WORKSPACE_AUTO_THRESHOLD && run?.situation?.risk !== 'crisis');
+    if (!workspaceEligible || mode === 'off') {
+      return { enabled: false, decision: initialDecision, brief: null, agents: [], findings: [], arbiter: null };
+    }
+  }
+
+  const subsystemPlan = providedSubsystemPlan ?? buildSubsystemPlan(basePayload.codeIntelligence.project, {
+    maxSubsystems: Math.max(1, Math.min(24, Math.floor(maxAgents / 2) * 2)),
+    risk: run?.situation?.risk ?? 'ordinary',
+    revisionId: basePayload?.codeIntelligence?.project?.revisionId ?? basePayload?.workspace?.revisionId ?? null
+  });
+  if (!subsystemPlan?.subsystems?.length) {
+    return { enabled: false, decision: { ...initialDecision, reason: 'no-subsystems' }, brief: null, agents: [], findings: [], arbiter: null };
+  }
+
+  const subsystemPlanContext = compactSubsystemPlan(subsystemPlan, {
+    maxSubsystems: 24,
+    maxFilesPerSubsystem: 40
+  });
+  let blackboard = await loadBlackboard({ run, task });
+  if (!(blackboard?.subsystemPlan?.project?.contentHash === subsystemPlan.project.contentHash)) {
+    blackboard = mergeBlackboard(blackboard ?? {}, { subsystemPlan: subsystemPlanContext }, run?.id ?? null);
+    await recordBlackboard({ run, task, blackboard });
+  }
+
+  const usedModels = [];
+  const allFindings = [];
+  const agentStates = [];
+  const waves = [];
+  const subsystemMessages = [];
+  const subsystemState = new Map(subsystemPlan.subsystems.map(item => [item.id, {
+    iteration: 0,
+    status: 'pending',
+    findings: [],
+    roles: [],
+    confidence: 0
+  }]));
+  let tokensSpent = 0;
+  let effectiveMaxParallel = Math.max(
+    1,
+    Math.min(maxAgents, Number(initialDecision.maxParallel) || maxAgents)
+  );
+
+  const remainingBudgetRatio = () => run?.maxTokens === null || run?.maxTokens === undefined
+    ? 1
+    : Math.max(0, Math.min(1, (Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent) / Math.max(1, Number(run.maxTokens))));
+  const budgetParallelLimit = () => run?.maxTokens === null || run?.maxTokens === undefined
+    ? maxAgents
+    : Math.max(1, Math.min(maxAgents, Math.floor(Math.max(1, Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent) / (AGENT_MAX_OUTPUT_TOKENS * 2))));
+
+  for (const dependencyWave of subsystemPlan.waves) {
+    let pendingWave = dependencyWave.subsystemIds.filter(id => subsystemState.get(id)?.status !== 'complete');
+
+    while (pendingWave.length) {
+      const ready = pendingWave
+        .map(id => subsystemPlan.subsystems.find(item => item.id === id))
+        .filter(Boolean)
+        .filter(subsystem => (subsystem.dependencies ?? []).every(dep => {
+          const depState = subsystemState.get(dep);
+          return !depState || depState.status === 'complete';
+        }))
+        .sort((a, b) => a.ordinal - b.ordinal);
+
+      if (!ready.length) break;
+
+      const representativeState = subsystemState.get(ready[0].id);
+      const panelIteration = Math.max(1, Number(representativeState?.iteration ?? 0) + 1);
+      const panelWidth = codeWorkspacePanelWidth(run, task, maxAgents, panelIteration);
+      const maxPanels = Math.max(1, Math.floor(Math.max(1, effectiveMaxParallel) / Math.max(1, panelWidth)));
+      const batch = ready.slice(0, maxPanels);
+      const jobs = [];
+
+      for (const subsystem of batch) {
+        const state = subsystemState.get(subsystem.id);
+        const iteration = Math.max(1, Number(state?.iteration ?? 0) + 1);
+        const width = Math.min(panelWidth, maxAgents);
+        const roles = codeWorkspacePanelRoles(run, task, subsystem, {
+          width,
+          iteration,
+          findings: state?.findings ?? [],
+          goal: basePayload?.goal
+        });
+        state.iteration = iteration;
+        state.roles = roles;
+        state.status = 'running';
+
+        for (const role of roles) {
+          if (!dataAllowed || !(await canSpend())) continue;
+          const modelId = agentModelFor(selection, primaryModelId, role, {
+            used: usedModels,
+            allows: allowsModel
+          });
+          usedModels.push(modelId);
+          const lane = agentWorkspaceLane({
+            agentId: `${text(run?.id) || 'run'}:${text(task?.id) || 'task'}:${subsystem.id}:${role}:i${iteration}`,
+            role,
+            authority: 'advisory',
+            projectId: basePayload?.workspace?.projectId ?? null,
+            branch: basePayload?.workspace?.branch ?? null,
+            revisionId: basePayload?.workspace?.revisionId ?? basePayload?.codeIntelligence?.project?.revisionId ?? null,
+            readSet: [...new Set([...(subsystem.files ?? []), ...(subsystem.readSet ?? []), ...(subsystem.tests ?? [])])],
+            writeSet: [],
+            conversationId: basePayload?.chat?.conversationId ?? null
+          });
+          const subsystemWork = subsystemCommunicationContext(
+            subsystemPlan,
+            subsystem.id,
+            blackboard?.subsystemMessages ?? []
+          );
+          jobs.push({
+            role,
+            modelId,
+            subsystem,
+            iteration,
+            lane,
+            subsystemWork,
+            panelId: `${subsystem.id}:i${iteration}`
+          });
+        }
+      }
+
+      if (!jobs.length) {
+        for (const subsystem of batch) {
+          const state = subsystemState.get(subsystem.id);
+          state.status = 'blocked';
+        }
+        break;
+      }
+
+      const harness = buildHarnessContext({
+        run,
+        task,
+        goal: basePayload?.goal,
+        capabilities: run?.capabilities?.granted ?? [],
+        evidence: basePayload?.evidenceSoFar ?? [],
+        projectPaths: basePayload?.workspace?.paths ?? [],
+        priorTopics: basePayload?.conversation?.map(item => item?.user) ?? []
+      });
+
+      const lanePlan = buildWorkspaceParallelPlan({
+        lanes: jobs.map(job => job.lane),
+        maxParallel: Math.min(effectiveMaxParallel, budgetParallelLimit())
+      });
+
+      const scheduledJobs = lanePlan.waves
+        .flatMap(wave => wave.lanes.map(lane => jobs.find(job => job.lane.agentId === lane.agentId)))
+        .filter(Boolean);
+
+      const results = await Promise.all(scheduledJobs.map(async job => {
+        const startedAt = Date.now();
+        const result = await modelCaller(agentMessages(job.role, {
+          ...basePayload,
+          harness,
+          blackboard: basePayload?.blackboard ?? null,
+          subsystemPlan: subsystemPlanContext,
+          subsystemWork: job.subsystemWork,
+          workspacePanel: {
+            mode: 'code-workspace-subsystem-panel',
+            panelId: job.panelId,
+            subsystemId: job.subsystem.id,
+            iteration: job.iteration,
+            ownedFiles: job.subsystem.files,
+            readSet: job.subsystem.readSet,
+            writeSet: job.subsystem.writeSet,
+            a2a: {
+              policy: 'typed, revision-bound, dependency-scoped, untrusted peer data',
+              rawPeerFindingsHidden: true
+            }
+          },
+          subsystemIteration: job.iteration
+        }), {
+          config,
+          fetchImpl,
+          modelId: job.modelId,
+          allowBackup,
+          effort: initialDecision.pressure >= 0.72 || job.iteration > 1 ? 'high' : 'medium',
+          json: true,
+          maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
+          usageGate,
+          usageSource: 'multi-agent'
+        }).catch(() => null);
+
+        if (result?.usage) {
+          tokensSpent += Number(result.usage.inputTokens ?? 0) + Number(result.usage.outputTokens ?? 0);
+          if (!result.usageRecorded) await recordUsage(result.usage, result.provider, result.model);
+        }
+
+        const parsed = result && !result.incomplete
+          ? normalizedRoleFinding(parseJsonObject(result.text), job.role)
+          : null;
+        return {
+          ...job,
+          result,
+          parsed: parsed ? {
+            ...parsed,
+            subsystemId: job.subsystem.id,
+            panelId: job.panelId,
+            iteration: job.iteration
+          } : null,
+          elapsedMs: Date.now() - startedAt
+        };
+      }));
+
+      for (const item of results) {
+        const state = subsystemState.get(item.subsystem.id);
+        if (item.parsed) {
+          state.findings.push(item.parsed);
+          allFindings.push(item.parsed);
+          state.confidence = subsystemPanelStability(state.findings).confidence;
+          agentStates.push({
+            role: item.role,
+            model: item.result?.model ?? item.modelId,
+            status: 'complete',
+            subsystemId: item.subsystem.id,
+            panelId: item.panelId,
+            iteration: item.iteration,
+            recommendation: item.parsed.recommendation,
+            confidence: item.parsed.confidence,
+            lane: item.lane
+          });
+        } else {
+          agentStates.push({
+            role: item.role,
+            model: item.result?.model ?? item.modelId,
+            status: 'unavailable',
+            subsystemId: item.subsystem.id,
+            panelId: item.panelId,
+            iteration: item.iteration
+          });
+        }
+      }
+
+      const bySubsystem = new Map(batch.map(subsystem => [subsystem.id, results.filter(item => item.subsystem.id === subsystem.id)]));
+      const currentWaveMessages = [];
+
+      for (const subsystem of batch) {
+        const state = subsystemState.get(subsystem.id);
+        const scopedResults = bySubsystem.get(subsystem.id) ?? [];
+        const parsed = scopedResults.filter(item => item.parsed);
+        const stability = subsystemPanelStability(parsed);
+        state.confidence = stability.confidence;
+        const panelSummary = parsed.length
+          ? parsed.map(item => `${item.role}: ${item.summary}`).join(' | ').slice(0, 2200)
+          : 'No specialist produced a usable finding.';
+        const projectRevision = subsystem.baseRevision ?? subsystemPlan.project.revisionId ?? null;
+
+        const selfMessage = codeWorkspaceSubsystemMessage({
+          type: stability.blocked ? 'blocker' : 'handoff',
+          from: `panel:${subsystem.id}`,
+          to: subsystem.id,
+          subsystem,
+          projectRevision,
+          iteration: state.iteration,
+          payload: {
+            summary: panelSummary,
+            recommendation: stability.blocked ? 'stop' : (stability.stable ? 'proceed' : 'revise'),
+            confidence: stability.confidence,
+            disagreement: stability.disagreement
+          }
+        });
+        if (selfMessage) currentWaveMessages.push(selfMessage);
+
+        const externalTargets = subsystem.consumers?.length ? subsystem.consumers : ['shared-integration'];
+        for (const to of externalTargets) {
+          const message = codeWorkspaceSubsystemMessage({
+            type: stability.blocked ? 'blocker' : stability.confidence < 0.65 ? 'dependency-request' : 'handoff',
+            from: `panel:${subsystem.id}`,
+            to,
+            subsystem,
+            projectRevision,
+            iteration: state.iteration,
+            payload: {
+              summary: panelSummary,
+              recommendation: stability.blocked ? 'stop' : (stability.stable ? 'proceed' : 'investigate'),
+              confidence: stability.confidence,
+              risks: [...new Set(parsed.flatMap(item => item.risks ?? []))].slice(0, 8),
+              unknowns: [...new Set(parsed.flatMap(item => item.unknowns ?? []))].slice(0, 8),
+              actions: [...new Set(parsed.flatMap(item => item.actions ?? []))].slice(0, 8)
+            }
+          });
+          if (message) currentWaveMessages.push(message);
+        }
+
+        if (stability.stable) {
+          state.status = 'complete';
+        } else if (state.iteration >= CODE_WORKSPACE_MAX_PANEL_ITERATIONS) {
+          state.status = stability.blocked ? 'blocked' : 'needs-integration-review';
+        } else {
+          state.status = 'pending';
+        }
+      }
+
+      const waveIndex = waves.length;
+      const waveRecord = {
+        index: waveIndex,
+        type: 'code-workspace-subsystem-panels',
+        dependencyWaveIndex: dependencyWave.index,
+        panelIds: batch.map(subsystem => `${subsystem.id}:i${subsystemState.get(subsystem.id)?.iteration ?? 1}`),
+        subsystemIds: batch.map(subsystem => subsystem.id),
+        roles: jobs.map(job => job.role),
+        parallel: scheduledJobs.length > 1,
+        lanePlan,
+        completed: results.filter(item => item.parsed).map(item => `${item.subsystem.id}:${item.role}`),
+        failed: results.filter(item => !item.parsed).map(item => `${item.subsystem.id}:${item.role}`),
+        iterations: batch.map(subsystem => ({
+          subsystemId: subsystem.id,
+          iteration: subsystemState.get(subsystem.id)?.iteration ?? 1,
+          state: subsystemState.get(subsystem.id)?.status ?? 'unknown',
+          confidence: subsystemState.get(subsystem.id)?.confidence ?? 0
+        }))
+      };
+      const avgLatencyMs = results.length
+        ? results.reduce((sum, item) => sum + Number(item.elapsedMs || 0), 0) / results.length
+        : 0;
+      const errorRate = results.length
+        ? results.filter(item => !item.parsed).length / results.length
+        : 1;
+      const concurrency = adaptConcurrency({
+        current: effectiveMaxParallel,
+        min: 1,
+        max: maxAgents,
+        averageLatencyMs: avgLatencyMs,
+        errorRate,
+        remainingBudgetRatio: remainingBudgetRatio(),
+        risk: run?.situation?.risk ?? 'ordinary',
+        benefit: Math.min(1, 0.65 + (batch.length > 1 ? 0.2 : 0))
+      });
+      effectiveMaxParallel = concurrency.next;
+      waveRecord.concurrency = concurrency;
+      waves.push(waveRecord);
+
+      const merged = mergeSubsystemMessages(blackboard?.subsystemMessages ?? [], currentWaveMessages);
+      subsystemMessages.push(...currentWaveMessages);
+      blackboard = mergeBlackboardForPanel(blackboard, results, currentWaveMessages);
+      blackboard = mergeBlackboard(blackboard ?? {}, { subsystemMessages: merged }, run?.id ?? null);
+      await recordWave({ run, task, wave: waveRecord });
+      await recordBlackboard({ run, task, blackboard });
+
+      await Promise.all(results.map(item => recordAgent({
+        run,
+        task,
+        waveIndex,
+        role: `${item.subsystem.id}:${item.role}`,
+        modelId: item.result?.model ?? item.modelId,
+        state: item.parsed ? 'complete' : 'failed',
+        finding: item.parsed ?? null,
+        errorCode: item.parsed ? null : 'agent-unavailable'
+      })));
+
+      pendingWave = dependencyWave.subsystemIds.filter(id => {
+        const state = subsystemState.get(id);
+        return state && state.status !== 'complete';
+      });
+    }
+  }
+
+  const integrationFindings = allFindings.length
+    ? allFindings.map(item => ({
+        ...item,
+        summary: `[${item.subsystemId ?? 'subsystem'}] ${item.summary}`
+      }))
+    : [];
+  let arbiter = null;
+  if (integrationFindings.length >= 2 && disagreementProfile(integrationFindings).disagreement && await canSpend() && dataAllowed) {
+    const modelId = agentModelFor(selection, primaryModelId, 'critic', { used: usedModels, allows: allowsModel });
+    const result = await modelCaller(arbiterMessages({
+      ...basePayload,
+      task: { ...task, id: 'code-workspace-integration-review' }
+    }, integrationFindings.slice(0, 12)), {
+      config,
+      fetchImpl,
+      modelId,
+      allowBackup,
+      effort: 'high',
+      json: true,
+      maxOutputTokens: ARBITER_MAX_OUTPUT_TOKENS,
+      usageGate,
+      usageSource: 'multi-agent'
+    }).catch(() => null);
+    const parsed = result && !result.incomplete
+      ? normalizedRoleFinding(parseJsonObject(result.text), 'integration-arbiter')
+      : null;
+    if (parsed) {
+      arbiter = { ...parsed, model: result.model };
+      agentStates.push({ role: 'integration-arbiter', model: result.model, status: 'complete' });
+    }
+  }
+
+  const finalDecision = {
+    ...initialDecision,
+    enabled: true,
+    reason: 'code-workspace-adaptive-subsystem-panels',
+    panelIterations: CODE_WORKSPACE_MAX_PANEL_ITERATIONS,
+    a2a: 'typed-revision-bound-dependency-scoped'
+  };
+  const finalAllocation = {
+    targetAgents: maxAgents,
+    selectedAgents: agentStates.filter(item => item.status === 'complete').length,
+    allocationRounds: waves.length,
+    waves,
+    waveCount: waves.length,
+    parallel: waves.some(wave => wave.parallel),
+    subsystemPlan: subsystemPlanContext,
+    subsystemPanels: subsystemPlan.subsystems.map(subsystem => {
+      const state = subsystemState.get(subsystem.id);
+      return {
+        subsystemId: subsystem.id,
+        panelId: `${subsystem.id}:i${Math.max(1, Number(state?.iteration ?? 1))}`,
+        status: state?.status ?? 'pending',
+        iterations: state?.iteration ?? 0,
+        roles: state?.roles ?? [],
+        confidence: state?.confidence ?? 0
+      };
+    }),
+    subsystemMessages: mergeSubsystemMessages([], subsystemMessages)
+  };
+  const brief = buildBrief(allFindings, arbiter, finalDecision, agentStates, finalAllocation);
+  return {
+    enabled: true,
+    decision: finalDecision,
+    allocation: finalAllocation,
+    waves,
+    agents: agentStates,
+    findings: allFindings,
+    arbiter,
+    brief
   };
 }
 
