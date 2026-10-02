@@ -158,6 +158,11 @@ export async function usageSummary(pool, { principalId, workspaceId = null, conf
     model: config.ai ? { provider: config.ai.provider, model: config.ai.model || MODEL_DEFAULTS[config.ai.provider] || null, contextWindow } : null,
     modelIds: applied.modelIds ?? modelIdsForPlan(null, config),
     windows,
+    quotaScope: {
+      fourHour: 'principal',
+      weekly: 'principal',
+      context: 'conversation'
+    },
     days,
     bySource,
     context
