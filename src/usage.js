@@ -323,14 +323,14 @@ export async function releaseUsageReservation(pool, { reservationId, principalId
   return rowCount > 0;
 }
 
-export function createUsageGate(pool, { principalId, workspaceId, runId = null, config } = {}) {
+export function createUsageGate(pool, { principalId, workspaceId, runId = null, conversationId = null, config } = {}) {
   return Object.freeze({
     reserve: args => reserveUsage(pool, {
       principalId, workspaceId, runId, config,
       estimatedTokens: args?.estimatedTokens
     }),
     settle: args => settleUsageReservation(pool, {
-      principalId, workspaceId, runId,
+      principalId, workspaceId, runId, conversationId,
       ...(args ?? {})
     }),
     release: args => releaseUsageReservation(pool, {

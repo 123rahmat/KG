@@ -2567,5 +2567,17 @@ export const MIGRATIONS = [
           )
         );
     `
+  },
+
+  {
+    version: 63,
+    name: 'usage-reservation-maintenance',
+    sql: `
+      CREATE INDEX IF NOT EXISTS usage_reservations_state_age_idx
+        ON usage_reservations(state, updated_at);
+      DELETE FROM usage_reservations
+       WHERE state IN ('consumed','released')
+         AND updated_at < now() - interval '30 days';
+    `
   }
 ];
