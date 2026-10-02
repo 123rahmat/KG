@@ -69,7 +69,9 @@ export function normalizeWorkspaceFiles(files = []) {
     const content = String(item?.content ?? item?.text ?? '');
     const bytes = Buffer.byteLength(content, 'utf8');
     if (bytes > WORKSPACE_LIMITS.maxFileBytes) throw new Error(`Workspace file exceeds ${WORKSPACE_LIMITS.maxFileBytes} bytes: ${path}`);
-    if (!map.has(path)) totalBytes += bytes;
+    const previous = map.get(path);
+    if (previous !== undefined) totalBytes -= Buffer.byteLength(previous, 'utf8');
+    totalBytes += bytes;
     if (totalBytes > WORKSPACE_LIMITS.maxTotalBytes) throw new Error('Workspace exceeds its total file-size limit');
     map.set(path, content);
     if (map.size > WORKSPACE_LIMITS.maxFiles) throw new Error('Workspace exceeds its file-count limit');
@@ -161,12 +163,29 @@ export function selectWorkspaceContext(files = [], { changedPaths = [], query = 
     if (file.path.split('/').length <= 2) score += 10;
     return { ...file, score };
   }).sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
+  const utf8Prefix = (value, limit) => {
+    const raw = Buffer.from(String(value ?? ''), 'utf8');
+    if (raw.byteLength <= limit) return raw.toString('utf8');
+    let end = Math.max(0, Number(limit) || 0);
+    while (end > 0 && (raw[end] & 0b11000000) === 0b10000000) end -= 1;
+    return raw.subarray(0, end).toString('utf8');
+  };
   const selected = [];
   let bytes = 0;
   for (const file of scored) {
     if (selected.length >= maxFiles) break;
     const size = Buffer.byteLength(file.content, 'utf8');
-    if (bytes + size > maxBytes && selected.length) continue;
+    const remaining = Math.max(0, maxBytes - bytes);
+    if (!remaining) break;
+    if (size > remaining) {
+      if (!selected.length) {
+        const content = utf8Prefix(file.content, remaining);
+        if (!content) break;
+        selected.push({ ...file, content });
+        bytes += Buffer.byteLength(content, 'utf8');
+      }
+      continue;
+    }
     selected.push(file);
     bytes += size;
   }
