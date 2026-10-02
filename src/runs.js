@@ -866,6 +866,7 @@ export class RunStore {
             }
           : result.evidence ?? null;
 
+      let approvedPlanUpdate = null;
       if (status === 'complete' && target.type === 'approval') {
         const conditions = text(result.conditions ?? result.evidence?.conditions).slice(0, 4000);
         const normalizePlanChoices = value => {
@@ -895,7 +896,7 @@ export class RunStore {
           // The approved plan is authoritative for the following coding step.
           // The model proposal remains evidence, but these user choices are
           // the only plan overrides the coding stage may treat as instructions.
-          adaptiveUpdate.approvedPlan = {
+          approvedPlanUpdate = {
             sourceTaskId: target.dependsOn?.[0] ?? null,
             existingCodePlan: target.metadata?.existingCodePlan === true,
             planChoices,
@@ -1123,7 +1124,7 @@ export class RunStore {
     );
 
     const adaptiveUpdate = {
-          ...(run.adaptation ?? {}),
+      ...(run.adaptation ?? {}),
           discoveries: [
             ...((run.adaptation?.discoveries ?? [])),
             ...adaptiveDiscoveries
@@ -1150,6 +1151,7 @@ export class RunStore {
             ? structured
             : (run.adaptation?.lastReassessment ?? null)
         };
+    if (approvedPlanUpdate) adaptiveUpdate.approvedPlan = approvedPlanUpdate;
 
     // Code changes are written back into the same unified context used by
     // planning and file reads. This keeps workflow state, editable files and
