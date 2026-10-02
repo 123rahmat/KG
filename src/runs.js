@@ -891,10 +891,6 @@ export class RunStore {
           ...(conditions ? { conditions } : {}),
           ...(hasChoices ? { planChoices } : {})
         };
-        if (target.metadata?.planAgreement) {
-          // Applied in #settle after the run's adaptive state is constructed.
-          // The approval evidence remains the single authoritative choice set.
-        }
       }
 
       if (status === 'complete' && target.type === 'verify') {
@@ -1129,7 +1125,27 @@ export class RunStore {
       )
     );
 
+    const approvedPlanUpdate = target.type === 'approval'
+      && target.metadata?.planAgreement
+      && evidence?.approved === true
+      ? {
+          sourceTaskId: target.dependsOn?.[0] ?? null,
+          existingCodePlan: target.metadata?.existingCodePlan === true,
+          planChoices: evidence.planChoices ?? {
+            keepExisting: [],
+            removeExisting: [],
+            addNew: [],
+            changeExisting: []
+          },
+          conditions: evidence.conditions ?? null,
+          approvedAt: evidence.approvedAt ?? new Date().toISOString(),
+          actor: evidence.actor ?? run.principal_id ?? run.principalId
+        }
+      : null;
+
     const adaptiveUpdate = {
+          ...(run.adaptation ?? {}),
+          ...(approvedPlanUpdate ? { approvedPlan: approvedPlanUpdate } : {}),
           ...(run.adaptation ?? {}),
           discoveries: [
             ...((run.adaptation?.discoveries ?? [])),
