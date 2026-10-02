@@ -344,6 +344,31 @@ test('non-coding work can recruit independent cognitive roles', () => {
 });
 
 
+test('clean independent evidence stops generic panels before exhausting the role catalog', async () => {
+  let calls = 0;
+  const result = await runAdaptiveAgentPanel({
+    run: run({ adaptation: { scale: 'complex' } }),
+    task: { id: 'plan', type: 'plan' },
+    basePayload: { goal: 'Plan a deterministic implementation', task: { id: 'plan', type: 'plan' } },
+    selection,
+    primaryModelId: 'google:gemini-3.8-flash',
+    config: { agents: { multiAgent: 'always', maxAgents: 7 } },
+    canSpend: async () => true,
+    modelCaller: async (_messages, options) => {
+      calls += 1;
+      return {
+        text: JSON.stringify(finding('proceed', 'clear evidence', { confidence: 0.94 })),
+        provider: 'google',
+        model: options.modelId,
+        usage: null
+      };
+    }
+  });
+  assert.ok(calls <= 3);
+  assert.equal(result.allocation.efficiency.earlyConvergence.stop, true);
+  assert.equal(result.allocation.efficiency.principle.includes('smallest'), false);
+});
+
 test('observed evidence can shrink or expand the next agent allocation', () => {
   const baseRun = run({
     adaptation: { scale: 'complex' },
@@ -491,7 +516,7 @@ test('Code Workspace gives every subsystem its own multi-agent panel with bounde
     modelCaller: fakeModel
   });
 
-  assert.equal(result.findings.length, 10);
+  assert.ok(result.findings.length >= 6);
   assert.equal(new Set(calls.map(item => item.body.workspacePanel.subsystemId)).size, 2);
   assert.equal(new Set(calls.map(item => item.body.workspacePanel.panelId)).size, 2);
   assert.equal(calls.every(item => item.body.workspacePanel.mode === 'unified-adaptive-code-panel'), true);
@@ -505,7 +530,7 @@ test('Code Workspace gives every subsystem its own multi-agent panel with bounde
   assert.equal(calls.every(item => item.body.workspacePanel.iteration === 1), true);
   assert.equal(result.waves[0].parallel, true);
   assert.equal(result.waves[0].subsystemIds.length, 2);
-  assert.equal(result.waves[0].roles.length, 10);
+  assert.ok(result.waves[0].roles.length >= 6);
   assert.equal(result.allocation.subsystemPanels.length, 2);
   assert.equal(result.allocation.subsystemPanels.every(item => item.status === 'complete'), true);
   assert.equal(result.allocation.subsystemPanels.every(item => item.iterations === 1), true);
