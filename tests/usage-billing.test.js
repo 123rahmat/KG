@@ -69,6 +69,36 @@ test('past the 4-hour limit, AI steps wait and say when they open again', () =>
     assert.equal((await call('GET', '/api/schedules', auth)).status, 200);
   }, { env: { ...AI, USAGE_LIMIT_4H_TOKENS: '60' }, fetchImpl: provider }));
 
+
+async function delayedProvider() {
+  await new Promise(resolve => setTimeout(resolve, 75));
+  return jsonResponse({
+    stop_reason: 'end_turn',
+    content: [{ type: 'text', text: 'An answer.' }],
+    usage: { input_tokens: 40, output_tokens: 10 }
+  });
+}
+
+
+test('concurrent AI requests share one atomic usage reservation', () =>
+  withServer(async ({ call, seed }) => {
+    const { token, workspace } = await seed();
+    const auth = { token, workspace };
+    const first = await call('POST', '/api/runs', {
+      ...auth, body: { goal: 'Concurrent one', conversationId: 'concurrent-0001', privacyConsent: { modelProvider: true } }
+    });
+    const second = await call('POST', '/api/runs', {
+      ...auth, body: { goal: 'Concurrent two', conversationId: 'concurrent-0002', privacyConsent: { modelProvider: true } }
+    });
+
+    const [a, b] = await Promise.all([
+      call('POST', `/api/runs/${first.body.id}/execute`, { ...auth, body: {} }),
+      call('POST', `/api/runs/${second.body.id}/execute`, { ...auth, body: {} })
+    ]);
+    const statuses = [a.body.execution?.status, b.body.execution?.status].sort();
+    assert.deepEqual(statuses, ['completed', 'usage-limit-reached']);
+  }, { env: { ...AI, USAGE_LIMIT_4H_TOKENS: '60' }, fetchImpl: delayedProvider }));
+
 test('billing details are for admins, never hold card numbers, and link to the payment portal', () =>
   withServer(async ({ call, seed, pool }) => {
     const admin = await seed();
