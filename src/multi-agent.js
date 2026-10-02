@@ -935,7 +935,9 @@ export async function runAdaptiveAgentPanel({
     waveCount: waves.length,
     parallel: waves.some(wave => wave.parallel),
     completedRoles,
-    failedRoles
+    failedRoles,
+    subsystemPlan: subsystemPlanContext,
+    subsystemMessages: blackboard?.subsystemMessages ?? []
   };
   const brief = buildBrief(findings, arbiter, finalDecision, agentStates, finalAllocation);
   return {
