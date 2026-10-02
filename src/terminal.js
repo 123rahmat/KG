@@ -295,7 +295,7 @@ export function attachTerminalServer(server, {
           [sourceId, scope.workspaceId, principal.id]
         );
         source = row || null;
-        if (!source) throw Object.assign(new Error('Workspace source not found'), { code: 'terminal-source-not-found' });
+        if (!source || source.kind !== 'github') throw Object.assign(new Error('Only GitHub repositories can be opened in the Code Workspace terminal.'), { code: 'github-source-required' });
         baseFiles = await readSnapshot(objects, scope, source.snapshot_object_id);
       }
 
