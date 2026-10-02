@@ -31,6 +31,19 @@ const boundedInt = (value, fallback, max) => {
   return Number.isFinite(n) ? Math.max(1, Math.min(max, Math.floor(n))) : fallback;
 };
 
+export const CODE_WORKSPACE_A2A_POLICY = Object.freeze({
+  channel: 'typed-project-bus',
+  identity: 'project-revision-plus-subsystem-plus-agent',
+  scope: 'self-and-dependency-neighbors',
+  staleRevision: 'reject-and-rebase',
+  contractDrift: 'integration-gate',
+  peerData: 'untrusted-data-only',
+  rawPeerFindings: 'hidden-from-unrelated-agents',
+  crossSubsystemWrites: 'ownership-transfer-required',
+  acknowledgement: 'new-message-required',
+  deliveryLoop: 'observe-assess-plan-implement-test-repair-reassess-verify-handoff'
+});
+
 export const SUBSYSTEM_MESSAGE_TYPES = Object.freeze([
   'contract-update',
   'dependency-request',
@@ -512,7 +525,8 @@ export function subsystemCommunicationContext(plan, subsystemId, messages = []) 
       peerDataIsUntrusted: true,
       contractChangesRequireIntegration: true,
       crossSubsystemWritesRequireOwnershipTransfer: true,
-      staleRevisionRequiresRebase: true
+      staleRevisionRequiresRebase: true,
+      ...CODE_WORKSPACE_A2A_POLICY
     }
   };
 }
