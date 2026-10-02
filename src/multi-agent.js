@@ -647,10 +647,19 @@ function buildBrief(findings, arbiter, decision, states = [], allocation = null)
 }
 
 
-const CODE_WORKSPACE_MAX_PANEL_ITERATIONS = 3;
+const CODE_WORKSPACE_MAX_PANEL_ITERATIONS = 2;
 const CODE_WORKSPACE_MIN_PANEL_AGENTS = 2;
 const CODE_WORKSPACE_MAX_PANEL_AGENTS = 5;
 const CODE_WORKSPACE_AUTO_THRESHOLD = 0.22;
+const CODE_WORKSPACE_ROLE_OUTPUT_TOKENS = Object.freeze({
+  architect: 850,
+  implementer: 900,
+  'test-engineer': 750,
+  debugger: 800,
+  critic: 700,
+  'security-reviewer': 700,
+  'performance-reviewer': 700
+});
 
 function codeWorkspaceTask(basePayload, task) {
   return Boolean(
@@ -671,7 +680,10 @@ function normalChatZipCodeTask(run, basePayload, task) {
   return attachments.some(item => /\.zip$/i.test(text(typeof item === 'string' ? item : item?.name ?? '')));
 }
 
-function codeWorkspacePanelWidth(run, task, maxAgents, iteration = 1) {
+function codeWorkspacePanelWidth(run, task, maxAgents, iteration = 1, {
+  fileCount = 0,
+  remainingBudgetRatio = 1
+} = {}) {
   const signals = taskSignals(run, task, {
     goal: null,
     findings: [],
@@ -679,13 +691,21 @@ function codeWorkspacePanelWidth(run, task, maxAgents, iteration = 1) {
     evidenceSoFar: []
   });
   if (maxAgents < CODE_WORKSPACE_MIN_PANEL_AGENTS) return 1;
-  const desired = signals.securityFocus || signals.performanceFocus
+  let desired = signals.securityFocus || signals.performanceFocus
     ? 4
     : signals.retrying || iteration > 1
       ? 3
       : signals.scaleComplexity >= 0.32 || signals.decomposition >= 0.18
         ? 3
         : 2;
+
+  // Small projects do not benefit from a wide panel. Large projects may,
+  // but only when budget headroom exists.
+  if (fileCount > 0 && fileCount <= 24 && !signals.securityFocus && !signals.performanceFocus && !signals.retrying) {
+    desired = 2;
+  }
+  if (remainingBudgetRatio < 0.35) desired = Math.min(desired, 2);
+  if (remainingBudgetRatio < 0.18) desired = 1;
   return Math.min(CODE_WORKSPACE_MAX_PANEL_AGENTS, maxAgents, desired);
 }
 
@@ -742,11 +762,14 @@ function subsystemPanelStability(results) {
   const profile = disagreementProfile(parsed);
   const meanConfidence = parsed.reduce((sum, item) => sum + confidenceValue(item.confidence), 0) / parsed.length;
   const blocking = parsed.some(item => ['stop', 'revise', 'investigate'].includes(item.recommendation));
+  const severeRisk = parsed.some(item => (item.risks ?? []).length > 0)
+    || parsed.some(item => (item.unknowns ?? []).length > 0);
   return {
-    stable: !blocking && meanConfidence >= 0.78,
+    stable: !blocking && !profile.disagreement && !severeRisk && meanConfidence >= 0.82,
     blocked: parsed.some(item => item.recommendation === 'stop'),
     confidence: Number(meanConfidence.toFixed(3)),
-    disagreement: profile.disagreement
+    disagreement: profile.disagreement,
+    severeRisk
   };
 }
 
@@ -892,7 +915,10 @@ async function runCodeWorkspaceAgentPanels({
 
       const representativeState = subsystemState.get(ready[0].id);
       const panelIteration = Math.max(1, Number(representativeState?.iteration ?? 0) + 1);
-      const panelWidth = codeWorkspacePanelWidth(run, task, maxAgents, panelIteration);
+      const panelWidth = codeWorkspacePanelWidth(run, task, maxAgents, panelIteration, {
+        fileCount: Number(subsystemPlan.project?.fileCount ?? 0),
+        remainingBudgetRatio: remainingBudgetRatio()
+      });
       const maxPanels = singlePanel
         ? 1
         : Math.max(1, Math.floor(Math.max(1, effectiveMaxParallel) / Math.max(1, panelWidth)));
@@ -1006,7 +1032,7 @@ async function runCodeWorkspaceAgentPanels({
           allowBackup,
           effort: initialDecision.pressure >= 0.72 || job.iteration > 1 ? 'high' : 'medium',
           json: true,
-          maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
+          maxOutputTokens: CODE_WORKSPACE_ROLE_OUTPUT_TOKENS[job.role] ?? AGENT_MAX_OUTPUT_TOKENS,
           usageGate,
           usageSource: 'multi-agent'
         }).catch(() => null);
@@ -1248,6 +1274,13 @@ async function runCodeWorkspaceAgentPanels({
     panelMode: singlePanel ? 'normal-chat-zip-single-panel' : 'subsystem-panel-orchestration',
     panelScope: singlePanel ? 'entire-attached-zip-project' : null,
     panelEngine: 'unified-adaptive-code-panel-v1',
+    codingEconomy: {
+      maxPanelAgents: CODE_WORKSPACE_MAX_PANEL_AGENTS,
+      maxIterations: CODE_WORKSPACE_MAX_PANEL_ITERATIONS,
+      roleSpecificOutputCaps: true,
+      earlyConvergence: true,
+      disagreementRequiredForArbitration: true
+    },
     subsystemPanels: subsystemPlan.subsystems.map(subsystem => {
       const state = subsystemState.get(subsystem.id);
       return {
