@@ -81,6 +81,23 @@ test('control managers run independently in parallel and cannot mutate server au
 });
 
 
+test('specialist panel owns coordination when generic multi-agent work is already justified', async () => {
+  const result = await runNormalChatControlPlane({
+    run: run({ adaptation: { scale: 'complex' } }),
+    task,
+    payload: { workPlan: { steps: ['one', 'two'] } },
+    modelId: 'google:gemini-3.8-flash',
+    config: { ai: true },
+    specialistPanelOwnsCoordination: true,
+    modelCaller: async () => {
+      throw new Error('manager call should be suppressed');
+    }
+  });
+  assert.equal(result.enabled, false);
+  assert.equal(result.needs.stepManager, false);
+  assert.equal(result.needs.resourceDataManager, false);
+});
+
 test('dedicated coding flows skip duplicate normal-chat manager calls', async () => {
   const result = await runNormalChatControlPlane({
     run: run(),
