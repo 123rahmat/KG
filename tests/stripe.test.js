@@ -148,10 +148,15 @@ test('an admin buys a plan through Stripe Checkout; only a signed webhook makes 
     const usage = await call('GET', '/api/usage', auth);
     assert.equal(usage.body.windows[0].limit, 5000);
     assert.equal(usage.body.plan, 'Pro');
-    // Members see the workspace is paid; they do not see billing details.
+    // Members see the workspace is paid, but billing details are owned by Stripe.
     const seen = await call('GET', '/api/billing', { token: editor.token, workspace: editor.workspace });
     assert.equal(seen.body.stripe.subscription.status, 'active');
-    assert.equal(seen.body.details, null);
+    assert.equal(Object.hasOwn(seen.body, 'details'), false);
+    assert.equal(seen.body.billingAuthority, 'stripe');
+    assert.equal(seen.body.billingDetailsStoredLocally, false);
+
+    // Local billing-detail writes no longer exist; Stripe owns that data.
+    assert.equal((await call('PUT', '/api/billing', { ...auth, body: { billingEmail: 'local@example.com' } })).status, 404);
 
     // A second checkout is refused; changes go through the portal.
     assert.equal((await call('POST', '/api/billing/checkout', { ...auth, body: { planId: 'team' } })).status, 409);
