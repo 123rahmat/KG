@@ -15,6 +15,10 @@ const clamp = (value, min, max, fallback = min) => {
 };
 
 export const FLEET_PROJECT_STATES = Object.freeze(['active', 'paused', 'archived']);
+
+export class FleetValidationError extends Error {
+  constructor(message) { super(message); this.name = 'FleetValidationError'; this.code = 'fleet-validation'; }
+}
 export const FLEET_LIMITS = Object.freeze({
   maxProjectConcurrency: 8,
   maxDispatchBatch: 32,
@@ -26,7 +30,7 @@ export const FLEET_LIMITS = Object.freeze({
 export function normalizeProjectSpec(input = {}) {
   const value = input && typeof input === 'object' ? input : {};
   const name = text(value.name).slice(0, 180);
-  if (!name) throw new Error('Project name is required');
+  if (!name) throw new FleetValidationError('Project name is required');
   return {
     name,
     state: FLEET_PROJECT_STATES.includes(text(value.state)) ? text(value.state) : 'active',
@@ -187,7 +191,7 @@ export class FleetStore {
 
   async addDependency(scope, id, dependsOnId) {
     const left = text(id); const right = text(dependsOnId);
-    if (!left || !right || left === right) throw new Error('A project cannot depend on itself');
+    if (!left || !right || left === right) throw new FleetValidationError('A project cannot depend on itself');
     const cycleSql = [
       'WITH RECURSIVE reaches(id) AS (',
       'SELECT depends_on_project_id FROM fleet_project_dependencies WHERE project_id=$1 AND workspace_id=$3',
@@ -196,12 +200,12 @@ export class FleetStore {
       'SELECT 1 FROM reaches WHERE id=$2 LIMIT 1'
     ].join(' ');
     const { rows: cycle } = await this.pool.query(cycleSql, [left, right, scope.workspaceId]);
-    if (cycle.length) throw new Error('Adding this dependency would create a project cycle');
+    if (cycle.length) throw new FleetValidationError('Adding this dependency would create a project cycle');
     const { rows: count } = await this.pool.query(
       'SELECT count(*)::int count FROM fleet_project_dependencies WHERE project_id=$1 AND workspace_id=$2',
       [left, scope.workspaceId]
     );
-    if (Number(count[0]?.count || 0) >= FLEET_LIMITS.maxDependencies) throw new Error('Project dependency limit reached');
+    if (Number(count[0]?.count || 0) >= FLEET_LIMITS.maxDependencies) throw new FleetValidationError('Project dependency limit reached');
     await this.pool.query(
       'INSERT INTO fleet_project_dependencies(workspace_id,project_id,depends_on_project_id) SELECT $3,$1,$2 WHERE EXISTS (SELECT 1 FROM fleet_projects WHERE id=$1 AND workspace_id=$3) AND EXISTS (SELECT 1 FROM fleet_projects WHERE id=$2 AND workspace_id=$3) ON CONFLICT DO NOTHING',
       [left, right, scope.workspaceId]
@@ -211,9 +215,9 @@ export class FleetStore {
 
   async enqueue(scope, projectId, { runId, taskId, request = {}, maxAttempts = 3 } = {}) {
     const project = await this.get(scope, projectId);
-    if (!project) throw new Error('Fleet project not found');
-    if (project.state !== 'active') throw new Error('Project is not active');
-    if (!text(runId) || !text(taskId)) throw new Error('Fleet dispatch requires runId and taskId');
+    if (!project) throw new FleetValidationError('Fleet project not found');
+    if (project.state !== 'active') throw new FleetValidationError('Project is not active');
+    if (!text(runId) || !text(taskId)) throw new FleetValidationError('Fleet dispatch requires runId and taskId');
     const { rows: [row] } = await this.pool.query(
       "INSERT INTO fleet_dispatches(id,workspace_id,principal_id,project_id,state,payload,max_attempts,available_at) VALUES($1,$2,$3,$4,'queued',$5::jsonb,$6,now()) RETURNING *",
       [crypto.randomUUID(), scope.workspaceId, scope.principalId, projectId,
@@ -277,7 +281,7 @@ export class FleetStore {
   async finish(scope, dispatchId, {
     state = 'succeeded', costTokens = 0, costComputeMs = 0, error = null, metadata = {}
   } = {}) {
-    if (!['succeeded','failed','cancelled'].includes(text(state))) throw new Error('Invalid terminal dispatch state');
+    if (!['succeeded','failed','cancelled'].includes(text(state))) throw new FleetValidationError('Invalid terminal dispatch state');
     return transaction(this.pool, async client => {
       const { rows: [dispatch] = [] } = await client.query(
         'SELECT * FROM fleet_dispatches WHERE id=$1 AND workspace_id=$2 FOR UPDATE',
