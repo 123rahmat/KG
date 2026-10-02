@@ -6,7 +6,7 @@
 import crypto from 'node:crypto';
 import { parseJsonObject } from '../structured.js';
 import { callModel, callRunner, SANDBOX_TIMEOUT_MS } from '../runtime.js';
-import { chooseExecutionTarget, executionTargetsFor, verifyExecutionReceipt, signExecutionChallenge, executionPayloadDigest, executionSucceeded, executionIdFor, RECEIPT_ALGORITHM } from '../execution.js';
+import { chooseExecutionTarget, codeActionDecision, executionTargetsFor, verifyExecutionReceipt, signExecutionChallenge, executionPayloadDigest, executionSucceeded, executionIdFor, RECEIPT_ALGORITHM } from '../execution.js';
 import { text } from '../http/context.js';
 import { configuredExecutionTargets, runnerForTarget, planPolicyAllows, dataPolicyAllows, dataPolicyDecision, modelPolicyAllows } from '../http/policy.js';
 import { assertUsageAllowed, createUsageGate, UsageLimitError } from '../usage.js';
@@ -307,6 +307,33 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         return res.status(422).json({
           error: situationGate.reason,
           code: 'situation-governance-blocked',
+          run
+        });
+      }
+
+      // Coding has its own adaptive intent gate. This decides whether the
+      // requested code may be generated directly or whether a person must
+      // explicitly approve/clarify first. Running that code remains a separate
+      // execution-target boundary below.
+      const codeAction = codeActionDecision({
+        task,
+        run,
+        userApproved: req.body?.approved === true
+      });
+      if (codeAction.action === 'clarify') {
+        return res.status(409).json({
+          error: codeAction.reason,
+          code: 'code-clarification-required',
+          codeAction,
+          run
+        });
+      }
+      if (codeAction.action === 'approval-required' && req.body?.approved !== true) {
+        await recordBoundaryDenial(req, run, task, 'code-approval-required', { reason: codeAction.reason });
+        return res.status(409).json({
+          error: codeAction.reason,
+          code: 'code-approval-required',
+          codeAction,
           run
         });
       }
@@ -698,7 +725,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
               explicitConsent: (BUILTIN_TOOL_TARGETS.has(executionDecision?.target) && req.body?.approved === true)
                 || req.body?.modelConsent === true
             })
-          : { configured: false, executed: false, status: 'unsupported-task', message: `No executor for task type "${task.type}"` };
+          : { configured: false, executed: false, status: 'unsupported-task', message: `No executor for task type "${task.type}"`, codeAction };
 
       // Code in a language this sandbox cannot run goes on untested, and says
       // why, rather than waiting for a run that cannot happen.
@@ -709,6 +736,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         return res.status(200).json({ run: skipped ?? run, execution: { configured: true, executed: false, status: 'language-unavailable', message: output.message } });
       }
 
+      if (execution && typeof execution === 'object') execution.codeAction = codeAction;
       if (!execution.executed) {
         // Tokens already spent (a design whose run then failed) still count.
         if (execution.usage) {
