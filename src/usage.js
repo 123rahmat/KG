@@ -109,6 +109,7 @@ export async function limitsFor(pool, config, workspaceId, principalId = null) {
   // Usage admission always has a principal; without one, paid entitlement
   // must not be selected from an arbitrary workspace.
   return defaults;
+}
 
 /**
  * Usage for one person: each rolling window with its limit and when it
