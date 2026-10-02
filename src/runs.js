@@ -61,10 +61,25 @@ const PLANNED_STAGES = new Set(['discover-capabilities', 'investigate', 'respond
 
 // Planning a new build with the person: a plan they can read, then their
 // agreement (with any changes), then the code.
-const BUILD_PLAN_SCHEMA = Object.freeze({ summary: 'string', features: 'string[]', files: 'string[]', tests: 'string[]', assumptions: 'string[]', questions: 'string[]' });
+const BUILD_PLAN_SCHEMA = Object.freeze({
+  summary: 'string',
+  features: 'string[]',
+  files: 'string[]',
+  tests: 'string[]',
+  assumptions: 'string[]',
+  questions: 'string[]',
+  keepExisting: 'string[]',
+  removeExisting: 'string[]',
+  addNew: 'string[]',
+  changeExisting: 'string[]'
+});
 const BUILD_PLAN_STEP = Object.freeze({
   type: 'plan', title: 'Plan the build with you', buildPlan: true,
-  purpose: 'Propose a concrete plan for what will be built, for the person to agree before any code is written: what it does, its parts and files, how it will be tested, the assumptions made, and the few questions whose answers would change the build.'
+  purpose: 'Propose a concrete plan for what will be built, for the person to agree before any code is written: what it does, its parts and files, how it will be tested, the assumptions made, and the few questions whose answers would change the build. For existing code, explicitly review the current codebase and propose what to keep, remove, add and change; these are suggestions until the person approves them.'
+});
+const EXISTING_CODE_PLAN_STEP = Object.freeze({
+  type: 'plan', title: 'Review and re-plan the existing code', buildPlan: true, existingCodePlan: true,
+  purpose: 'Read the existing codebase and propose a concrete change plan. Clearly separate what should be kept, removed, added and changed, explain why, identify affected files and tests, and wait for the person to approve or modify those choices before any code is changed.'
 });
 const PLAN_AGREEMENT_STEP = Object.freeze({
   type: 'approval', title: 'Agree the plan', planAgreement: true,
@@ -844,14 +859,42 @@ export class RunStore {
 
       if (status === 'complete' && target.type === 'approval') {
         const conditions = text(result.conditions ?? result.evidence?.conditions).slice(0, 4000);
+        const normalizePlanChoices = value => {
+          const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+          const normalize = name => [...new Set(
+            (Array.isArray(source[name]) ? source[name] : String(source[name] ?? '').split(/\\n|;/))
+              .map(text).filter(Boolean)
+          )].slice(0, 40);
+          return {
+            keepExisting: normalize('keepExisting'),
+            removeExisting: normalize('removeExisting'),
+            addNew: normalize('addNew'),
+            changeExisting: normalize('changeExisting')
+          };
+        };
+        const planChoices = normalizePlanChoices(result.planChoices ?? result.evidence?.planChoices);
+        const hasChoices = Object.values(planChoices).some(items => items.length);
         evidence = {
           approved: true,
           actor: principal.id,
           approvedAt: new Date().toISOString(),
           reasons: target.purpose,
-          // The person's conditions or changes: the work after this follows them.
-          ...(conditions ? { conditions } : {})
+          ...(conditions ? { conditions } : {}),
+          ...(hasChoices ? { planChoices } : {})
         };
+        if (target.metadata?.planAgreement) {
+          // The approved plan is authoritative for the following coding step.
+          // The model proposal remains evidence, but these user choices are
+          // the only plan overrides the coding stage may treat as instructions.
+          adaptiveUpdate.approvedPlan = {
+            sourceTaskId: target.dependsOn?.[0] ?? null,
+            existingCodePlan: target.metadata?.existingCodePlan === true,
+            planChoices,
+            conditions: conditions || null,
+            approvedAt: evidence.approvedAt,
+            actor: principal.id
+          };
+        }
       }
 
       if (status === 'complete' && target.type === 'verify') {
@@ -1532,9 +1575,17 @@ export class RunStore {
           purpose: 'Read the attached files with the file tools, work out what the person asked from their actual contents, and answer from that evidence.' };
       }
       if (planned.has('code-generation') && !started('code')) {
-        // Something new to build is planned with the person before any
-        // code is written; fixing or extending existing code is not.
-        if (newBuild(run) && !started('plan')) return BUILD_PLAN_STEP;
+        // All substantive coding work is reviewed with the person before
+        // mutation. New builds and existing-code changes use the same
+        // approval surface; existing code adds explicit keep/remove/add/change
+        // decisions so the person's intent is not inferred by the model.
+        const hasExistingCode = (run.adaptation?.attachments?.length ?? 0) > 0
+          || (run.adaptation?.projectOverlay?.length ?? 0) > 0
+          || (run.situation?.artifacts?.length ?? 0) > 0
+          || run.adaptation?.ownWork === true;
+        if (!started('plan') && (newBuild(run) || hasExistingCode)) {
+          return hasExistingCode ? EXISTING_CODE_PLAN_STEP : BUILD_PLAN_STEP;
+        }
         return { type: 'code', title: 'Write the code',
           purpose: 'Write the requested code with its automated tests, as a reviewable package; do not claim that it has run.' };
       }
@@ -1802,7 +1853,11 @@ export class RunStore {
       ...(candidate.inventionLoop === true ? { inventionLoop: true } : {}),
       ...(candidate.type === 'reassess' && candidate.sourceTask ? { sourceTask: candidate.sourceTask } : {}),
       ...(candidate.humanInput ? { humanInput: true } : {}),
-      ...(candidate.buildPlan ? { buildPlan: true, outputSchema: BUILD_PLAN_SCHEMA } : {}),
+      ...(candidate.buildPlan ? {
+        buildPlan: true,
+        outputSchema: BUILD_PLAN_SCHEMA,
+        ...(candidate.existingCodePlan ? { existingCodePlan: true } : {})
+      } : {}),
       ...(candidate.planAgreement ? { planAgreement: true } : {}),
       requirementIds
     };
