@@ -118,37 +118,61 @@ export async function limitsFor(pool, config, workspaceId, principalId = null) {
  */
 export async function usageSummary(pool, { principalId, workspaceId = null, config, conversationId = null, now = new Date(), limits = null }) {
   const applied = limits ?? await limitsFor(pool, config, workspaceId, principalId);
-  const since = new Date(now.getTime() - WINDOWS.at(-1).ms);
-  const { rows: globalRows } = await pool.query(
-    `SELECT source, input_tokens, output_tokens, created_at
+  const weekStart = new Date(now.getTime() - WINDOWS[1].ms);
+  const sessionStart = new Date(now.getTime() - WINDOWS[0].ms);
+
+  const { rows: [totals] } = await pool.query(
+    `SELECT
+       COALESCE(SUM(input_tokens + output_tokens) FILTER (WHERE created_at > $2),0)::bigint AS session_used,
+       COALESCE(SUM(input_tokens) FILTER (WHERE created_at > $2),0)::bigint AS session_input,
+       COALESCE(SUM(output_tokens) FILTER (WHERE created_at > $2),0)::bigint AS session_output,
+       COUNT(*) FILTER (WHERE created_at > $2)::bigint AS session_calls,
+       MIN(created_at) FILTER (WHERE created_at > $2) AS session_oldest,
+       COALESCE(SUM(input_tokens + output_tokens),0)::bigint AS week_used,
+       COALESCE(SUM(input_tokens),0)::bigint AS week_input,
+       COALESCE(SUM(output_tokens),0)::bigint AS week_output,
+       COUNT(*)::bigint AS week_calls,
+       MIN(created_at) AS week_oldest
        FROM usage_events
       WHERE principal_id = $1
-        AND created_at > $2
-      ORDER BY created_at ASC`,
-    [principalId, since]
+        AND created_at > $3`,
+    [principalId, sessionStart, weekStart]
   );
-  const windows = WINDOWS.map(window => {
-    // Both AI quota windows are one user-wide budget. Chat context remains
-    // conversation-specific below, and workspace membership never creates a
-    // second quota pool that could be used to bypass the account limit.
-    const sourceRows = globalRows;
-    const start = now.getTime() - window.ms;
-    const inside = sourceRows.filter(row => new Date(row.created_at).getTime() > start);
-    const input = inside.reduce((sum, row) => sum + row.input_tokens, 0);
-    const output = inside.reduce((sum, row) => sum + row.output_tokens, 0);
-    const limit = applied[window.limitKey] || 0;
-    const used = input + output;
-    // A rolling window frees tokens as its oldest calls age out. When over the
-    // limit, it opens again once enough has aged out to go under it.
-    let resetsAt = inside.length ? new Date(new Date(inside[0].created_at).getTime() + window.ms) : null;
-    if (limit && used >= limit) {
-      let remaining = used;
-      for (const row of inside) {
-        remaining -= row.input_tokens + row.output_tokens;
-        if (remaining < limit) { resetsAt = new Date(new Date(row.created_at).getTime() + window.ms); break; }
-      }
+
+  const windows = [];
+  for (const [index, window] of WINDOWS.entries()) {
+    const prefix = index === 0 ? 'session' : 'week';
+    const used = Number(totals?.[`${prefix}_used`] || 0);
+    const input = Number(totals?.[`${prefix}_input`] || 0);
+    const output = Number(totals?.[`${prefix}_output`] || 0);
+    const calls = Number(totals?.[`${prefix}_calls`] || 0);
+    const limit = Number(applied[window.limitKey] || 0);
+    const oldest = totals?.[`${prefix}_oldest`] ? new Date(totals[`${prefix}_oldest`]) : null;
+    let resetsAt = oldest ? new Date(oldest.getTime() + window.ms) : null;
+
+    if (limit && used >= limit && calls) {
+      const startAt = index === 0 ? sessionStart : weekStart;
+      const { rows: [boundary] } = await pool.query(
+        `SELECT created_at
+           FROM (
+             SELECT created_at,
+                    COALESCE(SUM(input_tokens + output_tokens) OVER (
+                      ORDER BY created_at ASC
+                      ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+                    ),0) AS remaining_after
+               FROM usage_events
+              WHERE principal_id = $1
+                AND created_at > $2
+           ) q
+          WHERE remaining_after < $3
+          ORDER BY created_at ASC
+          LIMIT 1`,
+        [principalId, startAt, limit]
+      );
+      if (boundary?.created_at) resetsAt = new Date(new Date(boundary.created_at).getTime() + window.ms);
     }
-    return {
+
+    windows.push({
       id: window.id,
       label: window.label,
       scope: 'principal',
@@ -156,34 +180,53 @@ export async function usageSummary(pool, { principalId, workspaceId = null, conf
       used,
       input,
       output,
-      calls: inside.length,
+      calls,
       limit: limit || null,
       percent: limit ? Math.min(100, Math.round((used / limit) * 1000) / 10) : null,
       exceeded: Boolean(limit && used >= limit),
       resetsAt: resetsAt?.toISOString() ?? null
-    };
-  });
+    });
+  }
 
+  const { rows: dayRows } = await pool.query(
+    `SELECT (created_at AT TIME ZONE 'UTC')::date AS day,
+            COALESCE(SUM(input_tokens + output_tokens),0)::bigint AS tokens
+       FROM usage_events
+      WHERE principal_id = $1
+        AND created_at > $2
+      GROUP BY day
+      ORDER BY day ASC`,
+    [principalId, weekStart]
+  );
+  const dayMap = new Map(dayRows.map(row => [String(row.day), Number(row.tokens || 0)]));
   const days = [];
   for (let back = 6; back >= 0; back -= 1) {
     const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - back));
-    const next = day.getTime() + 24 * HOUR;
-    const inside = globalRows.filter(row => { const at = new Date(row.created_at).getTime(); return at >= day.getTime() && at < next; });
-    days.push({ date: day.toISOString().slice(0, 10), tokens: inside.reduce((sum, row) => sum + row.input_tokens + row.output_tokens, 0) });
+    days.push({ date: day.toISOString().slice(0, 10), tokens: dayMap.get(day.toISOString().slice(0, 10)) ?? 0 });
   }
-  const bySource = {};
-  for (const row of globalRows) bySource[row.source] = (bySource[row.source] ?? 0) + row.input_tokens + row.output_tokens;
+
+  const { rows: sourceRows } = await pool.query(
+    `SELECT source, COALESCE(SUM(input_tokens + output_tokens),0)::bigint AS tokens
+       FROM usage_events
+      WHERE principal_id = $1
+        AND created_at > $2
+      GROUP BY source`,
+    [principalId, weekStart]
+  );
+  const bySource = Object.fromEntries(sourceRows.map(row => [row.source, Number(row.tokens || 0)]));
 
   let context = null;
   const contextWindow = contextWindowFor(config);
   if (conversationId) {
     const { rows: [latest] } = await pool.query(
-      `SELECT input_tokens, created_at FROM usage_events
+      `SELECT input_tokens, created_at
+         FROM usage_events
         WHERE principal_id = $1
           AND ($2::text IS NULL OR workspace_id = $2)
           AND conversation_id = $3
           AND source = 'chat'
-        ORDER BY created_at DESC LIMIT 1`,
+        ORDER BY created_at DESC
+        LIMIT 1`,
       [principalId, workspaceId || null, conversationId]
     );
     context = {
@@ -215,14 +258,6 @@ export async function usageSummary(pool, { principalId, workspaceId = null, conf
 const RESERVATION_TTL_MS = 5 * 60_000;
 const MIN_ADMISSION_TOKENS = 32;
 const MAX_RESERVATION_TOKENS = 500_000;
-
-function usageWindowStats(rows, windowMs, nowMs = Date.now()) {
-  const start = nowMs - windowMs;
-  const inside = rows.filter(row => new Date(row.created_at).getTime() > start)
-    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-  const used = inside.reduce((sum, row) => sum + Number(row.input_tokens || 0) + Number(row.output_tokens || 0), 0);
-  return { inside, used };
-}
 
 export async function reserveUsage(pool, {
   principalId, workspaceId, runId = null, estimatedTokens = 0, config, ttlMs = RESERVATION_TTL_MS
@@ -258,32 +293,42 @@ export async function reserveUsage(pool, {
       runMax = run.max_tokens == null ? null : Number(run.max_tokens);
     }
 
-    const { rows: globalUsageRows } = await client.query(
-      "SELECT input_tokens, output_tokens, created_at FROM usage_events WHERE principal_id=$1 AND created_at>now()-interval '7 days'",
+    const { rows: [usage] } = await client.query(
+      `SELECT
+         COALESCE(SUM(input_tokens + output_tokens) FILTER (WHERE created_at > now()-interval '4 hours'),0)::bigint AS session_used,
+         COALESCE(SUM(input_tokens + output_tokens),0)::bigint AS week_used,
+         MIN(created_at) FILTER (WHERE created_at > now()-interval '4 hours') AS session_oldest,
+         MIN(created_at) AS week_oldest,
+         COUNT(*) FILTER (WHERE created_at > now()-interval '4 hours')::bigint AS session_calls,
+         COUNT(*)::bigint AS week_calls
+       FROM usage_events
+      WHERE principal_id=$1
+        AND created_at>now()-interval '7 days'`,
       [principalId]
     );
-    const { rows: globalReservationRows } = await client.query(
-      "SELECT estimated_tokens, expires_at, run_id, workspace_id FROM usage_reservations WHERE principal_id=$1 AND state='active' AND expires_at>now()",
-      [principalId]
+    const { rows: [reservations] } = await client.query(
+      `SELECT
+         COALESCE(SUM(estimated_tokens),0)::bigint AS global_reserved,
+         COALESCE(SUM(estimated_tokens) FILTER (WHERE run_id=$2 AND workspace_id=$3),0)::bigint AS run_reserved
+       FROM usage_reservations
+      WHERE principal_id=$1 AND state='active' AND expires_at>now()`,
+      [principalId, runId, workspaceId]
     );
-    const globalReserved = globalReservationRows.reduce((sum, row) => sum + Number(row.estimated_tokens || 0), 0);
-    const runReserved = runId
-      ? globalReservationRows.filter(row => row.run_id === runId && row.workspace_id === workspaceId).reduce((sum, row) => sum + Number(row.estimated_tokens || 0), 0)
-      : 0;
+    const globalReserved = Number(reservations?.global_reserved || 0);
+    const runReserved = Number(reservations?.run_reserved || 0);
 
     const available = [];
-    for (const window of WINDOWS) {
+    for (const [index, window] of WINDOWS.entries()) {
       const limit = Number(limits[window.limitKey] || 0);
       if (!limit) continue;
-      const sourceRows = globalUsageRows;
-      const reservedForWindow = globalReserved;
-      const stats = usageWindowStats(sourceRows, window.ms);
+      const used = Number(index === 0 ? usage?.session_used : usage?.week_used) + globalReserved;
       available.push({
         window,
         limit,
-        used: stats.used + reservedForWindow,
-        rows: stats.inside,
-        remaining: Math.max(0, limit - stats.used - reservedForWindow)
+        used,
+        calls: Number(index === 0 ? usage?.session_calls : usage?.week_calls),
+        oldest: index === 0 ? usage?.session_oldest : usage?.week_oldest,
+        remaining: Math.max(0, limit - used)
       });
     }
     if (runMax !== null) {
@@ -304,9 +349,9 @@ export async function reserveUsage(pool, {
         label: exhausted.window.label,
         hours: exhausted.window.ms ? exhausted.window.ms / HOUR : 0,
         used: exhausted.used,
-        input: exhausted.rows.reduce((sum, row) => sum + Number(row.input_tokens || 0), 0),
-        output: exhausted.rows.reduce((sum, row) => sum + Number(row.output_tokens || 0), 0),
-        calls: exhausted.rows.length,
+        input: 0,
+        output: 0,
+        calls: exhausted.calls ?? 0,
         limit: exhausted.limit,
         percent: 100,
         exceeded: true,
@@ -325,9 +370,9 @@ export async function reserveUsage(pool, {
         label: constrained.window.label,
         hours: constrained.window.ms ? constrained.window.ms / HOUR : 0,
         used: constrained.used,
-        input: constrained.rows.reduce((sum, row) => sum + Number(row.input_tokens || 0), 0),
-        output: constrained.rows.reduce((sum, row) => sum + Number(row.output_tokens || 0), 0),
-        calls: constrained.rows.length,
+        input: 0,
+        output: 0,
+        calls: constrained.calls ?? 0,
         limit: constrained.limit,
         percent: Math.min(100, Math.round((constrained.used / Math.max(1, constrained.limit)) * 1000) / 10),
         exceeded: true,
