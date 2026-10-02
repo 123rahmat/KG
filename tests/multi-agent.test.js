@@ -67,7 +67,7 @@ test('always mode preserves the requested specialist floor and parallel schedule
 
   const calls = [];
   const result = await runAdaptiveAgentPanel({
-    run: run({ adaptation: { scale: 'complex' } }),
+    run: run({ adaptation: { scale: 'complex' }, maxTokens: 100000 }),
     task: { id: 'plan', type: 'plan' },
     basePayload: { goal: 'Plan a deterministic implementation', task: { id: 'plan', type: 'plan' } },
     selection,
