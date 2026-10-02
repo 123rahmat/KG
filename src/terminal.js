@@ -34,6 +34,11 @@ const EXCLUDED_DIRS = new Set([
 
 const text = value => String(value ?? '').trim();
 
+export function terminalAccessRecheckDue(lastCheckedAt, now = Date.now()) {
+  const last = Number(lastCheckedAt) || 0;
+  return last <= 0 || now - last >= ACCESS_RECHECK_MS;
+}
+
 export function terminalOriginAllowed(req, config) {
   const origin = text(req.headers.origin);
   if (config.production && !origin) return false;
@@ -205,7 +210,7 @@ class TerminalSession {
 
   async ensureAccess() {
     if (this.closed) return false;
-    if (Date.now() - this.lastAccessCheckAt < ACCESS_RECHECK_MS) return true;
+    if (!terminalAccessRecheckDue(this.lastAccessCheckAt)) return true;
     try {
       await this.manager.identity.requireAccess(this.principal, this.scope.workspaceId, 'editor');
       this.lastAccessCheckAt = Date.now();

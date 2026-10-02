@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { terminalArgs, terminalImagesForFiles, terminalOriginAllowed } from '../src/terminal.js';
+import { terminalAccessRecheckDue, terminalArgs, terminalImagesForFiles, terminalOriginAllowed } from '../src/terminal.js';
 
 const config = {
   terminal: {
@@ -52,4 +52,11 @@ test('terminal snapshot boundary classifies credential-bearing files as non-exec
 test('terminal access is periodically re-checked during a long-lived session', () => {
   assert.equal(typeof config.terminal.images.node, 'string');
   assert.ok(config.terminal.images.node.includes('@sha256:'));
+});
+
+
+test('terminal authorization recheck is time bounded', () => {
+  assert.equal(terminalAccessRecheckDue(0, 1000), true);
+  assert.equal(terminalAccessRecheckDue(1000, 29000), false);
+  assert.equal(terminalAccessRecheckDue(1000, 31000), true);
 });
