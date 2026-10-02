@@ -111,6 +111,7 @@ check('docker-non-root', /USER node/.test(dockerfile), 'production application i
 check('ci-release-gates', /npm ci/.test(ci) && /npm audit/.test(ci) && /node --test/.test(ci) && /docker build/.test(ci), 'CI covers install, audit, tests and production image build');
 check('verify-release-gate', /npm run verify/.test(verify), 'Verify invokes the unified application verification contract');
 check('codeql-enabled', /github\/codeql-action\/init/.test(codeql) && /security-extended/.test(codeql), 'CodeQL security-extended analysis is present');
+check('codeql-upload-conditional', /upload:\s*\$\{\{/.test(codeql), 'CodeQL upload policy is environment-aware');
 check('secret-scan-enabled', /gitleaks\/gitleaks-action/.test(secretScan) && /GITLEAKS_CONFIG/.test(secretScan), 'repository secret scanning is present');
 
 const forbidden = [
@@ -124,6 +125,9 @@ for (const [name, pattern] of forbidden) {
   for (const file of sourceFiles) hit ||= pattern.test(await read(file));
   check(`unsafe-pattern:${name}`, !hit, hit ? 'pattern found in critical source' : 'not found in critical source');
 }
+
+
+check('codeql-private-upload-policy', /upload:\s*\$\{\{\s*github\.event\.repository\.visibility/.test(codeql), 'CodeQL upload is conditional so private repositories without Code Security keep artifact-only analysis');
 
 const failed = checks.filter(item => !item.ok);
 const passed = checks.length - failed.length;
