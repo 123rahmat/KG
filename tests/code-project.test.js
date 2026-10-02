@@ -95,7 +95,7 @@ test('surgical code patches reject stale workspace revisions', () => {
   const changedBase = [{ path: 'app.py', content: 'VALUE = 9\n' }];
   assert.throws(
     () => materializeCodePackage(patch, { baseFiles: changedBase, baseContentHash: hash }),
-    error => error?.code === 'workspace-revision-stale'
+    error => error?.code === 'stale-workspace'
   );
   const materialized = materializeCodePackage(patch, { baseFiles, baseContentHash: hash });
   assert.equal(materialized.files[0].content, 'VALUE = 2\n');
