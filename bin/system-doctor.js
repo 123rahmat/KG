@@ -94,7 +94,7 @@ check('stale-patch-rejection', /workspace-revision-stale/.test(codeWorkflow) && 
 check('background-job-lease-fencing', /worker_id/.test(jobs) && /lease_until\s*>\s*now\(\)/.test(jobs) && /workerId:\s*effectiveWorkerId/.test(jobs), 'background job completion is fenced to the owning worker, attempt and live lease');
 check('background-attempt-bound', /attempts\s*<\s*max_attempts/.test(jobs) && /reapExhausted\(/.test(jobs), 'background work cannot claim beyond its attempt budget and exhausted jobs are reaped');
 check('terminal-access-recheck', /ACCESS_RECHECK_MS/.test(await read('src/terminal.js')) && /ensureAccess\(/.test(await read('src/terminal.js')), 'long-lived terminal sessions periodically re-authorize workspace access');
-check('terminal-secret-input-filter', /SENSITIVE_TERMINAL_PATH/.test(await read('src/terminal.js')) && /Credential-bearing files must never enter/.test(await read('src/terminal.js')), 'credential-bearing files are excluded from terminal sandboxes');
+check('terminal-secret-input-filter', /isSensitiveWorkspacePath/.test(await read('src/terminal.js')), 'credential-bearing files are excluded from terminal sandboxes through the centralized path policy');
 check('usage-reservation-admission', /usage_reservations/.test(await read('src/usage.js')) && /runReserved/.test(await read('src/usage.js')) && /pg_advisory_xact_lock/.test(await read('src/usage.js')), 'model spend is admitted atomically against rolling and per-run token limits');
 check('universal-user-usage-windows', /const sourceRows = globalRows/.test(await read('src/usage.js')) && /fourHour: 'principal'/.test(await read('src/usage.js')) && /weekly: 'principal'/.test(await read('src/usage.js')) && /usage:principal:/.test(await read('src/usage.js')), '4-hour and weekly AI quotas are universal per user across chats and workspaces');
 check('usage-source-attribution', /multi-agent/.test(await read('src/usage.js')) && /verification-review/.test(await read('src/usage.js')), 'model spend sources remain distinguishable in the usage ledger');
@@ -131,26 +131,6 @@ check('codeql-private-upload-policy', /upload:\s*\$\{\{\s*github\.event\.reposit
 
 
 
-const failed = checks.filter(item => !item.ok);
-const passed = checks.length - failed.length;
-console.log(`Kindgleam system doctor: ${passed}/${checks.length} checks passed.`);
-for (const item of checks) console.log(`${item.ok ? 'PASS' : 'FAIL'} ${item.name} — ${item.detail}`);
-if (failed.length) {
-  console.error(`\nSystem doctor found ${failed.length} issue(s). Fix these before release.`);
-  process.exit(1);
-}
-console.log('\nSystem doctor passed. No release-blocking architecture issue was detected by this deterministic audit.');
-
-const failed = checks.filter(item => !item.ok);
-const passed = checks.length - failed.length;
-console.log(`Kindgleam system doctor: ${passed}/${checks.length} checks passed.`);
-for (const item of checks) console.log(`${item.ok ? 'PASS' : 'FAIL'} ${item.name} — ${item.detail}`);
-if (failed.length) {
-  console.error(`\nSystem doctor found ${failed.length} issue(s). Fix these before release.`);
-  process.exit(1);
-}
-console.log('\nSystem doctor passed. No release-blocking architecture issue was detected by this deterministic audit.');
-
 check('central-sensitive-file-policy', /isSensitiveWorkspacePath/.test(await read('src/workspace-path.js')) && /sensitive-file-blocked/.test(await read('src/toolbox.js')) && /sensitive-file-blocked/.test(await read('src/tool-forge.js')), 'credential-bearing files use one centralized model and sandbox exclusion policy');
 
 check('docker-base-image-pinned', /^FROM node:24-alpine@sha256:[0-9a-f]{64}$/m.test(await read('Dockerfile')), 'application build stages use an immutable Node base-image digest');
@@ -160,3 +140,13 @@ check('usage-summary-universal-scope', /quotaScope:[\s\S]*fourHour: 'principal',
 check('usage-output-cap', /admittedMaxOutputTokens/.test(await read('src/runtime.js')) && /maxOutputTokens: admittedMaxOutputTokens/.test(await read('src/runtime.js')), 'provider output limits are constrained to the amount admitted by the shared usage reservation');
 
 check('action-lease-live-finalize', /lease_until > now\(\)/.test(await read('src/run-actions.js')), 'approved side effects cannot finalize after their execution lease expires');
+
+const failed = checks.filter(item => !item.ok);
+const passed = checks.length - failed.length;
+console.log(`Kindgleam system doctor: ${passed}/${checks.length} checks passed.`);
+for (const item of checks) console.log(`${item.ok ? 'PASS' : 'FAIL'} ${item.name} — ${item.detail}`);
+if (failed.length) {
+  console.error(`\nSystem doctor found ${failed.length} issue(s). Fix these before release.`);
+  process.exit(1);
+}
+console.log('\nSystem doctor passed. No release-blocking architecture issue was detected by this deterministic audit.');
