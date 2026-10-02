@@ -176,10 +176,9 @@ export async function reserveUsage(pool, {
   principalId, workspaceId, runId = null, estimatedTokens = 0, config, ttlMs = RESERVATION_TTL_MS
 } = {}) {
   if (!principalId || !workspaceId) return null;
-  const estimate = Math.min(MAX_RESERVATION_TOKENS, count(estimatedTokens));
-  if (!estimate) return null;
+  const rawEstimate = Math.min(MAX_RESERVATION_TOKENS, count(estimatedTokens));
+  if (!rawEstimate) return null;
   const limits = await limitsFor(pool, config, workspaceId);
-  if (!limits.fourHourTokens && !limits.weeklyTokens) return null;
   const safeTtl = Math.max(30_000, Math.min(900_000, Number(ttlMs) || RESERVATION_TTL_MS));
 
   return transaction(pool, async client => {
@@ -191,49 +190,47 @@ export async function reserveUsage(pool, {
       "UPDATE usage_reservations SET state='released', updated_at=now() WHERE principal_id=$1 AND workspace_id=$2 AND state='active' AND expires_at<=now()",
       [principalId, workspaceId]
     );
-    const { rows: usageRows } = await client.query(
-      'SELECT input_tokens, output_tokens, created_at FROM usage_events WHERE principal_id=$1 AND workspace_id=$2 AND created_at>now()-interval \'7 days\'',
-      [principalId, workspaceId]
-    );
-    const { rows: reservationRows } = await client.query(
-      'SELECT estimated_tokens, expires_at, run_id FROM usage_reservations WHERE principal_id=$1 AND workspace_id=$2 AND state=\'active\' AND expires_at>now()',
-      [principalId, workspaceId]
-    );
-    const reserved = reservationRows.reduce((sum, row) => sum + Number(row.estimated_tokens || 0), 0);
 
+    let runUsed = 0;
+    let runMax = null;
     if (runId) {
       const { rows: [run] } = await client.query(
         'SELECT tokens_used, max_tokens FROM runs WHERE id=$1 AND workspace_id=$2 AND principal_id=$3 FOR UPDATE',
         [runId, workspaceId, principalId]
       );
       if (!run) throw new Error('Run not found for usage reservation');
-      const runReserved = reservationRows
-        .filter(row => row.run_id === runId)
-        .reduce((sum, row) => sum + Number(row.estimated_tokens || 0), 0);
-      const runUsed = Number(run.tokens_used || 0);
-      const runMax = run.max_tokens == null ? null : Number(run.max_tokens);
-      if (runMax !== null && runUsed + runReserved + estimate > runMax) {
-        throw new UsageLimitError({
-          id: 'run',
-          label: 'Run token budget',
-          hours: 0,
-          used: runUsed + runReserved,
-          input: 0,
-          output: 0,
-          calls: 0,
-          limit: runMax,
-          percent: Math.min(100, Math.round(((runUsed + runReserved) / Math.max(1, runMax)) * 1000) / 10),
-          exceeded: true,
-          resetsAt: null,
-          reserved: runReserved
-        }, { canUpgrade: false });
-      }
+      runUsed = Number(run.tokens_used || 0);
+      runMax = run.max_tokens == null ? null : Number(run.max_tokens);
     }
+
+    const { rows: usageRows } = await client.query(
+      "SELECT input_tokens, output_tokens, created_at FROM usage_events WHERE principal_id=$1 AND workspace_id=$2 AND created_at>now()-interval '7 days'",
+      [principalId, workspaceId]
+    );
+    const { rows: reservationRows } = await client.query(
+      "SELECT estimated_tokens, expires_at, run_id FROM usage_reservations WHERE principal_id=$1 AND workspace_id=$2 AND state='active' AND expires_at>now()",
+      [principalId, workspaceId]
+    );
+    const reserved = reservationRows.reduce((sum, row) => sum + Number(row.estimated_tokens || 0), 0);
+    const runReserved = runId
+      ? reservationRows.filter(row => row.run_id === runId).reduce((sum, row) => sum + Number(row.estimated_tokens || 0), 0)
+      : 0;
+
+    const ceilings = [
+      ...[limits.fourHourTokens, limits.weeklyTokens].map(Number).filter(value => value > 0),
+      ...(runMax === null ? [] : [runMax])
+    ];
+    if (!ceilings.length) return null;
+    const estimate = Math.min(rawEstimate, ...ceilings);
+    if (estimate <= 0) return null;
+
     for (const window of WINDOWS) {
       const stats = usageWindowStats(usageRows, window.ms);
       const limit = Number(limits[window.limitKey] || 0);
-      if (!limit || stats.used + reserved + estimate < limit) continue;
-      let resetsAt = stats.inside.length ? new Date(new Date(stats.inside[0].created_at).getTime() + window.ms) : null;
+      if (!limit || stats.used + reserved + estimate <= limit) continue;
+      let resetsAt = stats.inside.length
+        ? new Date(new Date(stats.inside[0].created_at).getTime() + window.ms)
+        : null;
       for (const row of reservationRows) {
         const expires = new Date(row.expires_at);
         if (!resetsAt || expires < resetsAt) resetsAt = expires;
@@ -253,6 +250,24 @@ export async function reserveUsage(pool, {
         reserved
       }, { canUpgrade: Boolean(config.stripe) });
     }
+
+    if (runMax !== null && runUsed + runReserved + estimate > runMax) {
+      throw new UsageLimitError({
+        id: 'run',
+        label: 'Run token budget',
+        hours: 0,
+        used: runUsed + runReserved,
+        input: 0,
+        output: 0,
+        calls: 0,
+        limit: runMax,
+        percent: Math.min(100, Math.round(((runUsed + runReserved) / Math.max(1, runMax)) * 1000) / 10),
+        exceeded: true,
+        resetsAt: null,
+        reserved: runReserved
+      }, { canUpgrade: false });
+    }
+
     const id = crypto.randomUUID();
     await client.query(
       "INSERT INTO usage_reservations (id, principal_id, workspace_id, run_id, estimated_tokens, state, expires_at) VALUES ($1,$2,$3,$4,$5,'active',now()+($6::int * interval '1 millisecond'))",
