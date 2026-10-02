@@ -185,20 +185,22 @@ export function compileCodeContext({
     if (selectedPathSet.has(criticalPath)) continue;
     const candidate = ranked.find(item => item.file.path === criticalPath);
     if (!candidate) continue;
-    const available = Math.max(200, charBudget - chars);
-    if (available <= 200 && selected.length >= fileBudget) continue;
+    const available = Math.max(0, charBudget - chars);
+    if (available < 200) continue;
     const perFile = Math.min(9_000, available);
     const content = boundedWindows(contextSafeContent(candidate.file.path, candidate.file.content),
       fileSymbols(index, candidate.file.path).map(item => item.line),
       defaults.snippetLines, perFile);
     if (!content) continue;
+    const cost = content.length + candidate.file.path.length + 80;
+    if (cost > available) continue;
     selected.push({
       path: candidate.file.path, kind: candidate.file.kind, language: candidate.file.language,
       digest: candidate.file.digest, score: candidate.score,
       symbols: fileSymbols(index,candidate.file.path), imports: fileImports(index,candidate.file.path), content
     });
     selectedPathSet.add(candidate.file.path);
-    chars += content.length + candidate.file.path.length + 80;
+    chars += cost;
   }
 
   const selectedPaths = selected.map(file => file.path);
