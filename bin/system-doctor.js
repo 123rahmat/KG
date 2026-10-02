@@ -142,6 +142,9 @@ check('usage-output-cap', /admittedMaxOutputTokens/.test(await read('src/runtime
 
 check('action-lease-live-finalize', /lease_until > now\(\)/.test(await read('src/run-actions.js')), 'approved side effects cannot finalize after their execution lease expires');
 
+check('postgres-service-image-pinned', /postgres:16-alpine@sha256:[0-9a-f]{64}/.test(await read('.github/workflows/ci.yml')) && /postgres:16-alpine@sha256:[0-9a-f]{64}/.test(await read('.github/workflows/verify.yml')), 'CI database services use an immutable PostgreSQL image digest');
+
+
 const failed = checks.filter(item => !item.ok);
 const passed = checks.length - failed.length;
 console.log(`Kindgleam system doctor: ${passed}/${checks.length} checks passed.`);
