@@ -183,7 +183,9 @@ function dependencyMetrics(index, roots) {
 export function estimateSubsystemCount(index = {}, {
   maxSubsystems = DEFAULT_MAX_SUBSYSTEMS,
   minFilesPerSubsystem = 8,
-  risk = 'ordinary'
+  risk = 'ordinary',
+  adaptivePressure = 0,
+  pressureTrend = 'stable'
 } = {}) {
   const files = Math.max(0, Number(index?.fileCount) || (Array.isArray(index?.files) ? index.files.length : 0));
   const bytes = Math.max(0, Number(index?.totals?.bytes) || 0);
@@ -232,12 +234,26 @@ export function estimateSubsystemCount(index = {}, {
   // deterministic first-pass grouping estimate from top-level roots.
   const provisionalRoots = chooseUnitRoots(index, Math.min(capped, Math.max(1, roots.length || 1)));
   const coupling = dependencyMetrics(index, provisionalRoots).crossEdgeRatio;
+  const pressure = Math.max(0, Math.min(1, Number(adaptivePressure) || 0));
+  const trend = text(pressureTrend).toLowerCase() || 'stable';
   let count = capped;
   if (coupling >= 0.55) count -= 2;
   else if (coupling >= 0.35) count -= 1;
   else if (coupling <= 0.08 && provisionalRoots.length >= capped) count += 1;
+
+  // Pressure is a live workload signal, not a replacement for topology. When
+  // pressure materially rises, independent work may justify additional
+  // subsystem boundaries even when file-count scale has not crossed a new
+  // bucket yet. When pressure materially falls and the project is stable, one
+  // boundary may be consolidated. Coupling always remains the stronger guard.
+  if (pressure >= 0.72 && coupling < 0.45) {
+    count += Math.min(3, 1 + Math.floor((pressure - 0.72) / 0.12));
+  } else if (pressure <= 0.28 && trend === 'down' && coupling < 0.35 && count > 1) {
+    count -= 1;
+  }
+
   if (text(risk).toLowerCase() === 'high-impact' || text(risk).toLowerCase() === 'physical') count = Math.min(count, 4);
-  count = Math.max(1, Math.min(capped, count));
+  count = Math.max(1, Math.min(max, count));
 
   return {
     count,
@@ -249,7 +265,15 @@ export function estimateSubsystemCount(index = {}, {
     fileCount: files,
     bytes,
     dependencies,
-    reason: coupling >= 0.35 ? 'reduce-subsystems-because-boundaries-are-tightly-coupled' : 'increase-subsystems-with-project-size-and-independent-structure'
+    reason: coupling >= 0.35
+      ? 'reduce-subsystems-because-boundaries-are-tightly-coupled'
+      : pressure >= 0.72
+        ? 'increase-subsystems-because-live-work-pressure-increased'
+        : pressure <= 0.28 && trend === 'down'
+          ? 'reduce-subsystems-because-live-work-pressure-decreased'
+          : 'increase-subsystems-with-project-size-and-independent-structure',
+    adaptivePressure: Number(pressure.toFixed(3)),
+    pressureTrend: trend
   };
 }
 
