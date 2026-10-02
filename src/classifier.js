@@ -111,7 +111,7 @@ export function normalizeClassification(value, { blockedTopics = [] } = {}) {
  * { hints, source, ... } where hints is null whenever the keyword rules
  * should be used; the reason says why.
  */
-export async function classifyGoal(goal, { config, fetchImpl, allowed, conversation = [], modelId = null }) {
+export async function classifyGoal(goal, { config, fetchImpl, allowed, conversation = [], modelId = null, usageGate = null }) {
   const value = text(goal);
   if (!value) return { hints: null, source: 'keywords', reason: 'empty-goal' };
   if (!config.ai) return { hints: null, source: 'keywords', reason: 'no-model-configured' };
@@ -125,7 +125,17 @@ export async function classifyGoal(goal, { config, fetchImpl, allowed, conversat
         goal: value,
         ...(conversation.length ? { earlierTurns: conversation.slice(-3).map(turn => ({ user: text(turn.user).slice(0, 400), assistant: text(turn.assistant).slice(0, 400) })) } : {})
       }) }
-    ], { config, fetchImpl, timeoutMs: CLASSIFIER_TIMEOUT_MS, retries: 0, modelId, effort: 'low', json: true });
+    ], {
+      config,
+      fetchImpl,
+      timeoutMs: CLASSIFIER_TIMEOUT_MS,
+      retries: 0,
+      modelId,
+      effort: 'low',
+      json: true,
+      usageGate,
+      usageSource: 'classifier'
+    });
   } catch {
     return { hints: null, source: 'keywords', reason: 'model-unavailable' };
   }

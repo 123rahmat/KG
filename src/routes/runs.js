@@ -6,7 +6,7 @@ import { chooseExecutionTarget, executionTarget } from '../execution.js';
 import { planningInput, publicClassification } from '../http/context.js';
 import { RunError } from '../runs.js';
 import { formatOf } from '../documents.js';
-import { assertUsageAllowed, UsageLimitError, recordUsage } from '../usage.js';
+import { assertUsageAllowed, createUsageGate, UsageLimitError, recordUsage } from '../usage.js';
 import { screenRequest, combineDecisions, recordRefusal, inCooldown, careNote, blockedTopicsFrom, ethicsOf, FIXED_REPLY_CATEGORIES } from '../safety.js';
 import { assertTermsAccepted } from '../terms.js';
 import { configuredExecutionTargets, planPolicyAllows, dataPolicyAllows, modelPolicyAllows } from '../http/policy.js';
@@ -113,7 +113,13 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
       workspaceId: req.scope?.workspaceId,
       principalId: req.principal.id
     });
-    const model = selection.selectedModelId || `${config.ai?.provider || ''}:${config.ai?.model || ''}`;
+    const model = selection.selectedModelId || String(config.ai?.provider || '') + ':' + String(config.ai?.model || '');
+    const usageGate = createUsageGate(pool, {
+      principalId: req.principal.id,
+      workspaceId: req.scope?.workspaceId,
+      conversationId: typeof req.body?.conversationId === 'string' ? req.body.conversationId : null,
+      config
+    });
     // Past a usage limit the goal is read by the keyword rules instead.
     const withinUsage = await assertUsageAllowed(pool, { principalId: req.principal.id, config, workspaceId: req.scope?.workspaceId }).then(() => true, error => {
       if (error instanceof UsageLimitError) return false;
@@ -128,7 +134,14 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
     const conversation = allowed && conversationId
       ? await runs.conversationHistory(req.scope, conversationId, { turns: 3, chars: 400 }).catch(() => [])
       : [];
-    return classifyGoal(req.body?.goal, { config, fetchImpl, allowed, conversation, modelId: selection.selectedModelId });
+    return classifyGoal(req.body?.goal, {
+      config,
+      fetchImpl,
+      allowed,
+      conversation,
+      modelId: selection.selectedModelId,
+      usageGate
+    });
   }
 
   app.post('/api/plan', scoped('viewer'), route(async (req, res) => {
