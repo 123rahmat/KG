@@ -386,6 +386,60 @@ test('observed evidence can shrink or expand the next agent allocation', () => {
 });
 
 
+test('coding panel converges without a needless second iteration on clean evidence', async () => {
+  const calls = [];
+  const project = {
+    revisionId: 'rev-clean',
+    contentHash: 'hash-clean',
+    scale: 'medium',
+    fileCount: 12,
+    files: Array.from({ length: 12 }, (_, i) => ({
+      path: `src/file-${i}.js`,
+      bytes: 100,
+      test: i >= 10
+    })),
+    dependencies: [],
+    totals: { bytes: 1200, dependencies: 0 },
+    hierarchy: {
+      scale: 'medium',
+      root: { path: '', depth: 0, fileCount: 12, bytes: 1200, digest: 'root' },
+      directories: [{ path: '', depth: 0, fileCount: 12, bytes: 1200, digest: 'root' }]
+    }
+  };
+  const fakeModel = async (messages, options) => {
+    calls.push({ body: JSON.parse(messages[1].content), options });
+    return {
+      text: JSON.stringify(finding('proceed', 'clean evidence', {
+        confidence: 0.94,
+        risks: [],
+        unknowns: []
+      })),
+      provider: 'google',
+      model: options.modelId,
+      usage: null
+    };
+  };
+  const result = await runAdaptiveAgentPanel({
+    run: run({ adaptation: { scale: 'medium' } }),
+    task: { id: 'build-code', type: 'code' },
+    basePayload: {
+      goal: 'Improve the project',
+      task: { id: 'build-code', type: 'code' },
+      workspace: { projectId: 'p1', revisionId: 'rev-clean', paths: project.files.map(file => file.path) },
+      codeIntelligence: { project, files: project.files }
+    },
+    selection,
+    primaryModelId: 'google:gemini-3.8-flash',
+    config: { agents: { multiAgent: 'always', maxAgents: 2 } },
+    canSpend: async () => true,
+    modelCaller: fakeModel
+  });
+  assert.equal(result.waves.length, 1);
+  assert.equal(result.allocation.subsystemPanels[0].iterations, 1);
+  assert.equal(result.allocation.codingEconomy.roleSpecificOutputCaps, true);
+  assert.equal(calls.every(item => item.options.maxOutputTokens <= 900), true);
+});
+
 test('Code Workspace gives every subsystem its own multi-agent panel with bounded A2A', async () => {
   const calls = [];
   const project = {
