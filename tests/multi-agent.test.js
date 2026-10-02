@@ -499,6 +499,8 @@ test('Code Workspace gives every subsystem its own multi-agent panel with bounde
   assert.equal(calls.every(item => item.body.workspacePanel.lifecycle.researchEveryCycle === true), true);
   assert.equal(calls.every(item => item.body.workspacePanel.lifecycle.explanationEveryCycle === true), true);
   assert.equal(calls.every(item => item.body.workspacePanel.lifecycle.replanEveryCycle === true), true);
+  assert.equal(result.waves.every(wave => wave.lifecycle?.research && wave.lifecycle?.explanation && wave.lifecycle?.replanning && wave.lifecycle?.verification), true);
+  assert.ok(result.waves[0].lanePlan.waveCount >= 2);
   assert.deepEqual(result.allocation.codingEconomy.panelCoverage, ['research', 'explain', 'replan', 'implement', 'test', 'critique', 'verify', 'handoff']);
   assert.equal(calls.every(item => item.body.workspacePanel.iteration === 1), true);
   assert.equal(result.waves[0].parallel, true);
