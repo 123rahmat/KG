@@ -63,6 +63,12 @@ function hasResourceNeed(run, task, payload) {
     );
 }
 
+function dedicatedResourceNeed(run, task, payload) {
+  const type = text(task?.type).toLowerCase();
+  if (['investigate', 'tool', 'discover', 'discover-capabilities', 'clarify', 'approval', 'observe', 'verify'].includes(type)) return false;
+  return hasResourceNeed(run, task, payload);
+}
+
 function compactSteps(run, task) {
   return (run?.tasks ?? []).slice(-12).map(item => ({
     id: item.id,
@@ -96,11 +102,17 @@ function compactCode(payload) {
 export function normalChatControlNeeds({ run = {}, task = {}, payload = {} } = {}) {
   const code = isCodeTask(task, payload);
   const data = hasDataNeed(run, task, payload);
-  const resource = hasResourceNeed(run, task, payload);
-  const steps = CONTROL_TASKS.has(text(task?.type).toLowerCase())
-    && ((run?.tasks?.length ?? 0) > 1
-      || ['plan', 'step', 'reassess', 'build-code', 'code'].includes(text(task?.type).toLowerCase())
-      || Boolean(run?.adaptation?.workflowBlueprint)
+  const resource = dedicatedResourceNeed(run, task, payload);
+  const type = text(task?.type).toLowerCase();
+  // Execution-heavy stages already have their own governed coordinator
+  // (tools, research, discovery, verification, approvals, code panels). The
+  // normal-chat control plane must not insert extra model calls into them.
+  const dedicatedExecutionStage = ['investigate', 'tool', 'discover', 'discover-capabilities', 'clarify', 'approval', 'observe', 'verify'].includes(type);
+  const directWorkflow = run?.adaptation?.workflow === 'direct' || run?.workflow === 'direct';
+  const steps = !dedicatedExecutionStage && CONTROL_TASKS.has(type)
+    && ((run?.tasks?.length ?? 0) > 1 && !directWorkflow
+      || ['plan', 'step', 'reassess', 'build-code', 'code'].includes(type)
+      || Boolean(run?.adaptation?.workflowBlueprint && !directWorkflow)
       || Boolean(payload?.workPlan?.steps?.length || payload?.workPlan?.length));
   return {
     stepManager: steps,
@@ -136,8 +148,7 @@ function managerSystem(role) {
 
 function managerBody(role, { run, task, payload, needs }) {
   const base = {
-    goal: clip(run?.goal, 1200),
-    task: {
+    controlTask: {
       id: task?.id ?? null,
       type: task?.type ?? null,
       purpose: clip(task?.purpose, 700)
@@ -268,6 +279,9 @@ export async function runNormalChatControlPlane({
     dedicatedCodingFlow,
     specialistPanelOwnsCoordination: Boolean(specialistPanelOwnsCoordination)
   };
+  if (specialistPanelOwnsCoordination) {
+    return { ...base, enabled: false, reason: 'specialist-panel-owns-coordination' };
+  }
   if (!config?.ai || HUMAN_GATE_TASKS.has(text(task?.type).toLowerCase()) || !CONTROL_TASKS.has(text(task?.type).toLowerCase())) {
     return { ...base, enabled: false, reason: 'control-agents-not-needed-for-this-stage' };
   }
