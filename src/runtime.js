@@ -314,7 +314,8 @@ export async function callModel(messages, {
     try {
       const promptEstimate = Math.min(500_000, Math.max(256, estimateModelTokens(messages, { maxOutputTokens }) - Math.max(0, Math.floor(Number(maxOutputTokens) || 0))));
       usageReservation = await usageGate.reserve({
-        estimatedTokens: promptEstimate + Math.max(1, Math.floor(Number(maxOutputTokens) || 1))
+        estimatedTokens: promptEstimate + Math.max(1, Math.floor(Number(maxOutputTokens) || 1)),
+        usageSource
       });
       if (usageReservation?.estimatedTokens) {
         admittedMaxOutputTokens = Math.max(
