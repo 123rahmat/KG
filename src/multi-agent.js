@@ -1083,6 +1083,10 @@ function codeWorkspaceSubsystemMessage({
   });
 }
 
+function subsystemStateValues(stateMap) {
+  return [...(stateMap?.values?.() ?? [])];
+}
+
 function subsystemTopologyFingerprint(subsystem = {}) {
   return JSON.stringify({
     roots: [...new Set((subsystem.roots ?? []).map(text).filter(Boolean))].sort(),
@@ -1745,6 +1749,17 @@ async function runCodeWorkspaceAgentPanels({
       dependencies: pressureMonitor.dependencies,
       materialStateChange: pressureMonitor.materialStateChange
     },
+    efficiency: {
+      earlyConvergence: pressureMonitor.topologyAction === 'hold'
+        && subsystemStateValues(subsystemState).every(state => state.status === 'complete'),
+      topologyRevision,
+      panelsCompleted: subsystemStateValues(subsystemState).filter(state => state.status === 'complete').length,
+      panelsStillNeedingWork: subsystemStateValues(subsystemState).filter(state => state.status !== 'complete').length,
+      specialistsCompleted: agentStates.filter(item => item.status === 'complete' && item.role !== 'arbiter').length,
+      specialistsUnavailable: agentStates.filter(item => item.status === 'unavailable').length,
+      parallelWaves: waves.filter(wave => wave.parallel).length,
+      principle: 'Use the smallest live topology and specialist depth that can produce sufficient evidence.'
+    },
     codingEconomy: {
       maxPanelAgents: CODE_WORKSPACE_MAX_PANEL_AGENTS,
       iterationPolicy: 'adaptive-1-to-4-from-risk-complexity-verification-failure',
@@ -2132,6 +2147,10 @@ export async function runAdaptiveAgentPanel({
       }
     });
     lastAllocation = allocationResult.allocation ?? lastAllocation;
+    const earlyStop = panelEarlyConvergence({ run, task, findings, iteration: allocationRounds });
+    if (earlyStop.stop) {
+      break;
+    }
   }
 
   let arbiter = null;
@@ -2168,6 +2187,14 @@ export async function runAdaptiveAgentPanel({
     allocationRounds: Math.max(allocationRounds, completedRoles.length),
     waves,
     waveCount: waves.length,
+    efficiency: {
+      earlyConvergence: panelEarlyConvergence({ run, task, findings, iteration: allocationRounds }),
+      specialistsCompleted: completedRoles.length,
+      specialistsFailed: failedRoles.length,
+      parallelWaves: waves.filter(wave => wave.parallel).length,
+      serialWaves: waves.filter(wave => !wave.parallel).length,
+      principle: 'Spend additional model calls only when new evidence can materially change the verified outcome.'
+    },
     parallel: waves.some(wave => wave.parallel),
     completedRoles,
     failedRoles,
