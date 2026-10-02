@@ -27,7 +27,7 @@ function check(name, ok, detail) {
 const requiredFiles = [
   'server.js', 'package.json', 'src/core.js', 'src/runs.js',
   'src/runtime.js', 'src/safety.js', 'src/verification.js',
-  'src/code-workspace.js', 'src/project-index.js', 'src/adaptive.js',
+  'src/code-workspace.js', 'src/project-index.js', 'src/context-compiler.js', 'src/parallel-orchestrator.js', 'src/adaptive.js',
   'tests/security.test.js', 'tests/code-workspace.test.js'
 ];
 
