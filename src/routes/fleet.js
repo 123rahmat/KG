@@ -5,10 +5,10 @@ export function registerFleetRoutes(app, { pool, audit, route, scoped, metrics }
   const fleet = new FleetStore(pool);
 
   app.get('/api/fleet/status', scoped('viewer'), route(async (req, res) => {
-    const projects = await fleet.list(req.scope, { limit: 500 });
+    const summary = await fleet.summary(req.scope);
     const capacity = Math.max(1, Math.min(16, Number(process.env.FLEET_MAX_CONCURRENCY) || 4));
     const workerCount = Math.max(1, Number(process.env.FLEET_WORKERS) || 1);
-    const status = fleetStatus(projects, { capacity, workerCount });
+    const status = { ...summary, capacity, workers: workerCount };
     res.json({
       status,
       capacityPolicy: adaptFleetCapacity({
