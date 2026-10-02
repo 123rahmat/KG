@@ -301,8 +301,8 @@ function roleUtility(role, run, task, progress = {}) {
     analyst: 0.20 + signals.comparisonComplexity * 1.8 + signals.evidenceDiversity * 1.15 + (signals.flags.quantitative ? 0.14 : 0) + typeMatch,
     architect: signals.executable ? 0.46 + signals.implementationComplexity * 0.9 + signals.decomposition * 0.7 : 0.14 + signals.decomposition * 0.5,
     implementer: signals.executable
-      ? 0.64 + signals.implementationComplexity * 1.0 + signals.decomposition * 0.6 + (signals.retrying ? 0.18 : 0)
-      : 0.08,
+      ? 0.16 + signals.implementationComplexity * 0.2 + signals.decomposition * 0.2 + (signals.retrying ? 0.18 : 0)
+      : 0.04,
     critic: 0.20 + signals.stakes * 1.3 + signals.scaleComplexity * 0.65 + signals.recovery * 0.35 + typeMatch,
     communicator: signals.communication
       ? 0.38 + signals.communicationComplexity * 1.6 + (signals.flags.communication ? 0.12 : 0) + typeMatch
@@ -823,15 +823,18 @@ async function runCodeWorkspaceAgentPanels({
   }
   const initialDecision = multiAgentDecision(run, task, { mode, progress: {} });
   if (!initialDecision.enabled) {
-    const workspaceEligible = mode === 'always'
-      || (mode === 'auto' && initialDecision.pressure >= CODE_WORKSPACE_AUTO_THRESHOLD && run?.situation?.risk !== 'crisis');
+    const terminalDisable = ['crisis-or-safety-adaptive', 'declined-or-conversational', 'disabled'].includes(initialDecision.reason);
+    const workspaceEligible = !terminalDisable && (
+      mode === 'always'
+      || (mode === 'auto' && initialDecision.pressure >= CODE_WORKSPACE_AUTO_THRESHOLD)
+    );
     if (!workspaceEligible || mode === 'off') {
       return { enabled: false, decision: initialDecision, brief: null, agents: [], findings: [], arbiter: null };
     }
   }
 
   const subsystemPlan = providedSubsystemPlan ?? buildSubsystemPlan(basePayload.codeIntelligence.project, {
-    maxSubsystems: Math.max(1, Math.min(24, Math.floor(maxAgents / 2) * 2)),
+    maxSubsystems: 24,
     risk: run?.situation?.risk ?? 'ordinary',
     revisionId: basePayload?.codeIntelligence?.project?.revisionId ?? basePayload?.workspace?.revisionId ?? null
   });
@@ -1157,8 +1160,21 @@ async function runCodeWorkspaceAgentPanels({
 
       const merged = mergeSubsystemMessages(blackboard?.subsystemMessages ?? [], currentWaveMessages);
       subsystemMessages.push(...currentWaveMessages);
-      blackboard = mergeBlackboardForPanel(blackboard, results, currentWaveMessages);
-      blackboard = mergeBlackboard(blackboard ?? {}, { subsystemMessages: merged }, run?.id ?? null);
+      // Keep raw peer findings inside the local panel state. The shared
+      // blackboard receives only typed A2A messages and bounded subsystem
+      // coordination state, so later agents cannot herd on another agent's raw output.
+      blackboard = mergeBlackboard(blackboard ?? {}, {
+        subsystemMessages: merged,
+        subsystemPanelState: batch.map(subsystem => {
+          const state = subsystemState.get(subsystem.id);
+          return {
+            subsystemId: subsystem.id,
+            iteration: state?.iteration ?? 0,
+            status: state?.status ?? 'pending',
+            confidence: state?.confidence ?? 0
+          };
+        })
+      }, run?.id ?? null);
       await recordWave({ run, task, wave: waveRecord });
       await recordBlackboard({ run, task, blackboard });
 
