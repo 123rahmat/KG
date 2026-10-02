@@ -23,6 +23,7 @@ import { JobStore, createJobWorker } from './src/jobs.js';
 import { Scheduler } from './src/scheduling.js';
 import { createApp, VERSION } from './src/app.js';
 import { attachTerminalServer } from './src/terminal.js';
+import { FleetStore, createFleetWorker } from './src/fleet-control.js';
 
 /** Wire the object graph. Exported so tests build the same one. */
 export function build({ config, logger, metrics, fetchImpl }) {
@@ -49,14 +50,20 @@ export function build({ config, logger, metrics, fetchImpl }) {
     capabilities
   });
   const jobs = new JobStore(pool);
+  const fleet = new FleetStore(pool);
   // Reminders and scheduled questions (src/scheduling.js).
   const scheduler = new Scheduler({ pool, runs, identity, logger, metrics });
   const app = createApp({ config, pool, identity, governance, capabilities, objects, runs, jobs, scheduler, audit, logger, metrics, fetchImpl });
   app.locals.objects = objects;
-  const worker = createJobWorker({
-    jobs, identity, runs, logger, metrics, executeNext: app.locals.executeNext
+  const worker = createJobWorker({ jobs, identity, runs, logger, metrics, executeNext: app.locals.executeNext });
+  const fleetWorker = createFleetWorker({
+    fleet, identity, runs, logger, metrics, executeNext: app.locals.executeNext,
+    batchSize: Math.max(1, Math.min(32, Number(process.env.FLEET_BATCH_SIZE) || 8)),
+    maxConcurrency: Math.max(1, Math.min(16, Number(process.env.FLEET_MAX_CONCURRENCY) || 4)),
+    partition: process.env.FLEET_PARTITION === undefined ? null : Number(process.env.FLEET_PARTITION) || 0,
+    partitions: Math.max(1, Number(process.env.FLEET_PARTITIONS) || 1)
   });
-  return { pool, audit, governance, capabilities, identity, objects, runs, jobs, scheduler, worker, app };
+  return { pool, audit, governance, capabilities, identity, objects, runs, jobs, scheduler, worker, fleet, fleetWorker, app };
 }
 
 export async function start({ env = process.env } = {}) {
@@ -66,7 +73,7 @@ export async function start({ env = process.env } = {}) {
 
   logger.info('starting', { version: VERSION, nodeEnv: config.nodeEnv, node: process.version });
 
-  const { pool, identity, app, worker, scheduler, audit } = build({ config, logger, metrics });
+  const { pool, identity, app, worker, fleetWorker, scheduler, audit } = build({ config, logger, metrics });
   const migrationPool = config.database.migrationUrl
     ? createPool(config, logger, {
         connectionString: config.database.migrationUrl,
@@ -120,6 +127,7 @@ export async function start({ env = process.env } = {}) {
   });
   logger.info('listening', { host: config.host, port: server.address().port });
   worker.start();
+  fleetWorker.start();
   scheduler.start();
 
   // Expired sessions and spent idempotency records accumulate otherwise.
@@ -159,6 +167,7 @@ export async function start({ env = process.env } = {}) {
     const background = Promise.all([
       terminalServer.close(),
       worker.stop().catch(error => logger.error('job worker shutdown failed', { error })),
+      fleetWorker.stop().catch(error => logger.error('fleet worker shutdown failed', { error })),
       scheduler.stop().catch(error => logger.error('scheduler shutdown failed', { error }))
     ]);
 
