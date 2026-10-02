@@ -558,6 +558,10 @@ main > #notice { margin: 14px auto 0; width: min(var(--read), calc(100% - 32px))
   display: grid; gap: 28px; align-content: start; padding: 24px 0 32px;
 }
 .chat > #runNotice { width: min(var(--read), calc(100% - 40px)); margin: 0 auto 10px; }
+.chat > .usage-limit-banner { width: min(var(--read), calc(100% - 40px)); margin: 0 auto 10px; }
+.usage-limit-banner { font-weight: 650; border-width: 1px; }
+body[data-ai-usage-locked="true"] .composer { opacity: .72; }
+body[data-ai-usage-locked="true"] .composer textarea { cursor: not-allowed; }
 
 .msg { display: flex; gap: 14px; align-items: flex-start; min-width: 0; animation: rise .28s var(--ease); }
 .msg.user { justify-content: flex-end; }
@@ -758,6 +762,7 @@ button.chip:hover:not(:disabled) {
   font-size: 1.02rem; line-height: 1.5; min-height: 40px; max-height: 40vh; overflow-y: auto;
 }
 .composer textarea:focus, .composer textarea:focus-visible { outline: none; box-shadow: none; }
+.composer :disabled { cursor: not-allowed; }
 .composer-bar { display: flex; align-items: center; gap: 6px; }
 .attach-btn, .voice-btn {
   width: 34px; height: 34px; padding: 0; justify-content: center; border-radius: 50%;
