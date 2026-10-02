@@ -70,6 +70,7 @@ check('runner-side-effect-no-retry', /retries:\s*0/.test(runtime), 'side-effecti
 check('adaptive-efficiency-integrated', /adaptiveEffortProfile\(/.test(adaptive), 'adaptive efficiency participates in situation analysis');
 check('adaptive-scope-controller', /reconcileAdaptiveTransition|adaptiveBudgetStatus/.test(adaptiveControl), 'adaptive scope is re-evaluated at transitions');
 check('hierarchical-project-index', /buildProjectHierarchy\(/.test(projectIndex) && /hierarchicalProjectScope\(/.test(projectIndex), 'large repositories have deterministic hierarchical scope and subtree digests');
+check('incremental-project-index-cache', /FILE_SIGNAL_CACHE_LIMIT/.test(projectIndex) && /cachedFileSignals\(/.test(projectIndex), 'unchanged files reuse deterministic structural parsing across index rebuilds');
 check('hierarchical-context-integration', /hierarchicalProjectScope\(/.test(contextCompiler) && /projectScale\(/.test(contextCompiler), 'coding context selection consumes hierarchical project intelligence');
 check('workspace-lane-isolation', /workspaceLanesConflict\(/.test(parallel) && /rightReads/.test(parallel) && /leftReads/.test(parallel), 'workspace lanes serialize read/write and stale-revision conflicts');
 check('workspace-parallel-scheduler', /buildWorkspaceParallelPlan\(/.test(parallel), 'coding lanes have a deterministic server-owned parallel scheduler');
