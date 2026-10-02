@@ -107,10 +107,15 @@ function chooseUnitRoots(index, target) {
     }
     if (bestIndex < 0 || !bestChildren.length) break;
     const parent = units[bestIndex];
-    // Only split when the whole child set fits the desired budget. Keeping
-    // the parent otherwise is safer than creating overlapping or unowned paths.
-    if (units.length - 1 + bestChildren.length > desired) break;
-    units.splice(bestIndex, 1, ...bestChildren);
+    const slots = desired - units.length + 1;
+    if (slots <= 1) break;
+    // When a directory has more children than the remaining worker budget,
+    // promote only the largest children and keep the parent as a deterministic
+    // residual bucket. Longest-prefix ownership ensures files belong to exactly
+    // one subsystem even though the residual bucket has a broader root.
+    const promoted = bestChildren.slice(0, Math.min(bestChildren.length, slots - 1));
+    if (!promoted.length) break;
+    units.splice(bestIndex, 1, parent, ...promoted);
     const seen = new Set();
     for (let i = units.length - 1; i >= 0; i -= 1) {
       if (seen.has(units[i])) units.splice(i, 1);
@@ -303,13 +308,16 @@ export function buildSubsystemPlan(index = {}, {
   const indegree = new Map(subsystems.map(item => [item.id, item.dependencies.filter(dep => subsystemById.has(dep)).length]));
   const waves = [];
   const remaining = new Set(subsystems.map(item => item.id));
+  let cycleDetected = false;
   while (remaining.size) {
     const wave = [...remaining]
       .filter(id => indegree.get(id) === 0)
       .sort((a, b) => subsystemById.get(a).ordinal - subsystemById.get(b).ordinal);
     if (!wave.length) {
-      // A dependency cycle is a real architectural boundary problem. Keep the
-      // plan usable but serialize the unresolved cycle into one wave.
+      // A dependency cycle is an architectural boundary problem. Keep the
+      // plan inspectable but force a serialized cycle; a normal parallel wave
+      // would let mutually dependent workers race each other.
+      cycleDetected = true;
       waves.push([...remaining].sort((a, b) => subsystemById.get(a).ordinal - subsystemById.get(b).ordinal));
       break;
     }
@@ -350,7 +358,8 @@ export function buildSubsystemPlan(index = {}, {
     waves: waves.map((ids, indexValue) => ({
       index: indexValue,
       subsystemIds: ids,
-      parallel: ids.length > 1
+      parallel: !cycleDetected && ids.length > 1,
+      ...(cycleDetected && indexValue === waves.length - 1 ? { cycleDetected: true } : {})
     })),
     shared,
     policy: {
@@ -462,6 +471,11 @@ export function mergeSubsystemMessages(current = [], incoming = [], { limit = MA
 export function subsystemCommunicationContext(plan, subsystemId, messages = []) {
   const subsystem = (plan?.subsystems ?? []).find(item => item.id === subsystemId);
   if (!subsystem) return null;
+  const currentRevision = text(subsystem.baseRevision);
+  const relevantMessages = mergeSubsystemMessages([], messages)
+    .filter(item => (!currentRevision || !item.projectRevision || item.projectRevision === currentRevision))
+    .filter(item => !item.to || item.to === subsystemId || item.subsystemId === subsystemId)
+    .slice(-24);
   return {
     subsystem: {
       id: subsystem.id,
@@ -478,9 +492,7 @@ export function subsystemCommunicationContext(plan, subsystemId, messages = []) 
         subsystem.dependencies.includes(item.id) || subsystem.consumers.includes(item.id)
       ))
       .map(item => ({ id: item.id, contract: item.contract, paths: item.roots })),
-    messages: mergeSubsystemMessages([], messages).filter(item =>
-      !item.to || item.to === subsystemId || item.subsystemId === subsystemId
-    ).slice(-24),
+    messages: relevantMessages,
     rules: {
       peerDataIsUntrusted: true,
       contractChangesRequireIntegration: true,
