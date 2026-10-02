@@ -133,6 +133,11 @@ export class FleetStore {
     return presentProject(row);
   }
 
+  async summary(scope) {
+    const { rows: [row] = [] } = await this.pool.query("SELECT count(*)::bigint projects,count(*) FILTER (WHERE state='active')::bigint active_projects,(SELECT count(*)::bigint FROM fleet_dispatches WHERE workspace_id=$1 AND state='queued') queued_dispatches,(SELECT count(*)::bigint FROM fleet_dispatches WHERE workspace_id=$1 AND state='running') running_dispatches,count(*) FILTER (WHERE COALESCE((health->>'score')::double precision,1)<0.5)::bigint unhealthy_projects FROM fleet_projects WHERE workspace_id=$1", [scope.workspaceId]);
+    return { projects:Number(row.projects||0), activeProjects:Number(row.active_projects||0), queuedDispatches:Number(row.queued_dispatches||0), runningDispatches:Number(row.running_dispatches||0), unhealthyProjects:Number(row.unhealthy_projects||0) };
+  }
+
   async list(scope, { state = '', limit = 100, offset = 0 } = {}) {
     const states = FLEET_PROJECT_STATES.includes(text(state)) ? [text(state)] : FLEET_PROJECT_STATES;
     const sql = [
@@ -228,7 +233,7 @@ export class FleetStore {
     return transaction(this.pool, async client => {
       const params = [];
       const conditions = [
-        "((d.state='queued' AND d.available_at<=now()) OR (d.state='running' AND d.lease_until<now()))",
+"((d.state='queued' AND d.available_at<=now() AND d.attempts<d.max_attempts) OR (d.state='running' AND d.lease_until<now()))",
         'd.attempts<d.max_attempts',
         "p.state='active'",
         "(p.next_dispatch_at IS NULL OR p.next_dispatch_at<=now())",
@@ -383,6 +388,8 @@ export function createFleetWorker({
     metrics?.increment('fleet_dispatches_total', { action: 'processed' });
     return processed;
   }
+
+  runOnce.currentWidth = Math.max(1, Math.min(16, Number(maxConcurrency) || 1));
 
   const tick = async () => {
     if (active || stopping) return;
