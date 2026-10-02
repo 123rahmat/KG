@@ -50,7 +50,7 @@ function normalizeBoard(value = {}, runId = null) {
     evidence: normalizeList(value.evidence),
     openQuestions: normalizeList(value.openQuestions),
     subsystemPlan: value.subsystemPlan && typeof value.subsystemPlan === 'object' ? value.subsystemPlan : null,
-    subsystemMessages: mergeSubsystemMessages([], value.subsystemMessages, { limit: 120 }),
+    subsystemMessages: mergeSubsystemMessages([], value.subsystemMessages, { limit: 64 }),
     updatedAt: value.updatedAt ?? null
   };
   return merged;
