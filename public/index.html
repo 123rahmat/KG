@@ -643,7 +643,7 @@
           <p class="hint">A token is roughly ¾ of a word. The 4-hour and weekly windows roll: usage frees up as it gets older. The context window is how much the model can read at once; long chats fill it.</p>
         </section>
 
-        <section class="settings-group settings-section" data-settings-section="billing" data-settings-title="Billing" data-settings-description="Your plan, payment method, invoices and billing details.">
+        <section class="settings-group settings-section" data-settings-section="billing" data-settings-title="Billing" data-settings-description="Your plan, payment method and invoices, managed through Stripe.">
           <div class="notice" id="billingNotice" hidden aria-live="polite"></div>
           <div class="billing-plan" id="billingPlan"></div>
           <div class="billing-plans" id="billingPlans" hidden></div>
@@ -652,16 +652,7 @@
             <span><strong>Managed by the payment provider</strong><small id="billingPortalNote">Card details are entered only on the provider's secure page, never in Kindgleam.</small></span>
             <button type="button" class="small" id="billingPortal" hidden><svg class="i" aria-hidden="true"><use href="#i-external"/></svg> Manage payment</button>
           </div>
-          <h3 class="settings-subhead">Billing details</h3>
-          <p class="hint" id="billingDetailsNote"></p>
-          <div class="billing-form" id="billingForm">
-            <label>Billing email<input id="billingEmail" type="email" maxlength="200" autocomplete="email" placeholder="accounts@company.com"></label>
-            <label>Company or name<input id="billingCompany" maxlength="200" autocomplete="organization"></label>
-            <label>Tax ID (optional)<input id="billingTaxId" maxlength="64" placeholder="e.g. NTN or VAT number"></label>
-            <label>Country<input id="billingCountry" maxlength="80" autocomplete="country-name"></label>
-            <label class="wide">Address<textarea id="billingAddress" rows="3" maxlength="500" autocomplete="street-address"></textarea></label>
-            <div class="wide row"><button type="button" class="primary small" id="billingSave">Save billing details</button><span class="small muted" id="billingSaved" aria-live="polite"></span></div>
-          </div>
+          <p class="hint" id="billingDetailsNote">Billing profile, tax information, payment methods and invoices are managed on Stripe. Kindgleam does not store them locally.</p>
           <p class="hint" id="billingSupport"></p>
         </section>
 
