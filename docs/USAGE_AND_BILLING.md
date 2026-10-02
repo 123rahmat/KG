@@ -36,7 +36,11 @@ In the app, usage appears in three places:
 | `AI_EFFORT` | unset: each step chooses | The most Gemini may think on any step: `low`, `medium` or `high`. Unset, each step asks for what it needs (low for classifying, web searches and crisis replies; medium for answers and planning; high for code and verification). Set, it is a ceiling that caps cost; it never raises a quick step |
 
 Both usage windows are **principal-wide**: switching chats, code workspaces, or
-the active workspace does not create another quota pool. The model context
+the active workspace does not create another quota pool. The quota entitlement
+is resolved from the person's active subscriptions across their memberships,
+not from whichever workspace is open. When multiple active plans exist, the
+account uses the most permissive limit for each usage window (and the combined
+model access); the active workspace cannot change that allowance. The model context
 meter remains conversation-specific. A window frees up as its oldest calls get
 older than the window. When a person is over a limit:
 
@@ -89,8 +93,11 @@ missing or invalid, or if a test key is used in production.
   Your team creates its subscription in Stripe, at any price, with metadata
   `plan_id=<id>`. Only a sales-only plan can be picked by metadata, so a
   self-serve price never becomes Enterprise.
-- **Plans set the limits.** While a subscription is `active`, `trialing` or
-  `past_due`, the plan's `fourHourTokens` and `weeklyTokens` replace the
+- **Plans set account-level limits.** While a subscription is `active`,
+  `trialing` or `past_due`, its `fourHourTokens` and `weeklyTokens`
+  contribute to the person's single account-wide entitlement. With multiple
+  active plans, each window uses the most permissive limit (and model access is
+  combined), so switching workspaces cannot produce another quota pool. The
   defaults. When it is cancelled or unpaid, the defaults apply again.
 
 To try it locally, use Stripe's test mode and `stripe listen --forward-to

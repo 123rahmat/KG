@@ -272,6 +272,65 @@ test('usage windows are universal to the person across workspaces', () =>
   }));
 
 
+
+test('the account entitlement is stable when workspaces have different paid plans', () =>
+  withServer(async ({ call, seed, pool, config }) => {
+    const first = await seed({ workspace: 'entitlement-a' });
+    const secondWorkspace = 'entitlement-b';
+    await pool.query(
+      'INSERT INTO organizations (id, name, type) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+      ['org-entitlement-b', 'entitlement-b', 'enterprise']
+    );
+    await pool.query(
+      'INSERT INTO workspaces (id, name, max_bytes, max_objects, organization_id) VALUES ($1, $2, $3, $4, $5)',
+      [secondWorkspace, secondWorkspace, 1000000, 1000, 'org-entitlement-b']
+    );
+    await pool.query(
+      'INSERT INTO memberships (workspace_id, principal_id, role) VALUES ($1, $2, $3)',
+      [secondWorkspace, first.principal.id, 'editor']
+    );
+
+    config.stripe = {
+      plans: [
+        {
+          id: 'team',
+          name: 'Team',
+          fourHourTokens: 1000,
+          weeklyTokens: 10000,
+          modelIds: []
+        },
+        {
+          id: 'pro',
+          name: 'Pro',
+          fourHourTokens: 4000,
+          weeklyTokens: 40000,
+          modelIds: []
+        }
+      ]
+    };
+
+    await pool.query(
+      `INSERT INTO workspace_billing (workspace_id, subscription_status, plan_id)
+       VALUES ($1, 'active', 'team'), ($2, 'active', 'pro')`,
+      [first.workspace, secondWorkspace]
+    );
+
+    const a = await call('GET', '/api/usage', { token: first.token, workspace: first.workspace });
+    const b = await call('GET', '/api/usage', { token: first.token, workspace: secondWorkspace });
+
+    assert.equal(a.status, 200);
+    assert.equal(b.status, 200);
+    assert.equal(a.body.windows[0].limit, 4000);
+    assert.equal(b.body.windows[0].limit, 4000);
+    assert.equal(a.body.windows[1].limit, 40000);
+    assert.equal(b.body.windows[1].limit, 40000);
+    assert.equal(a.body.plan, 'Account-wide entitlement');
+    assert.equal(b.body.plan, 'Account-wide entitlement');
+    assert.equal(a.body.quotaScope.entitlement, 'principal');
+    assert.equal(b.body.quotaScope.entitlement, 'principal');
+  }));
+
+
 test('a universal quota cannot be bypassed by switching workspaces', () =>
   withServer(async ({ call, seed, pool }) => {
     const first = await seed({ workspace: 'quota-a' });

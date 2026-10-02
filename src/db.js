@@ -434,6 +434,7 @@ async function hardenRuntimeRole(client, runtimeRole, logger) {
   await client.query('GRANT EXECUTE ON FUNCTION kg_sign_up(TEXT, TEXT, BIGINT, INTEGER) TO ' + role);
   await client.query('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ' + role);
   await client.query('GRANT EXECUTE ON FUNCTION kg_audit_previous_hash(TEXT) TO ' + role);
+  await client.query('GRANT EXECUTE ON FUNCTION kg_account_active_billing_plans(TEXT) TO ' + role);
   await client.query('REVOKE ALL ON schema_migrations FROM ' + role);
 
   logger?.info('runtime database role privileges reconciled', { role: runtimeRole });

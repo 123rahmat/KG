@@ -12,7 +12,6 @@ import { catalogEntry } from './model-catalog.js';
 import { currentDbScope, transaction } from './db.js';
 import { MODEL_DEFAULTS } from './runtime.js';
 import { modelIdsForPlan } from './model-catalog.js';
-import { ACTIVE_STATUSES } from './stripe.js';
 
 const HOUR = 3_600_000;
 export const WINDOWS = Object.freeze([
@@ -22,6 +21,43 @@ export const WINDOWS = Object.freeze([
 const SOURCES = new Set(['chat', 'classifier', 'multi-agent', 'web-search', 'chat-retry', 'verification-review']);
 
 const count = value => Math.max(0, Math.round(Number(value) || 0));
+
+function mergeEntitledLimit(current, candidate) {
+  if (current === null) return candidate;
+  if (current === 0 || candidate === 0) return 0; // 0 means unlimited.
+  return Math.max(current, candidate);
+}
+
+async function accountEntitledLimits(pool, config, principalId, defaults) {
+  if (!config.stripe || !principalId) return null;
+  const { rows } = await pool.query(
+    'SELECT plan_id FROM kg_account_active_billing_plans($1)',
+    [principalId]
+  );
+  const plansById = new Map((config.stripe.plans ?? []).map(plan => [plan.id, plan]));
+  const plans = [...new Set(rows.map(row => row.plan_id))]
+    .map(planId => plansById.get(planId))
+    .filter(Boolean);
+  if (!plans.length) return defaults;
+
+  let fourHourTokens = null;
+  let weeklyTokens = null;
+  const modelIds = new Set();
+  for (const plan of plans) {
+    fourHourTokens = mergeEntitledLimit(fourHourTokens, Number(plan.fourHourTokens || 0));
+    weeklyTokens = mergeEntitledLimit(weeklyTokens, Number(plan.weeklyTokens || 0));
+    for (const modelId of modelIdsForPlan(plan, config)) modelIds.add(modelId);
+  }
+
+  return {
+    fourHourTokens: fourHourTokens ?? defaults.fourHourTokens,
+    weeklyTokens: weeklyTokens ?? defaults.weeklyTokens,
+    modelIds: [...modelIds],
+    planId: plans.length === 1 ? plans[0].id : null,
+    planName: plans.length === 1 ? plans[0].name : 'Account-wide entitlement',
+    planScope: 'principal'
+  };
+}
 
 /**
  * Record one model call for the person in the current database scope. A call
@@ -49,10 +85,16 @@ export function contextWindowFor(config, modelId = null) {
 }
 
 /**
- * The limits that apply in a workspace: its paid plan's while the
- * subscription is active, otherwise the deployment's defaults.
+ * Resolve the AI entitlement for the person, never from the active workspace.
+ * Active subscriptions on any workspace the person belongs to contribute to
+ * one account-wide allowance; each window takes the most permissive limit and
+ * model access is the union of those active plans. If no paid subscription is
+ * active, the deployment's free/default limits apply.
+ *
+ * workspaceId is retained for legacy callers, but paid quota resolution requires
+ * principalId so a workspace switch can never select another allowance.
  */
-export async function limitsFor(pool, config, workspaceId) {
+export async function limitsFor(pool, config, workspaceId, principalId = null) {
   // With Stripe, no subscription means the free plan.
   const defaults = {
     fourHourTokens: config.usage?.fourHourTokens || 0,
@@ -61,14 +103,12 @@ export async function limitsFor(pool, config, workspaceId) {
     planId: config.stripe ? 'free' : null,
     planName: config.stripe ? config.billing?.free?.name ?? 'Free' : config.billing?.planName ?? null
   };
-  if (!config.stripe || !workspaceId) return defaults;
-  const { rows: [row] } = await pool.query(
-    'SELECT plan_id, subscription_status FROM workspace_billing WHERE workspace_id = $1',
-    [workspaceId]
-  );
-  const plan = row && ACTIVE_STATUSES.includes(row.subscription_status) ? config.stripe.plans.find(item => item.id === row.plan_id) : null;
-  return plan ? { fourHourTokens: plan.fourHourTokens, weeklyTokens: plan.weeklyTokens, modelIds: modelIdsForPlan(plan, config), planId: plan.id, planName: plan.name } : defaults;
-}
+  if (!config.stripe) return defaults;
+  if (principalId) return accountEntitledLimits(pool, config, principalId, defaults);
+  // Fail closed for Stripe-enabled callers that do not provide the person.
+  // Usage admission always has a principal; without one, paid entitlement
+  // must not be selected from an arbitrary workspace.
+  return defaults;
 
 /**
  * Usage for one person: each rolling window with its limit and when it
@@ -76,7 +116,7 @@ export async function limitsFor(pool, config, workspaceId) {
  * chat) how full the model's context was on the latest call.
  */
 export async function usageSummary(pool, { principalId, workspaceId = null, config, conversationId = null, now = new Date(), limits = null }) {
-  const applied = limits ?? { fourHourTokens: config.usage?.fourHourTokens || 0, weeklyTokens: config.usage?.weeklyTokens || 0, modelIds: modelIdsForPlan(null, config), planName: config.billing?.planName ?? null };
+  const applied = limits ?? await limitsFor(pool, config, workspaceId, principalId);
   const since = new Date(now.getTime() - WINDOWS.at(-1).ms);
   const { rows: globalRows } = await pool.query(
     `SELECT source, input_tokens, output_tokens, created_at
@@ -161,6 +201,7 @@ export async function usageSummary(pool, { principalId, workspaceId = null, conf
     quotaScope: {
       fourHour: 'principal',
       weekly: 'principal',
+      entitlement: 'principal',
       context: 'conversation'
     },
     days,
@@ -188,7 +229,7 @@ export async function reserveUsage(pool, {
   if (!principalId || !workspaceId) return null;
   const rawEstimate = Math.min(MAX_RESERVATION_TOKENS, count(estimatedTokens));
   if (!rawEstimate) return null;
-  const limits = await limitsFor(pool, config, workspaceId);
+  const limits = await limitsFor(pool, config, workspaceId, principalId);
   const safeTtl = Math.max(30_000, Math.min(900_000, Number(ttlMs) || RESERVATION_TTL_MS));
 
   return transaction(pool, async client => {
@@ -398,7 +439,7 @@ export class UsageLimitError extends Error {
 
 /** Throws UsageLimitError when a limited window is used up. No limits: no query. */
 export async function assertUsageAllowed(pool, { principalId, config, workspaceId = null }) {
-  const limits = await limitsFor(pool, config, workspaceId);
+  const limits = await limitsFor(pool, config, workspaceId, principalId);
   if (!limits.fourHourTokens && !limits.weeklyTokens) return;
   const { windows } = await usageSummary(pool, { principalId, workspaceId, config, limits });
   const exceeded = windows.find(window => window.exceeded);

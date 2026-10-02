@@ -2580,4 +2580,30 @@ export const MIGRATIONS = [
          AND updated_at < now() - interval '30 days';
     `
   }
+  ,{
+    version: 64,
+    name: 'account-wide-ai-entitlement-resolver',
+    sql: `
+      -- AI quota entitlement is account-wide. This SECURITY DEFINER helper lets
+      -- the hardened runtime read only the active plan ids belonging to the
+      -- authenticated person without widening workspace_billing RLS across
+      -- tenants or exposing billing-private data.
+      CREATE OR REPLACE FUNCTION kg_account_active_billing_plans(p_principal_id TEXT)
+      RETURNS TABLE(plan_id TEXT)
+      LANGUAGE sql
+      SECURITY DEFINER
+      SET search_path = public, pg_temp
+      AS $fn$
+        SELECT DISTINCT wb.plan_id
+          FROM memberships m
+          JOIN workspace_billing wb ON wb.workspace_id = m.workspace_id
+         WHERE m.principal_id = p_principal_id
+           AND p_principal_id = current_setting('app.principal_id', true)
+           AND wb.subscription_status IN ('active', 'trialing', 'past_due')
+           AND wb.plan_id <> '';
+      $fn$;
+
+      REVOKE ALL ON FUNCTION kg_account_active_billing_plans(TEXT) FROM PUBLIC;
+    `
+  }
 ];

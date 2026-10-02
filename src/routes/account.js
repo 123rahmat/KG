@@ -33,8 +33,8 @@ export function registerAccountRoutes(app, { config, pool, identity, audit, rout
       workspaceId: req.scope.workspaceId,
       config,
       conversationId: CONVERSATION_ID.test(conversationId) ? conversationId : null,
-      // The limits of the workspace being worked in: its plan's, or the defaults.
-      limits: await limitsFor(pool, config, req.scope.workspaceId)
+      // AI quota is account-wide; the active workspace only selects chat context.
+      limits: await limitsFor(pool, config, req.scope.workspaceId, req.principal.id)
     }));
   }));
 
@@ -44,7 +44,7 @@ export function registerAccountRoutes(app, { config, pool, identity, audit, rout
     const privateBilling = row?.billing_private_enc
       ? decryptJson(config.security.billingEncryptionKey, 'workspace-billing-v1', row.billing_private_enc)
       : null;
-    const limits = await limitsFor(pool, config, req.scope.workspaceId);
+    const limits = await limitsFor(pool, config, req.scope.workspaceId, req.principal.id);
     res.json({
       plan: limits.planName,
       planId: limits.planId,
