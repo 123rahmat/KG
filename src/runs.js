@@ -998,7 +998,7 @@ export class RunStore {
          evidence === null ? null : JSON.stringify(evidence)]
       );
 
-      const applied = await this.#settle(client, run, decision, target, result, { evidence, verifiedExternalExecution });
+      const applied = await this.#settle(client, run, decision, target, result, { evidence, verifiedExternalExecution, approvedPlanUpdate });
 
       const nextSituation = applied.situation ?? evolveSituation(run.situation ?? {}, {
         type: target.type,
@@ -1047,7 +1047,7 @@ export class RunStore {
    * graph resets to pending and the attempt counter rises. Without the
    * counter, `iterate` is an unbounded loop that can burn budget forever.
    */
-  async #settle(client, run, decision, target, result, { evidence = result?.evidence ?? null, verifiedExternalExecution = false } = {}) {
+  async #settle(client, run, decision, target, result, { evidence = result?.evidence ?? null, verifiedExternalExecution = false, approvedPlanUpdate = null } = {}) {
     const structured = result?.evidence?.structured;
     let requirementModel = run.adaptation?.workflow === 'direct'
       ? (run.requirements ?? { version: 1, items: [], overallProgress: 100, completionReady: true })
