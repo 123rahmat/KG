@@ -72,6 +72,9 @@ const contextCompiler = await read('src/context-compiler.js');
 const parallel = await read('src/parallel-orchestrator.js');
 const multiAgent = await read('src/multi-agent.js');
 const migrationSource = await read('src/migrations.js');
+const billingAccount = await read('src/routes/account.js');
+const billingRoutes = await read('src/routes/stripe.js');
+const billingProtection = await read('src/data-protection.js');
 
 check('server-owned-workflow', /SELECT[\s\S]*FOR UPDATE/.test(runs), 'run state is expected to be re-read under a row lock');
 check('execution-claim-integrity', /executed\s*[:=]/.test(core + runs), 'execution state is represented explicitly');
@@ -98,9 +101,10 @@ check('terminal-secret-input-filter', /isSensitiveWorkspacePath/.test(await read
 check('usage-reservation-admission', /usage_reservations/.test(await read('src/usage.js')) && /runReserved/.test(await read('src/usage.js')) && /pg_advisory_xact_lock/.test(await read('src/usage.js')), 'model spend is admitted atomically against rolling and per-run token limits');
 check('universal-user-usage-windows', /const sourceRows = globalRows/.test(await read('src/usage.js')) && /fourHour: 'principal'/.test(await read('src/usage.js')) && /weekly: 'principal'/.test(await read('src/usage.js')) && /usage:principal:/.test(await read('src/usage.js')), '4-hour and weekly AI quotas are universal per user across chats and workspaces');
 check('account-level-usage-entitlement', /principal_ai_entitlements/.test(await read('src/usage.js')) && /principal_ai_entitlements/.test(await read('src/migrations.js')) && /principal_ai_entitlements/.test(await read('src/db.js')) && /account-entitlements/.test(await read('src/identity.js')) && /syncWorkspaceAiEntitlements/.test(await read('src/routes/stripe.js')), 'paid AI quota is resolved from the user account entitlement rather than the active workspace');
+check('stripe-hosted-billing', /billingDetailsStoredLocally:s*false/.test(billingAccount) && !/app.put(['"]/api/billing['"]/.test(billingAccount) && /stripeBillingPrivateState/.test(billingProtection) && /billing_storage_version/.test(billingProtection + migrationSource) && //api/billing/portal/.test(billingRoutes), 'payment methods, invoices and billing-profile data stay in Stripe; Kindgleam keeps only opaque references and entitlements');
 check('usage-source-attribution', /multi-agent/.test(await read('src/usage.js')) && /verification-review/.test(await read('src/usage.js')), 'model spend sources remain distinguishable in the usage ledger');
 check('run-action-write-policy-split', /run_actions_select_policy/.test(migrationSource) && /run_actions_update_policy/.test(migrationSource) && !/CREATE POLICY run_actions_policy/.test(migrationSource), 'database policy separates read access from action mutation');
-check('migration-order', (() => { const v = [...migrationSource.matchAll(/version:\s*(\d+)/g)].map(m => Number(m[1])); return v.every((n, i) => i === 0 || n > v[i - 1]) && v.at(-1) === 63; })(), 'migrations are strictly increasing and include every hardening migration');
+check('migration-order', (() => { const v = [...migrationSource.matchAll(/version:\s*(\d+)/g)].map(m => Number(m[1])); return v.every((n, i) => i === 0 || n > v[i - 1]) && v.at(-1) === 66; })(), 'migrations are strictly increasing and include every hardening migration');
 check('background-worker-cycle-bound', /maxPerCycle/.test(jobs) && /cycleLimit/.test(jobs), 'background workers bound queue draining per cycle for fairness and resource control');
 check('fleet-lease-fencing', /renewLease\(/.test(fleet) && /worker_id/.test(fleet) && /lease_until\s*>\s*now\(\)/.test(fleet), 'fleet completion and renewal are lease-owned');
 check('fleet-batch-concurrency-fence', /ROW_NUMBER\(\) OVER \(PARTITION BY d\.project_id/.test(fleet) && /project_rank/.test(fleet) && /project_slots/.test(fleet), 'fleet acquisition limits one batch by each project’s actual concurrency slots');
