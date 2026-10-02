@@ -79,9 +79,9 @@ test('replanning stops at the attempt budget', () =>
     const auth = { token, workspace };
     const { body: run } = await call('POST', '/api/runs', { ...auth, body: { goal: 'Explain recursion.' } });
     await walkToVerify(call, auth, run);
-    await failVerify(call, auth, run);
-    const exhausted = await call('POST', `/api/runs/${run.id}/advance`, { ...auth, body: { taskId: 'iterate', replan: true } });
-    assert.equal(exhausted.body.state, 'exhausted');
+    const failed = await failVerify(call, auth, run);
+    assert.equal(failed.body.state, 'exhausted');
+    assert.equal((await call('GET', `/api/runs/${run.id}`, auth)).body.state, 'exhausted');
   }, { env: { MAX_RUN_ATTEMPTS: '1' } }));
 
 /* ------------------------------------------ the whole loop through a model */
