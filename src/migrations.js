@@ -2584,10 +2584,9 @@ export const MIGRATIONS = [
     version: 64,
     name: 'account-wide-ai-entitlement-resolver',
     sql: `
-      -- AI quota entitlement is account-wide. This SECURITY DEFINER helper lets
-      -- the hardened runtime read only the active plan ids belonging to the
-      -- authenticated person without widening workspace_billing RLS across
-      -- tenants or exposing billing-private data.
+      -- Historical compatibility migration. Version 65 replaces the
+      -- SECURITY DEFINER cross-workspace billing lookup with a principal-scoped
+      -- entitlement ledger that works safely with forced row-level security.
       CREATE OR REPLACE FUNCTION kg_account_active_billing_plans(p_principal_id TEXT)
       RETURNS TABLE(plan_id TEXT)
       LANGUAGE sql
@@ -2604,6 +2603,77 @@ export const MIGRATIONS = [
       $fn$;
 
       REVOKE ALL ON FUNCTION kg_account_active_billing_plans(TEXT) FROM PUBLIC;
+    `
+  },
+  {
+    version: 65,
+    name: 'principal-ai-entitlement-ledger',
+    sql: `
+      CREATE TABLE IF NOT EXISTS principal_ai_entitlements (
+        principal_id  TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+        workspace_id  TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        plan_id       TEXT NOT NULL,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (principal_id, workspace_id)
+      );
+      CREATE INDEX IF NOT EXISTS principal_ai_entitlements_workspace_idx
+        ON principal_ai_entitlements(workspace_id, updated_at DESC);
+
+      INSERT INTO principal_ai_entitlements (principal_id, workspace_id, plan_id)
+      SELECT m.principal_id, wb.workspace_id, wb.plan_id
+        FROM memberships m
+        JOIN workspace_billing wb ON wb.workspace_id = m.workspace_id
+       WHERE wb.subscription_status IN ('active', 'trialing', 'past_due')
+         AND wb.plan_id <> ''
+      ON CONFLICT (principal_id, workspace_id) DO UPDATE
+        SET plan_id = EXCLUDED.plan_id, updated_at = now();
+
+      ALTER TABLE principal_ai_entitlements ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE principal_ai_entitlements FORCE ROW LEVEL SECURITY;
+
+      DROP POLICY IF EXISTS principal_ai_entitlements_select_policy ON principal_ai_entitlements;
+      CREATE POLICY principal_ai_entitlements_select_policy ON principal_ai_entitlements
+        FOR SELECT
+        USING (
+          principal_id = current_setting('app.principal_id', true)
+          OR current_setting('app.role', true) IN ('billing-webhook','job-worker','service')
+        );
+
+      DROP POLICY IF EXISTS principal_ai_entitlements_insert_policy ON principal_ai_entitlements;
+      CREATE POLICY principal_ai_entitlements_insert_policy ON principal_ai_entitlements
+        FOR INSERT
+        WITH CHECK (
+          (workspace_id = current_setting('app.workspace_id', true)
+            AND current_setting('app.role', true) IN ('admin','billing-webhook','job-worker','service'))
+          OR current_setting('app.role', true) IN ('billing-webhook','job-worker','service')
+        );
+
+      DROP POLICY IF EXISTS principal_ai_entitlements_update_policy ON principal_ai_entitlements;
+      CREATE POLICY principal_ai_entitlements_update_policy ON principal_ai_entitlements
+        FOR UPDATE
+        USING (
+          (workspace_id = current_setting('app.workspace_id', true)
+            AND current_setting('app.role', true) IN ('admin','billing-webhook','job-worker','service'))
+          OR current_setting('app.role', true) IN ('billing-webhook','job-worker','service')
+        )
+        WITH CHECK (
+          (workspace_id = current_setting('app.workspace_id', true)
+            AND current_setting('app.role', true) IN ('admin','billing-webhook','job-worker','service'))
+          OR current_setting('app.role', true) IN ('billing-webhook','job-worker','service')
+        );
+
+      DROP POLICY IF EXISTS principal_ai_entitlements_delete_policy ON principal_ai_entitlements;
+      CREATE POLICY principal_ai_entitlements_delete_policy ON principal_ai_entitlements
+        FOR DELETE
+        USING (
+          (workspace_id = current_setting('app.workspace_id', true)
+            AND current_setting('app.role', true) IN ('admin','billing-webhook','job-worker','service'))
+          OR current_setting('app.role', true) IN ('billing-webhook','job-worker','service')
+        );
+
+      REVOKE ALL ON principal_ai_entitlements FROM PUBLIC;
+      DROP FUNCTION IF EXISTS kg_account_active_billing_plans(TEXT);
     `
   }
 ];
