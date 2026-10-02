@@ -171,12 +171,14 @@ generic multi-agent path remains available to other task surfaces without
 taking on repository-specific panel semantics.
 
 For normal chat, a ZIP-backed code project is a deliberate single-panel mode.
-The panel still uses the same adaptive intelligence, coding-aware roles,
-parallel specialist execution, memory/skills/evidence inputs, usage controls
-and disagreement handling, but the attached ZIP is treated as one project
-context rather than being split into subsystem panels. This is independent of
-user type or account role: the panel topology follows the work and current
-situation, not who the user is.
+It invokes the same `unified-adaptive-code-panel-v1` engine used by Code
+Workspace; the difference is topology only. The ZIP is represented internally
+as one full-project panel instance, so it receives the same adaptive role
+selection, parallel specialist scheduling, memory/skills/evidence inputs,
+iteration, A2A rules, usage controls and disagreement handling. Code Workspace
+may instantiate several of these same panel instances for independent
+subsystems. This is independent of user type or account role: panel topology
+follows the work and current situation, not who the user is.
 
 Agents remain advisory: they can propose exact implementation and test changes,
 but the server retains tool, write, integration, approval and verification
