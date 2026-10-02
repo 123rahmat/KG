@@ -2755,6 +2755,53 @@ export const MIGRATIONS = [
           current_setting('app.role', true) = 'billing-webhook'
           AND memberships.workspace_id = current_setting('app.workspace_id', true)
         );
+    `  ,{
+    version: 69,
+    name: 'run-action-private-visibility',
+    sql: `
+      -- Proposed actions inherit the visibility of their owning run:
+      -- private runs are owner-only; workspace runs are available only to
+      -- collaborators who can actually see the shared run.
+      DROP POLICY IF EXISTS run_actions_policy ON run_actions;
+      CREATE POLICY run_actions_policy ON run_actions
+        FOR ALL
+        USING (
+          run_actions.workspace_id = current_setting('app.workspace_id', true)
+          AND EXISTS (
+            SELECT 1
+              FROM runs r
+             WHERE r.id = run_actions.run_id
+               AND r.workspace_id = current_setting('app.workspace_id', true)
+               AND (
+                 r.principal_id = current_setting('app.principal_id', true)
+                 OR (
+                   r.visibility = 'workspace'
+                   AND current_setting('app.role', true) IN ('editor', 'admin', 'job-worker')
+                 )
+               )
+          )
+        )
+        WITH CHECK (
+          run_actions.workspace_id = current_setting('app.workspace_id', true)
+          AND EXISTS (
+            SELECT 1
+              FROM runs r
+             WHERE r.id = run_actions.run_id
+               AND r.workspace_id = current_setting('app.workspace_id', true)
+               AND (
+                 r.principal_id = current_setting('app.principal_id', true)
+                 OR (
+                   r.visibility = 'workspace'
+                   AND current_setting('app.role', true) IN ('editor', 'admin', 'job-worker')
+                 )
+               )
+          )
+          AND (
+            run_actions.principal_id = current_setting('app.principal_id', true)
+            OR current_setting('app.role', true) = 'job-worker'
+          )
+        );
     `
+  }
   }
 ];
