@@ -49,3 +49,28 @@ test('concurrency narrows under failures and expands only when healthy', () => {
   assert.equal(adaptConcurrency({ current: 2, max: 4, errorRate: 0.01, averageLatencyMs: 1000, remainingBudgetRatio: 0.9, benefit: 0.8 }).next, 3);
   assert.equal(adaptConcurrency({ current: 4, max: 4, risk: 'high-impact', errorRate: 0, averageLatencyMs: 1000, remainingBudgetRatio: 0.9, benefit: 0.9 }).next, 2);
 });
+
+test('healthy high latency does not shrink concurrency and slow the critical path', () => {
+  assert.equal(
+    adaptConcurrency({
+      current: 3,
+      max: 6,
+      errorRate: 0,
+      averageLatencyMs: 9000,
+      remainingBudgetRatio: 0.9,
+      benefit: 0.8
+    }).next,
+    4
+  );
+  assert.equal(
+    adaptConcurrency({
+      current: 4,
+      max: 6,
+      errorRate: 0.12,
+      averageLatencyMs: 9000,
+      remainingBudgetRatio: 0.9,
+      benefit: 0.3
+    }).next,
+    4
+  );
+});
