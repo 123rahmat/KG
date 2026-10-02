@@ -320,13 +320,15 @@ function roleCandidates(run, task, progress = {}) {
 export function rolesFor(run, task, {
   maxAgents = DEFAULT_MULTI_AGENT_MAX_AGENTS,
   mode = 'auto',
-  progress = {}
+  progress = {},
+  minimumAgents = 1
 } = {}) {
   const decision = multiAgentDecision(run, task, { mode, progress });
   if (!decision.enabled) return { decision, roles: [], agentCount: 0, allocation: null };
 
   const maximum = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
-  let targetCount = Math.min(maximum, targetAgentCount(decision.pressure, maximum));
+  const minimum = Math.max(1, Math.min(maximum, Number(minimumAgents) || 1));
+  let targetCount = Math.min(maximum, Math.max(minimum, targetAgentCount(decision.pressure, maximum)));
   // A normal build-code step uses a focused pair; explicit build planning can
   // justify more specialists when decomposition or risk actually warrants it.
   const observed = observedPanelSignals(progress);
@@ -663,8 +665,15 @@ export async function runAdaptiveAgentPanel({
       })
     : null;
   const subsystemPlanContext = compactSubsystemPlan(subsystemPlan, { maxSubsystems: maxAgents });
+  const subsystemParallelMode = Boolean(subsystemPlan && (
+    subsystemPlan.scale === 'large' || subsystemPlan.scale === 'very-large' || task?.metadata?.buildPlan === true
+  ));
+  const minimumSubsystemAgents = subsystemParallelMode
+    ? Math.min(maxAgents, Math.max(1, subsystemPlan.subsystems.length))
+    : 1;
   if (subsystemPlan && !(blackboard?.subsystemPlan?.project?.contentHash === subsystemPlan.project.contentHash)) {
     blackboard = mergeBlackboard(blackboard ?? {}, { subsystemPlan }, run?.id ?? null);
+    await recordBlackboard({ run, task, blackboard });
   }
   let tokensSpent = 0;
   const remainingBudgetRatio = () => run?.maxTokens === null || run?.maxTokens === undefined
@@ -688,7 +697,7 @@ export async function runAdaptiveAgentPanel({
       evidenceSoFar: basePayload?.evidenceSoFar,
       findings
     };
-    allocationResult = rolesFor(run, task, { maxAgents, mode, progress });
+    allocationResult = rolesFor(run, task, { maxAgents, mode, progress, minimumAgents: minimumSubsystemAgents });
     lastAllocation = allocationResult.allocation ?? lastAllocation;
 
     const pendingRoles = allocationResult.roles.filter(role =>
@@ -887,6 +896,7 @@ export async function runAdaptiveAgentPanel({
     allocationResult = rolesFor(run, task, {
       maxAgents,
       mode,
+      minimumAgents: minimumSubsystemAgents,
       progress: {
         completedRoles,
         failedRoles,
