@@ -653,6 +653,8 @@ export async function runAdaptiveAgentPanel({
   const completedRoles = [];
   const failedRoles = [];
   const assignedSubsystems = new Set();
+  const completedSubsystems = new Set();
+  const subsystemAttempts = new Map();
   const waves = [];
   let lastAllocation = allocationResult.allocation;
   let allocationRounds = 0;
@@ -710,7 +712,19 @@ export async function runAdaptiveAgentPanel({
     const neededRoles = Math.max(0, Number(allocationResult.agentCount ?? allocationResult.roles.length) - completedRoles.length);
     if (!pendingRoles.length || neededRoles === 0) break;
 
-    const waveRoles = pendingRoles.slice(0, Math.min(effectiveMaxParallel, neededRoles));
+    const readySubsystems = subsystemParallelMode
+      ? subsystemPlan.subsystems
+        .filter(item => !completedSubsystems.has(item.id) && !assignedSubsystems.has(item.id))
+        .filter(item => (item.dependencies ?? []).every(id => completedSubsystems.has(id)))
+        .sort((a, b) => a.ordinal - b.ordinal)
+      : [];
+    if (subsystemParallelMode && !readySubsystems.length) break;
+
+    const waveRoles = pendingRoles.slice(0, Math.min(
+      effectiveMaxParallel,
+      neededRoles,
+      subsystemParallelMode ? readySubsystems.length : Number.MAX_SAFE_INTEGER
+    ));
     const waveIndex = waves.length;
     const jobs = [];
 
@@ -728,10 +742,15 @@ export async function runAdaptiveAgentPanel({
         ? subsystemAssignment(subsystemPlan, {
             role,
             ordinal: assignedSubsystems.size + jobs.length,
-            preferredId: subsystemPlan.subsystems.find(item => !assignedSubsystems.has(item.id) && !jobs.some(job => job.subsystem?.id === item.id))?.id ?? null
+            preferredId: subsystemParallelMode
+              ? readySubsystems.find(item => !jobs.some(job => job.subsystem?.id === item.id))?.id ?? null
+              : subsystemPlan.subsystems.find(item => !assignedSubsystems.has(item.id) && !jobs.some(job => job.subsystem?.id === item.id))?.id ?? null
           })
         : null;
-      if (subsystem?.id) assignedSubsystems.add(subsystem.id);
+      if (subsystem?.id) {
+        assignedSubsystems.add(subsystem.id);
+        subsystemAttempts.set(subsystem.id, (subsystemAttempts.get(subsystem.id) ?? 0) + 1);
+      }
       const modelId = agentModelFor(selection, primaryModelId, role, {
         used: usedModels,
         allows: allowsModel
@@ -819,6 +838,7 @@ export async function runAdaptiveAgentPanel({
       }
       findings.push(item.parsed);
       completedRoles.push(item.role);
+      if (item.subsystem?.id) completedSubsystems.add(item.subsystem.id);
       agentStates.push({
         role: item.role,
         model: item.result.model,
@@ -827,6 +847,7 @@ export async function runAdaptiveAgentPanel({
         summary: item.parsed.summary,
         confidence: item.parsed.confidence,
         wave: item.wave,
+        subsystemAttempt: item.subsystem?.id ? (subsystemAttempts.get(item.subsystem.id) ?? 1) : null,
         lane: item.lane,
         subsystemId: item.subsystem?.id ?? null
       });
