@@ -363,6 +363,41 @@ export function buildSubsystemPlan(index = {}, {
   };
 }
 
+export function compactSubsystemPlan(plan, { maxSubsystems = DEFAULT_MAX_SUBSYSTEMS, maxFilesPerSubsystem = 60 } = {}) {
+  if (!plan || typeof plan !== 'object') return null;
+  return {
+    version: plan.version,
+    kind: plan.kind,
+    scale: plan.scale,
+    decision: plan.decision ?? null,
+    project: plan.project ?? null,
+    metrics: plan.metrics ?? null,
+    subsystems: (Array.isArray(plan.subsystems) ? plan.subsystems : [])
+      .slice(0, Math.max(1, Math.min(ABSOLUTE_MAX_SUBSYSTEMS, Number(maxSubsystems) || DEFAULT_MAX_SUBSYSTEMS)))
+      .map(item => ({
+        id: item.id,
+        ordinal: item.ordinal,
+        roots: list(item.roots),
+        fileCount: Number(item.fileCount) || 0,
+        files: list(item.files).slice(0, maxFilesPerSubsystem),
+        tests: list(item.tests).slice(0, Math.min(40, maxFilesPerSubsystem)),
+        readSet: list(item.readSet).slice(0, 40),
+        writeSet: list(item.writeSet).slice(0, maxFilesPerSubsystem),
+        dependencies: list(item.dependencies),
+        consumers: list(item.consumers),
+        contract: item.contract ?? null,
+        baseRevision: item.baseRevision ?? null
+      })),
+    waves: (Array.isArray(plan.waves) ? plan.waves : []).slice(0, 24),
+    shared: {
+      id: plan.shared?.id ?? 'shared-integration',
+      files: list(plan.shared?.files).slice(0, Math.min(60, maxFilesPerSubsystem)),
+      reason: text(plan.shared?.reason)
+    },
+    policy: plan.policy ?? null
+  };
+}
+
 export function subsystemAssignment(plan, { role = 'subsystem-worker', preferredId = null, ordinal = 0 } = {}) {
   const subsystems = Array.isArray(plan?.subsystems) ? plan.subsystems : [];
   if (!subsystems.length) return null;
