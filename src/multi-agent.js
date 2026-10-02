@@ -671,7 +671,6 @@ function buildBrief(findings, arbiter, decision, states = [], allocation = null)
 
 
 const CODE_WORKSPACE_MIN_PANEL_AGENTS = 2;
-const CODE_WORKSPACE_MAX_PANEL_ITERATIONS = 4;
 const CODE_WORKSPACE_DEFAULT_PANEL_ITERATIONS = 1;
 
 function codeWorkspacePanelIterationCeiling(run, task) {
@@ -944,10 +943,6 @@ async function runCodeWorkspaceAgentPanels({
 
       const representativeState = subsystemState.get(ready[0].id);
       const panelIteration = Math.max(1, Number(representativeState?.iteration ?? 0) + 1);
-      const panelIterationCeiling = Math.max(
-        1,
-        ...batch.map(subsystem => codeWorkspacePanelIterationCeiling(run, task, subsystem))
-      );
       const panelWidth = codeWorkspacePanelWidth(run, task, maxAgents, panelIteration, {
         fileCount: Number(subsystemPlan.project?.fileCount ?? 0),
         remainingBudgetRatio: remainingBudgetRatio()
