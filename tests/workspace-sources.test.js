@@ -314,3 +314,9 @@ test('GitHub write-back builds one revision and rejects stale bases', async () =
     error => error.code === 'stale-github-revision'
   );
 });
+
+
+test('Code Workspace sources are GitHub-only', async () => {
+  const sourceModule = await import('../src/workspace-sources.js');
+  assert.deepEqual(sourceModule.SOURCE_KINDS, ['github']);
+});
