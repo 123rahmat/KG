@@ -28,7 +28,7 @@ import { systemPromptFor, situationBrief, previousAttempts, normalizeVerdict, GE
 import { gradedCriteria } from '../requirements.js';
 import { groundedCheckDecision, verificationBrief, groundVerdict } from '../verification.js';
 import { reviewDecision, reviewerModelFor, reviewMessages, readReview, mergeReview, REVIEW_MAX_OUTPUT_TOKENS } from '../agents.js';
-import { runAdaptiveAgentPanel } from '../multi-agent.js';
+import { runAdaptiveAgentPanel, multiAgentDecision } from '../multi-agent.js';
 import { runNormalChatControlPlane } from '../normal-chat-orchestrator.js';
 import { workPlan, readStepAnswer } from '../step-plan.js';
 import { adaptationFor, compact } from '../prompt-scope.js';
@@ -1565,6 +1565,16 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     const allowBackup = name => modelPolicyAllows(run, `google:${name}`, 'medium')
       && (!selection.configuredModelIds.includes(`google:${name}`) || selection.enabledModelIds.includes(`google:${name}`));
 
+    const specialistPanelOwnsCoordination = multiAgentDecision(run, task, {
+      mode: config?.agents?.multiAgent ?? 'auto'
+    }).enabled && !(
+      task?.id === 'build-code'
+      || ['code', 'implement'].includes(String(task?.type ?? '').toLowerCase())
+      || payload?.workspace?.projectId
+      || payload?.subsystemPlan?.subsystems?.length
+      || payload?.codeIntelligence?.project
+    );
+
     const normalChatControl = await runNormalChatControlPlane({
       run,
       task,
@@ -1581,7 +1591,8 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
           provider,
           model: providerModel
         }, { source: 'normal-chat-control' });
-      }
+      },
+      specialistPanelOwnsCoordination
     });
     if (normalChatControl?.enabled) {
       payload = {
