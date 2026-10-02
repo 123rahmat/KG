@@ -1168,8 +1168,11 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
   }
 
   async function codeIntelligenceForStep(run, task, scope) {
-    if (!isCodeTask(task)) return null;
     const attachments = scopedAttachments(run, task);
+    const attachedCode = attachments.some(item => /\\.(?:py|js|mjs|cjs|jsx|ts|tsx|go|rs|java|kt|c|cc|cpp|h|hpp|cs|rb|php|swift|sql|sh|zip)$/i.test(text(item?.name ?? item?.path ?? '')));
+    const codingPlanStage = ['understand', 'plan', 'reassess'].includes(task?.type)
+      && (run?.intent?.kind === 'coding' || run?.adaptation?.primarySurface === 'code' || attachedCode);
+    if (!isCodeTask(task) && !codingPlanStage) return null;
     const files = attachments.length
       ? await projectFiles(objects, scope ?? currentDbScope(), attachments, { overlay: run.adaptation?.projectOverlay })
       : [];
@@ -1528,13 +1531,14 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
           }))
         : attached.files,
       previousAttempts: previousAttempts(run),
+      approvedPlan: run.adaptation?.approvedPlan ?? null,
       task: {
         id: task.id,
         type: task.type,
         purpose: task.purpose,
         requirementIds: task.metadata?.requirementIds ?? [],
         ...(task.metadata?.inventionLoop ? { method: 'invention' } : {}),
-        ...(task.metadata?.buildPlan ? { buildPlan: true } : {})
+        ...(task.metadata?.buildPlan ? { buildPlan: true, existingCodePlan: task.metadata?.existingCodePlan === true } : {})
       },
       // What the plan can shape: the stages still ahead.
       stagesAhead: task.type === 'plan' ? run.tasks.filter(item => item.status === 'pending' && item.id !== task.id).map(item => ({ id: item.id, type: item.type, purpose: item.purpose })) : null,
