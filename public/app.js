@@ -1289,6 +1289,7 @@ $('workspace').addEventListener('change', event => {
 
 // Enter sends, Shift+Enter starts a new line, as in any chat.
 $('goal').addEventListener('keydown', event => {
+  if (document.body.dataset.aiUsageLocked === 'true') return;
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && state.settings.enterSends) {
     event.preventDefault();
     sendMessage($('goal').value);
