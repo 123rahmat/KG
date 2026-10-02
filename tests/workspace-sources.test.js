@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { githubApplyChanges, githubHeaders, githubListBranches, githubListRepositories, githubReadRepository, normalizeSourceFiles, sourceManifest, workspaceReviewDigest } from '../src/workspace-sources.js';
+import { githubApplyChanges, githubHeaders, githubListBranches, githubListRepositories, githubReadRepository, normalizeSourceFiles, sourceManifest, workspaceReviewDigest, SOURCE_KINDS } from '../src/workspace-sources.js';
 import { workspacePath } from '../src/workspace-path.js';
 
 test('workspace source files normalize safely and deterministically', () => {
@@ -317,6 +317,5 @@ test('GitHub write-back builds one revision and rejects stale bases', async () =
 
 
 test('Code Workspace sources are GitHub-only', async () => {
-  const sourceModule = await import('../src/workspace-sources.js');
-  assert.deepEqual(sourceModule.SOURCE_KINDS, ['github']);
+  assert.deepEqual(SOURCE_KINDS, ['github']);
 });
