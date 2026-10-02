@@ -24,13 +24,27 @@ const boundedInt = (value, fallback, max = ABSOLUTE_MAX_PARALLEL) => {
   return Number.isFinite(n) ? Math.max(1, Math.min(max, Math.floor(n))) : fallback;
 };
 
-const resourcesOf = item => {
+const writeResourcesOf = item => {
   const metadata = item?.metadata ?? item ?? {};
   return new Set([
     ...list(metadata.writeSet),
-    ...list(metadata.resourceLocks),
-    ...list(metadata.resources),
     ...list(metadata.mutates)
+  ]);
+};
+
+const readResourcesOf = item => {
+  const metadata = item?.metadata ?? item ?? {};
+  return new Set([
+    ...list(metadata.readSet),
+    ...list(metadata.reads)
+  ]);
+};
+
+const lockResourcesOf = item => {
+  const metadata = item?.metadata ?? item ?? {};
+  return new Set([
+    ...list(metadata.resourceLocks),
+    ...list(metadata.resources)
   ]);
 };
 
@@ -44,9 +58,23 @@ export function taskCanRunInParallel(task = {}) {
 
 export function tasksConflict(a = {}, b = {}) {
   if (!taskCanRunInParallel(a) || !taskCanRunInParallel(b)) return true;
-  const left = resourcesOf(a);
-  const right = resourcesOf(b);
-  for (const value of left) if (right.has(value)) return true;
+
+  const leftWrites = writeResourcesOf(a);
+  const rightWrites = writeResourcesOf(b);
+  const leftReads = readResourcesOf(a);
+  const rightReads = readResourcesOf(b);
+  const leftLocks = lockResourcesOf(a);
+  const rightLocks = lockResourcesOf(b);
+
+  // Shared locks/resources are explicit serialization points even for readers.
+  for (const value of leftLocks) if (rightLocks.has(value)) return true;
+  // Writers cannot race each other or a reader of the same resource.
+  for (const value of leftWrites) {
+    if (rightWrites.has(value) || rightReads.has(value)) return true;
+  }
+  for (const value of rightWrites) {
+    if (leftReads.has(value)) return true;
+  }
   return false;
 }
 
