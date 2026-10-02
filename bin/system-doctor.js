@@ -96,7 +96,8 @@ check('fleet-batch-concurrency-fence', /ROW_NUMBER\(\) OVER \(PARTITION BY d\.pr
 check('action-outcome-fencing', /ACTION_LEASE_MS/.test(actions) && /recoverExpired\(/.test(actions) && /status = \'running\'/.test(actions), 'approved side effects carry a lease and abandoned outcomes become explicit uncertainty');
 check('action-run-privacy', /run_actions_policy/.test(await read('src/migrations.js')) && /r\.visibility = \'workspace\'/.test(await read('src/migrations.js')), 'proposed action access follows the underlying run visibility');
 check('browser-security-boundary', /sec-fetch-site/.test(securityBoundary) && /SameSite=Strict/.test(app), 'browser state changes have request-metadata and strict-cookie boundaries');
-check('sandbox-production-pinning', /@sha256/.test(sandbox) && /assertProductionSandboxConfiguration/.test(sandbox) && /USER node/.test(dockerfile) === false, 'sandbox source enforces immutable production images and the app image is not root');
+check('sandbox-production-pinning', /@sha256/.test(sandbox) && /assertProductionSandboxConfiguration/.test(sandbox), 'sandbox source enforces immutable production image references in production');
+check('docker-non-root', /USER node/.test(dockerfile), 'production application image runs as the unprivileged node user');
 check('ci-release-gates', /npm ci/.test(ci) && /npm audit/.test(ci) && /node --test/.test(ci) && /docker build/.test(ci), 'CI covers install, audit, tests and production image build');
 check('verify-release-gate', /npm run verify/.test(verify), 'Verify invokes the unified application verification contract');
 check('codeql-enabled', /github\/codeql-action\/init/.test(codeql) && /security-extended/.test(codeql), 'CodeQL security-extended analysis is present');

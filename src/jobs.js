@@ -160,8 +160,9 @@ export class JobStore {
  * The worker. `start()` polls; `runOnce()` drains the queue once and is what
  * tests use to run jobs deterministically.
  */
-export function createJobWorker({ jobs, identity, runs, executeNext, logger, metrics, pollMs = 1_000, leaseMs = LEASE_MS, workerId = null }) {
+export function createJobWorker({ jobs, identity, runs, executeNext, logger, metrics, pollMs = 1_000, leaseMs = LEASE_MS, workerId = null, maxPerCycle = 32 }) {
   const effectiveWorkerId = text(workerId) || newWorkerId();
+  const cycleLimit = Math.max(1, Math.min(500, Number(maxPerCycle) || 32));
   const safeLeaseMs = Math.max(10_000, Math.min(900_000, Number(leaseMs) || LEASE_MS));
   let timer = null;
   let active = null;
@@ -234,7 +235,7 @@ export function createJobWorker({ jobs, identity, runs, executeNext, logger, met
   async function runOnce() {
     let processed = 0;
     for (;;) {
-      if (stopping) break;
+      if (stopping || processed >= cycleLimit) break;
       const job = await jobs.claim({ workerId: effectiveWorkerId, leaseMs: safeLeaseMs });
       if (!job) break;
       metrics?.increment('background_jobs_total', { phase: 'claimed' });
