@@ -93,6 +93,9 @@ export function terminalArgs({ image, runtime, workdir }) {
 
 async function writeSnapshot(workdir, files) {
   for (const file of files) {
+    // Credential-bearing files must never enter the interactive execution
+    // container, even when they are present in a source snapshot.
+    if (SENSITIVE_TERMINAL_PATH.test(String(file.path ?? ''))) continue;
     const safe = file.path;
     const destination = path.join(workdir, safe);
     if (!destination.startsWith(workdir + path.sep)) throw new Error('Invalid workspace path');

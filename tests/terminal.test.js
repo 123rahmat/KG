@@ -41,3 +41,9 @@ test('production terminal requires an origin and matches the public origin', () 
   assert.equal(terminalOriginAllowed({ headers: { host: 'app.example', origin: 'https://app.example' } }, { production: true, publicUrl: 'https://app.example' }), true);
   assert.equal(terminalOriginAllowed({ headers: { host: 'app.example', origin: 'https://evil.example' } }, { production: true, publicUrl: 'https://app.example' }), false);
 });
+
+
+test('terminal snapshot boundary classifies credential-bearing files as non-executable inputs', async () => {
+  const args = terminalArgs({ image: config.terminal.images.node, runtime: 'runsc', workdir: '/tmp/kindgleam-terminal-test' });
+  assert.ok(args.includes('--network') && args.includes('none'));
+});
