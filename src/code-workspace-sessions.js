@@ -21,7 +21,7 @@ export class CodeWorkspaceSessionStore {
   constructor(pool) { this.pool = pool; }
   async create(scope, body = {}) {
     const input = normalizeWorkspaceSessionInput(body);
-    if (!input.projectId && !input.sourceId) throw new Error('projectId or sourceId is required');
+    if (!input.sourceId) throw new Error('GitHub sourceId is required for a Code Workspace session');
     if (input.sourceId) {
       const { rows: [source] } = await this.pool.query(
         `SELECT id, kind FROM workspace_sources WHERE id = $1 AND workspace_id = $2 AND principal_id = $3 AND revoked_at IS NULL LIMIT 1`,
