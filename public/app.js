@@ -578,31 +578,69 @@ function planView(plan) {
     ...list('What it will do', plan.features),
     ...list('Files', plan.files),
     ...list('How it will be tested', plan.tests),
-    ...list('Assumptions (change any of them below)', plan.assumptions),
+    ...list('Assumptions', plan.assumptions),
+    ...list('Keep from the existing code', plan.keepExisting),
+    ...list('Remove from the existing code', plan.removeExisting),
+    ...list('Add to the project', plan.addNew),
+    ...list('Change in the existing code', plan.changeExisting),
     ...list('Questions for you', plan.questions, true)
   ]);
 }
 
-/** A new build waits for the person to agree its plan, with any changes. */
+/** The plan is a suggestion; the person's choices are collected above approval. */
 function planAgreementCard(run, task) {
   const planTask = [...run.tasks].reverse().find(item => item.metadata?.buildPlan && item.status === 'complete');
   const plan = planTask?.evidence?.structured && typeof planTask.evidence.structured === 'object' ? planTask.evidence.structured : null;
   const questions = Array.isArray(plan?.questions) ? plan.questions.filter(Boolean) : [];
-  const changes = element('textarea', { rows: '3', placeholder: questions.length ? 'Your answers, or anything to change (optional)' : 'Anything to change? (optional)' });
+  const choice = (label, placeholder) => {
+    const input = element('textarea', { rows: '2', placeholder });
+    return { input, field: field(label, input) };
+  };
+  const keep = choice('What do you want to keep? (optional)', 'Files, modules, behaviour or decisions to keep. Leave blank to accept the suggestion.');
+  const remove = choice('What do you want to remove? (optional)', 'Files, modules or behaviour to remove. Leave blank to accept the suggestion.');
+  const add = choice('What do you want to add? (optional)', 'New files, features, modules or tests to add. Leave blank to accept the suggestion.');
+  const change = choice('What do you want to change? (optional)', 'Specific changes to make in the existing code. Leave blank to accept the suggestion.');
+  const answers = choice(
+    questions.length ? 'Answers / other instructions (optional)' : 'Other instructions (optional)',
+    questions.length ? 'Answer the questions above or add any other instruction.' : 'Any additional instruction for the approved build.'
+  );
   const stopRow = element('div', { class: 'row wrap', hidden: true }, [
-    element('span', { class: 'small', text: 'Stop this work? Nothing has been built yet.' }),
+    element('span', { class: 'small', text: 'Stop this work? Nothing will be changed.' }),
     button('Yes, stop it', () => stopRun('plan not agreed'), 'danger small')
   ]);
+  const values = () => {
+    const split = value => value.trim().split(/\n|;|,/).map(item => item.trim()).filter(Boolean).slice(0, 40);
+    return {
+      keepExisting: split(keep.input.value),
+      removeExisting: split(remove.input.value),
+      addNew: split(add.input.value),
+      changeExisting: split(change.input.value)
+    };
+  };
   const agree = () => {
-    const text = changes.value.trim();
-    advance({ taskId: task.id, approved: true, conditions: text, summary: text ? 'Plan agreed with changes.' : 'Plan agreed.' });
+    const planChoices = values();
+    const other = answers.input.value.trim();
+    advance({
+      taskId: task.id,
+      approved: true,
+      planChoices,
+      conditions: other,
+      summary: other || Object.values(planChoices).some(items => items.length)
+        ? 'Plan approved with user-selected changes.'
+        : 'Plan approved as proposed.'
+    });
   };
   return [
-    ...heading('Here is the plan', 'Nothing is built until you agree. Build it as it is, or say what to change first.'),
+    ...heading(
+      task.metadata?.existingCodePlan ? 'Review the proposed changes to your existing code' : 'Here is the proposed plan',
+      'The suggestions below do not change anything. Choose what you want to keep, remove, add or change, then approve before coding begins.'
+    ),
     plan ? planView(plan) : planTask?.evidence?.text ? element('div', { class: 'answer' }, renderMarkdown(String(planTask.evidence.text))) : null,
-    field(questions.length ? 'Answers and changes' : 'Changes', changes),
+    element('div', { class: 'plan-choice-inputs' }, [
+      keep.field, remove.field, add.field, change.field, answers.field
+    ]),
     element('div', { class: 'row wrap' }, [
-      button('Build it', agree, 'primary'),
+      button(task.metadata?.existingCodePlan ? 'Approve these changes and code' : 'Approve plan and build', agree, 'primary'),
       button('Stop', () => { stopRow.hidden = false; })
     ]),
     stopRow
