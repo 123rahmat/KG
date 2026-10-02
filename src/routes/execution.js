@@ -1293,6 +1293,13 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     const verificationContext = grounding ? verificationBrief(run, grounding) : null;
     const attached = await attachmentTexts(scope, run, task, { focus: stepFocus(run, task) });
     const codeIntelligence = await codeIntelligenceForStep(run, task, scope).catch(() => null);
+    const subsystemPlan = codeIntelligence?.project && isCodeTask(task)
+      ? buildSubsystemPlan(codeIntelligence.project, {
+          maxSubsystems: Math.max(1, Math.min(12, Number(config.agents?.maxAgents) || 11)),
+          risk: run?.situation?.risk ?? 'ordinary',
+          revisionId: codeIntelligence.project.revisionId ?? null
+        })
+      : null;
     const remembered = await memoriesFor(memories, scope ?? currentDbScope(), run).catch(() => []);
     // Each step is sent only what it uses (prompt-scope.js), and only the
     // rules that apply to it (systemPromptFor): the server keeps its full
@@ -1380,6 +1387,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         workspaceState: run.adaptation?.unifiedWorkContext?.workspace ?? null,
         blackboardPresent: Boolean(blackboard),
         codeIntelligencePresent: Boolean(codeIntelligence),
+        subsystemPlanPresent: Boolean(subsystemPlan),
         multiAgentEligible: Boolean(run.adaptation?.parallel)
       },
       chat: run.adaptation?.unifiedWorkContext?.chat ?? {
@@ -1391,6 +1399,9 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       // Deterministic code intelligence: symbols, dependencies and tests are computed server-side,
       // then only task-relevant source windows are sent to the reasoning layer.
       codeIntelligence,
+      // Large coding work is decomposed server-side into bounded subsystem
+      // contracts and dependency waves before any agent is assigned.
+      subsystemPlan,
       // Earlier turns of the same chat, oldest first.
       conversation: (run.adaptation?.conversation ?? []).slice(-maxContextItems),
       attachments: codeIntelligence
@@ -1476,7 +1487,9 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
           findings: currentBoard.findings,
           blockers: currentBoard.blockers,
           evidence: currentBoard.evidence,
-          openQuestions: currentBoard.openQuestions
+          openQuestions: currentBoard.openQuestions,
+          subsystemPlan: currentBoard.subsystemPlan,
+          subsystemMessages: currentBoard.subsystemMessages
         };
         try {
           await blackboard.merge(scope, currentRun.id, contribution, Math.max(0, Number(currentBoard.version) - 1));
