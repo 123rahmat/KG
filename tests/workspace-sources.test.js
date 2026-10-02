@@ -319,3 +319,15 @@ test('GitHub write-back builds one revision and rejects stale bases', async () =
 test('Code Workspace sources are GitHub-only', async () => {
   assert.deepEqual(SOURCE_KINDS, ['github']);
 });
+
+
+test('Code Workspace has no local-folder terminal or write-back path', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const terminal = await readFile(new URL('../public/terminal.js', import.meta.url), 'utf8');
+  const sourceClient = await readFile(new URL('../public/workspace-sources.js', import.meta.url), 'utf8');
+  const terminalServer = await readFile(new URL('../src/terminal.js', import.meta.url), 'utf8');
+  assert.equal(/local-folder|applyLocalWorkspaceChanges/.test(terminal), false);
+  assert.equal(/local-folder|applyLocalWorkspaceChanges/.test(sourceClient), false);
+  assert.match(terminalServer, /github-source-required/);
+  assert.match(terminalServer, /source\.kind !== 'github'/);
+});
