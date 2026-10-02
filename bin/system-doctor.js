@@ -52,6 +52,10 @@ const verification = await read('src/verification.js');
 const runtime = await read('src/runtime.js');
 const adaptive = await read('src/adaptive.js');
 const adaptiveControl = await read('src/adaptive-control.js');
+const projectIndex = await read('src/project-index.js');
+const contextCompiler = await read('src/context-compiler.js');
+const parallel = await read('src/parallel-orchestrator.js');
+const multiAgent = await read('src/multi-agent.js');
 
 check('server-owned-workflow', /SELECT[\s\S]*FOR UPDATE/.test(runs), 'run state is expected to be re-read under a row lock');
 check('execution-claim-integrity', /executed\s*[:=]/.test(core + runs), 'execution state is represented explicitly');
@@ -63,6 +67,11 @@ check('provider-governor-enforced', /providerGovernor\.run\(modelKey/.test(runti
 check('runner-side-effect-no-retry', /retries:\s*0/.test(runtime), 'side-effecting runner POSTs do not retry ambiguously');
 check('adaptive-efficiency-integrated', /adaptiveEffortProfile\(/.test(adaptive), 'adaptive efficiency participates in situation analysis');
 check('adaptive-scope-controller', /reconcileAdaptiveTransition|adaptiveBudgetStatus/.test(adaptiveControl), 'adaptive scope is re-evaluated at transitions');
+check('hierarchical-project-index', /buildProjectHierarchy\(/.test(projectIndex) && /hierarchicalProjectScope\(/.test(projectIndex), 'large repositories have deterministic hierarchical scope and subtree digests');
+check('hierarchical-context-integration', /hierarchicalProjectScope\(/.test(contextCompiler) && /projectScale\(/.test(contextCompiler), 'coding context selection consumes hierarchical project intelligence');
+check('workspace-lane-isolation', /workspaceLanesConflict\(/.test(parallel) && /rightReads/.test(parallel) && /leftReads/.test(parallel), 'workspace lanes serialize read/write and stale-revision conflicts');
+check('workspace-parallel-scheduler', /buildWorkspaceParallelPlan\(/.test(parallel), 'coding lanes have a deterministic server-owned parallel scheduler');
+check('multi-agent-lane-integration', /agentWorkspaceLane\(/.test(multiAgent) && /buildWorkspaceParallelPlan\(/.test(multiAgent), 'multi-agent waves execute through workspace lane contracts');
 
 const forbidden = [
   ['eval', /\beval\s*\(/],
