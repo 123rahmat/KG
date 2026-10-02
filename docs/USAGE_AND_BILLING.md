@@ -11,8 +11,8 @@ Row-level security limits each person to reading their own usage.
 
 | Field | Meaning |
 | --- | --- |
-| `windows[0]` | Rolling **4-hour window**: tokens used, in/out split, calls, limit, % used, when it frees up |
-| `windows[1]` | Rolling **week**, with the same fields |
+| `windows[0]` | Rolling **4-hour account window**: all chats and code workspaces for the user share one token pool |
+| `windows[1]` | Rolling **weekly account window**, shared by the same user across chats and code workspaces |
 | `days` | Tokens per day for the last 7 days |
 | `bySource` | What the tokens were spent on |
 | `context` | For a chat: the prompt size of its latest AI call compared with the model's context window |
@@ -27,16 +27,18 @@ In the app, usage appears in three places:
 
 | Setting | Default | Effect |
 | --- | --- | --- |
-| `USAGE_LIMIT_4H_TOKENS` | 0 (none) | Tokens per person per rolling 4 hours |
-| `USAGE_LIMIT_WEEKLY_TOKENS` | 0 (none) | Tokens per person per rolling week |
+| `USAGE_LIMIT_4H_TOKENS` | 0 (none) | Tokens per person account-wide per rolling 4 hours |
+| `USAGE_LIMIT_WEEKLY_TOKENS` | 0 (none) | Tokens per person account-wide per rolling week |
 | `AI_MODEL` | `gemini-3.8-flash` | The default Gemini model. Any Gemini model id works, so a successor needs no code change |
 | `AI_MODELS` | only `AI_MODEL` | Other Gemini models workspace admins may choose in Settings → Workspace → AI model, comma-separated (for example `gemini-3.1-pro`). A new default is tried with Gemini before it is saved, and a plan's `modelIds` in `STRIPE_PLANS` can limit which ones it includes |
 | `AI_CONTEXT_WINDOW_TOKENS` | the model catalogue's window (1M for Gemini 3.8 Flash) | Size used for the context meter |
 | `AI_FALLBACK_MODELS` | unset: no backups | Backup Gemini models, comma-separated, tried in order when the chosen model is out of quota, overloaded or retired (for example `gemini-3.5-flash,gemini-3.1-flash-lite`). Each Gemini model has its own quota, so on the free tier (about 20 requests a day per model) backups multiply what the site can answer. A model that failed that way is passed over for as long as Gemini asked (a minute by default), so later requests do not wait on it. The answer records which model wrote it. A rejected key or request is reported at once, never retried on another model |
 | `AI_EFFORT` | unset: each step chooses | The most Gemini may think on any step: `low`, `medium` or `high`. Unset, each step asks for what it needs (low for classifying, web searches and crisis replies; medium for answers and planning; high for code and verification). Set, it is a ceiling that caps cost; it never raises a quick step |
 
-A window frees up as its oldest calls get older than the window. When a
-person is over a limit:
+Both usage windows are **principal-wide**: switching chats, code workspaces, or
+the active workspace does not create another quota pool. The model context
+meter remains conversation-specific. A window frees up as its oldest calls get
+older than the window. When a person is over a limit:
 
 - AI steps in a chat stop and say when they can continue;
 - requests are understood by the keyword rules instead of the AI.
