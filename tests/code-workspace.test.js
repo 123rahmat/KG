@@ -74,7 +74,7 @@ test('every code workspace chat has an explicit isolated memory scope and adapti
     note: 'Chat-local memory is isolated to this conversation; cross-chat recall never happens implicitly.'
   });
   assert.equal(chat.multiAgent.mode, 'auto');
-  assert.equal(chat.multiAgent.maxAgents, 5);
+  assert.equal(chat.multiAgent.maxAgents, 8);
   assert.equal(chat.multiAgent.adaptive, true);
   assert.equal(chat.multiAgent.serverOrchestrated, true);
   assert.equal(chat.multiAgent.advisoryOnly, true);
@@ -85,12 +85,17 @@ test('workspace chat rejects an invalid conversation scope instead of silently s
 });
 
 test('duplicate paths are charged against the final content size, not the first occurrence', () => {
-  const limits = { maxFileBytes: 10, maxTotalBytes: 20, maxFiles: 100 };
+  const limits = { maxFileBytes: 12, maxTotalBytes: 20, maxFiles: 100 };
+  assert.doesNotThrow(() => normalizeWorkspaceFiles([
+    { path: 'a.js', content: '1234567890' },
+    { path: 'b.js', content: '1234567890' },
+    { path: 'a.js', content: 'x' }
+  ], limits));
   assert.throws(
     () => normalizeWorkspaceFiles([
       { path: 'a.js', content: '1234567890' },
-      { path: 'b.js', content: '123456789' },
-      { path: 'a.js', content: 'ABCDEFGHIJ' }
+      { path: 'b.js', content: '1234567890' },
+      { path: 'c.js', content: '1234567890' }
     ], limits),
     /Workspace exceeds its total file-size limit/
   );
