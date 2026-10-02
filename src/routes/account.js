@@ -29,7 +29,10 @@ export function registerAccountRoutes(app, { config, pool, identity, audit, rout
 
   app.get('/api/billing', scoped('viewer'), route(async (req, res) => {
     const admin = req.scope.role === 'admin';
-    const { rows: [row] } = await pool.query('SELECT * FROM workspace_billing WHERE workspace_id = $1', [req.scope.workspaceId]);
+    const { rows: [row] } = await pool.query(
+      'SELECT subscription_status, plan_id, current_period_end, cancel_at_period_end FROM workspace_billing WHERE workspace_id = $1',
+      [req.scope.workspaceId]
+    );
     const limits = await limitsFor(pool, config, req.scope.workspaceId, req.principal.id);
     res.json({
       plan: limits.planName,
