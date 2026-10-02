@@ -2676,5 +2676,18 @@ export const MIGRATIONS = [
       REVOKE ALL ON principal_ai_entitlements FROM PUBLIC;
       DROP FUNCTION IF EXISTS kg_account_active_billing_plans(TEXT);
     `
+  },
+  {
+    version: 66,
+    name: 'stripe-hosted-billing-only',
+    sql: `
+      -- Stripe owns payment methods, invoices and customer billing details.
+      -- Existing local billing payloads are scrubbed by backfillSensitiveData
+      -- after migrations run; Kindgleam keeps only opaque Stripe references.
+      ALTER TABLE workspace_billing
+        ADD COLUMN IF NOT EXISTS billing_storage_version SMALLINT NOT NULL DEFAULT 0;
+      ALTER TABLE workspace_billing
+        ALTER COLUMN billing_storage_version SET DEFAULT 1;
+    `
   }
 ];
