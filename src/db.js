@@ -423,7 +423,8 @@ async function hardenRuntimeRole(client, runtimeRole, logger) {
     ['SELECT, INSERT, UPDATE', ['safety_reports']],
     ['SELECT, INSERT, UPDATE, DELETE', ['workspace_sources', 'run_agents', 'run_waves', 'code_workspace_sessions', 'rag_documents', 'run_blackboards', 'adaptive_cache', 'run_feedback', 'evolution_proposals', 'skill_profiles', 'skill_observations', 'fleet_projects', 'fleet_project_dependencies', 'fleet_dispatches']],
     ['SELECT, INSERT, UPDATE, DELETE', ['login_links']],
-    ['SELECT, INSERT, UPDATE', ['mail_settings']]
+    ['SELECT, INSERT, UPDATE', ['mail_settings']],
+    ['SELECT, INSERT, UPDATE, DELETE', ['principal_ai_entitlements']]
   ];
   for (const [privileges, tables] of grants) {
     await client.query(
@@ -434,7 +435,7 @@ async function hardenRuntimeRole(client, runtimeRole, logger) {
   await client.query('GRANT EXECUTE ON FUNCTION kg_sign_up(TEXT, TEXT, BIGINT, INTEGER) TO ' + role);
   await client.query('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ' + role);
   await client.query('GRANT EXECUTE ON FUNCTION kg_audit_previous_hash(TEXT) TO ' + role);
-  await client.query('GRANT EXECUTE ON FUNCTION kg_account_active_billing_plans(TEXT) TO ' + role);
+
   await client.query('REVOKE ALL ON schema_migrations FROM ' + role);
 
   logger?.info('runtime database role privileges reconciled', { role: runtimeRole });
