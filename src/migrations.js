@@ -2375,5 +2375,91 @@ export const MIGRATIONS = [
        WHERE status = 'running';
     `
   }
+,
 
+  {
+    version: 60,
+    name: 'run-action-write-policy-hardening',
+    sql: `
+      -- Defense in depth: viewers may read actions for workspace-shared runs,
+      -- but only editors/admins and server workers may create or mutate them.
+      DROP POLICY IF EXISTS run_actions_policy ON run_actions;
+      DROP POLICY IF EXISTS run_actions_select_policy ON run_actions;
+      DROP POLICY IF EXISTS run_actions_insert_policy ON run_actions;
+      DROP POLICY IF EXISTS run_actions_update_policy ON run_actions;
+      DROP POLICY IF EXISTS run_actions_delete_policy ON run_actions;
+
+      CREATE POLICY run_actions_select_policy ON run_actions
+        FOR SELECT
+        USING (
+          EXISTS (
+            SELECT 1 FROM runs r
+             WHERE r.id = run_actions.run_id
+               AND r.workspace_id = current_setting('app.workspace_id', true)
+               AND (
+                 r.principal_id = current_setting('app.principal_id', true)
+                 OR (
+                   r.visibility = 'workspace'
+                   AND current_setting('app.role', true) IN ('viewer','editor','admin')
+                 )
+               )
+          )
+          OR current_setting('app.role', true) IN ('job-worker','service')
+        );
+
+      CREATE POLICY run_actions_insert_policy ON run_actions
+        FOR INSERT
+        WITH CHECK (
+          EXISTS (
+            SELECT 1 FROM runs r
+             WHERE r.id = run_actions.run_id
+               AND r.workspace_id = current_setting('app.workspace_id', true)
+               AND (
+                 r.principal_id = current_setting('app.principal_id', true)
+                 OR (
+                   r.visibility = 'workspace'
+                   AND current_setting('app.role', true) IN ('editor','admin')
+                 )
+               )
+          )
+          OR current_setting('app.role', true) IN ('job-worker','service')
+        );
+
+      CREATE POLICY run_actions_update_policy ON run_actions
+        FOR UPDATE
+        USING (
+          EXISTS (
+            SELECT 1 FROM runs r
+             WHERE r.id = run_actions.run_id
+               AND r.workspace_id = current_setting('app.workspace_id', true)
+               AND (
+                 r.principal_id = current_setting('app.principal_id', true)
+                 OR (
+                   r.visibility = 'workspace'
+                   AND current_setting('app.role', true) IN ('editor','admin')
+                 )
+               )
+          )
+          OR current_setting('app.role', true) IN ('job-worker','service')
+        )
+        WITH CHECK (
+          EXISTS (
+            SELECT 1 FROM runs r
+             WHERE r.id = run_actions.run_id
+               AND r.workspace_id = current_setting('app.workspace_id', true)
+               AND (
+                 r.principal_id = current_setting('app.principal_id', true)
+                 OR (
+                   r.visibility = 'workspace'
+                   AND current_setting('app.role', true) IN ('editor','admin')
+                 )
+               )
+          )
+          OR current_setting('app.role', true) IN ('job-worker','service')
+        );
+
+      -- There is no application path that should delete an action.
+      REVOKE DELETE ON run_actions FROM PUBLIC;
+    `
+  }
 ];
