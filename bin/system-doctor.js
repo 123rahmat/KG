@@ -28,6 +28,8 @@ const requiredFiles = [
   'server.js', 'package.json', 'src/core.js', 'src/runs.js',
   'src/runtime.js', 'src/safety.js', 'src/verification.js',
   'src/code-workspace.js', 'src/project-index.js', 'src/context-compiler.js', 'src/parallel-orchestrator.js', 'src/adaptive.js',
+  'src/jobs.js', 'src/fleet-control.js', 'src/run-actions.js', 'src/security-boundary.js', 'src/sandbox.js',
+  '.github/workflows/ci.yml', '.github/workflows/verify.yml', '.github/workflows/codeql.yml', '.github/workflows/secret-scan.yml',
   'tests/security.test.js', 'tests/code-workspace.test.js'
 ];
 
@@ -53,6 +55,16 @@ const workspace = await read('src/code-workspace.js');
 const safety = await read('src/safety.js');
 const verification = await read('src/verification.js');
 const runtime = await read('src/runtime.js');
+const jobs = await read('src/jobs.js');
+const fleet = await read('src/fleet-control.js');
+const actions = await read('src/run-actions.js');
+const securityBoundary = await read('src/security-boundary.js');
+const sandbox = await read('src/sandbox.js');
+const ci = await read('.github/workflows/ci.yml');
+const verify = await read('.github/workflows/verify.yml');
+const codeql = await read('.github/workflows/codeql.yml');
+const secretScan = await read('.github/workflows/secret-scan.yml');
+const dockerfile = await read('Dockerfile');
 const adaptive = await read('src/adaptive.js');
 const adaptiveControl = await read('src/adaptive-control.js');
 const projectIndex = await read('src/project-index.js');
@@ -78,6 +90,17 @@ check('workspace-parallel-scheduler', /buildWorkspaceParallelPlan\(/.test(parall
 check('multi-agent-lane-integration', /agentWorkspaceLane\(/.test(multiAgent) && /buildWorkspaceParallelPlan\(/.test(multiAgent), 'multi-agent waves execute through workspace lane contracts');
 const codeWorkflow = await read('src/code-workflow.js');
 check('stale-patch-rejection', /workspace-revision-stale/.test(codeWorkflow) && /expectedBaseHash/.test(codeWorkflow), 'code mutation rejects patches prepared from stale workspace state');
+check('background-job-lease-fencing', /worker_id/.test(jobs) && /attempts\s*=\s*\$5|attempts\s*=\s*\$4/.test(jobs) && /lease_until\s*>\s*now\(\)/.test(jobs), 'background job completion is fenced to the owning worker, attempt and live lease');
+check('fleet-lease-fencing', /renewLease\(/.test(fleet) && /worker_id/.test(fleet) && /lease_until\s*>\s*now\(\)/.test(fleet), 'fleet completion and renewal are lease-owned');
+check('fleet-batch-concurrency-fence', /ROW_NUMBER\(\) OVER \(PARTITION BY d\.project_id/.test(fleet) && /project_rank/.test(fleet) && /project_slots/.test(fleet), 'fleet acquisition limits one batch by each project’s actual concurrency slots');
+check('action-outcome-fencing', /ACTION_LEASE_MS/.test(actions) && /recoverExpired\(/.test(actions) && /status = \'running\'/.test(actions), 'approved side effects carry a lease and abandoned outcomes become explicit uncertainty');
+check('action-run-privacy', /run_actions_policy/.test(await read('src/migrations.js')) && /r\.visibility = \'workspace\'/.test(await read('src/migrations.js')), 'proposed action access follows the underlying run visibility');
+check('browser-security-boundary', /sec-fetch-site/.test(securityBoundary) && /SameSite=Strict/.test(app), 'browser state changes have request-metadata and strict-cookie boundaries');
+check('sandbox-production-pinning', /@sha256/.test(sandbox) && /assertProductionSandboxConfiguration/.test(sandbox) && /USER node/.test(dockerfile) === false, 'sandbox source enforces immutable production images and the app image is not root');
+check('ci-release-gates', /npm ci/.test(ci) && /npm audit/.test(ci) && /node --test/.test(ci) && /docker build/.test(ci), 'CI covers install, audit, tests and production image build');
+check('verify-release-gate', /npm run verify/.test(verify), 'Verify invokes the unified application verification contract');
+check('codeql-enabled', /github\/codeql-action\/init/.test(codeql) && /security-extended/.test(codeql), 'CodeQL security-extended analysis is present');
+check('secret-scan-enabled', /gitleaks\/gitleaks-action/.test(secretScan) && /GITLEAKS_CONFIG/.test(secretScan), 'repository secret scanning is present');
 
 const forbidden = [
   ['eval', /\beval\s*\(/],
