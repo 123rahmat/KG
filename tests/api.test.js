@@ -631,8 +631,11 @@ test('iterate starts a new attempt and the budget eventually stops it', () =>
         ...auth, body: { taskId: checking.next, status: 'failed', evidence: { verdict: { verdict: 'fail', criteria: criteria.map(criterion => ({ criterion, met: false, reason: 'not yet' })), problems: ['incomplete'], summary: 'Not done.' } } }
       });
       assert.equal(failed.status, 200);
-      // After a failure the decision is due: replan or stop.
-      assert.equal(failed.body.tasks.find(task => task.id === failed.body.next).type, 'iterate');
+      // A run at its attempt ceiling becomes terminal immediately; otherwise
+      // the workflow inserts the explicit iterate decision.
+      if (failed.body.state === 'exhausted') return failed;
+      assert.equal(failed.body.next, 'iterate');
+      assert.equal(failed.body.tasks.find(task => task.id === failed.body.next)?.type, 'iterate');
       return call('POST', `/api/runs/${run.id}/advance`, { ...auth, body: { taskId: failed.body.next, replan: true } });
     };
 
