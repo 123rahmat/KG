@@ -379,7 +379,16 @@ export function createFleetWorker({
       limit: batchSize, workerId, partition, partitions
     });
     if (!batch.length) return 0;
-    const width = Math.max(1, Math.min(16, Number(maxConcurrency) || 1));
+    const ceiling = Math.max(1, Math.min(16, Number(maxConcurrency) || 1));
+    const adaptive = adaptFleetCapacity({
+      current: runOnce.currentWidth || ceiling,
+      max: ceiling,
+      queueDepth: batch.length,
+      usefulParallelism: batch.length > 1 ? 1 : 0,
+      remainingBudgetRatio: 1
+    });
+    const width = adaptive.next;
+    runOnce.currentWidth = width;
     let processed = 0;
     for (let i = 0; i < batch.length; i += width) {
       await Promise.all(batch.slice(i, i + width).map(process));
