@@ -29,6 +29,7 @@ import { normalizeNextStep } from './step-plan.js';
 import { buildRequirementModel, normalizeRequirementModel, reconcileRequirements, nextRequirement, requirementAction, gradedCriteria } from './requirements.js';
 import { insertTask, insertTasks, loadTasks } from './run-graph.js';
 import { present, summarize, encodeCursor, decodeCursor, normalizeUnderstanding, isEmpty } from './run-view.js';
+import { workspacePath } from './workspace-path.js';
 
 const TERMINAL = new Set(['complete', 'failed', 'blocked', 'exhausted']);
 // Generic "continue" steps a run may chain before its result is checked.
@@ -90,6 +91,36 @@ const PLAN_AGREEMENT_STEP = Object.freeze({
 // "just build it", "skip the plan": the person has said not to plan first.
 const SKIP_PLANNING = /\b(?:just (?:build|write|code|make|do) it|skip (?:the )?plan(?:ning)?|no (?:need to )?plan|without (?:a )?plan|don'?t ask)\b/i;
 const BUILD_WORDS = /\b(?:system|app|application|platform|website|web ?site|web service|api|backend|frontend|game|dashboard|chat ?bot|software|cli|command[- ]line (?:app|tool))\b/i;
+
+const concretePlanPath = value => {
+  const candidate = text(value);
+  if (!workspacePath(candidate)) return null;
+  // Natural-language choices such as "auth module" are intentionally not
+  // treated as hard path contracts. Exact-looking paths/extensions are.
+  return candidate.includes('/')
+    || candidate.startsWith('.')
+    || /\.[A-Za-z0-9][A-Za-z0-9_-]*$/.test(candidate)
+    ? candidate
+    : null;
+};
+
+export function approvedPlanPaths(approvedPlan = {}) {
+  const proposed = Array.isArray(approvedPlan?.proposedFiles) ? approvedPlan.proposedFiles : [];
+  const choices = approvedPlan?.planChoices && typeof approvedPlan.planChoices === 'object'
+    ? Object.values(approvedPlan.planChoices).flatMap(value => Array.isArray(value) ? value : [])
+    : [];
+  return [...new Set([...proposed, ...choices].map(concretePlanPath).filter(Boolean))];
+}
+
+export function approvedPlanScopeDrift(approvedPlan, structured) {
+  if (!approvedPlan || typeof approvedPlan !== 'object' || !structured || typeof structured !== 'object') return [];
+  const allowed = new Set(approvedPlanPaths(approvedPlan));
+  if (!allowed.size) return [];
+  return [...new Set([
+    ...codeFiles(structured).map(file => file.path),
+    ...deletedPaths(structured)
+  ].map(text).filter(Boolean))].filter(path => !allowed.has(path));
+}
 
 /**
  * Whether a run is a new thing to build: code-making work that does not
@@ -818,6 +849,26 @@ export class RunStore {
         const structured = result.evidence?.structured && typeof result.evidence.structured === 'object'
           ? result.evidence.structured
           : {};
+        const scopeDrift = approvedPlanScopeDrift(run.adaptation?.approvedPlan ?? null, structured);
+        if (scopeDrift.length) {
+          await this.audit?.record({
+            principalId: principal.id,
+            workspaceId: scope.workspaceId,
+            action: 'run.approval-scope',
+            target: run.id + ':' + target.id,
+            outcome: 'denied',
+            detail: { reason: 'approved-plan-scope-drift', paths: scopeDrift.slice(0, 40) },
+            requestId
+          });
+          throw new RunError(
+            'The generated code proposes files outside the approved plan. Re-plan and approve those paths before writing them.',
+            {
+              status: 409,
+              code: 'approved-plan-scope-drift',
+              detail: { paths: scopeDrift.slice(0, 40) }
+            }
+          );
+        }
         if (!text(structured.language) || !hasCode(structured)) {
           throw new RunError(
             'Code generation must produce a structured language and source artifact before testing can proceed.',
@@ -893,6 +944,12 @@ export class RunStore {
           ...(hasChoices ? { planChoices } : {})
         };
         if (target.metadata?.planAgreement) {
+          const planTask = tasks.find(item => item.id === target.dependsOn?.[0]);
+          const proposed = planTask?.evidence?.structured;
+          const proposedFiles = [
+            ...(Array.isArray(proposed?.files) ? proposed.files : []),
+            ...(Array.isArray(proposed?.tests) ? proposed.tests : [])
+          ].map(concretePlanPath).filter(Boolean);
           // The approved plan is authoritative for the following coding step.
           // The model proposal remains evidence, but these user choices are
           // the only plan overrides the coding stage may treat as instructions.
@@ -900,6 +957,7 @@ export class RunStore {
             sourceTaskId: target.dependsOn?.[0] ?? null,
             existingCodePlan: target.metadata?.existingCodePlan === true,
             planChoices,
+            proposedFiles: [...new Set(proposedFiles)],
             conditions: conditions || null,
             approvedAt: evidence.approvedAt,
             actor: principal.id
