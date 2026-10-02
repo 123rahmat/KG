@@ -39,6 +39,8 @@ test('normal chat identifies the three logical agents without forcing three mode
 test('control managers run independently in parallel and cannot mutate server authority', async () => {
   const calls = [];
   const usage = [];
+  let active = 0;
+  let peak = 0;
   const selection = [];
   const result = await runNormalChatControlPlane({
     run: run(),
@@ -56,6 +58,10 @@ test('control managers run independently in parallel and cannot mutate server au
     recordUsage: async value => usage.push(value),
     modelCaller: async (messages, options) => {
       calls.push({ messages, options });
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      active -= 1;
       const isStep = messages[0].content.includes('You are the Step Manager');
       const body = isStep
         ? { status: 'ready', summary: 'Use the current step.', nextStep: 'build', dependencies: ['api'], replan: { needed: false } }
@@ -72,6 +78,7 @@ test('control managers run independently in parallel and cannot mutate server au
   assert.equal(result.serverGuards.toolAllowList, true);
   assert.equal(result.serverGuards.codeMutation, true);
   assert.equal(calls.length, 2);
+  assert.equal(peak, 2);
   assert.equal(usage.length, 2);
   assert.ok(calls.every(item => !item.messages[0].content.includes('tool call')));
 });

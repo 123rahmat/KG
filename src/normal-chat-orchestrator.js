@@ -32,7 +32,7 @@ function hasDedicatedCodingControl(task, payload) {
   if (payload?.workspace?.projectId && payload?.codeIntelligence?.project) return true;
   if (payload?.subsystemPlan?.subsystems?.length) return true;
   const attachments = Array.isArray(payload?.attachments) ? payload.attachments : [];
-  return Boolean(payload?.codeIntelligence?.project && attachments.some(item => /\\.zip$/i.test(text(typeof item === 'string' ? item : item?.name ?? ''))));
+  return Boolean(payload?.codeIntelligence?.project && attachments.some(item => /\.zip$/i.test(text(typeof item === 'string' ? item : item?.name ?? ''))));
 }
 
 function isCodeTask(task, payload) {
