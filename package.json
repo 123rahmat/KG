@@ -1,6 +1,6 @@
 {
   "name": "kindgleam",
-  "version": "10.4.0",
+  "version": "10.4.1",
   "private": true,
   "description": "Open-world adaptive workflow for known, unknown and future goals.",
   "type": "module",
@@ -16,7 +16,8 @@
     "local-agent": "node bin/local-agent.js",
     "test": "node --test",
     "lint": "eslint .",
-    "verify": "npm run check && npm run eval:skills && npm run lint && npm test",
+    "doctor": "node bin/system-doctor.js",
+    "verify": "npm run check && npm run doctor && npm run eval:skills && npm run lint && npm test",
     "check": "node bin/check-source.js",
     "backup": "node bin/backup.js",
     "restore": "node bin/restore.js",
