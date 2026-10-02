@@ -419,7 +419,8 @@ export function rolesFor(run, task, {
     if (roles.length >= targetCount) break;
     const marginal = candidate.utility - roles.length * ROLE_REDUNDANCY_PENALTY;
     utilities[candidate.role] = Number(marginal.toFixed(3));
-    if (marginal < MIN_ROLE_UTILITY && roles.length > 0 && !disagreement && roles.length >= minimum) continue;
+    const forcedPanel = normalizedMode === 'always' && roles.length < targetCount;
+    if (marginal < MIN_ROLE_UTILITY && roles.length > 0 && !disagreement && !forcedPanel && roles.length >= minimum) continue;
     roles.push(candidate.role);
   }
   if (!roles.length && candidates[0]) {
@@ -1920,7 +1921,11 @@ export async function runAdaptiveAgentPanel({
     : Math.max(1, Math.min(maxAgents, Math.floor(Math.max(1, Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent) / (AGENT_MAX_OUTPUT_TOKENS * 2))));
   let effectiveMaxParallel = Math.max(
     1,
-    Math.min(maxAgents, Number(allocationResult.decision.maxParallel) || 1, budgetParallelLimit())
+    Math.min(
+      maxAgents,
+      Number(allocationResult.allocation?.targetAgents) || Number(allocationResult.roles?.length) || 1,
+      budgetParallelLimit()
+    )
   );
 
   while (true) {
