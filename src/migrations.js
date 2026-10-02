@@ -2694,8 +2694,41 @@ export const MIGRATIONS = [
     version: 67,
     name: 'github-only-code-workspace-sources',
     sql: `
-      -- Code Workspace is a GitHub-only product surface. Existing local-folder
-      -- sources are removed so legacy browser-held folder access cannot remain active.
+      -- Code Workspace is a GitHub-only product surface. Remove legacy
+      -- local-folder sources and their private snapshots. Preserve blob ref-counts
+      -- exactly as the normal object deletion path does.
+      WITH doomed AS (
+        SELECT o.id, o.digest
+          FROM objects o
+          JOIN workspace_sources ws
+            ON ws.snapshot_object_id = o.id
+           AND ws.kind = 'local-folder'
+         WHERE NOT EXISTS (
+           SELECT 1
+             FROM workspace_sources keep
+            WHERE keep.snapshot_object_id = o.id
+              AND keep.kind <> 'local-folder'
+         )
+      ),
+      deleted_objects AS (
+        DELETE FROM objects o
+         USING doomed d
+         WHERE o.id = d.id
+        RETURNING o.digest
+      ),
+      digest_counts AS (
+        SELECT digest, COUNT(*)::BIGINT AS released
+          FROM deleted_objects
+         GROUP BY digest
+      )
+      UPDATE blobs b
+         SET ref_count = b.ref_count - c.released
+        FROM digest_counts c
+       WHERE b.digest = c.digest;
+
+      DELETE FROM blobs
+       WHERE ref_count = 0;
+
       DELETE FROM workspace_sources
        WHERE kind = 'local-folder';
 
