@@ -56,6 +56,32 @@ test('every AI call is recorded and shows in the 4-hour and weekly windows and t
     assert.equal(theirs.body.windows[0].used, 0);
   }, { env: AI, fetchImpl: provider }));
 
+test('multi-agent usage is exempt from the weekly quota but remains inside the 4-hour quota', () =>
+  withServer(async ({ seed, pool }) => {
+    const { principal, workspace } = await seed();
+    await pool.query(
+      `INSERT INTO usage_events
+        (principal_id, workspace_id, conversation_id, source, provider, model, input_tokens, output_tokens)
+        VALUES ($1, $2, 'weekly-user-work', 'chat', 'google', 'gemini-test', 60, 40)`,
+      [principal.id, workspace]
+    );
+
+    const agentReservation = await reserveUsage(pool, {
+      principalId: principal.id,
+      workspaceId: workspace,
+      estimatedTokens: 50,
+      usageSource: 'multi-agent',
+      config: {
+        stripe: null,
+        usage: { fourHourTokens: 1000, weeklyTokens: 100 },
+        ai: { modelId: 'google:gemini-3.8-flash' }
+      }
+    });
+
+    assert.ok(agentReservation?.id, 'agent work can reserve tokens even when the weekly human quota is exhausted');
+    assert.equal(agentReservation.estimatedTokens, 50);
+  }), { env: { USAGE_LIMIT_4H_TOKENS: '1000', USAGE_LIMIT_WEEKLY_TOKENS: '100' } });
+
 test('past the 4-hour limit, AI steps wait and say when they open again', () =>
   withServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
