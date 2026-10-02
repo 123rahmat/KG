@@ -682,7 +682,7 @@ function codeWorkspacePanelIterationCeiling(run, task) {
   });
   const risk = text(run?.situation?.risk).toLowerCase();
   if (signals.retrying || risk === 'critical' || signals.scaleComplexity >= 0.82) return 4;
-  if (risk === 'high' || signals.securityFocus || signals.performanceFocus || signals.verificationGap >= 0.5 || signals.implementationComplexity >= 0.72) return 3;
+  if (risk === 'high' || signals.securityFocus || signals.performanceFocus || signals.evidenceGap >= 0.5 || signals.implementationComplexity >= 0.72) return 3;
   if (signals.decomposition >= 0.18 || signals.implementationComplexity >= 0.4) return 2;
   return CODE_WORKSPACE_DEFAULT_PANEL_ITERATIONS;
 }
@@ -1318,6 +1318,7 @@ async function runCodeWorkspaceAgentPanels({
         panelId: `${subsystem.id}:i${Math.max(1, Number(state?.iteration ?? 1))}`,
         status: state?.status ?? 'pending',
         iterations: state?.iteration ?? 0,
+        iterationCeiling: codeWorkspacePanelIterationCeiling(run, task, subsystem),
         roles: state?.roles ?? [],
         confidence: state?.confidence ?? 0
       };
