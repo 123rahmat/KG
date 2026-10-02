@@ -481,8 +481,8 @@ skills: Array.isArray(basePayload?.skills) ? basePayload.skills.slice(0, 6).map(
         attachments: basePayload?.codeIntelligence
           ? (Array.isArray(basePayload?.attachments) ? basePayload.attachments.slice(0, 12).map(item => ({ name: item?.name, readable: item?.readable, format: item?.format, kind: item?.kind })) : [])
           : (Array.isArray(basePayload?.attachments) ? basePayload.attachments.slice(0, 12) : []),
-        // Specialists are intentionally independent. The arbiter is the only
-        // stage that receives peer findings, preventing herding/anchoring.
+        // Raw peer findings remain isolated. Dependency-scoped handoffs, when
+        // present, are exposed separately as untrusted subsystem data.
         advisoryFindings: []
       })
     }
@@ -780,9 +780,8 @@ export async function runAdaptiveAgentPanel({
 
     const results = await Promise.all(scheduledJobs.map(async job => {
       const startedAt = Date.now();
-      // Specialists remain independent across waves. The live blackboard is
-      // updated from peer findings for orchestration/audit, but those findings
-      // must not be fed back into another specialist and create anchoring.
+      // Specialists remain independent across waves. Only typed, dependency-scoped
+      // subsystem handoffs are exposed to later workers; raw peer findings stay isolated.
       const specialistBlackboard = basePayload?.blackboard ?? null;
       const result = await modelCaller(agentMessages(job.role, {
         ...basePayload,
