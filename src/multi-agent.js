@@ -13,7 +13,7 @@ import { callModel } from './runtime.js';
 import { clip } from './reasoning-context.js';
 import { mergeBlackboard } from './blackboard.js';
 import { adaptConcurrency, agentWorkspaceLane, buildWorkspaceParallelPlan } from './parallel-orchestrator.js';
-import { buildSubsystemPlan, createSubsystemMessage, subsystemAssignment, subsystemCommunicationContext } from './subsystem-orchestrator.js';
+import { buildSubsystemPlan, compactSubsystemPlan, createSubsystemMessage, subsystemAssignment, subsystemCommunicationContext } from './subsystem-orchestrator.js';
 
 export const MULTI_AGENT_MODES = Object.freeze(['auto', 'always', 'off']);
 export const DEFAULT_MULTI_AGENT_MAX_AGENTS = 11;
@@ -662,6 +662,10 @@ export async function runAdaptiveAgentPanel({
         revisionId: basePayload?.codeIntelligence?.project?.revisionId ?? basePayload?.workspace?.revisionId ?? null
       })
     : null;
+  const subsystemPlanContext = compactSubsystemPlan(subsystemPlan, { maxSubsystems: maxAgents });
+  if (subsystemPlan && !(blackboard?.subsystemPlan?.project?.contentHash === subsystemPlan.project.contentHash)) {
+    blackboard = mergeBlackboard(blackboard ?? {}, { subsystemPlan }, run?.id ?? null);
+  }
   let tokensSpent = 0;
   const remainingBudgetRatio = () => run?.maxTokens === null || run?.maxTokens === undefined
     ? 1
@@ -775,7 +779,7 @@ export async function runAdaptiveAgentPanel({
         ...basePayload,
         harness,
         blackboard: specialistBlackboard,
-        subsystemPlan,
+        subsystemPlan: subsystemPlanContext,
         subsystemWork: job.subsystemWork
       }), {
         config,
