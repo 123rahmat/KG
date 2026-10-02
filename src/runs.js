@@ -1051,21 +1051,6 @@ export class RunStore {
       [run.id, JSON.stringify(requirementModel)]
     );
     run.requirements = requirementModel;
-    if (target.type === 'approval' && target.metadata?.planAgreement && evidence?.approved === true) {
-      adaptiveUpdate.approvedPlan = {
-        sourceTaskId: target.dependsOn?.[0] ?? null,
-        existingCodePlan: target.metadata?.existingCodePlan === true,
-        planChoices: evidence.planChoices ?? {
-          keepExisting: [],
-          removeExisting: [],
-          addNew: [],
-          changeExisting: []
-        },
-        conditions: evidence.conditions ?? null,
-        approvedAt: evidence.approvedAt ?? new Date().toISOString(),
-        actor: evidence.actor ?? run.principal_id ?? run.principalId
-      };
-    }
 
     let nextState;
     const discovery = target.type === 'discover-capabilities'
@@ -1146,7 +1131,6 @@ export class RunStore {
     const adaptiveUpdate = {
           ...(run.adaptation ?? {}),
           ...(approvedPlanUpdate ? { approvedPlan: approvedPlanUpdate } : {}),
-          ...(run.adaptation ?? {}),
           discoveries: [
             ...((run.adaptation?.discoveries ?? [])),
             ...adaptiveDiscoveries
