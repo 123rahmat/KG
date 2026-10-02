@@ -1332,14 +1332,15 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
 
   async function reason(run, task, { managedTarget = null, explicitConsent = false, executionId = null, scope = null } = {}) {
     let ragResults = [];
-    if (rag && scope) {
-      try {
-        ragResults = await rag.search(scope, [run.goal, task.purpose].filter(Boolean).join('\n'), { limit: 8 });
-      } catch (error) {
-        metrics?.increment('rag_retrieval_errors_total');
-        ragResults = [];
-      }
-    }
+    // RAG is evidence retrieval, not a mandatory prelude to every answer.
+    // Routine turns avoid retrieval cost and unrelated prior-work context.
+    const ragNeeded = rag && scope && (
+      ['investigate', 'plan', 'code', 'verify', 'step', 'reassess', 'deliver'].includes(task?.type)
+      || task?.id === 'build-code'
+      || ['large-project', 'very-large'].includes(run?.adaptation?.scale)
+      || Boolean(run?.situation?.need?.externalData)
+      || Boolean(run?.investigation?.unknownSituation)
+    );
     // The composition this step records is the one the server already chose
     // (working scope and way of working): no model call is needed for it.
     if (task.type === 'adapt') return composedLocally(run);
@@ -1362,6 +1363,16 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     }
 
     const blocked = await usageBlock(scope);
+    if (blocked) return blocked;
+
+    if (ragNeeded) {
+      try {
+        ragResults = await rag.search(scope, [run.goal, task.purpose].filter(Boolean).join('\n'), { limit: 8 });
+      } catch (error) {
+        metrics?.increment('rag_retrieval_errors_total');
+        ragResults = [];
+      }
+    }
     if (blocked) return blocked;
 
     const usageGate = createUsageGate(pool, {
