@@ -174,7 +174,13 @@ export function hierarchicalProjectScope(index, changedPaths = [], { query = '',
   return {
     scale: projectScale(index),
     root: index.hierarchy.root,
-    subtrees: ranked.map(({ score: _score, ...node }) => node),
+    subtrees: ranked.map(node => ({
+      path: node.path,
+      depth: node.depth,
+      fileCount: node.fileCount,
+      bytes: node.bytes,
+      digest: node.digest
+    })),
     changedSubtrees: [...new Set(targets.map(directoryOf).filter(Boolean))].sort()
   };
 }
