@@ -284,15 +284,17 @@ export function attachTerminalServer(server, {
       if (principalCount >= config.terminal.maxSessionsPerPrincipal) throw Object.assign(new Error('Too many active terminal sessions'), { code: 'terminal-session-limit' });
       if (workspaceCount >= config.terminal.maxSessionsPerWorkspace) throw Object.assign(new Error('Workspace terminal limit reached'), { code: 'terminal-workspace-limit' });
 
+      const requiredSourceId = text(sourceId);
+      if (!requiredSourceId) throw Object.assign(new Error('A GitHub repository source is required for the Code Workspace terminal.'), { code: 'github-source-required' });
       let source = null;
       let baseFiles = [];
-      if (sourceId) {
+      if (requiredSourceId) {
         assertSourceId(sourceId);
         const { rows: [row] } = await pool.query(
           `SELECT * FROM workspace_sources
              WHERE id = $1 AND workspace_id = $2 AND principal_id = $3 AND revoked_at IS NULL
            FOR SHARE`,
-          [sourceId, scope.workspaceId, principal.id]
+[requiredSourceId, scope.workspaceId, principal.id]
         );
         source = row || null;
         if (!source || source.kind !== 'github') throw Object.assign(new Error('Only GitHub repositories can be opened in the Code Workspace terminal.'), { code: 'github-source-required' });
