@@ -29,6 +29,7 @@ import { gradedCriteria } from '../requirements.js';
 import { groundedCheckDecision, verificationBrief, groundVerdict } from '../verification.js';
 import { reviewDecision, reviewerModelFor, reviewMessages, readReview, mergeReview, REVIEW_MAX_OUTPUT_TOKENS } from '../agents.js';
 import { runAdaptiveAgentPanel } from '../multi-agent.js';
+import { runNormalChatControlPlane } from '../normal-chat-orchestrator.js';
 import { workPlan, readStepAnswer } from '../step-plan.js';
 import { adaptationFor, compact } from '../prompt-scope.js';
 import { codeFailure, codeRunOutput, repairDecision, repairCeiling, codeNotRunNow, repairsThisAttempt, repairContext, untestedCode, missingTests, compactCodeEvidence, TESTS_REQUIRED_PROMPT, isProject, sandboxPayload, hasCode, compactProject, mergeFix, materializeCodePackage } from '../code-workflow.js';
@@ -1816,6 +1817,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       model: answer.model,
       usage: answer.usage,
       multiAgent: multiAgent.brief ?? null,
+      normalChatControl,
       toolLog: answer.toolLog ?? [],
       // Only skills selected for this exact task receive this task's outcome.
       skillsUsed: selectedSkills.map(skill => skill.name).filter(Boolean),
