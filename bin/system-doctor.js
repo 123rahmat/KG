@@ -39,6 +39,7 @@ for (const file of requiredFiles) check(
 
 const pkg = JSON.parse(await read('package.json'));
 check('node-engine', Number(String(pkg.engines?.node ?? '').replace(/[^0-9.]/g, '')) >= 22, `requires ${pkg.engines?.node ?? 'unset'}`);
+check('package-lock-sync', (await read('package-lock.json')).includes(`\"version\": \"${pkg.version}\"`), 'package.json and package-lock.json versions must match');
 for (const script of ['check', 'lint', 'test', 'verify']) {
   check(`script:${script}`, typeof pkg.scripts?.[script] === 'string', pkg.scripts?.[script] ?? 'missing');
 }
@@ -48,6 +49,9 @@ const runs = await read('src/runs.js');
 const workspace = await read('src/code-workspace.js');
 const safety = await read('src/safety.js');
 const verification = await read('src/verification.js');
+const runtime = await read('src/runtime.js');
+const adaptive = await read('src/adaptive.js');
+const adaptiveControl = await read('src/adaptive-control.js');
 
 check('server-owned-workflow', /SELECT[\s\S]*FOR UPDATE/.test(runs), 'run state is expected to be re-read under a row lock');
 check('execution-claim-integrity', /executed\s*[:=]/.test(core + runs), 'execution state is represented explicitly');
@@ -55,6 +59,10 @@ check('workspace-path-boundary', /workspacePath\(/.test(workspace), 'workspace p
 check('workspace-content-hash', /createHash\(['"]sha256['"]\)/.test(workspace), 'workspace revisions have deterministic content hashes');
 check('safety-boundary', /export|function/.test(safety) && /BLOCK|deny|refus/i.test(safety), 'safety module is present with decision/refusal logic');
 check('verification-separation', /verify|verification/i.test(verification), 'verification remains a distinct subsystem');
+check('provider-governor-enforced', /providerGovernor\.run\(modelKey/.test(runtime), 'model traffic passes through the adaptive concurrency boundary');
+check('runner-side-effect-no-retry', /retries:\s*0/.test(runtime), 'side-effecting runner POSTs do not retry ambiguously');
+check('adaptive-efficiency-integrated', /adaptiveEffortProfile\(/.test(adaptive), 'adaptive efficiency participates in situation analysis');
+check('adaptive-scope-controller', /reconcileAdaptiveTransition|adaptiveBudgetStatus/.test(adaptiveControl), 'adaptive scope is re-evaluated at transitions');
 
 const forbidden = [
   ['eval', /\beval\s*\(/],
