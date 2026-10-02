@@ -381,7 +381,8 @@ export function rolesFor(run, task, {
   progress = {},
   minimumAgents = 1
 } = {}) {
-  const decision = multiAgentDecision(run, task, { mode, progress });
+  const normalizedMode = MULTI_AGENT_MODES.includes(mode) ? mode : 'auto';
+  const decision = multiAgentDecision(run, task, { mode: normalizedMode, progress });
   if (!decision.enabled) return { decision, roles: [], agentCount: 0, allocation: null };
 
   const maximum = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
