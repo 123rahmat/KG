@@ -135,7 +135,13 @@ const BUILT_IN = [
       // An answer from memory is not a search result: say search is down.
       if (found.webSearchUnavailable) return { error: 'Web search is not available right now (its quota is used up or it was refused). Read a known page with web.fetch, or answer from what you know and say plainly that it was not checked against current sources.' };
       if (found.incomplete) return { error: `The search did not finish (${found.incomplete}).` };
-      return { query, findings: found.text, sources: found.citations ?? [] };
+      const citations = (Array.isArray(found.citations) ? found.citations : [])
+        .map(item => {
+          const url = text(item?.url || item?.uri);
+          return url ? { ...item, url } : null;
+        })
+        .filter(Boolean);
+      return { query, findings: found.text, sources: citations, citations };
     }
   },
   {
@@ -381,7 +387,13 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
     if (!result?.error) reach.learn(result);
     const { showImage, ...shown } = result ?? {};
     // Where facts came from, so the answer can cite them.
-    for (const source of Array.isArray(result?.sources) ? result.sources : []) if (source?.url) sources.set(source.url, source);
+    for (const source of [
+      ...(Array.isArray(result?.sources) ? result.sources : []),
+      ...(Array.isArray(result?.citations) ? result.citations : [])
+    ]) {
+      const url = text(source?.url || source?.uri);
+      if (url) sources.set(url, { ...source, url });
+    }
     if (result?.url && !result.error) sources.set(result.url, { url: result.url, title: result.title || result.name || '' });
     toolLog.push({
       round, tool: call.tool, why: call.why,
