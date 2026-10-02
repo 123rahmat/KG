@@ -21,9 +21,15 @@ export function changeSetDigest(changes = []) {
   const normalized = (Array.isArray(changes) ? changes : []).map(change => ({
     path: safeWorkspacePath(change?.path),
     kind: change?.kind === 'delete' || change?.delete === true ? 'delete' : change?.kind === 'range' ? 'range' : 'upsert',
-    beforeDigest: text(change?.beforeDigest) || null,
+    beforeDigest: text(change?.beforeDigest) || text(change?.expectedDigest) || null,
+    startLine: change?.kind === 'range' ? Number(change?.startLine) : null,
+    endLine: change?.kind === 'range' ? Number(change?.endLine) : null,
+    replacementDigest: change?.kind === 'range' ? contentDigest(change?.replacement ?? '') : null,
     afterDigest: change?.content == null ? null : contentDigest(change.content)
-  })).filter(item => item.path).sort((a,b) => a.path.localeCompare(b.path) || a.kind.localeCompare(b.kind));
+  })).filter(item => item.path).sort((a,b) =>
+    a.path.localeCompare(b.path) || a.kind.localeCompare(b.kind)
+    || Number(a.startLine ?? 0) - Number(b.startLine ?? 0)
+    || Number(a.endLine ?? 0) - Number(b.endLine ?? 0));
   return sha256(JSON.stringify(normalized));
 }
 
