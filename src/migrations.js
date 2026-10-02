@@ -2584,9 +2584,10 @@ export const MIGRATIONS = [
     version: 64,
     name: 'account-wide-ai-entitlement-resolver',
     sql: `
-      -- Historical compatibility migration. Version 65 replaces the
-      -- SECURITY DEFINER cross-workspace billing lookup with a principal-scoped
-      -- entitlement ledger that works safely with forced row-level security.
+      -- AI quota entitlement is account-wide. This SECURITY DEFINER helper lets
+      -- the hardened runtime read only the active plan ids belonging to the
+      -- authenticated person without widening workspace_billing RLS across
+      -- tenants or exposing billing-private data.
       CREATE OR REPLACE FUNCTION kg_account_active_billing_plans(p_principal_id TEXT)
       RETURNS TABLE(plan_id TEXT)
       LANGUAGE sql
@@ -2604,6 +2605,7 @@ export const MIGRATIONS = [
 
       REVOKE ALL ON FUNCTION kg_account_active_billing_plans(TEXT) FROM PUBLIC;
     `
+  },
   },
   {
     version: 65,
