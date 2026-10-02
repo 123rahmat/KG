@@ -45,7 +45,7 @@ test('negative learned evidence reduces a skill selection without becoming a per
     intent: 'coding',
     capabilities: ['code-generation'],
     learnedSkills: learned,
-    limit: 6
+    limit: 9
   });
   assert.ok(selected.every(skill => builtinSkillDescriptors().some(item => item.name === skill.name)));
   const debugging = selected.find(skill => skill.name === 'debugging');
@@ -69,14 +69,14 @@ test('positive learned skill evidence is scoped by task type', () => {
     intent: 'coding',
     capabilities: ['verification'],
     learnedSkills: learned,
-    limit: 4
+    limit: 9
   });
   const build = selectSkillDescriptors('build this code', {
     taskType: 'build-code',
     intent: 'coding',
     capabilities: ['code-generation'],
     learnedSkills: learned,
-    limit: 4
+    limit: 9
   });
   assert.equal(verify.find(skill => skill.name === 'testing')?.learning.attempts, 10);
   assert.equal(build.find(skill => skill.name === 'testing')?.learning.attempts ?? 0, 0);
