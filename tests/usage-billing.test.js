@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { withServer, jsonResponse } from './helpers.js';
 import { syncWorkspaceAiEntitlements } from '../src/account-entitlements.js';
+import { reserveUsage } from '../src/usage.js';
+import { runDbScope } from '../src/db.js';
 
 /** A provider that answers everything with 40 tokens in and 10 out. */
 const provider = async () => {
@@ -104,33 +106,27 @@ async function delayedProvider() {
 
 
 test('concurrent AI requests share one atomic usage reservation', () =>
-  withServer(async ({ call, seed }) => {
-    const { token, workspace } = await seed();
-    const auth = { token, workspace };
-    const first = await call('POST', '/api/runs', {
-      ...auth,
-      body: {
-        goal: 'Explain how a heat pump works in winter',
-        conversationId: 'concurrent-0001',
-        privacyConsent: { modelProvider: true }
-      }
-    });
-    const second = await call('POST', '/api/runs', {
-      ...auth,
-      body: {
-        goal: 'Explain how a heat pump works in winter',
-        conversationId: 'concurrent-0002',
-        privacyConsent: { modelProvider: true }
-      }
-    });
+  withServer(async ({ seed, appPool, config }) => {
+    const { principal, workspace } = await seed();
+    const scope = { principalId: principal.id, workspaceId: workspace };
+    const reserve = () => runDbScope(
+      { ...scope, role: 'editor' },
+      () => reserveUsage(appPool, {
+        principalId: principal.id,
+        workspaceId: workspace,
+        estimatedTokens: 50,
+        config
+      })
+    );
 
-    const [a, b] = await Promise.all([
-      call('POST', `/api/runs/${first.body.id}/execute`, { ...auth, body: {} }),
-      call('POST', `/api/runs/${second.body.id}/execute`, { ...auth, body: {} })
-    ]);
-    const statuses = [a.body.execution?.status ?? a.body.code, b.body.execution?.status ?? b.body.code].sort();
-    assert.deepEqual(statuses, ['completed', 'usage-limit-reached']);
-  }, { env: { ...AI, USAGE_LIMIT_4H_TOKENS: '160' }, fetchImpl: delayedProvider }));
+    const results = await Promise.allSettled([reserve(), reserve()]);
+    const fulfilled = results.filter(item => item.status === 'fulfilled');
+    const rejected = results.filter(item => item.status === 'rejected');
+    assert.equal(fulfilled.length, 1);
+    assert.equal(rejected.length, 1);
+    assert.equal(fulfilled[0].value.estimatedTokens, 50);
+    assert.equal(rejected[0].reason.code, 'usage-limit-reached');
+  }, { env: { ...AI, USAGE_LIMIT_4H_TOKENS: '60' }, fetchImpl: delayedProvider }));
 
 test('billing is provider-owned and never exposes local payment details', () =>
   withServer(async ({ call, seed }) => {
