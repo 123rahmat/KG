@@ -109,7 +109,7 @@ function presentProject(row) {
     sourceId: row.source_id ?? null, currentRevision: row.current_revision ?? null,
     budgetTokens: row.budget_tokens == null ? null : Number(row.budget_tokens),
     budgetComputeMs: row.budget_compute_ms == null ? null : Number(row.budget_compute_ms),
-    inFlight: Number(row.in_flight ?? 0), queued: Number(row.queued ?? 0) > 0,
+    inFlight: Number(row.in_flight ?? 0), queued: Number(row.queued ?? 0),
     consecutiveFailures: Number(row.consecutive_failures ?? 0),
     successCount: Number(row.success_count ?? 0), failureCount: Number(row.failure_count ?? 0),
     health: row.health ?? { score: 1 }, tags: Array.isArray(row.tags) ? row.tags : [],

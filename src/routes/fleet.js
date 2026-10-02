@@ -1,7 +1,7 @@
 /** Fleet-level project registry and dispatch control. */
 import { FleetStore, FleetValidationError, adaptFleetCapacity } from '../fleet-control.js';
 
-export function registerFleetRoutes(app, { pool, audit, route, scoped, metrics, fleet: injectedFleet = null }) {
+export function registerFleetRoutes(app, { pool, audit, route, scoped, metrics, idempotent, fleet: injectedFleet = null }) {
   const fleet = injectedFleet ?? new FleetStore(pool);
 
   app.get('/api/fleet/status', scoped('viewer'), route(async (req, res) => {
@@ -64,7 +64,7 @@ export function registerFleetRoutes(app, { pool, audit, route, scoped, metrics, 
     }
   }));
 
-  app.post('/api/fleet/projects/:id/dispatch', scoped('editor'), route(async (req, res) => {
+  app.post('/api/fleet/projects/:id/dispatch', scoped('editor'), idempotent ?? ((_req, _res, next) => next()), route(async (req, res) => {
     try {
       const dispatch = await fleet.enqueue(req.scope, req.params.id, req.body);
       await audit?.record({
