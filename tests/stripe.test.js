@@ -132,12 +132,13 @@ test('an admin buys a plan through Stripe Checkout; only a signed webhook makes 
     const after = await call('GET', '/api/billing', auth);
     assert.equal(after.body.plan, 'Pro');
     const { rows: [stored] } = await pool.query(
-      'SELECT stripe_customer_id, stripe_subscription_id, billing_private_enc, billing_encryption_version FROM workspace_billing WHERE workspace_id = $1',
+      'SELECT stripe_customer_id, stripe_subscription_id, billing_private_enc, billing_encryption_version, billing_storage_version FROM workspace_billing WHERE workspace_id = $1',
       [admin.workspace]
     );
     assert.equal(stored.stripe_customer_id, null);
     assert.equal(stored.stripe_subscription_id, null);
     assert.equal(stored.billing_encryption_version, 1);
+    assert.equal(stored.billing_storage_version, 1);
     assert.ok(stored.billing_private_enc);
     assert.equal(stored.billing_private_enc.includes('cus_123'), false);
     assert.equal(stored.billing_private_enc.includes('sub_1'), false);
