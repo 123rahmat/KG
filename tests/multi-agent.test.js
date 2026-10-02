@@ -650,3 +650,68 @@ test('coding panels stop at the adaptive ceiling when evidence never converges',
   assert.equal(result.waves.length, 4);
   assert.equal(calls, 8);
 });
+
+test('from-scratch coding uses the same adaptive panel engine and grows across planned subsystems', async () => {
+  const calls = [];
+  const project = {
+    sourceKind: 'from-scratch',
+    revisionId: null,
+    contentHash: 'scratch-plan',
+    workspaceContentHash: 'empty-workspace',
+    fileCount: 0,
+    scale: 'large',
+    plannedRoots: ['frontend', 'backend', 'auth', 'data'],
+    hierarchy: {
+      scale: 'large',
+      root: { path: '', depth: 0, fileCount: 0, bytes: 0, digest: 'root' },
+      directories: [
+        ...['frontend', 'backend', 'auth', 'data'].map(path => ({
+          path, depth: 1, fileCount: 0, bytes: 0, digest: path
+        }))
+      ]
+    }
+  };
+  const fakeModel = async (messages, options) => {
+    const body = JSON.parse(messages[1].content);
+    calls.push({ body, options });
+    const root = body.workspacePanel.writeRoots?.[0] ?? 'unknown';
+    return {
+      text: JSON.stringify(finding('proceed', 'design ' + root, {
+        confidence: 0.93,
+        implementation: {
+          objective: 'create the assigned subsystem',
+          targets: [{ path: root + '/index.js', change: 'create the subsystem entry point', reason: 'required by the architecture' }],
+          tests: [root + '/index.test.mjs'],
+          contractChanges: []
+        }
+      })),
+      provider: 'google',
+      model: options.modelId,
+      usage: null
+    };
+  };
+
+  const result = await runAdaptiveAgentPanel({
+    run: run({ adaptation: { scale: 'advanced' } }),
+    task: { id: 'build-code', type: 'code' },
+    basePayload: {
+      goal: 'Build a large platform from scratch with frontend backend auth and data',
+      task: { id: 'build-code', type: 'code' },
+      codeIntelligence: { project, files: [] },
+      subsystemPlan: null
+    },
+    selection,
+    primaryModelId: 'google:gemini-3.8-flash',
+    config: { agents: { multiAgent: 'always', maxAgents: 8 } },
+    canSpend: async () => true,
+    modelCaller: fakeModel
+  });
+
+  assert.equal(result.allocation.panelEngine, 'unified-adaptive-code-panel-v1');
+  assert.equal(result.allocation.subsystemPanels.length, 4);
+  assert.equal(result.waves[0].parallel, true);
+  assert.equal(new Set(calls.map(item => item.body.workspacePanel.subsystemId)).size, 4);
+  assert.equal(calls.every(item => item.body.workspacePanel.topology === 'subsystem'), true);
+  assert.equal(calls.every(item => item.body.workspacePanel.writeRoots?.length === 1), true);
+  assert.equal(result.brief.implementationPlan.targets.length > 0, true);
+});
