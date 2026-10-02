@@ -13,7 +13,7 @@ test('private-run actions are not visible to another workspace member', () =>
     const { body: run } = await call('POST', '/api/runs', {
       token: owner.token,
       workspace: 'shared',
-      body: { goal: 'Private task' }
+      body: { goal: 'Private task', privacyConsent: { modelProvider: true } }
     });
     assert.ok(run.id);
     await runDbScope(
