@@ -1,5 +1,5 @@
 /** Fleet-level project registry and dispatch control. */
-import { FleetStore, adaptFleetCapacity, fleetStatus } from '../fleet-control.js';
+import { FleetStore, adaptFleetCapacity } from '../fleet-control.js';
 
 export function registerFleetRoutes(app, { pool, audit, route, scoped, metrics }) {
   const fleet = new FleetStore(pool);
