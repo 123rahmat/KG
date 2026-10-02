@@ -280,7 +280,8 @@ test('adaptive multi-agent configuration accepts bounded modes and agent counts'
   assert.equal(loadConfig({ ...base, MULTI_AGENT_MAX_AGENTS: '1' }).agents.maxAgents, 1);
   assert.throws(() => loadConfig({ ...base, MULTI_AGENT_MODE: 'sometimes' }), /MULTI_AGENT_MODE must be/);
   assert.equal(loadConfig({ ...base, MULTI_AGENT_MAX_AGENTS: '5' }).agents.maxAgents, 5);
-  assert.throws(() => loadConfig({ ...base, MULTI_AGENT_MAX_AGENTS: '6' }), /MULTI_AGENT_MAX_AGENTS must be/);
+  assert.equal(loadConfig({ ...base, MULTI_AGENT_MAX_AGENTS: '11' }).agents.maxAgents, 11);
+  assert.throws(() => loadConfig({ ...base, MULTI_AGENT_MAX_AGENTS: '12' }), /MULTI_AGENT_MAX_AGENTS must be/);
 });
 
 test('AI_EFFORT chooses how deeply Gemini reasons, and only real levels are accepted', () => {
