@@ -146,3 +146,5 @@ check('docker-base-image-pinned', /^FROM node:24-alpine@sha256:[0-9a-f]{64}$/m.t
 check('usage-summary-universal-scope', /quotaScope:[\s\S]*fourHour: 'principal',[\s\S]*weekly: 'principal'/.test(await read('src/usage.js')), 'usage summaries identify both rolling AI quotas as principal-wide');
 
 check('usage-output-cap', /admittedMaxOutputTokens/.test(await read('src/runtime.js')) && /maxOutputTokens: admittedMaxOutputTokens/.test(await read('src/runtime.js')), 'provider output limits are constrained to the amount admitted by the shared usage reservation');
+
+check('action-lease-live-finalize', /lease_until > now\(\)/.test(await read('src/run-actions.js')), 'approved side effects cannot finalize after their execution lease expires');

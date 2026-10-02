@@ -145,7 +145,7 @@ export class RunActions {
     let done = null;
     try {
       const { rows } = await this.pool.query(
-        'UPDATE run_actions SET status = $2, result = $3::jsonb, lease_until = NULL WHERE id = $1 AND status = \'running\' AND decided_by = $4 RETURNING *',
+        'UPDATE run_actions SET status = $2, result = $3::jsonb, lease_until = NULL WHERE id = $1 AND status = \'running\' AND decided_by = $4 AND lease_until > now() RETURNING *',
         [actionId, status, JSON.stringify(result ?? {}), principal.id]
       );
       done = rows[0] ?? null;
