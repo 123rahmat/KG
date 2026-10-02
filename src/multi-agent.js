@@ -825,6 +825,87 @@ function normalChatZipCodeTask(run, basePayload, task) {
   return attachments.some(item => /\.zip$/i.test(text(typeof item === 'string' ? item : item?.name ?? '')));
 }
 
+export function taskPressureMonitor({
+  run,
+  task,
+  project = null,
+  progress = {},
+  previous = null,
+  iteration = 1
+} = {}) {
+  const files = Array.isArray(project?.files) ? project.files : [];
+  const fileCount = Number(project?.fileCount ?? files.length) || 0;
+  const bytes = Number(project?.totals?.bytes) || files.reduce((sum, file) => sum + (Number(file?.bytes) || 0), 0);
+  const dependencies = Number(project?.totals?.dependencies) || (Array.isArray(project?.dependencies) ? project.dependencies.length : 0);
+  const changedFiles = Array.isArray(progress?.changedFiles) ? progress.changedFiles.filter(Boolean) : [];
+  const failedRoles = Array.isArray(progress?.failedRoles) ? progress.failedRoles.length : 0;
+  const findings = Array.isArray(progress?.findings) ? progress.findings : [];
+  const unstableFindings = findings.filter(item => ['stop', 'revise', 'investigate'].includes(text(item?.recommendation).toLowerCase())).length;
+  const confidenceGap = findings.length
+    ? Math.max(0, 0.88 - (findings.reduce((sum, item) => sum + confidenceValue(item?.confidence), 0) / findings.length))
+    : 0.18;
+
+  const projectScalePressure = ({ small: 0.15, medium: 0.32, large: 0.58, 'very-large': 0.76 }[text(project?.scale).toLowerCase()] ?? (fileCount ? Math.min(0.82, Math.log2(fileCount + 1) / 8) : 0));
+  const dependencyPressure = Math.min(0.28, dependencies / Math.max(1, fileCount) * 0.9);
+  const changePressure = Math.min(0.24, changedFiles.length / Math.max(1, Math.min(50, fileCount || 50)));
+  const failurePressure = Math.min(0.32, failedRoles * 0.08 + unstableFindings * 0.06);
+  const observedPressure = decisionPressure(run, task, {
+    ...progress,
+    findings,
+    failedRoles: Array.from({ length: failedRoles }, () => 'failure'),
+    goal: progress?.goal ?? run?.goal
+  });
+  const pressure = Math.max(
+    observedPressure,
+    projectScalePressure,
+    Math.min(1, projectScalePressure + dependencyPressure + changePressure + failurePressure + confidenceGap)
+  );
+
+  const previousPressure = Number(previous?.pressure);
+  const hasPrevious = Number.isFinite(previousPressure);
+  const delta = hasPrevious ? Number((pressure - previousPressure).toFixed(3)) : 0;
+  const direction = !hasPrevious || Math.abs(delta) < 0.05 ? 'stable' : delta > 0 ? 'up' : 'down';
+  const materialStateChange = Boolean(
+    !previous
+    || fileCount !== Number(previous.fileCount ?? fileCount)
+    || dependencies !== Number(previous.dependencies ?? dependencies)
+    || bytes !== Number(previous.bytes ?? bytes)
+    || changedFiles.length > 0
+    || failedRoles !== Number(previous.failedRoles ?? failedRoles)
+  );
+  const topologyAction = singleProjectMonitorAction(project, pressure, delta, direction);
+
+  return {
+    agent: 'task-pressure-monitor',
+    mode: 'continuous-event-driven-supervision',
+    iteration,
+    pressure: Number(pressure.toFixed(3)),
+    previousPressure: hasPrevious ? Number(previousPressure.toFixed(3)) : null,
+    delta,
+    direction,
+    materialStateChange,
+    topologyAction,
+    fileCount,
+    bytes,
+    dependencies,
+    changedFileCount: changedFiles.length,
+    failedRoles,
+    unstableFindings,
+    confidenceGap: Number(confidenceGap.toFixed(3)),
+    reason: topologyAction === 'expand'
+      ? 'live work pressure materially increased; prepare more independent work capacity'
+      : topologyAction === 'contract'
+        ? 'live work pressure materially decreased; consolidate unnecessary coordination'
+        : 'current capacity remains proportionate to live work pressure'
+  };
+}
+
+function singleProjectMonitorAction(project, pressure, delta, direction) {
+  if (pressure >= 0.72 || (direction === 'up' && delta >= 0.10)) return 'expand';
+  if (pressure <= 0.28 && direction === 'down' && !project?.coupled) return 'contract';
+  return 'hold';
+}
+
 function codeWorkspacePanelWidth(run, task, maxAgents, iteration = 1, {
   fileCount = 0,
   remainingBudgetRatio = 1
@@ -994,17 +1075,29 @@ async function runCodeWorkspaceAgentPanels({
   // Both Code Workspace and normal-chat ZIP coding use this exact panel
   // engine. The only topology difference is how many panel instances the
   // planner is allowed to create.
+  let pressureMonitor = taskPressureMonitor({
+    run,
+    task,
+    project: basePayload?.codeIntelligence?.project,
+    progress: { goal: basePayload?.goal, evidenceSoFar: basePayload?.evidenceSoFar, findings: [] },
+    previous: null,
+    iteration: 1
+  });
   const subsystemPlan = singlePanel
     ? buildSubsystemPlan(basePayload.codeIntelligence.project, {
         maxSubsystems: 1,
         risk: run?.situation?.risk ?? 'ordinary',
+        adaptivePressure: pressureMonitor.pressure,
+        pressureTrend: pressureMonitor.direction,
         revisionId: basePayload?.codeIntelligence?.project?.revisionId ?? basePayload?.workspace?.revisionId ?? null
       })
-    : (providedSubsystemPlan ?? buildSubsystemPlan(basePayload.codeIntelligence.project, {
+    : buildSubsystemPlan(basePayload.codeIntelligence.project, {
         maxSubsystems: 24,
         risk: run?.situation?.risk ?? 'ordinary',
+        adaptivePressure: pressureMonitor.pressure,
+        pressureTrend: pressureMonitor.direction,
         revisionId: basePayload?.codeIntelligence?.project?.revisionId ?? basePayload?.workspace?.revisionId ?? null
-      }));
+      });
   if (!subsystemPlan?.subsystems?.length) {
     return { enabled: false, decision: { ...initialDecision, reason: 'no-subsystems' }, brief: null, agents: [], findings: [], arbiter: null };
   }
@@ -1061,10 +1154,29 @@ async function runCodeWorkspaceAgentPanels({
 
       const representativeState = subsystemState.get(ready[0].id);
       const panelIteration = Math.max(1, Number(representativeState?.iteration ?? 0) + 1);
-      const panelWidth = codeWorkspacePanelWidth(run, task, maxAgents, panelIteration, {
+      pressureMonitor = taskPressureMonitor({
+        run,
+        task,
+        project: subsystemPlan.project,
+        progress: {
+          goal: basePayload?.goal,
+          evidenceSoFar: basePayload?.evidenceSoFar,
+          findings: allFindings,
+          failedRoles: agentStates.filter(item => item.status !== 'complete').map(item => item.role),
+          changedFiles: basePayload?.workspace?.paths ?? []
+        },
+        previous: pressureMonitor,
+        iteration: panelIteration
+      });
+      const basePanelWidth = codeWorkspacePanelWidth(run, task, maxAgents, panelIteration, {
         fileCount: Number(subsystemPlan.project?.fileCount ?? 0),
         remainingBudgetRatio: remainingBudgetRatio()
       });
+      const panelWidth = pressureMonitor.topologyAction === 'expand'
+        ? Math.min(maxAgents, basePanelWidth + 1)
+        : pressureMonitor.topologyAction === 'contract'
+          ? Math.max(1, basePanelWidth - 1)
+          : basePanelWidth;
       const maxPanels = singlePanel
         ? 1
         : Math.max(1, Math.floor(Math.max(1, effectiveMaxParallel) / Math.max(1, panelWidth)));
@@ -1325,6 +1437,12 @@ async function runCodeWorkspaceAgentPanels({
       const errorRate = results.length
         ? results.filter(item => !item.parsed).length / results.length
         : 1;
+      if (pressureMonitor.topologyAction === 'expand') {
+        effectiveMaxParallel = Math.min(maxAgents, effectiveMaxParallel + 1);
+      } else if (pressureMonitor.topologyAction === 'contract') {
+        effectiveMaxParallel = Math.max(1, effectiveMaxParallel - 1);
+      }
+
       const concurrency = adaptConcurrency({
         current: effectiveMaxParallel,
         min: 1,
@@ -1424,6 +1542,17 @@ async function runCodeWorkspaceAgentPanels({
     panelMode: singlePanel ? 'normal-chat-zip-single-panel' : 'subsystem-panel-orchestration',
     panelScope: singlePanel ? 'entire-attached-zip-project' : null,
     panelEngine: 'unified-adaptive-code-panel-v1',
+    taskPressureMonitor: {
+      agent: pressureMonitor.agent,
+      mode: pressureMonitor.mode,
+      pressure: pressureMonitor.pressure,
+      direction: pressureMonitor.direction,
+      topologyAction: pressureMonitor.topologyAction,
+      changedFiles: pressureMonitor.changedFileCount,
+      fileCount: pressureMonitor.fileCount,
+      dependencies: pressureMonitor.dependencies,
+      materialStateChange: pressureMonitor.materialStateChange
+    },
     codingEconomy: {
       maxPanelAgents: CODE_WORKSPACE_MAX_PANEL_AGENTS,
       iterationPolicy: 'adaptive-1-to-4-from-risk-complexity-verification-failure',
