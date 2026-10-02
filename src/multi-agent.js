@@ -1163,7 +1163,7 @@ async function runCodeWorkspaceAgentPanels({
           evidenceSoFar: basePayload?.evidenceSoFar,
           findings: allFindings,
           failedRoles: agentStates.filter(item => item.status !== 'complete').map(item => item.role),
-          changedFiles: basePayload?.workspace?.paths ?? []
+          changedFiles: basePayload?.changeImpact?.changedArtifacts ?? basePayload?.changedFiles ?? []
         },
         previous: pressureMonitor,
         iteration: panelIteration
