@@ -67,7 +67,7 @@ test('expired approved actions become explicitly uncertain instead of hanging fo
       assert.equal(await actions.recoverExpired({ limit: 10 }), 1);
       const seen = await runDbScope(
         { principalId: owner.principal.id, workspaceId: 'shared', role: 'editor' },
-        () => actions.list({ principalId: owner.principal.id, workspaceId: 'shared' }, runId)
+        () => actions.list({ principalId: owner.principal.id, workspaceId: 'shared' }, run.id)
       );
       assert.equal(seen[0].status, 'uncertain');
       assert.equal(seen[0].result.code, 'execution-outcome-uncertain');
