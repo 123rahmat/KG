@@ -6,6 +6,7 @@ import {
   agentModelFor,
   agentMessages,
   runAdaptiveAgentPanel,
+  taskPressureMonitor,
   AGENT_MAX_OUTPUT_TOKENS,
   ARBITER_MAX_OUTPUT_TOKENS
 } from '../src/multi-agent.js';
@@ -714,4 +715,64 @@ test('from-scratch coding uses the same adaptive panel engine and grows across p
   assert.equal(calls.every(item => item.body.workspacePanel.topology === 'subsystem'), true);
   assert.equal(calls.every(item => item.body.workspacePanel.writeRoots?.length === 1), true);
   assert.equal(result.brief.implementationPlan.targets.length > 0, true);
+});
+
+
+test('one task-pressure monitor tracks live work pressure and direction', () => {
+  const project = {
+    scale: 'medium',
+    fileCount: 20,
+    files: Array.from({ length: 20 }, (_, i) => ({ path: 'src/file-' + i + '.js', bytes: 100 })),
+    totals: { bytes: 2000, dependencies: 4 }
+  };
+  const initial = taskPressureMonitor({
+    run: run({ adaptation: { scale: 'medium' } }),
+    task: { id: 'build-code', type: 'code' },
+    project,
+    progress: { goal: 'Build the project', findings: [] }
+  });
+  const increased = taskPressureMonitor({
+    run: run({ adaptation: { scale: 'complex' }, attempt: 2, situation: { risk: 'high-impact', failure: 'test failed' } }),
+    task: { id: 'build-code', type: 'code' },
+    project: {
+      ...project,
+      scale: 'large',
+      fileCount: 45,
+      files: Array.from({ length: 45 }, (_, i) => ({ path: 'src/file-' + i + '.js', bytes: 100 })),
+      totals: { bytes: 4500, dependencies: 16 }
+    },
+    progress: {
+      goal: 'Build the project',
+      findings: [finding('revise', 'verification remains unresolved', { confidence: 0.42 })],
+      failedRoles: ['debugger']
+    },
+    previous: initial,
+    iteration: 2
+  });
+  assert.equal(initial.agent, 'task-pressure-monitor');
+  assert.equal(initial.mode, 'continuous-event-driven-supervision');
+  assert.ok(increased.pressure > initial.pressure);
+  assert.equal(increased.direction, 'up');
+  assert.equal(increased.topologyAction, 'expand');
+  assert.equal(increased.materialStateChange, true);
+});
+
+test('pressure-aware subsystem planning can expand and contract during the same ongoing task', async () => {
+  const planModule = await import('../src/subsystem-orchestrator.js');
+  const project = {
+    scale: 'large',
+    fileCount: 40,
+    totals: { bytes: 4000, dependencies: 2 },
+    files: [
+      ...Array.from({ length: 20 }, (_, i) => ({ path: 'auth/file-' + i + '.js', bytes: 100 })),
+      ...Array.from({ length: 20 }, (_, i) => ({ path: 'orders/file-' + i + '.js', bytes: 100 }))
+    ],
+    dependencies: []
+  };
+  const low = planModule.buildSubsystemPlan(project, { maxSubsystems: 12, adaptivePressure: 0.3, pressureTrend: 'stable' });
+  const high = planModule.buildSubsystemPlan(project, { maxSubsystems: 12, adaptivePressure: 0.9, pressureTrend: 'up' });
+  const down = planModule.buildSubsystemPlan(project, { maxSubsystems: 12, adaptivePressure: 0.2, pressureTrend: 'down' });
+  assert.ok(high.subsystems.length >= low.subsystems.length);
+  assert.ok(high.decision === undefined || high.subsystems.length >= 2);
+  assert.ok(down.subsystems.length <= high.subsystems.length);
 });
