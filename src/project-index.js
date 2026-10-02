@@ -142,6 +142,95 @@ export function projectScale(index) {
   return text(index?.hierarchy?.scale) || projectSizeClass(index?.fileCount, index?.totals?.bytes);
 }
 
+
+/**
+ * Deterministic architectural scaffold for a brand-new multi-file project.
+ * There is no source tree yet, so this creates virtual directory boundaries
+ * from the requested outcome. These roots are planning structure, not source
+ * files; implementation creates the real files later.
+ */
+export function buildScratchProjectIndex({
+  goal = '',
+  task = null,
+  requirements = [],
+  outputs = [],
+  constraints = []
+} = {}) {
+  const value = [goal, task?.purpose, ...requirements, ...outputs, ...constraints].map(text).join(' ').toLowerCase();
+  const candidates = [
+    ['frontend', /\b(?:frontend|ui|web|browser|dashboard|react|vue|svelte|page|pages)\b/],
+    ['backend', /\b(?:backend|server|api|rest|graphql|service|services)\b/],
+    ['auth', /\b(?:auth|login|logout|signup|sign[ -]?up|user(?:s| account)?|rbac|permission|role)\b/],
+    ['data', /\b(?:database|db|postgres|postgresql|mysql|sql|storage|schema|repository|persistence)\b/],
+    ['billing', /\b(?:billing|payment|payments|stripe|subscription|subscriptions|invoice|invoicing)\b/],
+    ['worker', /\b(?:worker|workers|queue|queues|job|jobs|background|async|scheduler)\b/],
+    ['integrations', /\b(?:integration|integrations|webhook|webhooks|connector|connectors|external service|third-party)\b/],
+    ['admin', /\b(?:admin|administration|backoffice|moderation|moderator)\b/],
+    ['infra', /\b(?:deploy|deployment|docker|kubernetes|ci\/cd|monitoring|observability|infrastructure|cloud)\b/]
+  ];
+  let roots = candidates.filter(([, pattern]) => pattern.test(value)).map(([name]) => name);
+  if (!roots.length) {
+    roots = /\b(?:system|platform|application|app|software|project|prototype|tool)\b/.test(value)
+      ? ['app']
+      : ['app'];
+  }
+  roots = [...new Set(roots)].slice(0, 8);
+
+  const scale = roots.length <= 1 ? 'small'
+    : roots.length <= 3 ? 'medium'
+      : roots.length <= 5 ? 'large'
+        : 'very-large';
+  const directories = roots.map((path, index) => ({
+    path,
+    depth: 1,
+    fileCount: 0,
+    bytes: 0,
+    digest: crypto.createHash('sha256').update('scratch:' + path + ':' + value.slice(0, 2000), 'utf8').digest('hex')
+  }));
+  const contentHash = crypto.createHash('sha256')
+    .update(JSON.stringify({ kind: 'scratch-project', goal: text(goal), roots, scale }), 'utf8')
+    .digest('hex');
+
+  return Object.freeze({
+    version: 1,
+    sourceKind: 'from-scratch',
+    revisionId: null,
+    contentHash,
+    fileCount: 0,
+    scale,
+    totals: { bytes: 0, symbols: 0, imports: 0, dependencies: 0, tests: 0 },
+    files: [],
+    symbols: [],
+    imports: [],
+    dependencies: [],
+    tests: [],
+    config: [],
+    entryPoints: [],
+    hierarchy: {
+      version: 1,
+      scale,
+      root: {
+        path: '',
+        depth: 0,
+        fileCount: 0,
+        bytes: 0,
+        digest: crypto.createHash('sha256').update('scratch-root:' + contentHash, 'utf8').digest('hex')
+      },
+      directories
+    },
+    profile: {
+      packageManager: null,
+      runtime: null,
+      frameworks: [],
+      scripts: {},
+      testCommands: [],
+      manifests: []
+    },
+    plannedRoots: roots,
+    planningNote: 'Virtual architecture only. No source files exist yet; subsystem roots are proposed output boundaries for the first implementation pass.'
+  });
+}
+
 /** Return directory-level scope for a coding task; file contents remain external. */
 export function hierarchicalProjectScope(index, changedPaths = [], { query = '', maxSubtrees = 12 } = {}) {
   const directories = Array.isArray(index?.hierarchy?.directories) ? index.hierarchy.directories : [];
