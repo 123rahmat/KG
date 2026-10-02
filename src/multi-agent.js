@@ -335,9 +335,9 @@ export function multiAgentDecision(run, task, { mode = 'auto', progress = {} } =
   return { enabled: false, reason: 'single-agent-sufficient', pressure };
 }
 
-function roleUtility(role, run, task, progress = {}) {
-  const signals = taskSignals(run, task, progress);
-  const observed = observedPanelSignals(progress);
+function roleUtility(role, run, task, progress = {}, precomputed = null) {
+  const signals = precomputed?.signals ?? taskSignals(run, task, progress);
+  const observed = precomputed?.observed ?? observedPanelSignals(progress);
   const typeMatch = ROLE_CATALOG[role]?.bestFor?.includes(signals.type) ||
     ROLE_CATALOG[role]?.bestFor?.includes(signals.taskId) ? 0.18 : 0;
   const completed = new Set(progress.completedRoles ?? []);
@@ -369,9 +369,9 @@ function roleUtility(role, run, task, progress = {}) {
   return Math.max(0, Math.min(1.2, base + disagreementBoost + learningBoost - resolutionPenalty - (completed.has(role) ? 1 : 0)));
 }
 
-function roleCandidates(run, task, progress = {}) {
+function roleCandidates(run, task, progress = {}, precomputed = null) {
   return Object.keys(ROLE_CATALOG)
-    .map(role => ({ role, utility: roleUtility(role, run, task, progress) }))
+    .map(role => ({ role, utility: roleUtility(role, run, task, progress, precomputed) }))
     .sort((a, b) => b.utility - a.utility || a.role.localeCompare(b.role));
 }
 
@@ -409,7 +409,10 @@ export function rolesFor(run, task, {
     // panels remain available when task pressure or explicit advanced work justifies them.
     targetCount = Math.min(maximum, Math.max(targetCount, 4));
   }
-  const candidates = roleCandidates(run, task, progress);
+  const signals = taskSignals(run, task, progress);
+  const observedSignals = observedPanelSignals(progress);
+  const precomputedSignals = { signals, observed: observedSignals };
+  const candidates = roleCandidates(run, task, progress, precomputedSignals);
   const roles = [];
   const utilities = {};
   for (const candidate of candidates) {
@@ -446,7 +449,6 @@ export function rolesFor(run, task, {
     }
   }
 
-  const signals = taskSignals(run, task, progress);
   if (signals.retrying && ['plan', 'reassess'].includes(signals.type) && targetCount >= 2 && !roles.includes('strategist')) {
     roles.splice(Math.max(0, roles.length - 1), 1, 'strategist');
     utilities.strategist = Number(roleUtility('strategist', run, task, progress).toFixed(3));
@@ -469,11 +471,11 @@ export function rolesFor(run, task, {
       stakes: Number(signals.stakes.toFixed(3)),
       recovery: Number(signals.recovery.toFixed(3)),
       concurrencyOpportunity: Number(signals.concurrencyOpportunity.toFixed(3)),
-      observedFindings: observedPanelSignals(progress).count,
-      observedConfidence: Number(observedPanelSignals(progress).confidence.toFixed(3)),
-      observedConfidenceSpread: Number(observedPanelSignals(progress).confidenceSpread.toFixed(3)),
+      observedFindings: observedSignals.count,
+      observedConfidence: Number(observedSignals.confidence.toFixed(3)),
+      observedConfidenceSpread: Number(observedSignals.confidenceSpread.toFixed(3)),
       observedDisagreement: disagreement,
-      observedResolution: Number(observedPanelSignals(progress).resolution.toFixed(3))
+      observedResolution: Number(observedSignals.resolution.toFixed(3))
     },
     utilities,
     reason: 'Task-specific allocation from current workflow state; cognitive roles are domain-agnostic.'
