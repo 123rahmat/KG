@@ -139,7 +139,7 @@ function normalizedRoleFinding(raw, role) {
     actions: list('actions'),
     evidence: list('evidence'),
     assumptions: list('assumptions'),
-    ...(implementation?.targets?.length || implementation?.tests?.length || implementation?.contractChanges?.length
+    ...(implementation?.targets?.length || implementation?.tests?.length || implementation?.contractChanges?.length || implementation?.patchProposal?.changes?.length
       ? { implementation }
       : {})
   };
@@ -531,13 +531,15 @@ function scopeImplementationProposal(finding, subsystem, codeIntelligence) {
   const proposal = finding.implementation.patchProposal;
   const expectedBaseHash = text(codeIntelligence?.project?.workspaceContentHash);
   if (!expectedBaseHash || text(proposal.baseContentHash) !== expectedBaseHash) {
-    const { patchProposal: _discarded, ...implementation } = finding.implementation;
+    const implementation = { ...finding.implementation };
+    delete implementation.patchProposal;
     return { ...finding, implementation };
   }
   const owned = new Set((subsystem.files ?? []).map(text).filter(Boolean));
   const changes = (proposal.changes ?? []).filter(change => owned.has(change.path));
   if (!changes.length) {
-    const { patchProposal: _discarded, ...implementation } = finding.implementation;
+    const implementation = { ...finding.implementation };
+    delete implementation.patchProposal;
     return { ...finding, implementation };
   }
   return {
