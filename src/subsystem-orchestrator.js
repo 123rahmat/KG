@@ -117,7 +117,7 @@ function chooseUnitRoots(index, target) {
       else seen.add(units[i]);
     }
   }
-  return [...new Set(units)].slice(0, desired);
+  return [...new Set(units)];
 }
 
 function assignedRoot(path, roots) {
