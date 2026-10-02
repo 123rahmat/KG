@@ -168,9 +168,19 @@ workspace scheduler serializes conflicting or stale revision lanes.
 
 This specialization is intentionally limited to Code Workspace coding. The
 generic multi-agent path remains available to other task surfaces without
-taking on repository-specific panel semantics. Agents remain advisory: they
-can propose exact implementation and test changes, but the server retains tool,
-write, integration, approval and verification authority.
+taking on repository-specific panel semantics.
+
+For normal chat, a ZIP-backed code project is a deliberate single-panel mode.
+The panel still uses the same adaptive intelligence, coding-aware roles,
+parallel specialist execution, memory/skills/evidence inputs, usage controls
+and disagreement handling, but the attached ZIP is treated as one project
+context rather than being split into subsystem panels. This is independent of
+user type or account role: the panel topology follows the work and current
+situation, not who the user is.
+
+Agents remain advisory: they can propose exact implementation and test changes,
+but the server retains tool, write, integration, approval and verification
+authority.
 
 The ordinary server task graph still does not execute arbitrary stored
 execution steps concurrently. Parallelism inside Code Workspace is currently
