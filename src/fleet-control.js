@@ -192,25 +192,37 @@ export class FleetStore {
   async addDependency(scope, id, dependsOnId) {
     const left = text(id); const right = text(dependsOnId);
     if (!left || !right || left === right) throw new FleetValidationError('A project cannot depend on itself');
-    const cycleSql = [
-      'WITH RECURSIVE reaches(id) AS (',
-      'SELECT depends_on_project_id FROM fleet_project_dependencies WHERE project_id=$1 AND workspace_id=$3',
-      'UNION',
-      'SELECT d.depends_on_project_id FROM fleet_project_dependencies d JOIN reaches r ON r.id=d.project_id WHERE d.workspace_id=$3)',
-      'SELECT 1 FROM reaches WHERE id=$2 LIMIT 1'
-    ].join(' ');
-    const { rows: cycle } = await this.pool.query(cycleSql, [left, right, scope.workspaceId]);
-    if (cycle.length) throw new FleetValidationError('Adding this dependency would create a project cycle');
-    const { rows: count } = await this.pool.query(
-      'SELECT count(*)::int count FROM fleet_project_dependencies WHERE project_id=$1 AND workspace_id=$2',
-      [left, scope.workspaceId]
-    );
-    if (Number(count[0]?.count || 0) >= FLEET_LIMITS.maxDependencies) throw new FleetValidationError('Project dependency limit reached');
-    await this.pool.query(
-      'INSERT INTO fleet_project_dependencies(workspace_id,project_id,depends_on_project_id) SELECT $3,$1,$2 WHERE EXISTS (SELECT 1 FROM fleet_projects WHERE id=$1 AND workspace_id=$3) AND EXISTS (SELECT 1 FROM fleet_projects WHERE id=$2 AND workspace_id=$3) ON CONFLICT DO NOTHING',
-      [left, right, scope.workspaceId]
-    );
-    return this.dependencies(scope, left);
+    return transaction(this.pool, async client => {
+      const cycleSql = [
+        'WITH RECURSIVE reaches(id) AS (',
+        'SELECT depends_on_project_id FROM fleet_project_dependencies WHERE project_id=$1 AND workspace_id=$3',
+        'UNION',
+        'SELECT d.depends_on_project_id FROM fleet_project_dependencies d JOIN reaches r ON r.id=d.project_id WHERE d.workspace_id=$3)',
+        'SELECT 1 FROM reaches WHERE id=$2 LIMIT 1'
+      ].join(' ');
+      const { rows: cycle } = await client.query(cycleSql, [left, right, scope.workspaceId]);
+      if (cycle.length) throw new FleetValidationError('Adding this dependency would create a project cycle');
+
+      const { rows: count } = await client.query(
+        'SELECT count(*)::int count FROM fleet_project_dependencies WHERE project_id=$1 AND workspace_id=$2 FOR UPDATE',
+        [left, scope.workspaceId]
+      );
+      if (Number(count[0]?.count || 0) >= FLEET_LIMITS.maxDependencies) throw new FleetValidationError('Project dependency limit reached');
+
+      const inserted = await client.query(
+        'INSERT INTO fleet_project_dependencies(workspace_id,project_id,depends_on_project_id) SELECT $3,$1,$2 WHERE EXISTS (SELECT 1 FROM fleet_projects WHERE id=$1 AND workspace_id=$3) AND EXISTS (SELECT 1 FROM fleet_projects WHERE id=$2 AND workspace_id=$3) ON CONFLICT DO NOTHING RETURNING project_id',
+        [left, right, scope.workspaceId]
+      );
+      if (!inserted.rows.length) {
+        throw new FleetValidationError('One or both fleet projects do not exist in this workspace');
+      }
+
+      const { rows } = await client.query(
+        'SELECT d.depends_on_project_id id,p.name,p.state FROM fleet_project_dependencies d JOIN fleet_projects p ON p.id=d.depends_on_project_id WHERE d.project_id=$1 AND d.workspace_id=$2 ORDER BY p.priority DESC,p.id',
+        [left, scope.workspaceId]
+      );
+      return rows.map(row => ({ id: row.id, name: row.name, state: row.state }));
+    });
   }
 
   async enqueue(scope, projectId, { runId, taskId, request = {}, maxAttempts = 3 } = {}) {
@@ -260,7 +272,7 @@ export class FleetStore {
       if (!rows.length) return 0;
       const ids = [...new Set(rows.map(row => row.project_id))];
       await client.query(
-        "UPDATE fleet_projects p SET in_flight=(SELECT count(*) FROM fleet_dispatches d WHERE d.project_id=p.id AND d.state='running'),failure_count=failure_count+1,consecutive_failures=consecutive_failures+1,updated_at=now() WHERE p.id=ANY($1::text[])",
+        "UPDATE fleet_projects p SET in_flight=(SELECT count(*) FROM fleet_dispatches d WHERE d.project_id=p.id AND d.state='running' AND d.lease_until>now()),failure_count=failure_count+1,consecutive_failures=consecutive_failures+1,updated_at=now() WHERE p.id=ANY($1::text[])",
         [ids]
       );
       return rows.length;
@@ -277,13 +289,12 @@ export class FleetStore {
     return transaction(this.pool, async client => {
       const params = [];
       const conditions = [
-"((d.state='queued' AND d.available_at<=now() AND d.attempts<d.max_attempts) OR (d.state='running' AND d.lease_until<now()))",
+        "((d.state='queued' AND d.available_at<=now() AND d.attempts<d.max_attempts) OR (d.state='running' AND d.lease_until<now()))",
         'd.attempts<d.max_attempts',
         "p.state='active'",
         "(p.next_dispatch_at IS NULL OR p.next_dispatch_at<=now())",
         '(p.budget_tokens IS NULL OR p.budget_tokens>0)',
         '(p.budget_compute_ms IS NULL OR p.budget_compute_ms>0)',
-        "p.max_concurrency>(SELECT count(*) FROM fleet_dispatches r WHERE r.project_id=d.project_id AND r.state='running')",
         "NOT EXISTS (SELECT 1 FROM fleet_project_dependencies dep WHERE dep.project_id=d.project_id AND NOT EXISTS (SELECT 1 FROM fleet_dispatches latest WHERE latest.project_id=dep.depends_on_project_id AND latest.id=(SELECT l2.id FROM fleet_dispatches l2 WHERE l2.project_id=dep.depends_on_project_id ORDER BY l2.updated_at DESC,l2.id DESC LIMIT 1) AND latest.state='succeeded'))"
       ];
       if (workspaceId) { params.push(workspaceId); conditions.unshift('d.workspace_id=$' + params.length); }
@@ -295,10 +306,18 @@ export class FleetStore {
         conditions.push('mod(abs(hashtext(d.project_id)),$' + countParam + '::int)=$' + shardParam);
       }
       const limitParam = params.length + 1; params.push(safeLimit);
+      const score = "(p.priority*10 + LEAST(120,EXTRACT(EPOCH FROM (now()-COALESCE(p.last_dispatch_at,p.created_at)))/60)*0.75 + COALESCE((p.health->>'score')::double precision,1)*20 - LEAST(80,p.consecutive_failures*p.consecutive_failures*4))";
       const sql = [
-        'WITH candidates AS (SELECT d.id FROM fleet_dispatches d JOIN fleet_projects p ON p.id=d.project_id',
+        'WITH ranked AS (',
+        'SELECT d.id,d.project_id,d.created_at,' + score + ' AS dispatch_score,',
+        'ROW_NUMBER() OVER (PARTITION BY d.project_id ORDER BY ' + score + ' DESC,d.created_at ASC,d.id ASC) AS project_rank,',
+        'GREATEST(0,p.max_concurrency-(SELECT count(*) FROM fleet_dispatches r WHERE r.project_id=d.project_id AND r.state=\'running\' AND r.lease_until>now())) AS project_slots',
+        'FROM fleet_dispatches d JOIN fleet_projects p ON p.id=d.project_id',
         'WHERE ' + conditions.join(' AND '),
-        'ORDER BY (p.priority*10 + LEAST(120,EXTRACT(EPOCH FROM (now()-COALESCE(p.last_dispatch_at,p.created_at)))/60)*0.75 + COALESCE((p.health->>\'score\')::double precision,1)*20 - LEAST(80,p.consecutive_failures*p.consecutive_failures*4)) DESC,d.created_at ASC,d.id ASC',
+        '), candidates AS (',
+        'SELECT d.id FROM fleet_dispatches d JOIN ranked r ON r.id=d.id',
+        'WHERE r.project_rank<=r.project_slots',
+        'ORDER BY r.dispatch_score DESC,r.created_at ASC,d.id ASC',
         'FOR UPDATE OF d SKIP LOCKED LIMIT $' + limitParam + ')',
         "UPDATE fleet_dispatches d SET state='running',attempts=d.attempts+1,lease_until=now()+(" + (limitParam + 1) + "::bigint*interval '1 millisecond'),worker_id=$" + (limitParam + 2) + ",started_at=COALESCE(d.started_at,now()),updated_at=now() FROM candidates c WHERE d.id=c.id RETURNING d.*"
       ].join(' ');
@@ -372,7 +391,7 @@ export class FleetStore {
         [dispatch.id, state, tokenSpent, computeSpent, error ? text(error).slice(0,1000) : null, JSON.stringify(metadata && typeof metadata === 'object' ? metadata : {})]
       );
       await client.query(
-        "UPDATE fleet_projects SET in_flight=(SELECT count(*) FROM fleet_dispatches d WHERE d.project_id=$1 AND d.state='running'),consecutive_failures=$2,success_count=success_count+$3,failure_count=failure_count+$4,health=$5::jsonb,last_dispatch_at=now(),next_dispatch_at=CASE WHEN $4>0 AND $2>=2 THEN now()+interval '5 minutes' ELSE next_dispatch_at END,budget_tokens=CASE WHEN budget_tokens IS NULL THEN NULL ELSE GREATEST(0,budget_tokens-$6) END,budget_compute_ms=CASE WHEN budget_compute_ms IS NULL THEN NULL ELSE GREATEST(0,budget_compute_ms-$7) END,updated_at=now() WHERE id=$1 AND workspace_id=$8",
+        "UPDATE fleet_projects SET in_flight=(SELECT count(*) FROM fleet_dispatches d WHERE d.project_id=$1 AND d.state='running' AND d.lease_until>now()),consecutive_failures=$2,success_count=success_count+$3,failure_count=failure_count+$4,health=$5::jsonb,last_dispatch_at=now(),next_dispatch_at=CASE WHEN $4>0 AND $2>=2 THEN now()+interval '5 minutes' ELSE next_dispatch_at END,budget_tokens=CASE WHEN budget_tokens IS NULL THEN NULL ELSE GREATEST(0,budget_tokens-$6) END,budget_compute_ms=CASE WHEN budget_compute_ms IS NULL THEN NULL ELSE GREATEST(0,budget_compute_ms-$7) END,updated_at=now() WHERE id=$1 AND workspace_id=$8",
         [dispatch.project_id, failures, succeeded ? 1 : 0, failed ? 1 : 0,
           JSON.stringify({ score: Number(score.toFixed(4)), lastOutcome: succeeded ? 'succeeded' : failed ? 'failed' : state }),
           tokenSpent, computeSpent, scope.workspaceId]
