@@ -31,7 +31,7 @@ function mergeEntitledLimit(current, candidate) {
 async function accountEntitledLimits(pool, config, principalId, defaults) {
   if (!config.stripe || !principalId) return null;
   const { rows } = await pool.query(
-    'SELECT plan_id FROM kg_account_active_billing_plans($1)',
+    'SELECT DISTINCT plan_id FROM principal_ai_entitlements WHERE principal_id = $1',
     [principalId]
   );
   const plansById = new Map((config.stripe.plans ?? []).map(plan => [plan.id, plan]));
