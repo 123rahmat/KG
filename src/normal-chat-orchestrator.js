@@ -55,18 +55,11 @@ function hasDataNeed(run, task, payload) {
 
 function hasResourceNeed(run, task, payload) {
   const type = text(task?.type).toLowerCase();
-  const selected = payload?.adaptation?.resourcePlan?.selected ?? {};
-  const selectedTools = Array.isArray(selected.tools) ? selected.tools : [];
-  const selectedArtifacts = Array.isArray(selected.artifacts) ? selected.artifacts : [];
-  const selectedDataSources = Array.isArray(selected.dataSources) ? selected.dataSources : [];
   return CONTROL_TASKS.has(type)
     && Boolean(
       isCodeTask(task, payload)
       || hasDataNeed(run, task, payload)
       || ['investigate', 'tool'].includes(type)
-      || selectedTools.length
-      || selectedArtifacts.length
-      || selectedDataSources.length
     );
 }
 
