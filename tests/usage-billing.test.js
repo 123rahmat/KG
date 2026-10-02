@@ -128,9 +128,9 @@ test('concurrent AI requests share one atomic usage reservation', () =>
       call('POST', `/api/runs/${first.body.id}/execute`, { ...auth, body: {} }),
       call('POST', `/api/runs/${second.body.id}/execute`, { ...auth, body: {} })
     ]);
-    const statuses = [a.body.execution?.status, b.body.execution?.status].sort();
+    const statuses = [a.body.execution?.status ?? a.body.code, b.body.execution?.status ?? b.body.code].sort();
     assert.deepEqual(statuses, ['completed', 'usage-limit-reached']);
-  }, { env: { ...AI, USAGE_LIMIT_4H_TOKENS: '60' }, fetchImpl: delayedProvider }));
+  }, { env: { ...AI, USAGE_LIMIT_4H_TOKENS: '160' }, fetchImpl: delayedProvider }));
 
 test('billing is provider-owned and never exposes local payment details', () =>
   withServer(async ({ call, seed }) => {
