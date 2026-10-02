@@ -39,7 +39,11 @@ test('every AI call is recorded and shows in the 4-hour and weekly windows and t
     assert.equal(session.limit, null, 'no limit is configured');
     assert.ok(usage.body.bySource.chat >= 50);
     assert.equal(usage.body.days.length, 7);
-    assert.equal(usage.body.days.at(-1).tokens, week.used);
+    assert.equal(
+      usage.body.days.reduce((sum, day) => sum + day.tokens, 0),
+      week.used,
+      'the seven daily buckets reconcile to the weekly total'
+    );
     assert.equal(usage.body.context.used, 40, 'the prompt of the latest call');
     assert.equal(usage.body.context.limit, 1_048_576, 'the Gemini catalogue window');
     assert.equal(usage.body.model.provider, 'google');
@@ -104,10 +108,20 @@ test('concurrent AI requests share one atomic usage reservation', () =>
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const first = await call('POST', '/api/runs', {
-      ...auth, body: { goal: 'Concurrent one', conversationId: 'concurrent-0001' }
+      ...auth,
+      body: {
+        goal: 'Concurrent one',
+        conversationId: 'concurrent-0001',
+        privacyConsent: { modelProvider: true }
+      }
     });
     const second = await call('POST', '/api/runs', {
-      ...auth, body: { goal: 'Concurrent two', conversationId: 'concurrent-0002' }
+      ...auth,
+      body: {
+        goal: 'Concurrent two',
+        conversationId: 'concurrent-0002',
+        privacyConsent: { modelProvider: true }
+      }
     });
 
     const [a, b] = await Promise.all([
@@ -118,8 +132,8 @@ test('concurrent AI requests share one atomic usage reservation', () =>
     assert.deepEqual(statuses, ['completed', 'usage-limit-reached']);
   }, { env: { ...AI, USAGE_LIMIT_4H_TOKENS: '60' }, fetchImpl: delayedProvider }));
 
-test('billing details are for admins, never hold card numbers, and link to the payment portal', () =>
-  withServer(async ({ call, seed, pool }) => {
+test('billing is provider-owned and never exposes local payment details', () =>
+  withServer(async ({ call, seed }) => {
     const admin = await seed();
     const viewer = await seed({ name: 'Viewer', role: 'viewer' });
     const asAdmin = { token: admin.token, workspace: admin.workspace };
@@ -128,43 +142,37 @@ test('billing details are for admins, never hold card numbers, and link to the p
     assert.equal(empty.status, 200);
     assert.equal(empty.body.plan, 'Team');
     assert.equal(empty.body.portalUrl, 'https://billing.example.com/portal');
-    assert.equal(empty.body.canEdit, true);
+    assert.equal(empty.body.canManage, true);
     assert.deepEqual(empty.body.limits, { fourHourTokens: 1000, weeklyTokens: 20000 });
+    assert.equal(empty.body.billingAuthority, 'stripe');
+    assert.equal(empty.body.billingDetailsStoredLocally, false);
+    assert.equal(Object.hasOwn(empty.body, 'details'), false);
 
-    const saved = await call('PUT', '/api/billing', { ...asAdmin, body: { billingEmail: 'accounts@example.com', companyName: 'Example Ltd', taxId: 'PK-1234567', country: 'Pakistan', address: 'Lahore' } });
-    assert.equal(saved.status, 200);
-    const read = await call('GET', '/api/billing', asAdmin);
-    assert.equal(read.body.details.companyName, 'Example Ltd');
-    const { rows: [stored] } = await pool.query(
-      'SELECT billing_email, company_name, tax_id, country, address, stripe_customer_id, stripe_subscription_id, billing_private_enc, billing_encryption_version FROM workspace_billing WHERE workspace_id = $1',
-      [admin.workspace]
-    );
-    assert.equal(stored.billing_email, '');
-    assert.equal(stored.company_name, '');
-    assert.equal(stored.tax_id, '');
-    assert.equal(stored.country, '');
-    assert.equal(stored.address, '');
-    assert.equal(stored.stripe_customer_id, null);
-    assert.equal(stored.stripe_subscription_id, null);
-    assert.equal(stored.billing_encryption_version, 1);
-    assert.ok(stored.billing_private_enc);
-    assert.equal(stored.billing_private_enc.includes('Example Ltd'), false);
-    assert.equal(stored.billing_private_enc.includes('accounts@example.com'), false);
+    const localWrite = await call('PUT', '/api/billing', {
+      ...asAdmin,
+      body: { billingEmail: 'accounts@example.com', companyName: 'Example Ltd' }
+    });
+    assert.equal(localWrite.status, 404);
 
-    const card = await call('PUT', '/api/billing', { ...asAdmin, body: { address: 'Card 4242 4242 4242 4242' } });
-    assert.equal(card.status, 400);
-    assert.equal(card.body.code, 'billing-card-data');
-    const email = await call('PUT', '/api/billing', { ...asAdmin, body: { billingEmail: 'not an email' } });
-    assert.equal(email.status, 400);
+    const cardWrite = await call('PUT', '/api/billing', {
+      ...asAdmin,
+      body: { address: 'Card 4242 4242 4242 4242' }
+    });
+    assert.equal(cardWrite.status, 404);
 
     const seen = await call('GET', '/api/billing', { token: viewer.token, workspace: viewer.workspace });
     assert.equal(seen.status, 200);
-    assert.equal(seen.body.details, null);
     assert.equal(seen.body.portalUrl, null);
-    assert.equal(seen.body.canEdit, false);
-    const denied = await call('PUT', '/api/billing', { token: viewer.token, workspace: viewer.workspace, body: { companyName: 'X' } });
-    assert.equal(denied.status, 403);
-  }, { env: { BILLING_PLAN_NAME: 'Team', BILLING_PORTAL_URL: 'https://billing.example.com/portal', USAGE_LIMIT_4H_TOKENS: '1000', USAGE_LIMIT_WEEKLY_TOKENS: '20000' } }));
+    assert.equal(seen.body.canManage, false);
+    assert.equal(Object.hasOwn(seen.body, 'details'), false);
+  }, {
+    env: {
+      BILLING_PLAN_NAME: 'Team',
+      BILLING_PORTAL_URL: 'https://billing.example.com/portal',
+      USAGE_LIMIT_4H_TOKENS: '1000',
+      USAGE_LIMIT_WEEKLY_TOKENS: '20000'
+    }
+  }));
 
 test('a person can see their signed-in sessions and sign out everywhere else', () =>
   withServer(async ({ seed, base }) => {
@@ -275,7 +283,7 @@ test('usage windows are universal to the person across workspaces', () =>
 
 
 test('the account entitlement is stable when workspaces have different paid plans', () =>
-  withServer(async ({ call, seed, pool, config }) => {
+  withServer(async ({ call, seed, pool }) => {
     const first = await seed({ workspace: 'entitlement-a' });
     const secondWorkspace = 'entitlement-b';
     await pool.query(
@@ -290,25 +298,6 @@ test('the account entitlement is stable when workspaces have different paid plan
       'INSERT INTO memberships (workspace_id, principal_id, role) VALUES ($1, $2, $3)',
       [secondWorkspace, first.principal.id, 'editor']
     );
-
-    config.stripe = {
-      plans: [
-        {
-          id: 'team',
-          name: 'Team',
-          fourHourTokens: 1000,
-          weeklyTokens: 10000,
-          modelIds: []
-        },
-        {
-          id: 'pro',
-          name: 'Pro',
-          fourHourTokens: 4000,
-          weeklyTokens: 40000,
-          modelIds: []
-        }
-      ]
-    };
 
     await pool.query(
       `INSERT INTO workspace_billing (workspace_id, subscription_status, plan_id)
@@ -331,7 +320,17 @@ test('the account entitlement is stable when workspaces have different paid plan
     assert.equal(b.body.plan, 'Account-wide entitlement');
     assert.equal(a.body.quotaScope.entitlement, 'principal');
     assert.equal(b.body.quotaScope.entitlement, 'principal');
-  }));
+  }), {
+    env: {
+      STRIPE_SECRET_KEY: 'sk_test_abc123',
+      STRIPE_WEBHOOK_SECRET: 'whsec_testsecret',
+      PUBLIC_URL: 'https://ai.example.com',
+      STRIPE_PLANS: JSON.stringify([
+        { id: 'team', name: 'Team', priceId: 'price_team123', fourHourTokens: 1000, weeklyTokens: 10000 },
+        { id: 'pro', name: 'Pro', priceId: 'price_pro123', fourHourTokens: 4000, weeklyTokens: 40000 }
+      ])
+    }
+  });
 
 
 test('a universal quota cannot be bypassed by switching workspaces', () =>
