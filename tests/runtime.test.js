@@ -218,6 +218,26 @@ test('managed runner preserves explicit failure status while proving execution o
   assert.equal(result.executionReceipt.executionId, 'run-1');
 });
 
+test('managed runner does not retry an ambiguous transport failure', async () => {
+  let calls = 0;
+  const result = await callRunner('http://runner.test/v1/execute', {
+    runId: 'run-transport',
+    executionId: 'run-transport',
+    task: { id: 'test-code', type: 'code' },
+    executionTarget: 'general-ai-sandbox'
+  }, {
+    config: { ...base, runners: { token: 'runner-token' } },
+    sleep: async () => { throw new Error('sleep should not be called'); },
+    fetchImpl: async () => {
+      calls += 1;
+      throw new TypeError('connection reset');
+    }
+  });
+  assert.equal(calls, 1);
+  assert.equal(result.executed, false);
+  assert.equal(result.status, 'unreachable');
+});
+
 test('malformed provider responses are incomplete instead of throwing', async () => {
   const result = await callModel([{ role: 'user', content: 'hello' }], {
     config: { ...base, ai: { provider: 'google', apiKey: 'key', vertexProject: 'test-project', vertexAccessToken: 'test-token' } },
