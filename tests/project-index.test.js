@@ -4,7 +4,8 @@ import {
   buildProjectIndex,
   buildProjectHierarchy,
   hierarchicalProjectScope,
-  projectScale
+  projectScale,
+  buildScratchProjectIndex
 } from '../src/project-index.js';
 
 test('hierarchical index stays deterministic and classifies very-large projects', () => {
@@ -58,4 +59,20 @@ test('buildProjectHierarchy aggregates files by directory with stable subtree di
   assert.equal(hierarchy.root.fileCount, 2);
   assert.equal(hierarchy.directories.find(node => node.path === 'a').bytes, 12);
   assert.notEqual(hierarchy.root.digest, hierarchy.directories.find(node => node.path === 'a').digest);
+});
+
+test('scratch projects receive an adaptive virtual architecture before the first file exists', () => {
+  const index = buildScratchProjectIndex({
+    goal: 'Build a SaaS platform with web UI, API, authentication, database, billing and background workers',
+    requirements: ['secure login', 'subscription billing', 'async jobs']
+  });
+  assert.equal(index.fileCount, 0);
+  assert.equal(index.sourceKind, 'from-scratch');
+  assert.ok(index.plannedRoots.includes('frontend'));
+  assert.ok(index.plannedRoots.includes('backend'));
+  assert.ok(index.plannedRoots.includes('auth'));
+  assert.ok(index.plannedRoots.includes('data'));
+  assert.ok(index.plannedRoots.includes('billing'));
+  assert.ok(index.plannedRoots.includes('worker'));
+  assert.ok(index.scale === 'large' || index.scale === 'very-large');
 });
