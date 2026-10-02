@@ -764,7 +764,7 @@ export async function loadSelectedSkills(goal, {
     taskType, intent, capabilities, limit, learnedSkills, skillLevel, preferences, situation
   });
   const loaded = [];
-  for (const planItem of plan.skills) {
+  for (const planItem of selected) {
     const descriptor = planItem;
     try {
       const skill = await loadSkill(descriptor, { maxBytes: MAX_SKILL_BYTES });
