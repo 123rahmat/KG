@@ -1,14 +1,12 @@
 /**
- * Account routes: AI usage, workspace billing details, and sign-in sessions.
+ * Account routes: AI usage, Stripe-hosted billing and sign-in sessions.
  *
- * Billing never touches card data. A payment method and invoices are managed
- * in the payment provider's customer portal (BILLING_PORTAL_URL); this app
- * keeps only the invoice details a workspace admin enters.
+ * Billing is intentionally provider-owned. Kindgleam exposes plan/entitlement
+ * state but does not collect, store or edit billing-profile/payment details.
  */
 
 import { text, parseCookies, sessionCookieName } from '../http/context.js';
 import { usageSummary, limitsFor } from '../usage.js';
-import { transaction } from '../db.js';
 import { ScheduleError } from '../scheduling.js';
 import { MemoryError } from '../memory.js';
 import { termsStatus, acceptTerms } from '../terms.js';
@@ -16,15 +14,6 @@ import crypto from 'node:crypto';
 import { encryptJson, decryptJson } from '../data-protection.js';
 
 const CONVERSATION_ID = /^[A-Za-z0-9-]{8,64}$/;
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const BILLING_FIELDS = Object.freeze({
-  billingEmail: { column: 'billing_email', max: 200 },
-  companyName: { column: 'company_name', max: 200 },
-  taxId: { column: 'tax_id', max: 64 },
-  country: { column: 'country', max: 80 },
-  address: { column: 'address', max: 500 }
-});
-
 export function registerAccountRoutes(app, { config, pool, identity, audit, route, scoped, scheduler = null, memories = null }) {
   app.get('/api/usage', scoped('viewer'), route(async (req, res) => {
     const conversationId = text(req.query?.conversationId);
@@ -41,28 +30,23 @@ export function registerAccountRoutes(app, { config, pool, identity, audit, rout
   app.get('/api/billing', scoped('viewer'), route(async (req, res) => {
     const admin = req.scope.role === 'admin';
     const { rows: [row] } = await pool.query('SELECT * FROM workspace_billing WHERE workspace_id = $1', [req.scope.workspaceId]);
-    const privateBilling = row?.billing_private_enc
-      ? decryptJson(config.security.billingEncryptionKey, 'workspace-billing-v1', row.billing_private_enc)
-      : null;
     const limits = await limitsFor(pool, config, req.scope.workspaceId, req.principal.id);
     res.json({
       plan: limits.planName,
       planId: limits.planId,
       supportEmail: config.billing.supportEmail,
-      // Only the people who pay see where to pay.
+      // Stripe is the system of record for payment methods, invoices and
+      // customer billing details. Kindgleam keeps only entitlement state and
+      // opaque provider references required to open the hosted portal.
       portalUrl: admin && !config.stripe ? config.billing.portalUrl : null,
       portalConfigured: Boolean(config.stripe || config.billing.portalUrl),
-      canEdit: admin,
       canManage: admin && Boolean(config.stripe || config.billing.portalUrl),
       limits: { fourHourTokens: limits.fourHourTokens || null, weeklyTokens: limits.weeklyTokens || null },
       stripe: config.stripe ? {
-        // Free first, then the paid plans in their configured order. Price
-        // ids stay on the server.
         plans: [
           { id: 'free', free: true, name: config.billing.free.name, price: '$0', description: config.billing.free.description, features: config.billing.free.features, fourHourTokens: config.usage.fourHourTokens, weeklyTokens: config.usage.weeklyTokens },
           ...config.stripe.plans.map(({ priceId: _price, priceIds: _prices, ...plan }) => plan)
         ],
-        // Every member may see whether the workspace is paid up.
         subscription: row?.subscription_status ? {
           status: row.subscription_status,
           planId: row.plan_id || null,
@@ -70,56 +54,9 @@ export function registerAccountRoutes(app, { config, pool, identity, audit, rout
           cancelAtPeriodEnd: row.cancel_at_period_end
         } : null
       } : null,
-      details: admin && privateBilling
-        ? Object.fromEntries(Object.keys(BILLING_FIELDS).map(key => [key, privateBilling[key] ?? '']))
-        : admin ? Object.fromEntries(Object.keys(BILLING_FIELDS).map(key => [key, ''])) : null,
-      updatedAt: admin ? row?.updated_at ?? null : null
+      billingAuthority: 'stripe',
+      billingDetailsStoredLocally: false
     });
-  }));
-
-  app.put('/api/billing', scoped('admin'), route(async (req, res) => {
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const values = {};
-    for (const [key, field] of Object.entries(BILLING_FIELDS)) {
-      const value = text(body[key]);
-      if (value.length > field.max) return res.status(400).json({ error: `${key} is too long (at most ${field.max} characters).`, code: 'billing-invalid' });
-      values[key] = value;
-    }
-    if (values.billingEmail && !EMAIL.test(values.billingEmail)) {
-      return res.status(400).json({ error: 'Billing email must be an email address.', code: 'billing-invalid' });
-    }
-    // Card numbers do not belong here; refuse anything that looks like one.
-    if (Object.values(values).some(value => /\b(?:\d[ -]?){13,19}\b/.test(value))) {
-      return res.status(400).json({ error: 'Do not enter card numbers here. Payment methods are managed in the payment portal.', code: 'billing-card-data' });
-    }
-    await transaction(pool, async client => {
-      const { rows: [existing] } = await client.query(
-        'SELECT billing_private_enc FROM workspace_billing WHERE workspace_id = $1 FOR UPDATE',
-        [req.scope.workspaceId]
-      );
-      const current = existing?.billing_private_enc
-        ? decryptJson(config.security.billingEncryptionKey, 'workspace-billing-v1', existing.billing_private_enc)
-        : {};
-      const privateBilling = { ...current, ...values, stripeCustomerId: current.stripeCustomerId ?? null, stripeSubscriptionId: current.stripeSubscriptionId ?? null };
-      const encoded = encryptJson(config.security.billingEncryptionKey, 'workspace-billing-v1', privateBilling);
-      await client.query(
-        `INSERT INTO workspace_billing
-          (workspace_id, billing_email, company_name, tax_id, country, address, stripe_customer_id, stripe_subscription_id, billing_private_enc, billing_encryption_version, updated_by, updated_at)
-         VALUES ($1, '', '', '', '', '', NULL, NULL, $2, 1, $3, now())
-         ON CONFLICT (workspace_id) DO UPDATE SET
-           billing_private_enc = EXCLUDED.billing_private_enc,
-           billing_encryption_version = 1,
-           billing_email = '', company_name = '', tax_id = '', country = '', address = '',
-           stripe_customer_id = NULL, stripe_subscription_id = NULL,
-           updated_by = EXCLUDED.updated_by, updated_at = now()`,
-        [req.scope.workspaceId, encoded, req.principal.id]
-      );
-      await audit?.record({
-        principalId: req.principal.id, workspaceId: req.scope.workspaceId, action: 'billing.update',
-        target: req.scope.workspaceId, outcome: 'allowed', detail: { fields: Object.keys(values).filter(key => values[key]) }, requestId: req.requestId
-      }, client);
-    });
-    res.json({ details: values });
   }));
 
   app.get('/api/sessions', route(async (req, res) => {
