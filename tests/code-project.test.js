@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { withServer, jsonResponse, stepsIn, advanceTo, codeWritten } from './helpers.js';
 import { zip } from './document-fixtures.js';
-import { codeFiles, missingTests, sandboxPayload, mergeFix, builtCode, repairContext, hasCode, normalizePackage, repairDecision } from '../src/code-workflow.js';
+import { codeFiles, missingTests, sandboxPayload, mergeFix, builtCode, repairContext, hasCode, normalizePackage, repairDecision, materializeCodePackage } from '../src/code-workflow.js';
+import { workspaceContentHash } from '../src/code-workspace.js';
 import { validateJob, containerArgs, SandboxError, testSummary } from '../src/sandbox.js';
 import { readProject, formatOf } from '../src/documents.js';
 import { projectView, rankFiles, words } from '../src/project-view.js';
@@ -81,6 +82,23 @@ test('a project runs on top of the attached project: unchanged files stay, chang
   assert.equal(payload.files['shop/pricing.py'], 'NEW');
   // A single file stays a single file.
   assert.deepEqual(sandboxPayload({ language: 'python', source: 'print(1)', tests: 'import main' }), { language: 'python', source: 'print(1)', tests: 'import main' });
+});
+
+test('surgical code patches reject stale workspace revisions', () => {
+  const baseFiles = [{ path: 'app.py', content: 'VALUE = 1\n' }];
+  const hash = workspaceContentHash(baseFiles);
+  const patch = {
+    language: 'python',
+    patches: [{ path: 'app.py', kind: 'upsert', content: 'VALUE = 2\n' }],
+    baseContentHash: hash
+  };
+  const changedBase = [{ path: 'app.py', content: 'VALUE = 9\n' }];
+  assert.throws(
+    () => materializeCodePackage(patch, { baseFiles: changedBase, baseContentHash: hash }),
+    error => error?.code === 'workspace-revision-stale'
+  );
+  const materialized = materializeCodePackage(patch, { baseFiles, baseContentHash: hash });
+  assert.equal(materialized.files[0].content, 'VALUE = 2\n');
 });
 
 test('a fix returns only the files it changes and is laid over the project it fixes', () => {
