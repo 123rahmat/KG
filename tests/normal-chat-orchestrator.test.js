@@ -9,7 +9,7 @@ const run = extra => ({
   goal: 'Build and test a small application with the attached data.',
   situation: { successCriteria: ['works'], constraints: [] },
   adaptation: { scale: 'standard', dataClasses: ['user-content'] },
-  tasks: [{ id: 'understand', type: 'understand', status: 'complete' }],
+  tasks: [{ id: 'understand', type: 'understand', status: 'complete' }, { id: 'respond', type: 'respond', status: 'pending' }],
   ...extra
 });
 
