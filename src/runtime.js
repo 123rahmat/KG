@@ -14,6 +14,7 @@ import { AdaptiveProviderGovernor } from './adaptive-provider-governor.js';
 const text = value => String(value ?? '').trim();
 const providerGovernor = new AdaptiveProviderGovernor();
 export const providerConcurrencyStats = () => providerGovernor.stats();
+export const resetProviderConcurrency = () => providerGovernor.reset();
 
 export const MODEL_TIMEOUT_MS = 45_000;
 /** How long one call may spend moving through backup models. */
@@ -297,8 +298,10 @@ export async function callModel(messages, {
 
   const credential = selected.vertexProject ? await vertexAccessToken(config) : selected.apiKey;
   if (!credential) return null;
-  const request = async (url, headers, requestBody, attempts) => {
-    const outcome = await withRetry(async () => {
+  const request = async (model, url, headers, requestBody, attempts) => {
+    const modelKey = provider + ':' + model;
+    providerGovernor.configure(modelKey, providerLimit);
+    const outcome = await providerGovernor.run(modelKey, () => withRetry(async () => {
       const response = await fetchImpl(url, {
         method: 'POST',
         headers,
@@ -310,7 +313,7 @@ export async function callModel(messages, {
         retryable: !response.ok && RETRY_STATUS.has(response.status), status: response.status, raw,
         retryAfterMs: response.ok ? null : retryAfterMs(response.headers, raw)
       };
-    }, { sleep, retries: attempts, backoffMs: 1000, maxWaitMs: 8000 }).catch(error => {
+    }, { sleep, retries: attempts, backoffMs: 1000, maxWaitMs: 8000 })).catch(error => {
       // A model that does not answer in time, or a dropped connection, is the
       // model being unavailable: the next model is tried and the person is
       // told to try again, instead of the step failing as an internal error.
@@ -351,7 +354,7 @@ export async function callModel(messages, {
         // With another model to turn to, a failing one is not waited on.
         const alone = models.length === 1 || (pass > 0 && index === candidates.length - 1);
         try {
-          const segment = await request(url, headers, body, alone ? retries : 0);
+          const segment = await request(candidate, url, headers, body, alone ? retries : 0);
           // An empty answer or a garbled tool call (small models asked to
           // search) is worth another model's try before it is accepted.
           const hollow = SEARCH_TOOL_FAILURES.has(segment?.incomplete) || (!text(segment?.text) && segment?.incomplete !== 'refusal');
