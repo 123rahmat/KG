@@ -56,6 +56,33 @@ test('roles adapt to the task and retry state', () => {
   assert.equal(recovery.roles.includes('strategist'), true);
 });
 
+test('always mode preserves the requested specialist floor and parallel scheduler honors it', async () => {
+  const allocation = rolesFor(
+    run({ adaptation: { scale: 'complex' } }),
+    { id: 'plan', type: 'plan' },
+    { mode: 'always', maxAgents: 4 }
+  );
+  assert.ok(allocation.roles.length >= 2);
+  assert.ok(allocation.agentCount >= 2);
+
+  const calls = [];
+  const result = await runAdaptiveAgentPanel({
+    run: run({ adaptation: { scale: 'complex' } }),
+    task: { id: 'plan', type: 'plan' },
+    basePayload: { goal: 'Plan a deterministic implementation', task: { id: 'plan', type: 'plan' } },
+    selection,
+    primaryModelId: 'google:gemini-3.8-flash',
+    config: { agents: { multiAgent: 'always', maxAgents: 4 } },
+    canSpend: async () => true,
+    modelCaller: async (_messages, options) => {
+      calls.push(options);
+      return { text: JSON.stringify(finding('proceed', 'clear evidence', { confidence: 0.94 })), provider: 'google', model: options.modelId, usage: null };
+    }
+  });
+  assert.ok(calls.length >= 2);
+  assert.ok(result.waves[0].parallel);
+});
+
 test('model selection seeks diversity but falls back to the primary model', () => {
   const used = agentModelFor(selection, 'google:gemini-3.8-flash', 'architect');
   assert.equal(used, 'google:gemini-3.1-pro-preview');
