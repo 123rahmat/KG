@@ -158,11 +158,13 @@ project
   -> verification / delivery
 ```
 
-Every subsystem uses the same adaptive control loop, but its agents only receive
-the subsystem's owned files, read set, tests, contract and dependency-scoped A2A
-messages. Raw peer findings are kept out of unrelated agents to reduce herding.
-A2A messages are typed, revision-bound, contract-version-bound and bounded;
-cross-subsystem writes still require server-controlled ownership transfer.
+Every subsystem uses the same adaptive control loop, and each specialist receives
+the smallest sufficient context for its assigned scope: owned files, read set,
+tests, relevant dependency edges, contract metadata and dependency-scoped A2A
+messages. Raw peer findings are kept out of unrelated agents to reduce herding
+and repeated input. A2A messages are typed, revision-bound, contract-version-bound
+and bounded; cross-subsystem writes still require server-controlled ownership
+transfer.
 Independent panels and independent specialists can run concurrently, while the
 workspace scheduler serializes conflicting or stale revision lanes.
 
@@ -179,6 +181,17 @@ iteration, A2A rules, usage controls and disagreement handling. Code Workspace
 may instantiate several of these same panel instances for independent
 subsystems. This is independent of user type or account role: panel topology
 follows the work and current situation, not who the user is.
+
+The coding panel is adaptive in depth as well as width: clean, deterministic
+work can converge after one pass; complexity, security/performance sensitivity,
+verification gaps or observed failure can justify additional reassessment passes.
+These are adaptive ceilings, not token quotas. The global 4-hour and weekly usage
+limits remain the only token-quota boundaries.
+
+The implementer specialist may return a bounded, structured implementation handoff
+(objective, file targets, tests and contract changes). That handoff is carried
+through the panel brief/A2A path to the primary coding stage; it is not treated as
+proof that code changed.
 
 Agents remain advisory: they can propose exact implementation and test changes,
 but the server retains tool, write, integration, approval and verification
