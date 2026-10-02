@@ -115,7 +115,7 @@ export class JobStore {
             WHERE id = (
               SELECT id FROM run_jobs
                WHERE (state = 'queued' OR (state = 'running' AND lease_until < now()))
-                 AND attempts <= max_attempts
+                 AND attempts < max_attempts
                ORDER BY created_at
                FOR UPDATE SKIP LOCKED
                LIMIT 1
@@ -124,6 +124,42 @@ export class JobStore {
           [safeLease, owner]
         );
         return rows[0] ?? null;
+      }));
+  }
+
+  async reapExhausted({ limit = 100 } = {}) {
+    return runDbScope({ principalId: '', workspaceId: '', organizationId: '', jurisdiction: '', role: 'job-worker' }, () =>
+      transaction(this.pool, async client => {
+        const safeLimit = Math.max(1, Math.min(500, Number(limit) || 100));
+        const { rows } = await client.query(
+          `WITH exhausted AS (
+             SELECT id FROM run_jobs
+              WHERE attempts >= max_attempts
+                AND (
+                  state = 'queued'
+                  OR (state = 'running' AND lease_until IS NOT NULL AND lease_until < now())
+                )
+              ORDER BY updated_at ASC, id ASC
+              FOR UPDATE SKIP LOCKED
+              LIMIT $1
+           )
+           UPDATE run_jobs j
+              SET state = 'failed',
+                  outcome = jsonb_build_object(
+                    'code', 'job-attempts-exhausted',
+                    'error', 'The job was interrupted too many times.'
+                  ),
+                  request = request - 'payload',
+                  lease_until = NULL,
+                  worker_id = NULL,
+                  finished_at = now(),
+                  updated_at = now()
+             FROM exhausted e
+            WHERE j.id = e.id
+            RETURNING j.id`,
+          [safeLimit]
+        );
+        return rows.length;
       }));
   }
 
@@ -234,6 +270,7 @@ export function createJobWorker({ jobs, identity, runs, executeNext, logger, met
 
   async function runOnce() {
     let processed = 0;
+    await jobs.reapExhausted?.({ limit: Math.min(cycleLimit, 100) });
     for (;;) {
       if (stopping || processed >= cycleLimit) break;
       const job = await jobs.claim({ workerId: effectiveWorkerId, leaseMs: safeLeaseMs });
