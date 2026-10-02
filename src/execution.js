@@ -87,6 +87,57 @@ export function executionTarget(id) {
   return targetMap.get(text(id)) ?? null;
 }
 
+
+/**
+ * Decide whether a coding task may enter direct code-generation mode or must
+ * stop for a human decision first. Generating code is distinct from executing
+ * it on a machine: execution targets keep their own explicit approval gate.
+ */
+export function codeActionDecision({
+  task = {},
+  run = {},
+  userApproved = false
+} = {}) {
+  const risk = text(run?.situation?.risk).toLowerCase();
+  const codeTask = task?.type === 'code' || task?.id === 'build-code' || task?.metadata?.buildPlan === true;
+  if (!codeTask) {
+    return {
+      action: 'not-code',
+      requiresApproval: false,
+      reason: 'The task is not a coding task.'
+    };
+  }
+
+  if (task?.metadata?.requiresClarification === true) {
+    return {
+      action: 'clarify',
+      requiresApproval: true,
+      reason: 'Material ambiguity remains and needs the person to clarify before coding.'
+    };
+  }
+
+  const explicitApprovalRequired = task?.metadata?.approvalRequired === true;
+  const highRisk = new Set(['high-impact', 'physical', 'regulated', 'critical']).has(risk);
+  const repairAfterFailure = Number(run?.attempt ?? 1) > 1 || task?.id === 'test-code';
+  if ((explicitApprovalRequired || highRisk) && !userApproved && !repairAfterFailure) {
+    return {
+      action: 'approval-required',
+      requiresApproval: true,
+      reason: explicitApprovalRequired
+        ? 'This coding task is marked for explicit human approval.'
+        : 'High-risk coding requires explicit human approval before direct code generation.'
+    };
+  }
+
+  return {
+    action: 'direct-code',
+    requiresApproval: false,
+    reason: repairAfterFailure
+      ? 'Scoped coding repair is already authorized by the active task and its prior execution.'
+      : 'The coding task is sufficiently specified for direct server-side code generation; external execution remains separately gated.'
+  };
+}
+
 function normalizeGpu(gpu = {}) {
   return {
     available: gpu?.available === true,
