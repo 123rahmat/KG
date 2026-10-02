@@ -28,9 +28,17 @@ async function withAgent(run) {
     },
     stdio: ['ignore', 'pipe', 'pipe']
   });
+  let stdout = '';
+  let stderr = '';
   await new Promise((resolve, reject) => {
-    child.stdout.on('data', chunk => { if (String(chunk).includes('listening')) resolve(); });
-    child.once('exit', code => reject(new Error('agent exited with ' + code)));
+    child.stdout.on('data', chunk => {
+      stdout += String(chunk);
+      if (stdout.includes('listening')) resolve();
+    });
+    child.stderr.on('data', chunk => { stderr += String(chunk); });
+    child.once('exit', code => reject(new Error(
+      `agent exited with ${code}: ${stderr.trim() || stdout.trim() || 'no diagnostic output'}`
+    )));
   });
   try {
     await run(`http://127.0.0.1:${port}`);
