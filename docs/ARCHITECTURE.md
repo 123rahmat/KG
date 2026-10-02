@@ -135,11 +135,13 @@ tokens are recorded under its own model, it runs under the same governance and
 data-transfer rules as the verifier, and if it cannot answer the verdict stands
 with a visible warning. Cost: one extra model call per reviewed run.
 
+The adaptive subsystem planner (src/subsystem-orchestrator.js) extends coding work for medium, large and very-large repositories. It uses project size, dependency density, hierarchical directory structure and coupling to choose a bounded subsystem count, creates non-overlapping path ownership contracts, builds a dependency DAG, and feeds only dependency-ready subsystem contexts to workers. Typed handoffs, blockers and contract messages are revision-bound and bounded, and stale messages are rejected from newer revisions. The subsystem layer is coordination infrastructure; repository mutation and integration remain server-owned.
+
 The specialist panel (`src/multi-agent.js`) adds a domain-agnostic advisory
 layer without changing that authority model. In `MULTI_AGENT_MODE=auto`, the
 server estimates the value of additional independent perspectives from the
 current task and situation, then recruits the smallest useful set up to the
-configured five-agent ceiling. Reusable roles include strategist, researcher,
+configured eleven-agent ceiling. Reusable roles include strategist, researcher,
 analyst, architect, critic, communicator and diagnostician. Allocation reacts
 to complexity, decomposition, uncertainty, evidence gaps, comparison needs,
 communication needs, stakes, retries and observed specialist confidence or
