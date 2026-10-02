@@ -70,7 +70,7 @@ export function keyedDigest(masterKey, purpose, value) {
 }
 
 
-/** Move legacy plaintext private fields into encrypted columns. */
+/** Move legacy private data into encrypted columns; billing is Stripe-reference-only. */
 export function decryptFieldWithKeys(keys, purpose, encoded) {
   const candidates = (Array.isArray(keys) ? keys : [keys]).filter(Boolean);
   if (!candidates.length) throw new Error('No encryption key is configured');
@@ -94,6 +94,16 @@ export function decryptJsonWithKeys(keys, purpose, encoded) {
   }
 }
 
+export function stripeBillingPrivateState(value = {}) {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    stripeCustomerId: source.stripeCustomerId ? String(source.stripeCustomerId) : null,
+    stripeSubscriptionId: source.stripeSubscriptionId ? String(source.stripeSubscriptionId) : null,
+    stripeLastEventCreated: Number.isFinite(Number(source.stripeLastEventCreated)) ? Number(source.stripeLastEventCreated) : 0,
+    stripeLastEventId: source.stripeLastEventId ? String(source.stripeLastEventId) : null
+  };
+}
+
 const normalizeLookup = value =>
   String(value ?? '').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu, ' ').trim();
 
@@ -109,9 +119,11 @@ export async function backfillSensitiveData(pool, {
     for (;;) {
       const { rows } = await pool.query(
         `SELECT workspace_id, billing_email, company_name, tax_id, country, address,
-                stripe_customer_id, stripe_subscription_id, billing_private_enc
+                stripe_customer_id, stripe_subscription_id, billing_private_enc,
+                billing_storage_version
            FROM workspace_billing
-          WHERE billing_encryption_version <> 1
+          WHERE billing_storage_version <> 1
+             OR billing_encryption_version <> 1
              OR billing_private_enc IS NULL
              OR billing_private_enc = ''
              OR billing_email <> ''
@@ -119,8 +131,6 @@ export async function backfillSensitiveData(pool, {
              OR tax_id <> ''
              OR country <> ''
              OR address <> ''
-             OR stripe_customer_id IS NOT NULL
-             OR stripe_subscription_id IS NOT NULL
           ORDER BY workspace_id
           LIMIT 200`
       );
@@ -136,24 +146,21 @@ export async function backfillSensitiveData(pool, {
             keyIndex = decoded.keyIndex;
             privateBilling = decoded.value && typeof decoded.value === 'object' ? decoded.value : {};
           }
-          privateBilling = {
-            billingEmail: row.billing_email !== '' ? String(row.billing_email ?? '') : String(privateBilling.billingEmail ?? ''),
-            companyName: row.company_name !== '' ? String(row.company_name ?? '') : String(privateBilling.companyName ?? ''),
-            taxId: row.tax_id !== '' ? String(row.tax_id ?? '') : String(privateBilling.taxId ?? ''),
-            country: row.country !== '' ? String(row.country ?? '') : String(privateBilling.country ?? ''),
-            address: row.address !== '' ? String(row.address ?? '') : String(privateBilling.address ?? ''),
-            stripeCustomerId: row.stripe_customer_id ? String(row.stripe_customer_id) : (privateBilling.stripeCustomerId || null),
-            stripeSubscriptionId: row.stripe_subscription_id ? String(row.stripe_subscription_id) : (privateBilling.stripeSubscriptionId || null),
-            stripeLastEventCreated: Number.isFinite(Number(privateBilling.stripeLastEventCreated)) ? Number(privateBilling.stripeLastEventCreated) : 0,
-            stripeLastEventId: privateBilling.stripeLastEventId ? String(privateBilling.stripeLastEventId) : null
-          };
-          if (keyIndex !== 0 || row.billing_encryption_version !== 1 || !row.billing_private_enc
+          // Billing profile, tax and invoice details belong in Stripe and are
+          // deliberately discarded from both plaintext columns and ciphertext.
+          privateBilling = stripeBillingPrivateState({
+            ...privateBilling,
+            stripeCustomerId: row.stripe_customer_id ? String(row.stripe_customer_id) : privateBilling.stripeCustomerId,
+            stripeSubscriptionId: row.stripe_subscription_id ? String(row.stripe_subscription_id) : privateBilling.stripeSubscriptionId
+          });
+          if (keyIndex !== 0 || row.billing_storage_version !== 1 || row.billing_encryption_version !== 1 || !row.billing_private_enc
               || row.billing_email !== '' || row.company_name !== '' || row.tax_id !== '' || row.country !== ''
-              || row.address !== '' || row.stripe_customer_id !== null || row.stripe_subscription_id !== null) {
+              || row.address !== '') {
             await client.query(
               `UPDATE workspace_billing
                   SET billing_private_enc = $2,
                       billing_encryption_version = 1,
+                      billing_storage_version = 1,
                       billing_email = '',
                       company_name = '',
                       tax_id = '',
@@ -381,7 +388,8 @@ export async function assertSensitiveDataEncrypted(pool) {
     pool.query(
       `SELECT COUNT(*)::int AS count
          FROM workspace_billing
-        WHERE billing_encryption_version <> 1
+        WHERE billing_storage_version <> 1
+           OR billing_encryption_version <> 1
            OR billing_private_enc IS NULL
            OR billing_email <> ''
            OR company_name <> ''
