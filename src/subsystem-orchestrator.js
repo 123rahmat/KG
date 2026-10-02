@@ -28,7 +28,7 @@ export const SUBSYSTEM_MESSAGE_TYPES = Object.freeze([
 
 export const DEFAULT_MAX_SUBSYSTEMS = 12;
 export const ABSOLUTE_MAX_SUBSYSTEMS = 24;
-export const MAX_SUBSYSTEM_MESSAGES = 120;
+export const MAX_SUBSYSTEM_MESSAGES = 64;
 
 function digest(value) {
   return crypto.createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex').slice(0, 24);
@@ -172,10 +172,9 @@ export function estimateSubsystemCount(index = {}, {
   const structural = Math.min(3, Math.max(0, roots.length - 1) * 0.55);
   const sizePressure = Math.max(0, Math.log2(Math.max(1, files / Math.max(minFilesPerSubsystem, 1))));
   const score = base + Math.min(3.5, sizePressure * 0.65) + structural + Math.min(2.5, density * 3);
-  const capped = Math.max(1, Math.min(
-    boundedInt(maxSubsystems, DEFAULT_MAX_SUBSYSTEMS, ABSOLUTE_MAX_SUBSYSTEMS),
-    Math.round(score)
-  ));
+  const max = boundedInt(maxSubsystems, DEFAULT_MAX_SUBSYSTEMS, ABSOLUTE_MAX_SUBSYSTEMS);
+  const baseUnits = roots.length + (((index?.files ?? []).some(file => fileGroup(file?.path) === '__root__')) ? 1 : 0);
+  const capped = Math.max(1, Math.min(max, Math.max(Math.round(score), baseUnits)));
 
   // Coupled repositories benefit from fewer coordination boundaries. We use a
   // deterministic first-pass grouping estimate from top-level roots.
