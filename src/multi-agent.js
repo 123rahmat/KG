@@ -885,6 +885,7 @@ export function taskPressureMonitor({
     || bytes !== Number(previous.bytes ?? bytes)
     || changedFiles.length > 0
     || failedRoles !== Number(previous.failedRoles ?? failedRoles)
+    || Math.abs(delta) >= 0.10
   );
   const topologyAction = singleProjectMonitorAction(project, pressure, delta, direction);
 
@@ -1566,7 +1567,6 @@ async function runCodeWorkspaceAgentPanels({
             replan: Boolean(subsystemState.get(subsystem.id)?.replan),
             verification: true
           }
-        }))
         })),
         lifecycle: {
           research: true,
