@@ -1134,7 +1134,10 @@ async function runCodeWorkspaceAgentPanels({
     status: 'pending',
     findings: [],
     roles: [],
-    confidence: 0
+    confidence: 0,
+    research: null,
+    explanation: null,
+    replan: null
   }]));
   let tokensSpent = 0;
   let effectiveMaxParallel = Math.max(
@@ -1291,6 +1294,20 @@ async function runCodeWorkspaceAgentPanels({
             writeSet: job.subsystem.writeSet,
             topology: singlePanel ? 'single-project' : 'subsystem',
             engine: 'unified-adaptive-code-panel-v1',
+            lifecycle: {
+              cycle: job.iteration,
+              coverage: ['research', 'explain', 'replan', 'implement', 'test', 'critique', 'verify', 'handoff'],
+              researchEveryCycle: true,
+              explanationEveryCycle: true,
+              replanEveryCycle: true,
+              iterationAdaptive: true
+            },
+            communication: {
+              internal: 'independent-first-then-typed-summary',
+              crossSubsystem: singlePanel ? 'panel-local-summary' : 'dependency-scoped-typed-a2a',
+              rawPeerFindingsHidden: true,
+              newEvidenceReassessesPlan: true
+            },
             a2a: {
               policy: 'typed, revision-bound, dependency-scoped, untrusted peer data',
               rawPeerFindingsHidden: true
@@ -1374,6 +1391,19 @@ async function runCodeWorkspaceAgentPanels({
         const panelSummary = parsed.length
           ? parsed.map(item => `${item.role}: ${item.summary}`).join(' | ').slice(0, 2200)
           : 'No specialist produced a usable finding.';
+        const researchFinding = parsed.find(item => item.role === 'researcher');
+        const plannerFinding = parsed.find(item => item.role === 'architect' || item.role === 'strategist');
+        const explanationFinding = parsed.find(item => item.explanation);
+        const replanFindings = parsed.filter(item => item.replan?.needed || item.replan?.changes?.length);
+        state.research = researchFinding?.summary ?? null;
+        state.explanation = explanationFinding?.explanation ?? plannerFinding?.summary ?? panelSummary;
+        state.replan = replanFindings.length
+          ? {
+              needed: true,
+              reasons: replanFindings.map(item => item.replan?.reason).filter(Boolean).slice(0, 4),
+              changes: [...new Set(replanFindings.flatMap(item => item.replan?.changes ?? []))].slice(0, 8)
+            }
+          : { needed: false, reasons: [], changes: [] };
         const projectRevision = subsystem.baseRevision ?? subsystemPlan.project.revisionId ?? null;
 
         const selfMessage = codeWorkspaceSubsystemMessage({
@@ -1384,6 +1414,7 @@ async function runCodeWorkspaceAgentPanels({
           projectRevision,
           iteration: state.iteration,
           payload: {
+            stage: 'research-explain-replan-handoff',
             summary: panelSummary,
             recommendation: stability.blocked ? 'stop' : (stability.stable ? 'proceed' : 'revise'),
             confidence: stability.confidence,
@@ -1402,6 +1433,7 @@ async function runCodeWorkspaceAgentPanels({
             projectRevision,
             iteration: state.iteration,
             payload: {
+              stage: 'research-explain-replan-handoff',
               summary: panelSummary,
               recommendation: stability.blocked ? 'stop' : (stability.stable ? 'proceed' : 'investigate'),
               confidence: stability.confidence,
@@ -1440,8 +1472,24 @@ async function runCodeWorkspaceAgentPanels({
           subsystemId: subsystem.id,
           iteration: subsystemState.get(subsystem.id)?.iteration ?? 1,
           state: subsystemState.get(subsystem.id)?.status ?? 'unknown',
-          confidence: subsystemState.get(subsystem.id)?.confidence ?? 0
+          confidence: subsystemState.get(subsystem.id)?.confidence ?? 0,
+          coverage: {
+            research: Boolean(subsystemState.get(subsystem.id)?.research),
+            explanation: Boolean(subsystemState.get(subsystem.id)?.explanation),
+            replan: Boolean(subsystemState.get(subsystem.id)?.replan),
+            verification: true
+          }
         }))
+        })),
+        lifecycle: {
+          research: true,
+          explanation: true,
+          replanning: true,
+          implementation: true,
+          verification: true,
+          communication: 'typed-a2a'
+        },
+        taskPressure: pressureMonitor
       };
       const avgLatencyMs = results.length
         ? results.reduce((sum, item) => sum + Number(item.elapsedMs || 0), 0) / results.length
@@ -1570,7 +1618,9 @@ async function runCodeWorkspaceAgentPanels({
       iterationPolicy: 'adaptive-1-to-4-from-risk-complexity-verification-failure',
       roleSpecificOutputCaps: false,
       earlyConvergence: true,
-      disagreementRequiredForArbitration: true
+      disagreementRequiredForArbitration: true,
+      panelCoverage: ['research', 'explain', 'replan', 'implement', 'test', 'critique', 'verify', 'handoff'],
+      communicationProtocol: 'independent-specialists-plus-typed-panel-and-subsystem-handoffs'
     },
     subsystemPanels: subsystemPlan.subsystems.map(subsystem => {
       const state = subsystemState.get(subsystem.id);
