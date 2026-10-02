@@ -173,7 +173,13 @@ export function mergeFix(previous, fix) {
  */
 export function materializeCodePackage(structured, { baseFiles = [], baseContentHash = null } = {}) {
   if (!structured || typeof structured !== 'object' || !Array.isArray(structured.patches) || !structured.patches.length) return structured;
-  const baseHash = text(baseContentHash) || workspaceContentHash(baseFiles);
+  const expectedBaseHash = text(baseContentHash);
+  const baseHash = expectedBaseHash || workspaceContentHash(baseFiles);
+  if (expectedBaseHash && text(structured.baseContentHash) !== expectedBaseHash) {
+    const error = new Error('Code patch was generated from a different workspace revision.');
+    error.code = 'workspace-revision-stale';
+    throw error;
+  }
   const result = applySurgicalChanges(baseFiles, structured.patches, {
     expectedContentHash: text(structured.baseContentHash) || baseHash
   });
