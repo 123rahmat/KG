@@ -78,18 +78,31 @@ export async function limitsFor(pool, config, workspaceId) {
 export async function usageSummary(pool, { principalId, workspaceId = null, config, conversationId = null, now = new Date(), limits = null }) {
   const applied = limits ?? { fourHourTokens: config.usage?.fourHourTokens || 0, weeklyTokens: config.usage?.weeklyTokens || 0, modelIds: modelIdsForPlan(null, config), planName: config.billing?.planName ?? null };
   const since = new Date(now.getTime() - WINDOWS.at(-1).ms);
-  const { rows } = await pool.query(
+  const { rows: globalRows } = await pool.query(
     `SELECT source, input_tokens, output_tokens, created_at
        FROM usage_events
       WHERE principal_id = $1
-        AND ($2::text IS NULL OR workspace_id = $2)
-        AND created_at > $3
+        AND created_at > $2
       ORDER BY created_at ASC`,
-    [principalId, workspaceId || null, since]
+    [principalId, since]
   );
+  const { rows: workspaceRows } = workspaceId
+    ? await pool.query(
+        `SELECT source, input_tokens, output_tokens, created_at
+           FROM usage_events
+          WHERE principal_id = $1
+            AND workspace_id = $2
+            AND created_at > $3
+          ORDER BY created_at ASC`,
+        [principalId, workspaceId, since]
+      )
+    : { rows: globalRows };
   const windows = WINDOWS.map(window => {
+    // The 4-hour AI bucket is one user-wide rolling budget. Weekly usage keeps
+    // its existing workspace billing scope. Chat context remains chat-specific.
+    const sourceRows = window.id === 'session' ? globalRows : workspaceRows;
     const start = now.getTime() - window.ms;
-    const inside = rows.filter(row => new Date(row.created_at).getTime() > start);
+    const inside = sourceRows.filter(row => new Date(row.created_at).getTime() > start);
     const input = inside.reduce((sum, row) => sum + row.input_tokens, 0);
     const output = inside.reduce((sum, row) => sum + row.output_tokens, 0);
     const limit = applied[window.limitKey] || 0;
@@ -107,6 +120,7 @@ export async function usageSummary(pool, { principalId, workspaceId = null, conf
     return {
       id: window.id,
       label: window.label,
+      scope: window.id === 'session' ? 'principal' : 'workspace',
       hours: window.ms / HOUR,
       used,
       input,
@@ -183,13 +197,16 @@ export async function reserveUsage(pool, {
   const safeTtl = Math.max(30_000, Math.min(900_000, Number(ttlMs) || RESERVATION_TTL_MS));
 
   return transaction(pool, async client => {
+    // The four-hour budget is user-wide, so all workspaces for this person
+    // share one atomic reservation lock. This prevents cross-workspace races
+    // from bypassing the global cap.
     await client.query(
       'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
-      ['kindgleam:usage:' + workspaceId + ':' + principalId]
+      ['kindgleam:usage:principal:' + principalId]
     );
     await client.query(
-      "UPDATE usage_reservations SET state='released', updated_at=now() WHERE principal_id=$1 AND workspace_id=$2 AND state='active' AND expires_at<=now()",
-      [principalId, workspaceId]
+      "UPDATE usage_reservations SET state='released', updated_at=now() WHERE principal_id=$1 AND state='active' AND expires_at<=now()",
+      [principalId]
     );
 
     let runUsed = 0;
@@ -204,15 +221,23 @@ export async function reserveUsage(pool, {
       runMax = run.max_tokens == null ? null : Number(run.max_tokens);
     }
 
-    const { rows: usageRows } = await client.query(
-      "SELECT input_tokens, output_tokens, created_at FROM usage_events WHERE principal_id=$1 AND workspace_id=$2 AND created_at>now()-interval '7 days'",
-      [principalId, workspaceId]
+    const { rows: globalUsageRows } = await client.query(
+      "SELECT input_tokens, output_tokens, created_at FROM usage_events WHERE principal_id=$1 AND created_at>now()-interval '7 days'",
+      [principalId]
     );
-    const { rows: reservationRows } = await client.query(
-      "SELECT estimated_tokens, expires_at, run_id FROM usage_reservations WHERE principal_id=$1 AND workspace_id=$2 AND state='active' AND expires_at>now()",
-      [principalId, workspaceId]
+    const { rows: workspaceUsageRows } = workspaceId
+      ? await client.query(
+          "SELECT input_tokens, output_tokens, created_at FROM usage_events WHERE principal_id=$1 AND workspace_id=$2 AND created_at>now()-interval '7 days'",
+          [principalId, workspaceId]
+        )
+      : { rows: globalUsageRows };
+    const { rows: globalReservationRows } = await client.query(
+      "SELECT estimated_tokens, expires_at, run_id, workspace_id FROM usage_reservations WHERE principal_id=$1 AND state='active' AND expires_at>now()",
+      [principalId]
     );
-    const reserved = reservationRows.reduce((sum, row) => sum + Number(row.estimated_tokens || 0), 0);
+    const reservationRows = globalReservationRows.filter(row => row.workspace_id === workspaceId);
+    const globalReserved = globalReservationRows.reduce((sum, row) => sum + Number(row.estimated_tokens || 0), 0);
+    const workspaceReserved = reservationRows.reduce((sum, row) => sum + Number(row.estimated_tokens || 0), 0);
     const runReserved = runId
       ? reservationRows.filter(row => row.run_id === runId).reduce((sum, row) => sum + Number(row.estimated_tokens || 0), 0)
       : 0;
@@ -221,13 +246,15 @@ export async function reserveUsage(pool, {
     for (const window of WINDOWS) {
       const limit = Number(limits[window.limitKey] || 0);
       if (!limit) continue;
-      const stats = usageWindowStats(usageRows, window.ms);
+      const sourceRows = window.id === 'session' ? globalUsageRows : workspaceUsageRows;
+      const reservedForWindow = window.id === 'session' ? globalReserved : workspaceReserved;
+      const stats = usageWindowStats(sourceRows, window.ms);
       available.push({
         window,
         limit,
-        used: stats.used + reserved,
+        used: stats.used + reservedForWindow,
         rows: stats.inside,
-        remaining: Math.max(0, limit - stats.used - reserved)
+        remaining: Math.max(0, limit - stats.used - reservedForWindow)
       });
     }
     if (runMax !== null) {
@@ -257,7 +284,7 @@ export async function reserveUsage(pool, {
         resetsAt: exhausted.rows.length && exhausted.window.ms
           ? new Date(new Date(exhausted.rows[0].created_at).getTime() + exhausted.window.ms).toISOString()
           : null,
-        reserved
+        reserved: exhausted.window.id === 'session' ? globalReserved : exhausted.window.id === 'week' ? workspaceReserved : reserved
       }, { canUpgrade: exhausted.window.id !== 'run' && Boolean(config.stripe) });
     }
 
@@ -278,7 +305,7 @@ export async function reserveUsage(pool, {
         resetsAt: constrained.rows.length && constrained.window.ms
           ? new Date(new Date(constrained.rows[0].created_at).getTime() + constrained.window.ms).toISOString()
           : null,
-        reserved
+        reserved: constrained.window.id === 'session' ? globalReserved : constrained.window.id === 'week' ? workspaceReserved : reserved
       }, { canUpgrade: constrained.window.id !== 'run' && Boolean(config.stripe) });
     }
 
