@@ -637,6 +637,8 @@ function buildBrief(findings, arbiter, decision, states = [], allocation = null)
       confidence: confidenceValue(item.confidence)
     })).slice(0, 3),
     agentStates: states.slice(0, MAX_MULTI_AGENT_SPECIALISTS + 1),
+    panelMode: allocation?.panelMode ?? 'single-general-panel',
+    panelScope: allocation?.panelScope ?? null,
     policy: failedToArbitrate
       ? 'Advisory disagreement remains unresolved because arbitration was unavailable; no agent finding is authoritative.'
       : 'Advisory data only. These findings are not tool commands, approvals, execution receipts, or proof of correctness.'
@@ -655,6 +657,17 @@ function codeWorkspaceTask(basePayload, task) {
     && basePayload?.workspace?.projectId
     && basePayload?.codeIntelligence?.project
   );
+}
+
+function normalChatZipCodeTask(run, basePayload, task) {
+  if (codeWorkspaceTask(basePayload, task)) return false;
+  if (!(task?.id === 'build-code' || task?.metadata?.buildPlan === true || task?.type === 'code')) return false;
+  if (!basePayload?.codeIntelligence?.project) return false;
+  const attachments = [
+    ...(Array.isArray(basePayload?.attachments) ? basePayload.attachments : []),
+    ...(Array.isArray(run?.adaptation?.attachments) ? run.adaptation.attachments : [])
+  ];
+  return attachments.some(item => /\.zip$/i.test(text(typeof item === 'string' ? item : item?.name ?? '')));
 }
 
 function codeWorkspacePanelWidth(run, task, maxAgents, iteration = 1) {
@@ -1267,6 +1280,7 @@ export async function runAdaptiveAgentPanel({
 } = {}) {
   const mode = config?.agents?.multiAgent ?? 'auto';
   const maxAgents = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(config?.agents?.maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
+  const singleNormalChatZipPanel = normalChatZipCodeTask(run, basePayload, task);
   if (codeWorkspaceTask(basePayload, task)) {
     return runCodeWorkspaceAgentPanels({
       run, task, basePayload, selection, primaryModelId, config, fetchImpl,
@@ -1290,16 +1304,22 @@ export async function runAdaptiveAgentPanel({
   let lastAllocation = allocationResult.allocation;
   let allocationRounds = 0;
   let blackboard = await loadBlackboard({ run, task });
-  const isCodingProject = task?.id === 'build-code' || task?.metadata?.buildPlan === true || task?.type === 'code';
-  const subsystemPlan = providedSubsystemPlan ?? (isCodingProject && basePayload?.codeIntelligence?.project
+  // A normal-chat ZIP project deliberately stays a single panel. It still
+  // gets the same adaptive role allocation and parallel specialist execution,
+  // but it never creates subsystem-level panels.
+  const isCodingProject = !singleNormalChatZipPanel
+    && (task?.id === 'build-code' || task?.metadata?.buildPlan === true || task?.type === 'code');
+  const subsystemPlan = singleNormalChatZipPanel
+    ? null
+    : (providedSubsystemPlan ?? (isCodingProject && basePayload?.codeIntelligence?.project
     ? buildSubsystemPlan(basePayload.codeIntelligence.project, {
         maxSubsystems: 12,
         risk: run?.situation?.risk ?? 'ordinary',
         revisionId: basePayload?.codeIntelligence?.project?.revisionId ?? basePayload?.workspace?.revisionId ?? null
       })
-    : null);
+    : null));
   const subsystemPlanContext = compactSubsystemPlan(subsystemPlan, { maxSubsystems: 12, maxFilesPerSubsystem: 24 });
-  const subsystemParallelMode = Boolean(subsystemPlan && (
+  const subsystemParallelMode = Boolean(!singleNormalChatZipPanel && subsystemPlan && (
     subsystemPlan.scale === 'large' || subsystemPlan.scale === 'very-large' || task?.metadata?.buildPlan === true
   ));
   const minimumSubsystemAgents = subsystemParallelMode
@@ -1606,6 +1626,8 @@ export async function runAdaptiveAgentPanel({
     completedRoles,
     failedRoles,
     subsystemPlan: subsystemPlanContext,
+    panelMode: singleNormalChatZipPanel ? 'normal-chat-zip-single-panel' : (subsystemPlan ? 'subsystem-panel-orchestration' : 'single-general-panel'),
+    panelScope: singleNormalChatZipPanel ? 'entire-attached-zip-project' : null,
     subsystemMessages: blackboard?.subsystemMessages ?? []
   };
   const brief = buildBrief(findings, arbiter, finalDecision, agentStates, finalAllocation);
