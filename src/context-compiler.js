@@ -8,7 +8,7 @@
  * what the current task needs.
  */
 
-import { impactClosure, relatedSymbols, relatedTests, changeRiskSignals } from './project-index.js';
+import { impactClosure, relatedSymbols, relatedTests, changeRiskSignals, hierarchicalProjectScope, projectScale } from './project-index.js';
 import { normalizeWorkspaceFiles, safeWorkspacePath, workspaceContentHash } from './code-workspace.js';
 import crypto from 'node:crypto';
 
@@ -52,7 +52,7 @@ function taskTerms(goal, task, failure = null) {
   ].join(' ').toLowerCase().match(/[a-zA-Z_$][a-zA-Z0-9_$-]{2,}/g) ?? [];
 }
 
-function scoreFile(file, { changed, impacted, queryTerms, tests, config, symbolPaths = new Set() }) {
+function scoreFile(file, { changed, impacted, queryTerms, tests, config, symbolPaths = new Set(), subtreePaths = [] }) {
   const lower = file.path.toLowerCase();
   const pathParts = new Set(lower.split(/[\\/._-]+/).filter(Boolean));
   let score = 0;
@@ -61,6 +61,7 @@ function scoreFile(file, { changed, impacted, queryTerms, tests, config, symbolP
   if (tests.has(file.path)) score += 900;
   if (config.has(file.path)) score += 600;
   if (symbolPaths.has(file.path)) score += 1200;
+  if (subtreePaths.some(path => path && (file.path === path || file.path.startsWith(path + '/')))) score += 260;
   for (const term of queryTerms) {
     if (lower.includes(term)) score += 45;
     const parts = term.split(/[_-]+/).filter(part => part.length >= 3);
@@ -137,6 +138,10 @@ export function compileCodeContext({
   const changed = new Set(changedPaths.map(safeWorkspacePath).filter(Boolean));
   const impacted = new Set(impactClosure(index, [...changed], { maxFiles: 180 }));
   const terms = taskTerms(goal, task, failure);
+  const hierarchyScope = hierarchicalProjectScope(index, [...changed], {
+    query: terms.slice(0, 16).join(' '), maxSubtrees: totalContentChars > charBudget ? 16 : 8
+  });
+  const subtreePaths = (hierarchyScope.subtrees ?? []).map(item => item.path).filter(Boolean);
   const testPaths = new Set(relatedTests(index, [...changed], { max: 80 }));
   const configPaths = new Set(index?.config ?? []);
   const symbolPaths = new Set((index?.symbols ?? [])
@@ -144,7 +149,7 @@ export function compileCodeContext({
     .map(symbol => symbol.path));
   const ranked = normalized.map(file => ({
     file,
-    score: scoreFile(file, { changed, impacted, queryTerms: terms, tests: testPaths, config: configPaths, symbolPaths })
+    score: scoreFile(file, { changed, impacted, queryTerms: terms, tests: testPaths, config: configPaths, symbolPaths, subtreePaths })
   })).sort((a,b) => b.score - a.score || a.file.path.localeCompare(b.file.path));
 
   const selected = [];
@@ -201,7 +206,7 @@ export function compileCodeContext({
   const symbols = relatedSymbols(index, terms.slice(0,8).join(' '), [...changed], { max: 80 });
   const riskSignals = changeRiskSignals(index, [...changed]);
   const cacheKey = digest(JSON.stringify({
-    contentHash:index?.contentHash, goal, task:task?.id, changed:[...changed].sort(),
+    contentHash:index?.contentHash, hierarchyVersion:index?.hierarchy?.version ?? 0, goal, task:task?.id, changed:[...changed].sort(),
     failure:failure ? { status:failure.status, stderr:clean(failure.stderr).slice(-1000) } : null,
     scale, charBudget, fileBudget
   }));
@@ -219,7 +224,13 @@ export function compileCodeContext({
       fileCount:index?.fileCount ?? normalized.length,
       languages:[...new Set((index?.files ?? []).map(file => file.language).filter(Boolean))].sort(),
       entryPoints:(index?.entryPoints ?? []).slice(0,30),
-      profile:index?.profile ?? null
+      profile:index?.profile ?? null,
+      scale: projectScale(index),
+      hierarchy: {
+        root: hierarchyScope.root ?? index?.hierarchy?.root ?? null,
+        changedSubtrees: (hierarchyScope.changedSubtrees ?? []).slice(0, 40),
+        subtrees: (hierarchyScope.subtrees ?? []).slice(0, 16)
+      }
     },
     task:{ id:clean(task?.id), type:clean(task?.type), goal:clean(goal).slice(0,2000) },
     focus:{
