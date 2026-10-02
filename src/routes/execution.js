@@ -847,7 +847,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
             ? 'runner-failed'
             : 'completed',
         eventKey: run.id + ':' + task.id + ':attempt:' + String(run.attempt),
-        contextSignature: taskSkillContext,
+        contextSignature: skillContextSignature({ goal: run.goal, taskType: task.id === 'build-code' ? 'build-code' : task.type, intent: run.intent?.kind, coding: Boolean(run.intelligence?.coding || run.adaptation?.primarySurface === 'code'), projectWork: Boolean(run.adaptation?.unifiedWorkContext?.workspace?.projectId || run.adaptation?.scale === 'large-project' || run.adaptation?.scale === 'multi-file'), unknown: Boolean(run.investigation?.unknownSituation), complexity: Number(run.intelligence?.complexity ?? 0), scale: run.adaptation?.scale ?? '', retrying: Boolean(run.attempt > 0 || task.type === 'reassess' || task.type === 'replan'), verification: task.type === 'verify' || Boolean(task.metadata?.verification), language: run.adaptation?.language ?? '' }),
         utilitySignal: taskFailed ? -1 : 1
       }).catch(error => audit?.record({
         principalId: req.principal.id, workspaceId: req.scope.workspaceId,
