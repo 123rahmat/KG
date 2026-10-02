@@ -1605,7 +1605,12 @@ export class RunStore {
     let candidate = canonical(next);
     // A build plan is followed by the person agreeing it, whatever the model
     // suggested; only then is the code written, to the agreed plan.
-    if (target.type === 'plan' && target.metadata?.buildPlan) candidate = PLAN_AGREEMENT_STEP;
+    if (target.type === 'plan' && target.metadata?.buildPlan) {
+      candidate = {
+        ...PLAN_AGREEMENT_STEP,
+        ...(target.metadata?.existingCodePlan ? { existingCodePlan: true } : {})
+      };
+    }
     if (!candidate && target.type === 'approval' && target.metadata?.approvalFor) {
       candidate = canonical(target.metadata.approvalFor);
     }
@@ -1858,7 +1863,10 @@ export class RunStore {
         outputSchema: BUILD_PLAN_SCHEMA,
         ...(candidate.existingCodePlan ? { existingCodePlan: true } : {})
       } : {}),
-      ...(candidate.planAgreement ? { planAgreement: true } : {}),
+      ...(candidate.planAgreement ? {
+        planAgreement: true,
+        ...(candidate.existingCodePlan ? { existingCodePlan: true } : {})
+      } : {}),
       requirementIds
     };
 
