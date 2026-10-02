@@ -161,12 +161,20 @@ project
 Every subsystem uses the same adaptive control loop, and each specialist receives
 the smallest sufficient context for its assigned scope: owned files, read set,
 tests, relevant dependency edges, contract metadata and dependency-scoped A2A
-messages. Raw peer findings are kept out of unrelated agents to reduce herding
-and repeated input. A2A messages are typed, revision-bound, contract-version-bound
-and bounded; cross-subsystem writes still require server-controlled ownership
-transfer.
-Independent panels and independent specialists can run concurrently, while the
-workspace scheduler serializes conflicting or stale revision lanes.
+messages. Each coding-panel cycle explicitly covers research of the current
+code/evidence, explanation of the panel conclusion, re-planning from new
+evidence, implementation, testing, adversarial critique, verification and typed
+handoff. Research is repeated on later cycles rather than assuming the first
+plan remains correct. Raw peer findings are kept out of unrelated agents to
+reduce herding and repeated input; later cycles receive bounded typed summaries
+and dependency-scoped handoffs. A2A messages are typed, revision-bound,
+contract-version-bound and bounded; cross-subsystem writes still require
+server-controlled ownership transfer.
+Independent subsystem panels and independent specialists can run concurrently,
+using the shared workspace scheduler with bounded in-flight parallelism. Scheduler
+waves are actually awaited in sequence, so the configured parallel limit is an
+execution constraint rather than a descriptive plan. Conflicting or stale
+revision lanes are serialized or rejected.
 
 This specialization is intentionally limited to Code Workspace coding. The
 generic multi-agent path remains available to other task surfaces without
