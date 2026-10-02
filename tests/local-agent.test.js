@@ -16,11 +16,10 @@ const SECRET = crypto.randomBytes(32).toString('hex');
 const ORIGIN = 'http://localhost:3000';
 
 async function withAgent(run) {
-  const port = 20000 + Math.floor(Math.random() * 20000);
   const child = spawn(process.execPath, ['bin/local-agent.js'], {
     env: {
       PATH: process.env.PATH,
-      LOCAL_AGENT_PORT: String(port),
+      LOCAL_AGENT_PORT: '0',
       LOCAL_AGENT_ALLOWED_ORIGIN: ORIGIN,
       LOCAL_AGENT_ALLOW_PROCESS_EXECUTION: 'true',
       LOCAL_AGENT_SHARED_SECRET: SECRET,
@@ -30,10 +29,11 @@ async function withAgent(run) {
   });
   let stdout = '';
   let stderr = '';
-  await new Promise((resolve, reject) => {
+  const base = await new Promise((resolve, reject) => {
     child.stdout.on('data', chunk => {
       stdout += String(chunk);
-      if (stdout.includes('listening')) resolve();
+      const match = stdout.match(/listening on http:\/\/127\.0\.0\.1:(\d+)/);
+      if (match) resolve(`http://127.0.0.1:${match[1]}`);
     });
     child.stderr.on('data', chunk => { stderr += String(chunk); });
     child.once('exit', code => reject(new Error(
@@ -41,7 +41,7 @@ async function withAgent(run) {
     )));
   });
   try {
-    await run(`http://127.0.0.1:${port}`);
+    await run(base);
   } finally {
     child.kill();
   }
