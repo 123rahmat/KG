@@ -357,6 +357,12 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
     if (!answer) return null;
     usage.inputTokens += answer.usage?.inputTokens ?? 0;
     usage.outputTokens += answer.usage?.outputTokens ?? 0;
+    // Preserve model-grounded sources immediately. This is important for a
+    // tool-backed research step: the search result may itself contain
+    // citations even when the final synthesis does not repeat them.
+    for (const source of Array.isArray(answer.citations) ? answer.citations : []) {
+      if (source?.url) sources.set(source.url, source);
+    }
     const call = answer.incomplete ? null : parseToolCall(answer.text);
     const cited = () => [...new Map([...(answer.citations ?? []).map(item => [item.url, item]), ...sources]).values()];
     if (!call) return { ...answer, citations: cited(), usage, toolLog };
