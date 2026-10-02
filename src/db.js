@@ -421,7 +421,7 @@ async function hardenRuntimeRole(client, runtimeRole, logger) {
     ['SELECT, INSERT, UPDATE, DELETE', ['memories']],
     ['SELECT, INSERT', ['safety_events', 'terms_acceptances']],
     ['SELECT, INSERT, UPDATE', ['safety_reports']],
-    ['SELECT, INSERT, UPDATE, DELETE', ['workspace_sources', 'run_agents', 'run_waves', 'code_workspace_sessions', 'rag_documents', 'run_blackboards', 'adaptive_cache', 'run_feedback', 'evolution_proposals', 'skill_profiles', 'skill_observations', 'fleet_projects', 'fleet_project_dependencies', 'fleet_dispatches']],
+    ['SELECT, INSERT, UPDATE, DELETE', ['workspace_sources', 'run_agents', 'run_waves', 'code_workspace_sessions', 'rag_documents', 'run_blackboards', 'adaptive_cache', 'run_feedback', 'evolution_proposals', 'skill_profiles', 'skill_observations', 'skill_patterns', 'fleet_projects', 'fleet_project_dependencies', 'fleet_dispatches']],
     ['SELECT, INSERT, UPDATE, DELETE', ['login_links']],
     ['SELECT, INSERT, UPDATE', ['mail_settings']],
     ['SELECT, INSERT, UPDATE, DELETE', ['principal_ai_entitlements']]
