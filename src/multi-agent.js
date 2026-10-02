@@ -1036,6 +1036,58 @@ function codeWorkspaceSubsystemMessage({
   });
 }
 
+function subsystemTopologyFingerprint(subsystem = {}) {
+  return JSON.stringify({
+    roots: [...new Set((subsystem.roots ?? []).map(text).filter(Boolean))].sort(),
+    files: [...new Set((subsystem.files ?? []).map(text).filter(Boolean))].sort()
+  });
+}
+
+function reconcileLiveSubsystemTopology(previousPlan, nextPlan, previousState) {
+  const nextState = new Map();
+  const previousSubsystems = Array.isArray(previousPlan?.subsystems) ? previousPlan.subsystems : [];
+  const exact = new Map(previousSubsystems.map(item => [subsystemTopologyFingerprint(item), item]));
+
+  for (const subsystem of nextPlan?.subsystems ?? []) {
+    const priorExact = exact.get(subsystemTopologyFingerprint(subsystem));
+    const priorState = priorExact ? previousState.get(priorExact.id) : null;
+    if (priorState) {
+      nextState.set(subsystem.id, priorState);
+      continue;
+    }
+
+    // A changed boundary is a new coordination unit. Do not mark it complete
+    // from evidence produced under a different ownership boundary; force a
+    // fresh panel cycle while retaining the global typed A2A blackboard.
+    nextState.set(subsystem.id, {
+      iteration: 0,
+      status: 'pending',
+      findings: [],
+      roles: [],
+      confidence: 0,
+      research: null,
+      explanation: null,
+      replan: null,
+      topologyChanged: true
+    });
+  }
+  return nextState;
+}
+
+function liveSubsystemTopologyChange(previousPlan, nextPlan) {
+  const before = new Map((previousPlan?.subsystems ?? []).map(item => [item.id, subsystemTopologyFingerprint(item)]));
+  const after = new Map((nextPlan?.subsystems ?? []).map(item => [item.id, subsystemTopologyFingerprint(item)]));
+  const added = [...after.entries()].filter(([id, fingerprint]) => before.get(id) !== fingerprint).map(([id]) => id);
+  const removed = [...before.entries()].filter(([id, fingerprint]) => after.get(id) !== fingerprint).map(([id]) => id);
+  return {
+    changed: added.length > 0 || removed.length > 0 || before.size !== after.size,
+    added,
+    removed,
+    beforeCount: before.size,
+    afterCount: after.size
+  };
+}
+
 /**
  * Code Workspace-only orchestration.
  *
@@ -1095,7 +1147,7 @@ async function runCodeWorkspaceAgentPanels({
     previous: null,
     iteration: 1
   });
-  const subsystemPlan = singlePanel
+  let subsystemPlan = singlePanel
     ? buildSubsystemPlan(basePayload.codeIntelligence.project, {
         maxSubsystems: 1,
         risk: run?.situation?.risk ?? 'ordinary',
@@ -1114,7 +1166,7 @@ async function runCodeWorkspaceAgentPanels({
     return { enabled: false, decision: { ...initialDecision, reason: 'no-subsystems' }, brief: null, agents: [], findings: [], arbiter: null };
   }
 
-  const subsystemPlanContext = compactSubsystemPlan(subsystemPlan, {
+  let subsystemPlanContext = compactSubsystemPlan(subsystemPlan, {
     maxSubsystems: 24,
     maxFilesPerSubsystem: 40
   });
@@ -1129,7 +1181,7 @@ async function runCodeWorkspaceAgentPanels({
   const agentStates = [];
   const waves = [];
   const subsystemMessages = [];
-  const subsystemState = new Map(subsystemPlan.subsystems.map(item => [item.id, {
+  let subsystemState = new Map(subsystemPlan.subsystems.map(item => [item.id, {
     iteration: 0,
     status: 'pending',
     findings: [],
@@ -1152,13 +1204,10 @@ async function runCodeWorkspaceAgentPanels({
     ? maxAgents
     : Math.max(1, Math.min(maxAgents, Math.floor(Math.max(1, Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent) / (AGENT_MAX_OUTPUT_TOKENS * 2))));
 
-  for (const dependencyWave of subsystemPlan.waves) {
-    let pendingWave = dependencyWave.subsystemIds.filter(id => subsystemState.get(id)?.status === 'pending');
-
-    while (pendingWave.length) {
-      const ready = pendingWave
-        .map(id => subsystemPlan.subsystems.find(item => item.id === id))
-        .filter(Boolean)
+  let topologyRevision = 0;
+  while (true) {
+      const ready = subsystemPlan.subsystems
+        .filter(item => subsystemState.get(item.id)?.status === 'pending')
         .filter(subsystem => (subsystem.dependencies ?? []).every(dep => {
           const depState = subsystemState.get(dep);
           return !depState || depState.status === 'complete';
@@ -1166,7 +1215,6 @@ async function runCodeWorkspaceAgentPanels({
         .sort((a, b) => a.ordinal - b.ordinal);
 
       if (!ready.length) break;
-
       const representativeState = subsystemState.get(ready[0].id);
       const panelIteration = Math.max(1, Number(representativeState?.iteration ?? 0) + 1);
       pressureMonitor = taskPressureMonitor({
@@ -1183,6 +1231,42 @@ async function runCodeWorkspaceAgentPanels({
         previous: pressureMonitor,
         iteration: panelIteration
       });
+
+      if (!singlePanel && pressureMonitor.materialStateChange && pressureMonitor.topologyAction !== 'hold') {
+        const nextPlan = buildSubsystemPlan(basePayload.codeIntelligence.project, {
+          maxSubsystems: 24,
+          risk: run?.situation?.risk ?? 'ordinary',
+          adaptivePressure: pressureMonitor.pressure,
+          pressureTrend: pressureMonitor.direction,
+          revisionId: basePayload?.codeIntelligence?.project?.revisionId ?? basePayload?.workspace?.revisionId ?? null
+        });
+        const topology = liveSubsystemTopologyChange(subsystemPlan, nextPlan);
+        if (topology.changed) {
+          const previousPlan = subsystemPlan;
+          subsystemPlan = nextPlan;
+          subsystemPlanContext = compactSubsystemPlan(subsystemPlan, {
+            maxSubsystems: 24,
+            maxFilesPerSubsystem: 40
+          });
+          subsystemState = reconcileLiveSubsystemTopology(previousPlan, subsystemPlan, subsystemState);
+          topologyRevision += 1;
+          blackboard = mergeBlackboard(blackboard ?? {}, {
+            subsystemPlan: subsystemPlanContext,
+            subsystemTopology: {
+              revision: topologyRevision,
+              action: pressureMonitor.topologyAction,
+              pressure: pressureMonitor.pressure,
+              direction: pressureMonitor.direction,
+              added: topology.added,
+              removed: topology.removed,
+              fromCount: topology.beforeCount,
+              toCount: topology.afterCount
+            }
+          }, run?.id ?? null);
+          await recordBlackboard({ run, task, blackboard });
+        }
+      }
+
       const basePanelWidth = codeWorkspacePanelWidth(run, task, maxAgents, panelIteration, {
         fileCount: Number(subsystemPlan.project?.fileCount ?? 0),
         remainingBudgetRatio: remainingBudgetRatio()
@@ -1463,7 +1547,7 @@ async function runCodeWorkspaceAgentPanels({
       const waveRecord = {
         index: waveIndex,
         type: 'code-workspace-subsystem-panels',
-        dependencyWaveIndex: dependencyWave.index,
+        dependencyWaveIndex: subsystemPlan.waves.find(wave => wave.subsystemIds.includes(batch[0]?.id))?.index ?? 0,
         panelIds: batch.map(subsystem => `${subsystem.id}:i${subsystemState.get(subsystem.id)?.iteration ?? 1}`),
         subsystemIds: batch.map(subsystem => subsystem.id),
         roles: jobs.map(job => job.role),
@@ -1551,8 +1635,6 @@ async function runCodeWorkspaceAgentPanels({
         errorCode: item.parsed ? null : 'agent-unavailable'
       })));
 
-      pendingWave = dependencyWave.subsystemIds.filter(id => subsystemState.get(id)?.status === 'pending');
-    }
   }
 
   const integrationFindings = allFindings.length
@@ -1611,6 +1693,7 @@ async function runCodeWorkspaceAgentPanels({
       pressure: pressureMonitor.pressure,
       direction: pressureMonitor.direction,
       topologyAction: pressureMonitor.topologyAction,
+      topologyRevision,
       changedFiles: pressureMonitor.changedFileCount,
       fileCount: pressureMonitor.fileCount,
       dependencies: pressureMonitor.dependencies,
