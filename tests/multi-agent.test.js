@@ -385,3 +385,62 @@ test('observed evidence can shrink or expand the next agent allocation', () => {
   assert.equal(disputed.allocation.dimensions.observedDisagreement, true);
   assert.equal(disputed.agentCount, 4);
 });
+
+
+test('coding panel assigns separate subsystem contexts and emits dependency-scoped handoffs', async () => {
+  const calls = [];
+  const project = {
+    revisionId: 'rev-9',
+    contentHash: 'project-hash',
+    scale: 'large',
+    fileCount: 20,
+    files: [
+      ...Array.from({ length: 10 }, (_, i) => ({ path: `auth/file-${i}.js`, bytes: 100, test: i === 9 })),
+      ...Array.from({ length: 10 }, (_, i) => ({ path: `orders/file-${i}.js`, bytes: 100, test: i === 9 }))
+    ],
+    dependencies: [{ from: 'orders/file-0.js', to: 'auth/file-0.js' }],
+    totals: { bytes: 2000, dependencies: 1 },
+    hierarchy: {
+      scale: 'large',
+      root: { path: '', depth: 0, fileCount: 20, bytes: 2000, digest: 'root' },
+      directories: [
+        { path: '', depth: 0, fileCount: 20, bytes: 2000, digest: 'root' },
+        { path: 'auth', depth: 1, fileCount: 10, bytes: 1000, digest: 'auth' },
+        { path: 'orders', depth: 1, fileCount: 10, bytes: 1000, digest: 'orders' }
+      ]
+    }
+  };
+  const fakeModel = async (messages, options) => {
+    calls.push({ body: JSON.parse(messages[1].content), options });
+    return {
+      text: JSON.stringify(finding('proceed', 'subsystem inspected')),
+      provider: 'google',
+      model: options.modelId,
+      usage: null
+    };
+  };
+
+  const result = await runAdaptiveAgentPanel({
+    run: run({ adaptation: { scale: 'complex' } }),
+    task: { id: 'build-code', type: 'code' },
+    basePayload: {
+      goal: 'Build the project',
+      task: { id: 'build-code', type: 'code' },
+      workspace: { projectId: 'p1', revisionId: 'rev-9', paths: project.files.map(file => file.path) },
+      codeIntelligence: { project, files: project.files }
+    },
+    selection,
+    primaryModelId: 'google:gemini-3.8-flash',
+    config: { agents: { multiAgent: 'auto', maxAgents: 2 } },
+    canSpend: async () => true,
+    modelCaller: fakeModel
+  });
+
+  assert.equal(result.findings.length, 2);
+  assert.equal(new Set(calls.map(item => item.body.subsystemWork?.subsystem?.id)).size, 2);
+  assert.equal(calls.every(item => item.body.subsystemPlan?.kind === 'adaptive-subsystem-plan'), true);
+  assert.ok(result.allocation?.subsystemPlan);
+  assert.ok(result.allocation?.subsystemMessages?.length >= 2);
+  assert.equal(result.allocation.subsystemMessages.every(item => item.projectRevision === 'rev-9'), true);
+  assert.equal(result.allocation.subsystemMessages.every(item => ['handoff', 'blocker'].includes(item.type)), true);
+});
