@@ -762,14 +762,15 @@ function subsystemPanelStability(results) {
   const profile = disagreementProfile(parsed);
   const meanConfidence = parsed.reduce((sum, item) => sum + confidenceValue(item.confidence), 0) / parsed.length;
   const blocking = parsed.some(item => ['stop', 'revise', 'investigate'].includes(item.recommendation));
-  const severeRisk = parsed.some(item => (item.risks ?? []).length > 0)
-    || parsed.some(item => (item.unknowns ?? []).length > 0);
+  const materialRisk = parsed.some(item =>
+    (item.risks ?? []).length >= 2 || (item.unknowns ?? []).length >= 3
+  );
   return {
-    stable: !blocking && !profile.disagreement && !severeRisk && meanConfidence >= 0.82,
+    stable: !blocking && !profile.disagreement && !materialRisk && meanConfidence >= 0.82,
     blocked: parsed.some(item => item.recommendation === 'stop'),
     confidence: Number(meanConfidence.toFixed(3)),
     disagreement: profile.disagreement,
-    severeRisk
+    materialRisk
   };
 }
 
