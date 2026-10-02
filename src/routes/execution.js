@@ -34,7 +34,8 @@ import { adaptationFor, compact } from '../prompt-scope.js';
 import { codeFailure, codeRunOutput, repairDecision, repairCeiling, codeNotRunNow, repairsThisAttempt, repairContext, untestedCode, missingTests, compactCodeEvidence, TESTS_REQUIRED_PROMPT, isProject, sandboxPayload, hasCode, compactProject, mergeFix, materializeCodePackage } from '../code-workflow.js';
 import { cleanCheckpoint } from '../checkpoint.js';
 import { buildUnifiedWorkContext } from '../unified-work-context.js';
-import { buildProjectIndex } from '../project-index.js';
+import { buildProjectIndex, buildScratchProjectIndex } from '../project-index.js';
+import { workspaceContentHash } from '../code-workspace.js';
 import { compileCodeContext, isCodeTask } from '../context-compiler.js';
 import { RagStore } from '../rag.js';
 import { loadSelectedSkills, SkillLearningStore, skillContextSignature, skillPlanForSelectedSkills } from '../skills.js';
@@ -1133,12 +1134,18 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
    * the failure a fix is for.
    */
   /** Build one deterministic semantic evidence pack for code-aware steps. */
+  function rebuildRequested(run) {
+    const goal = text(run?.goal).toLowerCase();
+    return /(?:rebuild|rewrite|re-?architect|start over|from scratch|from the ground up|replace the whole|total(?:ly)? rebuild|complete rebuild|full rewrite)/.test(goal);
+  }
+
   async function codeIntelligenceForStep(run, task, scope) {
     if (!isCodeTask(task)) return null;
     const attachments = scopedAttachments(run, task);
-    if (!attachments.length) return null;
-    const files = await projectFiles(objects, scope ?? currentDbScope(), attachments, { overlay: run.adaptation?.projectOverlay });
-    if (!files.length) return null;
+    const files = attachments.length
+      ? await projectFiles(objects, scope ?? currentDbScope(), attachments, { overlay: run.adaptation?.projectOverlay })
+      : [];
+
     const workspace = run.adaptation?.unifiedWorkContext?.workspace ?? {};
     const lastChange = run.adaptation?.unifiedWorkContext?.lastChange ?? null;
     const changedPaths = [
@@ -1146,20 +1153,93 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       ...(Array.isArray(lastChange?.deleted) ? lastChange.deleted : [])
     ];
     const failure = task.id === 'build-code' ? repairContext(run)?.failure : null;
-    const index = buildProjectIndex(files, { revisionId: workspace.revisionId ?? null });
     const budget = run.adaptation?.resourcePlan?.budget?.maxAttachmentChars;
-    const maxChars = Number.isFinite(Number(budget)) ? Math.min(44_000, Math.max(12_000, Number(budget))) : null;
+    const maxChars = Number.isFinite(Number(budget))
+      ? Math.min(44_000, Math.max(12_000, Number(budget)))
+      : null;
+    const rebuilding = rebuildRequested(run);
+
+    if (!files.length) {
+      if (task.id !== 'build-code') return null;
+      const scratchIndex = buildScratchProjectIndex({
+        goal: run.goal,
+        task,
+        requirements: run.situation?.successCriteria ?? [],
+        outputs: run.situation?.outputs ?? [],
+        constraints: run.situation?.constraints ?? []
+      });
+      const emptyHash = workspaceContentHash([]);
+      const scratchPlan = buildSubsystemPlan(scratchIndex, {
+        maxSubsystems: 12,
+        risk: run?.situation?.risk ?? 'ordinary',
+        revisionId: null
+      });
+      return {
+        pack: {
+          version: 1,
+          strategy: 'from-scratch-architecture-first',
+          sourceOfTruth: 'new-project',
+          project: {
+            sourceKind: 'from-scratch',
+            revisionId: null,
+            contentHash: scratchIndex.contentHash,
+            workspaceContentHash: emptyHash,
+            fileCount: 0,
+            languages: [],
+            entryPoints: [],
+            scale: scratchIndex.scale,
+            hierarchy: scratchIndex.hierarchy,
+            plannedRoots: scratchIndex.plannedRoots,
+            mutation: {
+              mode: 'new-files-or-surgical-patches',
+              baseRevisionId: null,
+              baseContentHash: emptyHash,
+              exactBaseRequired: true,
+              rule: 'New-project mutations begin from the empty workspace snapshot and remain revision-bound.'
+            }
+          },
+          task: { id: task.id, type: task.type, goal: run.goal },
+          focus: { changedFiles: [], impactedFiles: [], relatedTests: [], relevantSymbols: [], changeRisk: null },
+          dependencies: [],
+          previousAttempts: previousAttempts(run),
+          failure: failure ? { status: failure.status, message: text(failure.message), stderr: text(failure.stderr).slice(-1800) } : null,
+          files: [],
+          budget: { maxChars: 0, usedChars: 0, truncated: false },
+          rebuildMode: false
+        },
+        subsystemPlan: scratchPlan
+      };
+    }
+
+    const index = buildProjectIndex(files, { revisionId: workspace.revisionId ?? null });
     const pack = compileCodeContext({
-      files, index, goal: run.goal, task, changedPaths, failure,
-      previousAttempts: previousAttempts(run), scale: run.adaptation?.scale ?? 'standard', maxChars
+      files,
+      index,
+      goal: run.goal,
+      task,
+      changedPaths,
+      failure,
+      previousAttempts: previousAttempts(run),
+      scale: run?.adaptation?.scale ?? 'standard',
+      maxChars
     });
     if (!pack) return null;
+
     const subsystemPlan = buildSubsystemPlan(index, {
       maxSubsystems: 12,
       risk: run?.situation?.risk ?? 'ordinary',
-      revisionId: workspace.revisionId ?? null
+      revisionId: workspace.revisionId ?? index.revisionId ?? index.contentHash
     });
-    return { pack, subsystemPlan };
+    return {
+      pack: {
+        ...pack,
+        rebuildMode: rebuilding,
+        planningDirective: rebuilding
+          ? 'full-rebuild-from-current-snapshot: treat the current project as evidence and baseline; redesign boundaries as needed, then replace or rewrite the necessary files with exact revision-bound changes.'
+          : 'evolve-current-project: preserve working parts unless evidence requires change; adapt subsystem boundaries as the project grows.'
+      },
+      subsystemPlan
+    };
   }
 
   function stepFocus(run, task) {
