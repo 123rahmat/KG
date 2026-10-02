@@ -649,6 +649,7 @@ export async function runAdaptiveAgentPanel({
   const agentStates = [];
   const completedRoles = [];
   const failedRoles = [];
+  const assignedSubsystems = new Set();
   const waves = [];
   let lastAllocation = allocationResult.allocation;
   let allocationRounds = 0;
@@ -712,10 +713,11 @@ export async function runAdaptiveAgentPanel({
       const subsystem = subsystemPlan
         ? subsystemAssignment(subsystemPlan, {
             role,
-            ordinal: completedRoles.length + jobs.length,
-            preferredId: subsystemPlan.subsystems.find(item => !completedRoles.includes(item.id))?.id ?? null
+            ordinal: assignedSubsystems.size + jobs.length,
+            preferredId: subsystemPlan.subsystems.find(item => !assignedSubsystems.has(item.id) && !jobs.some(job => job.subsystem?.id === item.id))?.id ?? null
           })
         : null;
+      if (subsystem?.id) assignedSubsystems.add(subsystem.id);
       const modelId = agentModelFor(selection, primaryModelId, role, {
         used: usedModels,
         allows: allowsModel
