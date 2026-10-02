@@ -29,6 +29,15 @@ jobs:
       # compromised development dependency can still execute in CI and poison
       # artifacts or source before production packaging.
       - run: npm audit --audit-level=high
+      - name: Generate dependency SBOM
+        run: npm sbom --sbom-format=cyclonedx > npm-sbom.json
+      - name: Upload dependency SBOM
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-sbom
+          path: npm-sbom.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Validate and unit-test the alert rules
         run: |
           docker run --rm -v "$PWD/docs/ops:/rules:ro" --entrypoint promtool prom/prometheus:v3.5.0 check rules /rules/prometheus-alerts.yml
