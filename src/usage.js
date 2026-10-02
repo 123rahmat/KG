@@ -7,8 +7,9 @@
  * A context meter reads the prompt size of the latest call in a chat.
  */
 
+import crypto from 'node:crypto';
 import { catalogEntry } from './model-catalog.js';
-import { currentDbScope } from './db.js';
+import { currentDbScope, transaction } from './db.js';
 import { MODEL_DEFAULTS } from './runtime.js';
 import { modelIdsForPlan } from './model-catalog.js';
 import { ACTIVE_STATUSES } from './stripe.js';
@@ -157,6 +158,157 @@ export async function usageSummary(pool, { principalId, workspaceId = null, conf
     bySource,
     context
   };
+}
+
+
+const RESERVATION_TTL_MS = 5 * 60_000;
+const MAX_RESERVATION_TOKENS = 500_000;
+
+function usageWindowStats(rows, windowMs, nowMs = Date.now()) {
+  const start = nowMs - windowMs;
+  const inside = rows.filter(row => new Date(row.created_at).getTime() > start)
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const used = inside.reduce((sum, row) => sum + Number(row.input_tokens || 0) + Number(row.output_tokens || 0), 0);
+  return { inside, used };
+}
+
+export async function reserveUsage(pool, {
+  principalId, workspaceId, runId = null, estimatedTokens = 0, config, ttlMs = RESERVATION_TTL_MS
+} = {}) {
+  if (!principalId || !workspaceId) return null;
+  const estimate = Math.min(MAX_RESERVATION_TOKENS, count(estimatedTokens));
+  if (!estimate) return null;
+  const limits = await limitsFor(pool, config, workspaceId);
+  if (!limits.fourHourTokens && !limits.weeklyTokens) return null;
+  const safeTtl = Math.max(30_000, Math.min(900_000, Number(ttlMs) || RESERVATION_TTL_MS));
+
+  return transaction(pool, async client => {
+    await client.query(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      ['kindgleam:usage:' + workspaceId + ':' + principalId]
+    );
+    await client.query(
+      "UPDATE usage_reservations SET state='released', updated_at=now() WHERE principal_id=$1 AND workspace_id=$2 AND state='active' AND expires_at<=now()",
+      [principalId, workspaceId]
+    );
+    const { rows: usageRows } = await client.query(
+      'SELECT input_tokens, output_tokens, created_at FROM usage_events WHERE principal_id=$1 AND workspace_id=$2 AND created_at>now()-interval \'7 days\'',
+      [principalId, workspaceId]
+    );
+    const { rows: reservationRows } = await client.query(
+      'SELECT estimated_tokens, expires_at FROM usage_reservations WHERE principal_id=$1 AND workspace_id=$2 AND state=\'active\' AND expires_at>now()',
+      [principalId, workspaceId]
+    );
+    const reserved = reservationRows.reduce((sum, row) => sum + Number(row.estimated_tokens || 0), 0);
+    for (const window of WINDOWS) {
+      const stats = usageWindowStats(usageRows, window.ms);
+      const limit = Number(limits[window.limitKey] || 0);
+      if (!limit || stats.used + reserved + estimate < limit) continue;
+      let resetsAt = stats.inside.length ? new Date(new Date(stats.inside[0].created_at).getTime() + window.ms) : null;
+      for (const row of reservationRows) {
+        const expires = new Date(row.expires_at);
+        if (!resetsAt || expires < resetsAt) resetsAt = expires;
+      }
+      throw new UsageLimitError({
+        id: window.id,
+        label: window.label,
+        hours: window.ms / HOUR,
+        used: stats.used + reserved,
+        input: stats.inside.reduce((sum, row) => sum + Number(row.input_tokens || 0), 0),
+        output: stats.inside.reduce((sum, row) => sum + Number(row.output_tokens || 0), 0),
+        calls: stats.inside.length,
+        limit,
+        percent: Math.min(100, Math.round(((stats.used + reserved) / limit) * 1000) / 10),
+        exceeded: true,
+        resetsAt: resetsAt?.toISOString() ?? null,
+        reserved
+      }, { canUpgrade: Boolean(config.stripe) });
+    }
+    const id = crypto.randomUUID();
+    await client.query(
+      "INSERT INTO usage_reservations (id, principal_id, workspace_id, run_id, estimated_tokens, state, expires_at) VALUES ($1,$2,$3,$4,$5,'active',now()+($6::int * interval '1 millisecond'))",
+      [id, principalId, workspaceId, runId, estimate, safeTtl]
+    );
+    return { id, estimatedTokens: estimate };
+  });
+}
+
+export async function settleUsageReservation(pool, {
+  reservationId, principalId, workspaceId, runId = null, conversationId = null,
+  source = 'chat', provider = '', model = '', inputTokens = 0, outputTokens = 0
+} = {}) {
+  if (!reservationId) return { recorded: false, tokens: 0 };
+  const input = count(inputTokens);
+  const output = count(outputTokens);
+  const tokens = input + output;
+  return transaction(pool, async client => {
+    await client.query(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      ['kindgleam:usage:' + workspaceId + ':' + principalId]
+    );
+    const { rows: [reservation] } = await client.query(
+      'SELECT id, estimated_tokens, state FROM usage_reservations WHERE id=$1 AND principal_id=$2 AND workspace_id=$3 FOR UPDATE',
+      [reservationId, principalId, workspaceId]
+    );
+    if (!reservation || reservation.state !== 'active') return { recorded: false, tokens: 0 };
+    await client.query(
+      "UPDATE usage_reservations SET state='consumed', actual_tokens=$4, updated_at=now() WHERE id=$1 AND principal_id=$2 AND workspace_id=$3",
+      [reservationId, principalId, workspaceId, tokens]
+    );
+    let run = null;
+    if (runId) {
+      const { rows: [updatedRun] } = await client.query(
+        'UPDATE runs SET tokens_used=tokens_used+$4, updated_at=now() WHERE id=$1 AND workspace_id=$2 AND principal_id=$3 RETURNING tokens_used,max_tokens,conversation_id',
+        [runId, workspaceId, principalId, tokens]
+      );
+      run = updatedRun ?? null;
+    }
+    if (tokens > 0) {
+      await client.query(
+        'INSERT INTO usage_events (principal_id,workspace_id,run_id,conversation_id,source,provider,model,input_tokens,output_tokens) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+        [principalId, workspaceId, runId, conversationId ?? run?.conversation_id ?? null,
+          SOURCES.has(source) ? source : 'chat',
+          String(provider ?? '').slice(0,40), String(model ?? '').slice(0,120), input, output]
+      );
+    }
+    const actual = run ? Number(run.tokens_used) : null;
+    const maxTokens = run?.max_tokens == null ? null : Number(run.max_tokens);
+    return {
+      recorded: true,
+      tokens,
+      estimatedTokens: Number(reservation.estimated_tokens),
+      overrun: tokens > Number(reservation.estimated_tokens),
+      tokensUsed: actual,
+      maxTokens,
+      exceeded: maxTokens !== null && actual !== null && actual > maxTokens
+    };
+  });
+}
+
+export async function releaseUsageReservation(pool, { reservationId, principalId, workspaceId } = {}) {
+  if (!reservationId) return false;
+  const { rowCount } = await pool.query(
+    "UPDATE usage_reservations SET state='released', updated_at=now() WHERE id=$1 AND principal_id=$2 AND workspace_id=$3 AND state='active'",
+    [reservationId, principalId, workspaceId]
+  );
+  return rowCount > 0;
+}
+
+export function createUsageGate(pool, { principalId, workspaceId, runId = null, config } = {}) {
+  return Object.freeze({
+    reserve: args => reserveUsage(pool, {
+      principalId, workspaceId, runId, config,
+      estimatedTokens: args?.estimatedTokens
+    }),
+    settle: args => settleUsageReservation(pool, {
+      principalId, workspaceId, runId,
+      ...(args ?? {})
+    }),
+    release: args => releaseUsageReservation(pool, {
+      principalId, workspaceId,
+      reservationId: typeof args === 'string' ? args : args?.id
+    })
+  });
 }
 
 export class UsageLimitError extends Error {

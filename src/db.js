@@ -206,7 +206,7 @@ export async function assertRlsReady(pool) {
     'objects', 'blobs', 'runs', 'run_tasks', 'audit_log',
     'governance_policies', 'capability_specs', 'situation_events', 'run_jobs', 'skill_profiles', 'skill_observations',
     'idempotency_keys', 'user_preferences',
-    'usage_events', 'workspace_billing', 'workspace_ai_settings', 'stripe_events', 'run_actions', 'workspace_tools', 'schedules', 'notifications', 'memories', 'safety_events', 'safety_reports', 'terms_acceptances',
+    'usage_events', 'usage_reservations', 'workspace_billing', 'workspace_ai_settings', 'stripe_events', 'run_actions', 'workspace_tools', 'schedules', 'notifications', 'memories', 'safety_events', 'safety_reports', 'terms_acceptances',
     'workspace_sources', 'run_agents', 'run_waves', 'code_workspace_sessions', 'rag_documents', 'run_blackboards', 'adaptive_cache', 'run_feedback', 'evolution_proposals', 'fleet_projects', 'fleet_project_dependencies', 'fleet_dispatches'
   ];
   const { rows: tables } = await pool.query(
@@ -412,6 +412,7 @@ async function hardenRuntimeRole(client, runtimeRole, logger) {
     ['SELECT, INSERT', ['audit_log', 'situation_events']],
     ['SELECT, INSERT, UPDATE', ['user_preferences']],
     ['SELECT, INSERT', ['usage_events']],
+    ['SELECT, INSERT, UPDATE, DELETE', ['usage_reservations']],
     ['SELECT, INSERT, UPDATE', ['workspace_billing', 'workspace_ai_settings']],
     ['SELECT, INSERT', ['stripe_events']],
     ['SELECT, INSERT, UPDATE', ['run_actions']],

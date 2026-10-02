@@ -2461,5 +2461,42 @@ export const MIGRATIONS = [
       -- There is no application path that should delete an action.
       REVOKE DELETE ON run_actions FROM PUBLIC;
     `
+  },
+
+  {
+    version: 61,
+    name: 'usage-admission-reservations',
+    sql: `
+      CREATE TABLE IF NOT EXISTS usage_reservations (
+        id TEXT PRIMARY KEY,
+        principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        run_id TEXT REFERENCES runs(id) ON DELETE SET NULL,
+        estimated_tokens BIGINT NOT NULL CHECK (estimated_tokens > 0),
+        actual_tokens BIGINT NOT NULL DEFAULT 0 CHECK (actual_tokens >= 0),
+        state TEXT NOT NULL DEFAULT 'active' CHECK (state IN ('active','consumed','released')),
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS usage_reservations_lookup_idx
+        ON usage_reservations(principal_id, workspace_id, state, expires_at);
+      CREATE INDEX IF NOT EXISTS usage_reservations_run_idx
+        ON usage_reservations(run_id, state, created_at DESC);
+      ALTER TABLE usage_reservations ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE usage_reservations FORCE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS usage_reservations_scope_policy ON usage_reservations;
+      CREATE POLICY usage_reservations_scope_policy ON usage_reservations
+        FOR ALL
+        USING (
+          (workspace_id=current_setting('app.workspace_id',true) AND principal_id=current_setting('app.principal_id',true))
+          OR current_setting('app.role',true) IN ('job-worker','service')
+        )
+        WITH CHECK (
+          (workspace_id=current_setting('app.workspace_id',true) AND principal_id=current_setting('app.principal_id',true))
+          OR current_setting('app.role',true) IN ('job-worker','service')
+        );
+      REVOKE ALL ON usage_reservations FROM PUBLIC;
+    `
   }
 ];
