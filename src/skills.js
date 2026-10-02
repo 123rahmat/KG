@@ -418,8 +418,8 @@ export function selectSkillDescriptors(goal, {
       if (learned?.failurePattern) score -= 0.25;
       return { skill, score, profile: learned };
     })
-    .filter(item => item.score > 0)
-    .sort((a, b) => b.score - a.score || a.skill.name.localeCompare(b.skill.name))
+    .filter(item => item.score > 0 || item.profile?.attempts > 0)
+    .sort((a, b) => b.score - a.score || b.profile?.attempts - a.profile?.attempts || a.skill.name.localeCompare(b.skill.name))
     .slice(0, Math.max(1, Math.min(8, Number(limit) || 4)))
     .map(item => ({
       ...item.skill,
