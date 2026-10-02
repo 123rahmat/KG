@@ -128,11 +128,11 @@ export async function usageSummary(pool, { principalId, workspaceId = null, conf
        COALESCE(SUM(output_tokens) FILTER (WHERE created_at > $2),0)::bigint AS session_output,
        COUNT(*) FILTER (WHERE created_at > $2)::bigint AS session_calls,
        MIN(created_at) FILTER (WHERE created_at > $2) AS session_oldest,
-       COALESCE(SUM(input_tokens + output_tokens),0)::bigint AS week_used,
-       COALESCE(SUM(input_tokens),0)::bigint AS week_input,
-       COALESCE(SUM(output_tokens),0)::bigint AS week_output,
-       COUNT(*)::bigint AS week_calls,
-       MIN(created_at) AS week_oldest
+       COALESCE(SUM(input_tokens + output_tokens) FILTER (WHERE source <> 'multi-agent'),0)::bigint AS week_used,
+       COALESCE(SUM(input_tokens) FILTER (WHERE source <> 'multi-agent'),0)::bigint AS week_input,
+       COALESCE(SUM(output_tokens) FILTER (WHERE source <> 'multi-agent'),0)::bigint AS week_output,
+       COUNT(*) FILTER (WHERE source <> 'multi-agent')::bigint AS week_calls,
+       MIN(created_at) FILTER (WHERE source <> 'multi-agent') AS week_oldest
        FROM usage_events
       WHERE principal_id = $1
         AND created_at > $3`,
@@ -162,6 +162,7 @@ export async function usageSummary(pool, { principalId, workspaceId = null, conf
                     ),0) AS remaining_after
                FROM usage_events
               WHERE principal_id = $1
+                AND source <> 'multi-agent'
                 AND created_at > $2
            ) q
           WHERE remaining_after < $3
@@ -193,6 +194,7 @@ export async function usageSummary(pool, { principalId, workspaceId = null, conf
             COALESCE(SUM(input_tokens + output_tokens),0)::bigint AS tokens
        FROM usage_events
       WHERE principal_id = $1
+        AND source <> 'multi-agent'
         AND created_at > $2
       GROUP BY day
       ORDER BY day ASC`,
@@ -250,6 +252,7 @@ export async function usageSummary(pool, { principalId, workspaceId = null, conf
     quotaScope: {
       fourHour: 'principal',
       weekly: 'principal',
+      weeklyExemptSources: ['multi-agent'],
       entitlement: 'principal',
       context: 'conversation'
     },
@@ -265,7 +268,8 @@ const MIN_ADMISSION_TOKENS = 32;
 const MAX_RESERVATION_TOKENS = 500_000;
 
 export async function reserveUsage(pool, {
-  principalId, workspaceId, runId = null, estimatedTokens = 0, config, ttlMs = RESERVATION_TTL_MS
+  principalId, workspaceId, runId = null, estimatedTokens = 0, config,
+  usageSource = 'chat', ttlMs = RESERVATION_TTL_MS
 } = {}) {
   if (!principalId || !workspaceId) return null;
   const rawEstimate = Math.min(MAX_RESERVATION_TOKENS, count(estimatedTokens));
@@ -298,14 +302,19 @@ export async function reserveUsage(pool, {
       runMax = run.max_tokens == null ? null : Number(run.max_tokens);
     }
 
-    const { rows: [usage] } = await client.query(
+    // Multi-agent specialists share the 4-hour account budget, but their
+  // advisory work is intentionally exempt from the user's weekly quota.
+  // This keeps background/coding-agent recruitment bounded in the short
+  // window without letting agent expansion consume the human-facing weekly
+  // allowance.
+  const { rows: [usage] } = await client.query(
       `SELECT
          COALESCE(SUM(input_tokens + output_tokens) FILTER (WHERE created_at > now()-interval '4 hours'),0)::bigint AS session_used,
-         COALESCE(SUM(input_tokens + output_tokens),0)::bigint AS week_used,
+         COALESCE(SUM(input_tokens + output_tokens) FILTER (WHERE source <> 'multi-agent'),0)::bigint AS week_used,
          MIN(created_at) FILTER (WHERE created_at > now()-interval '4 hours') AS session_oldest,
-         MIN(created_at) AS week_oldest,
+         MIN(created_at) FILTER (WHERE source <> 'multi-agent') AS week_oldest,
          COUNT(*) FILTER (WHERE created_at > now()-interval '4 hours')::bigint AS session_calls,
-         COUNT(*)::bigint AS week_calls
+         COUNT(*) FILTER (WHERE source <> 'multi-agent')::bigint AS week_calls
        FROM usage_events
       WHERE principal_id=$1
         AND created_at>now()-interval '7 days'`,
@@ -324,6 +333,10 @@ export async function reserveUsage(pool, {
 
     const available = [];
     for (const [index, window] of WINDOWS.entries()) {
+      // The weekly quota is for user-facing/model work. Multi-agent
+      // specialists remain governed by the 4-hour window (and any run cap),
+      // but do not consume or hit the weekly allowance.
+      if (window.id === 'week' && usageSource === 'multi-agent') continue;
       const limit = Number(limits[window.limitKey] || 0);
       if (!limit) continue;
       const used = Number(index === 0 ? usage?.session_used : usage?.week_used) + globalReserved;
@@ -465,7 +478,8 @@ export function createUsageGate(pool, { principalId, workspaceId, runId = null, 
   return Object.freeze({
     reserve: args => reserveUsage(pool, {
       principalId, workspaceId, runId, config,
-      estimatedTokens: args?.estimatedTokens
+      estimatedTokens: args?.estimatedTokens,
+      usageSource: args?.usageSource ?? 'chat'
     }),
     settle: args => settleUsageReservation(pool, {
       principalId, workspaceId, runId, conversationId,
