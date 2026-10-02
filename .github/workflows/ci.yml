@@ -125,6 +125,24 @@ jobs:
           docker image inspect kindgleam:ci --format '{{.Config.Env}}' | grep 'NODE_ENV=production'
       - name: Smoke test image runtime
         run: docker run --rm --entrypoint node kindgleam:ci -e "console.log('production image runtime OK')"
+      - name: Scan production image with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: kindgleam:ci
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-results.sarif
+          exit-code: '0'
+      - name: Upload Trivy SARIF
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: trivy-image-scan
+          path: trivy-results.sarif
+          if-no-files-found: error
+          retention-days: 14
 
 
   production-boot:
