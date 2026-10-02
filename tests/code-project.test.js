@@ -305,10 +305,11 @@ test('in a run, the code step of a large attached project reads the files its re
     const { body: run } = await call('POST', '/api/runs', {
       ...auth, body: { goal: 'Round invoice_total in billing/invoice.py to cents, with tests.', attachments: [file.body.id], privacyConsent: { modelProvider: true } }
     });
-    for (const taskId of await stepsIn(call, auth, run.id, ['understand', 'discover-capabilities', 'adapt', 'plan'])) {
-      await call('POST', `/api/runs/${run.id}/advance`, { ...auth, body: { taskId, summary: taskId } });
-    }
-    await call('POST', `/api/runs/${run.id}/advance`, { ...auth, body: { taskId: 'approval', approved: true } });
+    // The workflow is dynamic: only the current task exists, so do not
+    // assume legacy discover/adapt/plan stages are pre-created. Walk the
+    // server-owned graph until the actual build task becomes current.
+    const prepared = await advanceTo(call, auth, run.id, { until: 'build-code', approve: true });
+    assert.equal(prepared.next, 'build-code', `expected build-code, got ${prepared.next}: ${prepared.tasks.map(task => task.id).join(' → ')}`);
     const built = await call('POST', `/api/runs/${run.id}/execute`, { ...auth, body: {} });
     assert.ok(seen.some(request => request.task?.id === 'build-code'), `${run.tasks.map(task => task.id).join(' ')} → ${JSON.stringify(built.body).slice(0, 300)}`);
     const project = seen.filter(request => request.task?.id === 'build-code' && request.codeIntelligence)
