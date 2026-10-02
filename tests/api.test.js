@@ -409,7 +409,11 @@ test('research searches the web with the AI provider, reads what it found, and k
           { groundingChunks: [{ web: { uri: 'https://example.com/source', title: 'Example source' } }] }
         );
       }
-      const text = calls.length === 1 ? '{"tool":"web.search","input":{"query":"latest evidence unfamiliar topic"}}' : 'Current research result, from example.com.';
+      const text = calls.length === 1
+        ? '{"tool":"web.search","input":{"query":"latest evidence unfamiliar topic"}}'
+        : calls.some(item => item.tools)
+          ? 'Current research result, from example.com.'
+          : 'Current research result, from example.com.';
       return modelReply(text, { input_tokens: 5, output_tokens: 5 });
     }
   });
