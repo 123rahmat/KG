@@ -60,10 +60,28 @@ test('past the 4-hour limit, AI steps wait and say when they open again', () =>
     assert.equal(session.exceeded, true);
     assert.ok(session.resetsAt);
 
-    const { step } = await chatStep(call, auth, 'chat-limit-0002');
-    assert.equal(step.body.execution.executed, false);
-    assert.equal(step.body.execution.status, 'usage-limit-reached');
-    assert.match(step.body.execution.message, /4-hour AI usage limit\. It opens again at \d\d:\d\d UTC/);
+    const blocked = await call('POST', '/api/runs', {
+      ...auth,
+      body: {
+        goal: 'Explain the same thing in another chat',
+        conversationId: 'chat-limit-0002',
+        privacyConsent: { modelProvider: true }
+      }
+    });
+    assert.equal(blocked.status, 429);
+    assert.equal(blocked.body.code, 'usage-limit-reached');
+    assert.match(blocked.body.error, /4-hour AI usage limit\. It opens again at \d\d:\d\d UTC/);
+
+    const blockedAgain = await call('POST', '/api/runs', {
+      ...auth,
+      body: {
+        goal: 'Try again from a third chat',
+        conversationId: 'chat-limit-0003',
+        privacyConsent: { modelProvider: true }
+      }
+    });
+    assert.equal(blockedAgain.status, 429);
+    assert.equal(blockedAgain.body.code, 'usage-limit-reached');
 
     // Work that does not use the AI still works.
     assert.equal((await call('GET', '/api/schedules', auth)).status, 200);
