@@ -65,3 +65,15 @@ The manager does not classify a request into a hard-coded "coding" or "non-codin
 A task can therefore receive different panels without being labeled as a particular industry or domain. For example, a difficult research question may recruit researcher + analyst + critic; a complex writing task may recruit strategist + communicator + critic; a design decision may recruit strategist + analyst + researcher + critic; a failed implementation may add diagnostician. The same mechanism applies to future task types that the capability system discovers.
 
 The panel is still optional. Routine work remains single-agent. The maximum is a configurable ceiling, while marginal utility and budget determine how many specialists are actually called.
+
+## Adaptive subsystem orchestration for coding projects
+
+For medium, large and very-large codebases, the panel can also receive an adaptive-subsystem-plan. This plan is derived from the repository's deterministic project index rather than from model guesses. It estimates an appropriate subsystem count from project scale, file/byte volume, dependency density and cross-boundary coupling, then uses hierarchical directories to produce non-overlapping file ownership. A large single-root tree can be split by promoting the largest child directories while keeping the parent as a residual bucket.
+
+Each subsystem receives a bounded contract containing its owned paths, tests, dependency and consumer ids, read dependencies, write ownership, contract fingerprint and the exact base revision. The server builds a dependency DAG and exposes ready subsystems to workers only after their prerequisite subsystems have completed. Independent ready subsystems can still run concurrently, while failed subsystem work releases ownership so another role can retry it without allowing two workers to own the same subsystem at once.
+
+Peer communication uses a typed, bounded project bus with these message classes: contract-update, dependency-request, dependency-response, blocker, handoff, test-result, and integration-request. Messages are revision-bound and stale messages are withheld from newer subsystem contexts. Payloads are bounded before persistence, duplicate messages are deduplicated, and peer data remains untrusted data rather than instructions or authority.
+
+The subsystem plan is persisted in the run blackboard in compact form and is included in the primary/model context. This lets the primary coding workflow see the same ownership, dependency and communication state without creating a second authority system.
+
+The current subsystem stage remains advisory/read-only: the server owns all mutations and the final coding result. This is intentional. It provides the safe coordination contract for future subsystem patch workers and integration workers without introducing unrestricted multi-writer repository access.
