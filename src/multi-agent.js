@@ -672,7 +672,7 @@ export async function runAdaptiveAgentPanel({
     ? Math.min(maxAgents, Math.max(1, subsystemPlan.subsystems.length))
     : 1;
   if (subsystemPlan && !(blackboard?.subsystemPlan?.project?.contentHash === subsystemPlan.project.contentHash)) {
-    blackboard = mergeBlackboard(blackboard ?? {}, { subsystemPlan }, run?.id ?? null);
+    blackboard = mergeBlackboard(blackboard ?? {}, { subsystemPlan: subsystemPlanContext }, run?.id ?? null);
     await recordBlackboard({ run, task, blackboard });
   }
   let tokensSpent = 0;
