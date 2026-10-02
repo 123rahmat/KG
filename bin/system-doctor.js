@@ -122,8 +122,8 @@ check('migration-order', (() => { const v = [...migrationSource.matchAll(/versio
 check('background-worker-cycle-bound', /maxPerCycle/.test(jobs) && /cycleLimit/.test(jobs), 'background workers bound queue draining per cycle for fairness and resource control');
 check('fleet-lease-fencing', /renewLease\(/.test(fleet) && /worker_id/.test(fleet) && /lease_until\s*>\s*now\(\)/.test(fleet), 'fleet completion and renewal are lease-owned');
 check('fleet-batch-concurrency-fence', /ROW_NUMBER\(\) OVER \(PARTITION BY d\.project_id/.test(fleet) && /project_rank/.test(fleet) && /project_slots/.test(fleet), 'fleet acquisition limits one batch by each project’s actual concurrency slots');
-check('action-outcome-fencing', /ACTION_LEASE_MS/.test(actions) && /recoverExpired\(/.test(actions) && /status = \'running\'/.test(actions), 'approved side effects carry a lease and abandoned outcomes become explicit uncertainty');
-check('action-run-privacy', /run_actions_policy/.test(await read('src/migrations.js')) && /r\.visibility = \'workspace\'/.test(await read('src/migrations.js')), 'proposed action access follows the underlying run visibility');
+check('action-outcome-fencing', /ACTION_LEASE_MS/.test(actions) && /recoverExpired\(/.test(actions) && /status = 'running'/.test(actions), 'approved side effects carry a lease and abandoned outcomes become explicit uncertainty');
+check('action-run-privacy', /run_actions_policy/.test(await read('src/migrations.js')) && /r\.visibility = 'workspace'/.test(await read('src/migrations.js')), 'proposed action access follows the underlying run visibility');
 check('browser-security-boundary', /sec-fetch-site/.test(securityBoundary) && /SameSite=Strict/.test(app), 'browser state changes have request-metadata and strict-cookie boundaries');
 check('sandbox-production-pinning', /@sha256/.test(sandbox) && /assertProductionSandboxConfiguration/.test(sandbox), 'sandbox source enforces immutable production image references in production');
 check('docker-non-root', /USER node/.test(dockerfile), 'production application image runs as the unprivileged node user');
