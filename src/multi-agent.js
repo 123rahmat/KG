@@ -439,7 +439,7 @@ function modelPool(selection, primaryModelId) {
 export function agentModelFor(selection, primaryModelId, role, { used = [], allows = () => true } = {}) {
   const pool = modelPool(selection, primaryModelId).filter(id => allows(id));
   const available = pool.filter(id => !used.includes(id));
-  const roleWantsPro = ['strategist', 'architect', 'critic', 'diagnostician'].includes(role);
+  const roleWantsPro = ['strategist', 'architect', 'implementer', 'critic', 'diagnostician'].includes(role);
   const preferred = available.find(id => roleWantsPro ? /-pro\b/.test(id) : !/-pro\b/.test(id));
   return preferred ?? available[0] ?? pool[0] ?? primaryModelId;
 }
@@ -980,7 +980,7 @@ async function runCodeWorkspaceAgentPanels({
         const result = await modelCaller(agentMessages(job.role, {
           ...basePayload,
           harness,
-          blackboard: basePayload?.blackboard ?? null,
+          blackboard: blackboard ?? basePayload?.blackboard ?? null,
           subsystemPlan: subsystemPlanContext,
           subsystemWork: job.subsystemWork,
           workspacePanel: {
