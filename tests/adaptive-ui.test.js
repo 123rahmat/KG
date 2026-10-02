@@ -34,11 +34,11 @@ test('the client asks for decisions inline, not in browser pop-ups', async () =>
   assert.match(js, /function renderNextStep/);
   assert.match(js, /\/api\/conversations/);
   assert.match(js, /function autoDrive/);
-  // Answers, approvals, checks and findings are forms on the page; only the
-  // irreversible "stop", "delete", "delete chat" and "forget everything"
-  // actions keep a confirmation dialog.
+  // Answers, approvals, checks and findings are forms on the page; only
+  // irreversible destructive actions keep a confirmation dialog.
   assert.doesNotMatch(js, /\bprompt\(/);
-  assert.equal((js.match(/\bconfirm\(/g) ?? []).length, 4);
+  // stop run, delete object, forget everything, delete chat, and forget learned patterns.
+  assert.equal((js.match(/\bconfirm\(/g) ?? []).length, 5);
   // Work a person does is labelled as theirs, and AI consent is explicit.
   assert.match(js, /humanProvided: true/);
   assert.match(js, /modelConsent: true/);
