@@ -1,6 +1,6 @@
 # Kindgleam
 
-**One open-world adaptive workflow for any legitimate goal.**
+**One adaptive workflow for governed, evidence-backed work.**
 
 Kindgleam is not a bundle of domain products. Education, engineering, business,
 research, design, science, operations and future domains are context, not separate
@@ -24,8 +24,9 @@ goal
 ```
 
 The native capability registry is only a bootstrap set. Unknown or unprecedented
-requirements become dynamic capability specifications and can be routed through
-the generic tool boundary without changing the workflow core.
+requirements become governed capability specifications. A discovered capability
+remains non-executable until an authorized implementation exists, passes its
+required gates, and can return authenticated evidence.
 
 The full architecture — workflow, capability lifecycle, execution trust,
 governance, privacy and invariants — is in
@@ -80,8 +81,8 @@ Runtime placement is deployment-aware:
 
 For executable code, the run also selects an execution target:
 
-- **Local machine** — requires a local-agent preflight and explicit user approval.
-- **Kindgleam sandbox** — Kindgleam's own sealed runner for code (`SANDBOX_RUNNER_URL`), for when the local machine is unavailable or unsuitable.
+- **Local machine** — an optional execution target for deployments that explicitly pair a local agent; it is not a Code Workspace source.
+- **Kindgleam sandbox** — Kindgleam's sealed runner for code (`SANDBOX_RUNNER_URL`).
 
 The selection order is: detect requirements → preflight local resources when local is eligible → select a compatible target → require human approval → execute through the target boundary → record the receipt → observe → verify. The system never silently moves an execution to the cloud.
 
@@ -264,10 +265,11 @@ agent preflight containing exact host information. A local result must carry an
 HMAC-SHA256 receipt bound to the run id, task id, task type, execution target and output
 hashes. An unsigned or altered receipt cannot complete the server-owned task.
 
-Code may use the user's local machine or the Kindgleam sandbox. The paired local machine
-is checked first; if it is unavailable or insufficient, the sandbox is a fresh execution
-decision that still requires explicit human approval. The platform never silently uploads
-or moves execution to cloud.
+Code Workspace sources are GitHub repositories only. The terminal starts from a server-side
+snapshot of the selected GitHub revision; local folders are not imported or synchronized.
+An optional paired local agent is a separate execution target and never becomes a Code Workspace source.
+GitHub write-back requires explicit source permission, an exact revision, pre-image checks,
+and an explicit apply confirmation.
 
 A managed runner (the sandbox or the tool runner) must return the execution evidence for
 the server to mark a task complete. The same rule applies to any external execution boundary: a claim without
