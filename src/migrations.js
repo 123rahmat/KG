@@ -2696,10 +2696,7 @@ export const MIGRATIONS = [
     sql: `
       -- Code Workspace is a GitHub-only product surface. Existing local-folder
       -- sources are revoked so legacy browser-held folder access cannot remain active.
-      UPDATE workspace_sources
-         SET revoked_at = COALESCE(revoked_at, now()),
-             credentials_enc = NULL,
-             updated_at = now()
+      DELETE FROM workspace_sources
        WHERE kind = 'local-folder';
 
       ALTER TABLE workspace_sources
