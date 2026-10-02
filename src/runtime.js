@@ -31,6 +31,14 @@ const RETRY_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
  */
 const imagesOf = message => (Array.isArray(message.images) ? message.images.filter(image => image?.data && image?.mediaType) : []);
 
+export function estimateModelTokens(messages = [], { maxOutputTokens = 4096 } = {}) {
+  const list = Array.isArray(messages) ? messages : [];
+  const chars = list.reduce((sum, message) => sum + (typeof message?.content === 'string' ? message.content.length : 0), 0);
+  const images = list.reduce((sum, message) => sum + imagesOf(message).length, 0);
+  const output = Number(maxOutputTokens) > 0 ? Math.floor(Number(maxOutputTokens)) : 4096;
+  return Math.min(500_000, Math.max(256, Math.ceil(chars / 4) + images * 1024 + output));
+}
+
 const geminiContents = messages => {
   // Gemini 3.8 Flash rejects empty turns and histories ending in a prefilled
   // model turn. Keep prior assistant turns as context, but always stop at the
@@ -272,7 +280,7 @@ export function effectiveEffort(requested, ceiling) {
 export async function callModel(messages, {
   config, fetchImpl = fetch, sleep = wait, webSearch = false,
   timeoutMs = MODEL_TIMEOUT_MS, retries = 1, maxOutputTokens = null, modelId = null, effort = null, json = false,
-  allowBackup = () => true
+  allowBackup = () => true, usageGate = null, usageSource = 'chat'
 } = {}) {
   if (!config.ai) return null;
   const selected = resolveConfiguredModel(config, modelId || config.ai.modelId || null);
@@ -288,6 +296,9 @@ export async function callModel(messages, {
     .filter(model => model !== selected.model && (isPro(selected.model) || !isPro(model)) && allowBackup(model));
   const configured = [selected.model, ...new Set(backups)];
   const startedAt = Date.now();
+  let usageReservation = null;
+  let usageRecorded = false;
+  let spentUsage = { inputTokens: 0, outputTokens: 0 };
   // Resting models go last, not away: when every model is resting, all are
   // still tried. A model that said it does not exist is left out while it rests.
   const live = configured.filter(model => !isRetired(model, startedAt));
@@ -298,6 +309,27 @@ export async function callModel(messages, {
 
   const credential = selected.vertexProject ? await vertexAccessToken(config) : selected.apiKey;
   if (!credential) return null;
+  if (usageGate) {
+    try {
+      usageReservation = await usageGate.reserve({
+        estimatedTokens: estimateModelTokens(messages, { maxOutputTokens })
+      });
+    } catch (error) {
+      if (error?.code === 'usage-limit-reached') {
+        return {
+          text: '',
+          citations: [],
+          usage: null,
+          provider,
+          model: selected.model,
+          incomplete: 'usage-limit',
+          status: 'usage-limit-reached',
+          message: error.message
+        };
+      }
+      throw error;
+    }
+  }
   const request = async (model, url, headers, requestBody, attempts) => {
     const modelKey = provider + ':' + model;
     providerGovernor.configure(modelKey, providerLimit);
@@ -355,6 +387,8 @@ export async function callModel(messages, {
         const alone = models.length === 1 || (pass > 0 && index === candidates.length - 1);
         try {
           const segment = await request(candidate, url, headers, body, alone ? retries : 0);
+          spentUsage.inputTokens += Number(segment?.usage?.inputTokens || 0);
+          spentUsage.outputTokens += Number(segment?.usage?.outputTokens || 0);
           // An empty answer or a garbled tool call (small models asked to
           // search) is worth another model's try before it is accepted.
           const hollow = SEARCH_TOOL_FAILURES.has(segment?.incomplete) || (!text(segment?.text) && segment?.incomplete !== 'refusal');
@@ -388,7 +422,11 @@ export async function callModel(messages, {
   } catch (error) {
     // Web search out of quota or refused: answer without it, and say so,
     // rather than fail a step that no retry soon would complete.
-    if (!webSearch || !(error instanceof ModelProviderError) || !SEARCH_FALLBACK_CODES.has(error.code)) throw error;
+    if (!webSearch || !(error instanceof ModelProviderError) || !SEARCH_FALLBACK_CODES.has(error.code)) {
+      if (usageReservation) await usageGate.release(usageReservation).catch(() => {});
+      usageReservation = null;
+      throw error;
+    }
     outcome = await attempt(false);
     webSearchUnavailable = true;
   }
@@ -404,10 +442,38 @@ export async function callModel(messages, {
   }
   const { segment, model } = outcome;
   const joined = segment?.text ?? '';
-  const usage = segment?.usage ?? null;
+  const usage = spentUsage.inputTokens + spentUsage.outputTokens > 0 ? spentUsage : segment?.usage ?? null;
   const citations = segment?.citations ?? [];
   const incomplete = segment?.incomplete || (text(joined) ? null : 'empty-response');
-  return { text: joined, citations, usage, provider, model, incomplete, ...(webSearchUnavailable ? { webSearchUnavailable: true } : {}) };
+  if (usageReservation) {
+    try {
+      const settlement = await usageGate.settle({
+        reservationId: usageReservation.id,
+        source: usageSource,
+        provider,
+        model,
+        inputTokens: spentUsage.inputTokens,
+        outputTokens: spentUsage.outputTokens,
+        conversationId: null
+      });
+      usageRecorded = Boolean(settlement?.recorded);
+      usageReservation = null;
+    } catch (error) {
+      await usageGate.release(usageReservation).catch(() => {});
+      usageReservation = null;
+      throw error;
+    }
+  }
+  return {
+    text: joined,
+    citations,
+    usage,
+    provider,
+    model,
+    incomplete,
+    usageRecorded,
+    ...(webSearchUnavailable ? { webSearchUnavailable: true } : {})
+  };
 }
 
 /**
