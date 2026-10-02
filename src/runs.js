@@ -104,6 +104,15 @@ function newBuild(run) {
   if (SKIP_PLANNING.test(goal)) return false;
   return adaptation.scale !== 'small' || BUILD_WORDS.test(goal);
 }
+
+export function codePlanApprovalRequired(run = {}) {
+  const adaptation = run.adaptation ?? {};
+  const existingCode = (adaptation.attachments?.length ?? 0) > 0
+    || (adaptation.projectOverlay?.length ?? 0) > 0
+    || (run.situation?.artifacts?.length ?? 0) > 0
+    || adaptation.ownWork === true;
+  return existingCode || newBuild(run);
+}
 const HUMAN_COMPLETABLE_TASKS = new Set(['investigate', 'tool']);
 const CONVERSATION_ID = /^[A-Za-z0-9-]{8,64}$/;
 
@@ -1583,7 +1592,7 @@ export class RunStore {
           || (run.adaptation?.projectOverlay?.length ?? 0) > 0
           || (run.situation?.artifacts?.length ?? 0) > 0
           || run.adaptation?.ownWork === true;
-        if (!started('plan') && (newBuild(run) || hasExistingCode)) {
+        if (!started('plan') && codePlanApprovalRequired(run)) {
           return hasExistingCode ? EXISTING_CODE_PLAN_STEP : BUILD_PLAN_STEP;
         }
         return { type: 'code', title: 'Write the code',
