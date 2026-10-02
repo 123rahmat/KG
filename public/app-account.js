@@ -174,6 +174,47 @@ const untilText = iso => {
 const SOURCE_LABELS = { chat: 'Chat answers & steps', classifier: 'Understanding requests', 'simulation-design': 'Earlier features' };
 
 let usageLoading = null;
+
+/** Usage quota is scoped to the signed-in person + workspace, not a chat. */
+export function usageLimitStatus() {
+  const windows = Array.isArray(state.usage?.windows) ? state.usage.windows : [];
+  const exhausted = windows.find(window => window?.exceeded);
+  if (!exhausted) return null;
+  return {
+    window: exhausted.id,
+    label: exhausted.label,
+    resetsAt: exhausted.resetsAt ?? null,
+    message: `AI usage limit reached for this workspace (${exhausted.label}).`
+  };
+}
+
+/** Keep the same persistent lock visible wherever chat/code work happens. */
+export function renderUsageLimitLock() {
+  const lock = usageLimitStatus();
+  const resetText = lock?.resetsAt
+    ? ` AI access opens again at ${new Date(lock.resetsAt).toLocaleString()}.`
+    : '';
+  const message = lock
+    ? `${lock.message} AI is paused in every chat and code workspace.${resetText} Work that does not use the AI still works.`
+    : '';
+  for (const id of ['usageLimitBanner', 'usageLimitBannerCode']) {
+    const node = $(id);
+    if (!node) continue;
+    node.hidden = !message;
+    node.className = 'notice bad usage-limit-banner';
+    node.textContent = message;
+  }
+  document.body.dataset.aiUsageLocked = lock ? 'true' : 'false';
+  for (const id of ['goal', 'createRun', 'attachBtn', 'voiceBtn', 'attachInput']) {
+    const node = $(id);
+    if (!node) continue;
+    node.disabled = Boolean(lock);
+    node.setAttribute('aria-disabled', String(Boolean(lock)));
+    if (lock) node.title = 'AI usage limit reached for this workspace.';
+  }
+  return lock;
+}
+
 /** Fetch usage (with this chat's context) and refresh every place that shows it. */
 export function loadUsage() {
   if (!state.principal) return Promise.resolve(null);
@@ -181,11 +222,15 @@ export function loadUsage() {
     .then(usage => {
       state.usage = usage;
       renderUsageRing();
+      renderUsageLimitLock();
       renderChatHead();
       if (!$('settings').hidden && $('settings').open && document.querySelector('.settings-section.active')?.dataset.settingsSection === 'usage') renderUsageSection();
       return usage;
     })
-    .catch(() => null)
+    .catch(() => {
+      renderUsageLimitLock();
+      return null;
+    })
     .finally(() => { usageLoading = null; });
   return usageLoading;
 }
