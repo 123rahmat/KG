@@ -1602,7 +1602,7 @@ async function runCodeWorkspaceAgentPanels({
         panelIds: batch.map(subsystem => `${subsystem.id}:i${subsystemState.get(subsystem.id)?.iteration ?? 1}`),
         subsystemIds: batch.map(subsystem => subsystem.id),
         roles: jobs.map(job => job.role),
-        parallel: scheduledJobs.length > 1,
+        parallel: lanePlan.waves.some(wave => wave.lanes.length > 1),
         lanePlan,
         completed: results.filter(item => item.parsed).map(item => `${item.subsystem.id}:${item.role}`),
         failed: results.filter(item => !item.parsed).map(item => `${item.subsystem.id}:${item.role}`),
