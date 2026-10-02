@@ -87,14 +87,12 @@ test('workspace chat rejects an invalid conversation scope instead of silently s
 test('duplicate paths are charged against the final content size, not the first occurrence', () => {
   const limit = WORKSPACE_LIMITS.maxTotalBytes;
   const files = [
-    { path: 'src/shared.js', content: 'a'.repeat(Math.floor(limit * 0.60)) },
-    { path: 'src/other.js', content: 'x'.repeat(Math.floor(limit * 0.50)) },
-    { path: 'src/shared.js', content: 'b'.repeat(Math.floor(limit * 0.60)) }
+    { path: 'src/shared.js', content: 'a'.repeat(Math.floor(WORKSPACE_LIMITS.maxFileBytes * 0.5)) },
+    { path: 'src/other.js', content: 'x'.repeat(Math.floor(limit * 0.55)) },
+    { path: 'src/shared.js', content: 'b'.repeat(Math.floor(WORKSPACE_LIMITS.maxFileBytes * 0.5)) }
   ];
   assert.throws(
-    () => {
-      return workspaceContentHash(files);
-    },
+    () => workspaceContentHash(files),
     /Workspace exceeds its total file-size limit/
   );
 });
