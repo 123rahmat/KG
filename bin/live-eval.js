@@ -2,7 +2,7 @@
 /**
  * npm run eval:live
  *
- * Sends real requests to a running Kindgleam and checks how the real AI
+ * Sends the complete live-evaluation scenario set to a running Kindgleam and checks how the real AI
  * model handled each situation. It spends real tokens.
  *
  *   EVAL_URL        the deployment, e.g. http://127.0.0.1:8080
