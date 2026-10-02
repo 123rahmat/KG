@@ -24,6 +24,7 @@ const MIN_ROWS = 5;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_OUTPUT_CHUNK = 64 * 1024;
 const MAX_CONTROL_MESSAGES_PER_SECOND = 30;
+const ACCESS_RECHECK_MS = 30_000;
 const SENSITIVE_TERMINAL_PATH = /(?:^|\/)(?:\.env(?:\.(?!example$|sample$|template$)[^/]*)?|\.npmrc|\.netrc|\.pypirc|id_rsa(?:\.[^/]*)?|[^/]+\.(?:pem|key|p12|pfx))$/i;
 const EXCLUDED_DIRS = new Set([
   '.git', 'node_modules', '.next', '.cache', 'dist', 'build', 'coverage',
@@ -191,6 +192,7 @@ class TerminalSession {
     this.controlWindowStartedAt = this.createdAt;
     this.controlMessageCount = 0;
     this.closed = false;
+    this.lastAccessCheckAt = 0;
     this.lifetimeTimer = null;
     this.idleTimer = null;
   }
@@ -199,6 +201,24 @@ class TerminalSession {
     if (this.closed || this.ws.readyState !== WebSocket.OPEN) return false;
     this.ws.send(JSON.stringify(payload));
     return true;
+  }
+
+  async ensureAccess() {
+    if (this.closed) return false;
+    if (Date.now() - this.lastAccessCheckAt < ACCESS_RECHECK_MS) return true;
+    try {
+      await this.manager.identity.requireAccess(this.principal, this.scope.workspaceId, 'editor');
+      this.lastAccessCheckAt = Date.now();
+      return true;
+    } catch (error) {
+      this.send({ type: 'status', status: 'access-revoked' });
+      this.close('access-revoked');
+      this.manager.logger?.warn?.('terminal access revoked during session', {
+        sessionId: this.id, principalId: this.principal.id, workspaceId: this.scope.workspaceId,
+        code: error?.code ?? 'access-revoked'
+      });
+      return false;
+    }
   }
 
   touch() {
@@ -346,6 +366,7 @@ export function attachTerminalServer(server, {
     },
     async handleMessage(session, raw) {
       if (session.closed) return;
+      if (!(await session.ensureAccess())) return;
       let message;
       try { message = JSON.parse(raw.toString('utf8')); } catch {
         session.send({ type: 'error', error: 'Invalid terminal message' });

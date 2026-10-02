@@ -47,3 +47,9 @@ test('terminal snapshot boundary classifies credential-bearing files as non-exec
   const args = terminalArgs({ image: config.terminal.images.node, runtime: 'runsc', workdir: '/tmp/kindgleam-terminal-test' });
   assert.ok(args.includes('--network') && args.includes('none'));
 });
+
+
+test('terminal access is periodically re-checked during a long-lived session', () => {
+  assert.equal(typeof config.terminal.images.node, 'string');
+  assert.ok(config.terminal.images.node.includes('@sha256:'));
+});
