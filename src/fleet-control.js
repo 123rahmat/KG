@@ -243,7 +243,10 @@ export class FleetStore {
   async reapExpired({ workspaceId = '', limit = 100 } = {}) {
     return transaction(this.pool, async client => {
       const params = [];
-      const conditions = ["state='running'", "lease_until IS NOT NULL", "lease_until < now()", "attempts >= max_attempts"];
+      const conditions = [
+        "((state='running' AND lease_until IS NOT NULL AND lease_until < now() AND attempts >= max_attempts)"
+        + " OR (state='queued' AND attempts >= max_attempts))"
+      ];
       if (workspaceId) { params.push(workspaceId); conditions.push('workspace_id=$' + params.length); }
       const limitParam = params.length + 1;
       params.push(Math.max(1, Math.min(500, Number(limit) || 100)));
@@ -251,7 +254,7 @@ export class FleetStore {
         'WITH expired AS (SELECT id,project_id FROM fleet_dispatches WHERE',
         conditions.join(' AND '),
         'ORDER BY lease_until ASC,id ASC FOR UPDATE SKIP LOCKED LIMIT $' + limitParam + ')',
-        "UPDATE fleet_dispatches d SET state='failed',error='lease-expired-attempt-budget-exhausted',lease_until=NULL,worker_id=NULL,finished_at=now(),updated_at=now() FROM expired e WHERE d.id=e.id RETURNING d.project_id"
+        "UPDATE fleet_dispatches d SET state='failed',error=CASE WHEN e.state='running' THEN 'lease-expired-attempt-budget-exhausted' ELSE COALESCE(NULLIF(d.error,''),'attempt-budget-exhausted') END,lease_until=NULL,worker_id=NULL,finished_at=now(),updated_at=now() FROM expired e WHERE d.id=e.id RETURNING d.project_id"
       ].join(' ');
       const { rows } = await client.query(sql, params);
       if (!rows.length) return 0;
@@ -337,8 +340,15 @@ export class FleetStore {
     return transaction(this.pool, async client => {
       const fenceParams = [text(dispatchId), scope.workspaceId];
       const fence = ['id=$1', 'workspace_id=$2', "state='running'"];
-      if (text(workerId)) { fenceParams.push(text(workerId)); fence.push('worker_id=$' + fenceParams.length); }
-      if (attempts !== null && attempts !== undefined) { fenceParams.push(Number(attempts) || 0); fence.push('attempts=$' + fenceParams.length); }
+      if (text(workerId)) {
+        fenceParams.push(text(workerId));
+        fence.push('worker_id=$' + fenceParams.length);
+      }
+      if (attempts !== null && attempts !== undefined) {
+        fenceParams.push(Number(attempts) || 0);
+        fence.push('attempts=$' + fenceParams.length);
+      }
+      if (text(workerId) || (attempts !== null && attempts !== undefined)) fence.push('lease_until > now()');
       const { rows: [dispatch] = [] } = await client.query(
         'SELECT * FROM fleet_dispatches WHERE ' + fence.join(' AND ') + ' FOR UPDATE',
         fenceParams
@@ -370,6 +380,11 @@ export class FleetStore {
       return { id: dispatch.id, state, projectId: dispatch.project_id };
     });
   }
+}
+
+export function fleetDispatchTerminalState({ handled = false, statusCode = 500, workflowFailed = false } = {}) {
+  const status = Number(statusCode) || 500;
+  return !workflowFailed && Boolean(handled) && status < 400 ? 'succeeded' : 'failed';
 }
 
 export function fleetStatus(projects = [], { capacity = 1, workerCount = 1 } = {}) {
@@ -438,7 +453,7 @@ export function createFleetWorker({
           access = await identity.requireAccess({ id: dispatch.principalId }, dispatch.workspaceId, 'editor');
         } catch {
           await fleet.finish(scope, dispatch.id, {
-            state: 'succeeded',
+            state: 'failed',
             healthOutcome: 'failed',
             workerId: effectiveWorkerId,
             attempts: dispatch.attempts,
@@ -453,7 +468,7 @@ export function createFleetWorker({
         const task = run?.tasks.find(item => item.id === payload.taskId);
         if (!run || !task) {
           await fleet.finish(scope, dispatch.id, {
-            state: 'succeeded',
+            state: 'failed',
             healthOutcome: 'failed',
             workerId: effectiveWorkerId,
             attempts: dispatch.attempts,
@@ -464,7 +479,7 @@ export function createFleetWorker({
 
         if (['complete', 'failed', 'blocked', 'exhausted'].includes(text(run.state))) {
           await fleet.finish(scope, dispatch.id, {
-            state: 'succeeded',
+            state: run.state === 'complete' ? 'succeeded' : 'failed',
             healthOutcome: run.state === 'complete' ? 'succeeded' : 'failed',
             workerId: effectiveWorkerId,
             attempts: dispatch.attempts,
@@ -518,7 +533,8 @@ export function createFleetWorker({
             workerId: effectiveWorkerId,
             attempts: dispatch.attempts,
             delayMs,
-            error: text(reply?.body?.error || execution.status || execution.message || 'execution-not-completed')
+            error: text(reply?.body?.error || execution.status || execution.message || 'execution-not-completed'),
+            restoreAttempt: humanGate
           });
           if (released) {
             metrics?.increment('fleet_dispatches_total', { action: 'requeued', reason: humanGate ? 'human-gate' : 'not-executed' });
@@ -528,9 +544,10 @@ export function createFleetWorker({
 
         const workflowFailed = updatedTask?.status === 'failed';
         const handled = taskHandled || runMoved || responseRun?.state === 'complete';
+        const terminalState = fleetDispatchTerminalState({ handled, statusCode, workflowFailed });
         const finishResult = await fleet.finish(scope, dispatch.id, {
-          state: 'succeeded',
-          healthOutcome: workflowFailed ? 'failed' : (handled && statusCode < 400 ? 'succeeded' : 'failed'),
+          state: terminalState,
+          healthOutcome: terminalState,
           workerId: effectiveWorkerId,
           attempts: dispatch.attempts,
           error: statusCode < 400 ? null : text(reply?.body?.error),
@@ -558,7 +575,7 @@ export function createFleetWorker({
         }).catch(() => null);
         if (!released) {
           await fleet.finish(scope, dispatch.id, {
-            state: 'succeeded',
+            state: 'failed',
             healthOutcome: 'failed',
             workerId: effectiveWorkerId,
             attempts: dispatch.attempts,

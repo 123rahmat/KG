@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  adaptFleetCapacity, fleetHealthUpdate, fleetPartition,
+  adaptFleetCapacity, fleetDispatchTerminalState, fleetHealthUpdate, fleetPartition,
   normalizeProjectSpec, projectDispatchScore, selectFleetProjects, updateFleetTelemetry
 } from '../src/fleet-control.js';
 
@@ -50,4 +50,12 @@ test('fleet telemetry feeds real latency and error signals into adaptation', () 
   assert.equal(telemetry.samples, 2);
   assert.ok(telemetry.averageLatencyMs > 1000);
   assert.ok(telemetry.errorRate > 0);
+});
+
+
+test('fleet dispatch terminal state preserves workflow failure truth', () => {
+  assert.equal(fleetDispatchTerminalState({ handled: true, statusCode: 200, workflowFailed: false }), 'succeeded');
+  assert.equal(fleetDispatchTerminalState({ handled: true, statusCode: 200, workflowFailed: true }), 'failed');
+  assert.equal(fleetDispatchTerminalState({ handled: false, statusCode: 200, workflowFailed: false }), 'failed');
+  assert.equal(fleetDispatchTerminalState({ handled: true, statusCode: 500, workflowFailed: false }), 'failed');
 });
