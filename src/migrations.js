@@ -2755,7 +2755,8 @@ export const MIGRATIONS = [
           current_setting('app.role', true) = 'billing-webhook'
           AND memberships.workspace_id = current_setting('app.workspace_id', true)
         );
-    `  ,{
+    `
+  },{
     version: 69,
     name: 'run-action-private-visibility',
     sql: `
@@ -2802,6 +2803,5 @@ export const MIGRATIONS = [
           )
         );
     `
-  }
   }
 ];
