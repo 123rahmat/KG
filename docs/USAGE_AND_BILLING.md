@@ -97,8 +97,9 @@ missing or invalid, or if a test key is used in production.
   `trialing` or `past_due`, its `fourHourTokens` and `weeklyTokens`
   contribute to the person's single account-wide entitlement. With multiple
   active plans, each window uses the most permissive limit (and model access is
-  combined), so switching workspaces cannot produce another quota pool. The
-  defaults. When it is cancelled or unpaid, the defaults apply again.
+  combined), so switching workspaces cannot produce another quota pool. When
+  no active plan contributes entitlement, the free/default limits apply. When a
+  subscription is cancelled or unpaid, its workspace entitlement is removed.
 
 To try it locally, use Stripe's test mode and `stripe listen --forward-to
 localhost:3000/api/stripe/webhook`.
