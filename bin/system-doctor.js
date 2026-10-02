@@ -151,3 +151,5 @@ if (failed.length) {
   process.exit(1);
 }
 console.log('\nSystem doctor passed. No release-blocking architecture issue was detected by this deterministic audit.');
+
+check('usage-aggregation-bounded', /FILTER \(WHERE created_at >/.test(await read('src/usage.js')) && !/const \{ rows: globalUsageRows \}/.test(await read('src/usage.js')), 'quota checks use indexed database aggregates instead of loading the full rolling ledger into memory');
