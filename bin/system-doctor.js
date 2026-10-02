@@ -129,6 +129,18 @@ for (const [name, pattern] of forbidden) {
 
 check('codeql-private-upload-policy', /upload:\s*\$\{\{\s*github\.event\.repository\.visibility/.test(codeql), 'CodeQL upload is conditional so private repositories without Code Security keep artifact-only analysis');
 
+
+
+const failed = checks.filter(item => !item.ok);
+const passed = checks.length - failed.length;
+console.log(`Kindgleam system doctor: ${passed}/${checks.length} checks passed.`);
+for (const item of checks) console.log(`${item.ok ? 'PASS' : 'FAIL'} ${item.name} — ${item.detail}`);
+if (failed.length) {
+  console.error(`\nSystem doctor found ${failed.length} issue(s). Fix these before release.`);
+  process.exit(1);
+}
+console.log('\nSystem doctor passed. No release-blocking architecture issue was detected by this deterministic audit.');
+
 const failed = checks.filter(item => !item.ok);
 const passed = checks.length - failed.length;
 console.log(`Kindgleam system doctor: ${passed}/${checks.length} checks passed.`);
