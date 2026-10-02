@@ -41,7 +41,6 @@ test('control managers run independently in parallel and cannot mutate server au
   const usage = [];
   let active = 0;
   let peak = 0;
-  const selection = [];
   const result = await runNormalChatControlPlane({
     run: run(),
     task,
