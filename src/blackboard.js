@@ -79,7 +79,7 @@ export function mergeBlackboard(current, contribution = {}, runId = null) {
     subsystemPlan: contribution.subsystemPlan && typeof contribution.subsystemPlan === 'object'
       ? contribution.subsystemPlan
       : base.subsystemPlan,
-    subsystemMessages: mergeSubsystemMessages(base.subsystemMessages, contribution.subsystemMessages, { limit: 120 }),
+    subsystemMessages: mergeSubsystemMessages(base.subsystemMessages, contribution.subsystemMessages, { limit: 64 }),
     updatedAt: new Date().toISOString()
   };
   return next;
