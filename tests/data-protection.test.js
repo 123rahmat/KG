@@ -30,3 +30,23 @@ test('keyed lookup digests are stable but keyed', () => {
   assert.notEqual(first, other);
   assert.match(first, /^[0-9a-f]{64}$/);
 });
+
+test('Stripe billing state drops local invoice/profile fields', () => {
+  const sanitized = stripeBillingPrivateState({
+    billingEmail: 'accounts@example.com',
+    companyName: 'Example Ltd',
+    taxId: 'PK-1234567',
+    country: 'Pakistan',
+    address: 'Private address',
+    stripeCustomerId: 'cus_123',
+    stripeSubscriptionId: 'sub_123',
+    stripeLastEventCreated: 123,
+    stripeLastEventId: 'evt_123'
+  });
+  assert.deepEqual(sanitized, {
+    stripeCustomerId: 'cus_123',
+    stripeSubscriptionId: 'sub_123',
+    stripeLastEventCreated: 123,
+    stripeLastEventId: 'evt_123'
+  });
+});
