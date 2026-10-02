@@ -356,7 +356,7 @@ export function rolesFor(run, task, {
     if (roles.length >= targetCount) break;
     const marginal = candidate.utility - roles.length * ROLE_REDUNDANCY_PENALTY;
     utilities[candidate.role] = Number(marginal.toFixed(3));
-    if (marginal < MIN_ROLE_UTILITY && roles.length > 0 && !disagreement) continue;
+    if (marginal < MIN_ROLE_UTILITY && roles.length > 0 && !disagreement && roles.length >= minimum) continue;
     roles.push(candidate.role);
   }
   if (!roles.length && candidates[0]) {
