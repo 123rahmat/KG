@@ -1,6 +1,6 @@
 /**
- * Stripe routes: Checkout for a plan, the customer portal, and the webhook
- * that is the only source of truth for a workspace's subscription.
+ * Stripe routes: hosted Checkout, the hosted customer portal, and the signed
+ * webhook that is the only source of truth for a workspace's entitlement.
  *
  * A browser can start a Checkout or open the portal, but it can never mark a
  * workspace as paid: only a webhook signed with STRIPE_WEBHOOK_SECRET does.
@@ -22,7 +22,7 @@ const SUBSCRIPTION_EVENTS = new Set([
 
 const scopeFor = workspaceId => ({ principalId: '', workspaceId, organizationId: '', jurisdiction: '', role: 'billing-webhook' });
 
-/** Write a subscription's state to its workspace. */
+/** Write only the minimum Stripe reference/entitlement state needed by Kindgleam. */
 async function saveSubscription(client, workspaceId, state, { customerId = null, billingKey, eventCreated = 0, eventId = null } = {}) {
   const { rows: [existing] } = await client.query(
     'SELECT billing_private_enc FROM workspace_billing WHERE workspace_id = $1 FOR UPDATE',
@@ -40,12 +40,13 @@ async function saveSubscription(client, workspaceId, state, { customerId = null,
   const encoded = billingKey ? encryptJson(billingKey, 'workspace-billing-v1', privateBilling) : null;
   await client.query(
     `INSERT INTO workspace_billing
-      (workspace_id, billing_email, company_name, tax_id, country, address, stripe_customer_id, stripe_subscription_id, billing_private_enc, billing_encryption_version,
+      (workspace_id, billing_email, company_name, tax_id, country, address, stripe_customer_id, stripe_subscription_id, billing_private_enc, billing_encryption_version, billing_storage_version,
        subscription_status, plan_id, current_period_end, cancel_at_period_end, stripe_synced_at)
-     VALUES ($1, '', '', '', '', '', NULL, NULL, $2, 1, $3, $4, $5, $6, now())
+     VALUES ($1, '', '', '', '', '', NULL, NULL, $2, 1, 1, $3, $4, $5, $6, now())
      ON CONFLICT (workspace_id) DO UPDATE SET
        billing_private_enc = EXCLUDED.billing_private_enc,
        billing_encryption_version = 1,
+       billing_storage_version = 1,
        billing_email = '', company_name = '', tax_id = '', country = '', address = '',
        stripe_customer_id = NULL, stripe_subscription_id = NULL,
        subscription_status = EXCLUDED.subscription_status,
@@ -153,17 +154,16 @@ export function registerStripeRoutes(app, { config, pool, audit, fetchImpl, rout
       : {};
     if (privateBilling.stripeCustomerId) return privateBilling.stripeCustomerId;
     const customer = await stripeRequest(config.stripe, fetchImpl, 'POST', '/v1/customers', {
-      email: privateBilling.billingEmail || req.principal.email || undefined,
-      name: privateBilling.companyName || undefined,
+      email: req.principal.email || undefined,
       metadata: { workspace_id: req.scope.workspaceId }
     }, { idempotencyKey: `customer-${req.scope.workspaceId}` });
     const encoded = encryptJson(config.security.billingEncryptionKey, 'workspace-billing-v1', { ...privateBilling, stripeCustomerId: customer.id, stripeSubscriptionId: privateBilling.stripeSubscriptionId || null });
     await pool.query(
       `INSERT INTO workspace_billing
-        (workspace_id, billing_email, company_name, tax_id, country, address, stripe_customer_id, stripe_subscription_id, billing_private_enc, billing_encryption_version, updated_by, updated_at)
-       VALUES ($1, '', '', '', '', '', NULL, NULL, $2, 1, $3, now())
+        (workspace_id, billing_email, company_name, tax_id, country, address, stripe_customer_id, stripe_subscription_id, billing_private_enc, billing_encryption_version, billing_storage_version, updated_by, updated_at)
+       VALUES ($1, '', '', '', '', '', NULL, NULL, $2, 1, 1, $3, now())
        ON CONFLICT (workspace_id) DO UPDATE SET
-         billing_private_enc = EXCLUDED.billing_private_enc, billing_encryption_version = 1,
+         billing_private_enc = EXCLUDED.billing_private_enc, billing_encryption_version = 1, billing_storage_version = 1,
          billing_email = '', company_name = '', tax_id = '', country = '', address = '',
          stripe_customer_id = NULL, stripe_subscription_id = NULL,
          updated_by = EXCLUDED.updated_by, updated_at = now()`,
