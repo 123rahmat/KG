@@ -201,3 +201,41 @@ test('stale subsystem messages are not exposed to a newer project revision', () 
   assert.equal(context.messages.length, 1);
   assert.equal(context.messages[0].payload.summary, 'current result');
 });
+
+
+test('large single-root trees can split into bounded residual subsystems', () => {
+  const files = [];
+  const children = ['api', 'auth', 'db', 'jobs', 'payments', 'search', 'ui', 'workers'];
+  for (const child of children) {
+    for (let i = 0; i < 6; i += 1) {
+      files.push({ path: `src/${child}/file-${i}.js`, bytes: 1000, test: i === 5 });
+    }
+  }
+  const directories = [
+    { path: '', depth: 0, fileCount: files.length, bytes: files.length * 1000, digest: 'root' },
+    { path: 'src', depth: 1, fileCount: files.length, bytes: files.length * 1000, digest: 'src' },
+    ...children.map(child => ({
+      path: `src/${child}`,
+      depth: 2,
+      fileCount: 6,
+      bytes: 6000,
+      digest: child
+    }))
+  ];
+  const index = {
+    scale: 'very-large',
+    fileCount: files.length,
+    files,
+    dependencies: [],
+    totals: { bytes: files.length * 1000, dependencies: 0 },
+    hierarchy: {
+      scale: 'very-large',
+      directories,
+      root: directories[0]
+    }
+  };
+  const plan = buildSubsystemPlan(index, { maxSubsystems: 4, revisionId: 'rev-single-root' });
+  assert.equal(plan.subsystems.length, 4);
+  assert.equal(new Set(plan.subsystems.flatMap(item => item.files)).size, files.length);
+  assert.ok(plan.subsystems.some(item => item.roots.includes('src')));
+});
