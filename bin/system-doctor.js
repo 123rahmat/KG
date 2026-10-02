@@ -38,8 +38,10 @@ for (const file of requiredFiles) check(
 );
 
 const pkg = JSON.parse(await read('package.json'));
+const app = await read('src/app.js');
 check('node-engine', Number(String(pkg.engines?.node ?? '').replace(/[^0-9.]/g, '')) >= 22, `requires ${pkg.engines?.node ?? 'unset'}`);
 check('package-lock-sync', (await read('package-lock.json')).includes(`\"version\": \"${pkg.version}\"`), 'package.json and package-lock.json versions must match');
+check('app-version-sync', new RegExp(`VERSION\\s*=\\s*['\"]${String(pkg.version).replaceAll('.', '\\\\.') }['\"]`).test(app), 'application VERSION must match package.json');
 for (const script of ['check', 'lint', 'test', 'verify']) {
   check(`script:${script}`, typeof pkg.scripts?.[script] === 'string', pkg.scripts?.[script] ?? 'missing');
 }
