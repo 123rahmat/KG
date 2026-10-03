@@ -384,7 +384,6 @@ test('research searches the web with the AI provider, reads what it found, and k
       workspace,
       body: { approved: true }
     });
-    console.error('DEBUG_FINAL_RESEARCH', JSON.stringify({ text: result.body.execution.text, citations: result.body.execution.citations, calls: calls.length, toolCalls: calls.filter(item => item.tools).length }));
     assert.equal(result.status, 200);
     assert.equal(result.body.execution.executed, true);
     assert.equal(result.body.execution.text, 'Current research result, from example.com.');
