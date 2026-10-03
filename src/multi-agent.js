@@ -1616,6 +1616,8 @@ async function runCodeWorkspaceAgentPanels({
             type: stability.blocked ? 'blocker' : (
                 parsed.length
                   && parsed.every(item => item.recommendation === 'proceed' && !(item.risks ?? []).length && !(item.unknowns ?? []).length)
+                  && !stability.disagreement
+                  && !stability.materialRisk
                   ? 'handoff'
                   : stability.confidence < 0.65 ? 'dependency-request' : 'handoff'
               ),
