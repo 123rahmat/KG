@@ -13,7 +13,7 @@ import { callModel } from './runtime.js';
 import { clip } from './reasoning-context.js';
 import { buildHarnessContext } from './agent-harness.js';
 import { mergeBlackboard } from './blackboard.js';
-import { adaptConcurrency, agentWorkspaceLane, buildWorkspaceParallelPlan } from './parallel-orchestrator.js';
+import { adaptConcurrency, adaptiveParallelLimit, agentWorkspaceLane, buildWorkspaceParallelPlan } from './parallel-orchestrator.js';
 import { buildSubsystemPlan, compactSubsystemPlan, createSubsystemMessage, mergeSubsystemMessages, subsystemAssignment, subsystemCommunicationContext } from './subsystem-orchestrator.js';
 
 export const MULTI_AGENT_MODES = Object.freeze(['auto', 'always', 'off']);
@@ -1286,16 +1286,28 @@ async function runCodeWorkspaceAgentPanels({
     status: 'pending',
     findings: [],
     roles: [],
+    unavailableRoles: [],
+    lastCycleComplete: false,
     confidence: 0,
     research: null,
     explanation: null,
     replan: null
   }]));
   let tokensSpent = 0;
-  let effectiveMaxParallel = Math.max(
-    1,
-    Math.min(maxAgents, Number(initialDecision.maxParallel) || maxAgents)
-  );
+  const parallelMode = config?.agents?.parallel ?? config?.parallel?.mode ?? 'auto';
+  const initialParallel = adaptiveParallelLimit({
+    mode: parallelMode,
+    current: maxAgents,
+    min: 1,
+    max: maxAgents,
+    pressure: initialDecision.pressure,
+    concurrencyOpportunity: subsystemPlan.subsystems.length > 1 ? 0.8 : 0,
+    risk: run?.situation?.risk ?? 'ordinary',
+    itemCount: subsystemPlan.subsystems.length,
+    remainingBudgetRatio: 1,
+    explicit: mode === 'always' || parallelMode === 'always'
+  });
+  let effectiveMaxParallel = initialParallel.maxParallel;
 
   const remainingBudgetRatio = () => run?.maxTokens === null || run?.maxTokens === undefined
     ? 1
@@ -1393,11 +1405,21 @@ async function runCodeWorkspaceAgentPanels({
           goal: basePayload?.goal
         });
         state.iteration = iteration;
-        state.roles = roles;
+        state.roles = [];
+        state.unavailableRoles = [];
+        state.lastCycleComplete = false;
         state.status = 'running';
 
         for (const role of roles) {
-          if (!dataAllowed || !(await canSpend())) continue;
+          if (!dataAllowed) {
+            state.unavailableRoles.push({ role, reason: 'data-policy-blocked' });
+            continue;
+          }
+          if (!(await canSpend())) {
+            state.unavailableRoles.push({ role, reason: 'budget-blocked' });
+            continue;
+          }
+          state.roles.push(role);
           const modelId = agentModelFor(selection, primaryModelId, role, {
             used: usedModels,
             allows: allowsModel
@@ -1449,6 +1471,19 @@ async function runCodeWorkspaceAgentPanels({
         priorTopics: basePayload?.conversation?.map(item => item?.user) ?? []
       });
 
+      const parallelPlan = adaptiveParallelLimit({
+        mode: parallelMode,
+        current: effectiveMaxParallel,
+        min: 1,
+        max: maxAgents,
+        pressure: pressureMonitor.pressure,
+        concurrencyOpportunity: batch.length > 1 ? 0.8 : (jobs.length > 1 ? 0.5 : 0),
+        risk: run?.situation?.risk ?? 'ordinary',
+        itemCount: jobs.length,
+        remainingBudgetRatio: remainingBudgetRatio(),
+        explicit: mode === 'always' || parallelMode === 'always'
+      });
+      effectiveMaxParallel = parallelPlan.maxParallel;
       const lanePlan = buildWorkspaceParallelPlan({
         lanes: jobs.map(job => job.lane),
         maxParallel: Math.min(effectiveMaxParallel, budgetParallelLimit())
@@ -1637,11 +1672,15 @@ async function runCodeWorkspaceAgentPanels({
           if (message) currentWaveMessages.push(message);
         }
 
+        state.lastCycleComplete = state.roles.length > 0
+          && scopedResults.length === state.roles.length
+          && scopedResults.every(item => Boolean(item.parsed))
+          && state.unavailableRoles.length === 0;
         const ceiling = codeWorkspacePanelIterationCeiling(run, task, {
           iteration: state.iteration,
           findings: state.findings
         });
-        if (stability.stable) {
+        if (stability.stable && state.lastCycleComplete) {
           state.status = 'complete';
         } else if (state.iteration >= ceiling) {
           state.status = stability.blocked ? 'blocked' : 'needs-integration-review';
@@ -1755,11 +1794,10 @@ async function runCodeWorkspaceAgentPanels({
       && !(item.risks ?? []).length
       && !(item.unknowns ?? []).length
     );
-    if (stability.stable || cleanProceedEvidence) {
-      // A panel may have been marked needs-integration-review at its iteration
-      // ceiling before the final accumulated evidence was reconciled. Stable
-      // evidence is sufficient to close it; do not leave a converged panel
-      // falsely open merely because of its previous transient status.
+    if ((stability.stable || cleanProceedEvidence) && state.lastCycleComplete) {
+      // Only close a panel when the latest scheduled specialist cycle actually
+      // completed. Accumulated clean evidence from an earlier cycle must not
+      // hide a current budget, policy, or execution gap.
       state.status = 'complete';
       state.confidence = stability.confidence;
     }
@@ -1859,6 +1897,8 @@ async function runCodeWorkspaceAgentPanels({
           findings: state?.findings ?? []
         }),
         roles: state?.roles ?? [],
+        unavailableRoles: state?.unavailableRoles ?? [],
+        cycleComplete: state?.lastCycleComplete === true,
         confidence: state?.confidence ?? 0
       };
     }),
@@ -1976,12 +2016,28 @@ export async function runAdaptiveAgentPanel({
   const budgetParallelLimit = () => run?.maxTokens === null || run?.maxTokens === undefined
     ? maxAgents
     : Math.max(1, Math.min(maxAgents, Math.floor(Math.max(1, Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent) / (AGENT_MAX_OUTPUT_TOKENS * 2))));
+  const parallelMode = config?.agents?.parallel ?? config?.parallel?.mode ?? 'auto';
   const genericParallelCeiling = run?.maxTokens == null ? 1 : maxAgents;
+  const initialParallel = adaptiveParallelLimit({
+    mode: parallelMode,
+    current: Math.min(
+      genericParallelCeiling,
+      Number(allocationResult.allocation?.targetAgents) || Number(allocationResult.roles?.length) || 1
+    ),
+    min: 1,
+    max: maxAgents,
+    pressure: Number(allocationResult.allocation?.pressure ?? allocationResult.decision?.pressure ?? 0),
+    concurrencyOpportunity: Number(allocationResult.allocation?.dimensions?.concurrencyOpportunity ?? 0),
+    risk: run?.situation?.risk ?? 'ordinary',
+    itemCount: allocationResult.roles?.length ?? 0,
+    remainingBudgetRatio: remainingBudgetRatio(),
+    explicit: mode === 'always' || parallelMode === 'always'
+  });
   let effectiveMaxParallel = Math.max(
     1,
     Math.min(
       genericParallelCeiling,
-      Number(allocationResult.allocation?.targetAgents) || Number(allocationResult.roles?.length) || 1,
+      initialParallel.maxParallel,
       budgetParallelLimit()
     )
   );
