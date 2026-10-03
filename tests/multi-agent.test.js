@@ -567,7 +567,6 @@ test('Code Workspace gives every subsystem its own multi-agent panel with bounde
   assert.equal(result.brief.implementationPlan.targets.length > 0, true);
   assert.equal(calls.every(item => item.body.codeIntelligence.scopedTo.subsystemId === item.body.workspacePanel.subsystemId), true);
   assert.equal(calls.every(item => item.body.subsystemPlan.subsystems.length === 1), true);
-  console.error('DEBUG_SUBSYSTEM_MESSAGES', JSON.stringify(result.allocation.subsystemMessages));
   assert.ok(result.allocation.subsystemMessages.length >= 2);
   assert.equal(result.allocation.subsystemMessages.every(item => item.projectRevision === 'rev-9'), true);
   assert.equal(result.allocation.subsystemMessages.every(item => ['handoff', 'blocker'].includes(item.type)), true);
