@@ -1742,9 +1742,13 @@ async function runCodeWorkspaceAgentPanels({
   // Existing, converged evidence is sufficient to close the panel; only
   // unresolved, blocked or evidence-poor panels stay open.
   for (const state of subsystemState.values()) {
-    if (state.status !== 'pending' || !state.findings?.length) continue;
+    if (state.status === 'blocked' || !state.findings?.length) continue;
     const stability = subsystemPanelStability(state.findings);
     if (stability.stable) {
+      // A panel may have been marked needs-integration-review at its iteration
+      // ceiling before the final accumulated evidence was reconciled. Stable
+      // evidence is sufficient to close it; do not leave a converged panel
+      // falsely open merely because of its previous transient status.
       state.status = 'complete';
       state.confidence = stability.confidence;
     }
