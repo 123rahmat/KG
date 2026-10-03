@@ -345,6 +345,10 @@ const UNREACHABLE = 'For safety, only addresses that the person gave, that a web
  * answer (as callModel does) plus `toolLog` and summed `usage`.
  */
 export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRounds = MAX_TOOL_ROUNDS, ...options } = {}) {
+  // A tool-backed task needs at least one actual tool execution opportunity.
+  // A zero-round budget must not turn the model's tool request into the final
+  // answer; zero is therefore normalized to one for this governed helper.
+  const effectiveMaxRounds = Math.max(1, Number.isFinite(Number(maxRounds)) ? Math.floor(Number(maxRounds)) : MAX_TOOL_ROUNDS);
   const conversation = messages[0]?.role === 'system'
     ? [{ ...messages[0], content: `${messages[0].content}\n\n${toolPrompt(ctx)}` }, ...messages.slice(1)]
     : [{ role: 'system', content: toolPrompt(ctx) }, ...messages];
@@ -381,7 +385,7 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
       ...(answer.citations ?? [])
     ].filter(item => item?.url).map(item => [item.url, item])).values()];
     if (!call) return { ...answer, citations: cited(), usage, toolLog };
-    if (round >= maxRounds) {
+    if (round >= effectiveMaxRounds) {
       // One last call without tools: the person gets an answer, not a loop.
       conversation.push({ role: 'assistant', content: answer.text }, { role: 'user', content: 'No more tools can be used. Answer now with what you have.' });
       const last = await callModel(conversation, { config, fetchImpl, ...options });
