@@ -1152,6 +1152,73 @@ initActions();
 initAccount();
 initSettingsWindow();
 
+/* ----------------------------------------------------------- landing visual
+   A lightweight, deterministic product animation: no canvas, no video asset,
+   and no fabricated runtime telemetry. It simply illustrates the real
+   adaptive sequence and the real role catalog. */
+function initLandingSystemVisual() {
+  const root = document.querySelector('[data-system-visual]');
+  if (!root) return;
+
+  const agents = [...root.querySelectorAll('[data-agent]')];
+  const work = [...root.querySelectorAll('[data-work]')];
+  const stages = [
+    { work: 'execute', agents: ['step', 'executor', 'researcher'] },
+    { work: 'observe', agents: ['resource', 'executor', 'analyst'] },
+    { work: 'verify', agents: ['critic', 'tester', 'security'] },
+    { work: 'execute', agents: ['step', 'executor', 'debugger', 'architect'] }
+  ];
+
+  let index = 0;
+  let timer = null;
+
+  const reduceMotion = () => {
+    try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+    catch { return false; }
+  };
+
+  const render = () => {
+    const stage = stages[index % stages.length];
+    work.forEach(node => node.setAttribute('data-active', String(node.dataset.work === stage.work)));
+    agents.forEach(node => {
+      const active = stage.agents.includes(node.dataset.agent);
+      node.setAttribute('data-active', String(active));
+    });
+    root.dataset-stage = stage.work;
+  };
+
+  const start = () => {
+    if (reduceMotion() || timer) return;
+    timer = window.setInterval(() => {
+      index = (index + 1) % stages.length;
+      render();
+    }, 2600);
+  };
+
+  render();
+  start();
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (timer) { clearInterval(timer); timer = null; }
+    } else {
+      start();
+    }
+  });
+
+  try {
+    window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', () => {
+      if (reduceMotion()) {
+        if (timer) { clearInterval(timer); timer = null; }
+        render();
+      } else {
+        start();
+      }
+    });
+  } catch {}
+}
+initLandingSystemVisual();
+
 /* ---------------------------------------------------------------- wire-up */
 
 function setVoiceStatus(message, hidden = false) {
