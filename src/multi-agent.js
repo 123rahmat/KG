@@ -1916,10 +1916,7 @@ export async function runAdaptiveAgentPanel({
   // Preserve the initial specialist commitment long enough to obtain the
   // independent evidence that justified it. Adaptive evidence may still stop
   // the panel early, but it must not shrink the committed floor after one result.
-  const initialPanelFloor = Math.max(
-    minimumSubsystemAgents,
-    Number(allocationResult.agentCount ?? allocationResult.roles?.length) || 1
-  );
+  const initialPanelFloor = Number(allocationResult.agentCount ?? allocationResult.roles?.length) || 1;
   if (!allocationResult.decision.enabled) return { enabled: false, decision: allocationResult.decision, brief: null, agents: [], findings: [], arbiter: null };
 
   const usedModels = [];
@@ -1953,9 +1950,6 @@ export async function runAdaptiveAgentPanel({
   const subsystemParallelMode = Boolean(!singleNormalChatZipPanel && subsystemPlan && (
     subsystemPlan.scale === 'large' || subsystemPlan.scale === 'very-large' || task?.metadata?.buildPlan === true
   ));
-  const minimumSubsystemAgents = subsystemParallelMode
-    ? Math.min(maxAgents, Math.max(1, subsystemPlan.subsystems.length))
-    : 1;
   if (subsystemPlan && !(blackboard?.subsystemPlan?.project?.contentHash === subsystemPlan.project.contentHash)) {
     blackboard = mergeBlackboard(blackboard ?? {}, { subsystemPlan: subsystemPlanContext }, run?.id ?? null);
     await recordBlackboard({ run, task, blackboard });
