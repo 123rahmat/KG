@@ -81,6 +81,37 @@ test('control managers run independently in parallel and cannot mutate server au
 });
 
 
+test('normal-chat control managers use the shared scheduler and serialize when parallelism is off', async () => {
+  let active = 0;
+  let peak = 0;
+  const result = await runNormalChatControlPlane({
+    run: run(),
+    task,
+    payload: { attachments: [{ name: 'data.csv', kind: 'text', format: 'csv' }] },
+    modelId: 'google:gemini-3.8-flash',
+    config: { ai: true, agents: { parallel: 'off' } },
+    canSpend: async () => true,
+    modelCaller: async messages => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise(resolve => setTimeout(resolve, 1));
+      active -= 1;
+      const isStep = messages[0].content.includes('You are the Step Manager');
+      return {
+        text: JSON.stringify({
+          status: 'ready',
+          summary: isStep ? 'Use the current step.' : 'Scope resources.'
+        }),
+        provider: 'google',
+        model: 'google:gemini-3.8-flash',
+        usage: null
+      };
+    }
+  });
+  assert.equal(result.enabled, true);
+  assert.equal(peak, 1);
+});
+
 test('specialist panel owns coordination when generic multi-agent work is already justified', async () => {
   const result = await runNormalChatControlPlane({
     run: run({ adaptation: { scale: 'complex' } }),
