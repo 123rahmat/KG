@@ -33,7 +33,7 @@ Parallel analysis uses the same server-owned workflow scheduler as other adaptiv
 
 ## Code Workspace source boundary
 
-Code Workspace is GitHub-only. A session must reference an active GitHub repository source, the terminal is populated from that source's immutable commit snapshot, and repository write-back is performed only through the authenticated GitHub API after review, exact-revision, and pre-image checks. The browser exposes no local-folder source picker and no local-folder write-back path. Local execution-agent support, where enabled, is an execution target rather than a filesystem source and does not grant Code Workspace access to a user's local folders.
+Code Workspace supports GitHub repositories and browser-selected local-folder snapshots. A session references an active source and the terminal is populated from that source's immutable snapshot. GitHub write-back is performed only through the authenticated GitHub API after review, exact-revision, and pre-image checks. Local-folder changes are saved only to the private workspace snapshot and never written to the user's machine. Local execution-agent support, where enabled, is an execution target rather than a filesystem source and does not grant server access to a user's host folders.
 
 ## Release gates
 
