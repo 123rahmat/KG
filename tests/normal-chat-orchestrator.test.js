@@ -42,7 +42,13 @@ test('control managers run independently in parallel and cannot mutate server au
   let active = 0;
   let peak = 0;
   const result = await runNormalChatControlPlane({
-    run: run(),
+    run: run({
+      tasks: [
+        { id: 'understand', type: 'understand', status: 'complete' },
+        { id: 'respond', type: 'respond', status: 'pending' },
+        { id: 'verify', type: 'verify', status: 'pending' }
+      ]
+    }),
     task,
     payload: {
       attachments: [{ name: 'data.csv', kind: 'text', format: 'csv' }],
@@ -80,6 +86,34 @@ test('control managers run independently in parallel and cannot mutate server au
   assert.ok(calls.every(item => !item.messages[0].content.includes('tool call')));
 });
 
+
+test('a single-next-step turn does not pay for a redundant step manager', async () => {
+  let calls = 0;
+  const result = await runNormalChatControlPlane({
+    run: run(),
+    task,
+    payload: { attachments: [{ name: 'data.csv', kind: 'text', format: 'csv' }] },
+    modelId: 'google:gemini-3.8-flash',
+    config: { ai: true },
+    canSpend: async () => true,
+    modelCaller: async messages => {
+      calls += 1;
+      return {
+        text: JSON.stringify({
+          status: 'ready',
+          summary: 'Scope resources.'
+        }),
+        provider: 'google',
+        model: 'google:gemini-3.8-flash',
+        usage: null
+      };
+    }
+  });
+  assert.equal(result.enabled, true);
+  assert.equal(result.agents.stepManager.status, 'not-needed');
+  assert.equal(result.agents.resourceDataManager.status, 'ready');
+  assert.equal(calls, 1);
+});
 
 test('normal-chat control managers use the shared scheduler and serialize when parallelism is off', async () => {
   let active = 0;
