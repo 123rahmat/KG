@@ -1099,7 +1099,8 @@ function subsystemPanelStability(results) {
     (item.risks ?? []).length >= 2 || (item.unknowns ?? []).length >= 3
   );
   return {
-    stable: !blocking && !profile.disagreement && !materialRisk && meanConfidence >= 0.80,
+    stable: !blocking && !materialRisk && meanConfidence >= 0.80
+      && (!profile.disagreement || parsed.every(item => item.recommendation === 'proceed' && confidenceValue(item.confidence) >= 0.80 && !(item.risks ?? []).length && !(item.unknowns ?? []).length)),
     blocked: parsed.some(item => item.recommendation === 'stop'),
     confidence: Number(meanConfidence.toFixed(3)),
     disagreement: profile.disagreement,
