@@ -99,8 +99,17 @@ const PROVIDERS = {
       const metadata = candidate?.groundingMetadata ?? {};
       // Gemini normally returns grounding chunks under groundingMetadata, but
       // compatible provider responses may expose them directly on candidate.
-      const groundingChunks = metadata.groundingChunks ?? candidate?.groundingChunks ?? [];
-      const citations = [...new Map(groundingChunks.map(chunk => chunk?.web).filter(web => web?.uri).map(web => [web.uri, { url: text(web.uri), title: text(web.title) }])).values()];
+      const groundingChunks = [
+        ...(Array.isArray(metadata.groundingChunks) ? metadata.groundingChunks : []),
+        ...(Array.isArray(candidate?.groundingChunks) ? candidate.groundingChunks : []),
+        ...(Array.isArray(data?.groundingChunks) ? data.groundingChunks : []),
+        ...(Array.isArray(data?.groundingMetadata?.groundingChunks) ? data.groundingMetadata.groundingChunks : [])
+      ];
+      const citations = [...new Map(groundingChunks
+        .map(chunk => chunk?.web ?? chunk?.web?.uri ? chunk.web : chunk)
+        .filter(web => web?.uri)
+        .map(web => [web.uri, { url: text(web.uri), title: text(web.title) }]))
+        .values()];
       const usageMetadata = data.usageMetadata;
       const promptTokens = Number(usageMetadata?.promptTokenCount ?? 0);
       const outputTokens = usageMetadata?.totalTokenCount != null ? Math.max(0, Number(usageMetadata.totalTokenCount) - promptTokens) : Number(usageMetadata?.candidatesTokenCount ?? 0);
