@@ -265,7 +265,8 @@ agent preflight containing exact host information. A local result must carry an
 HMAC-SHA256 receipt bound to the run id, task id, task type, execution target and output
 hashes. An unsigned or altered receipt cannot complete the server-owned task.
 
-Code Workspace supports GitHub repositories and browser-selected local-folder snapshots. The terminal always starts from a server-side snapshot of the selected source; local folders are imported as private snapshots, never as host filesystem connections.
+Code Workspace sources are GitHub repositories only. The terminal starts from a server-side
+snapshot of the selected GitHub revision; local folders are not imported or synchronized.
 An optional paired local agent is a separate execution target and never becomes a Code Workspace source.
 GitHub write-back requires explicit source permission, an exact revision, pre-image checks,
 and an explicit apply confirmation.
