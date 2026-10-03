@@ -387,8 +387,6 @@ test('research searches the web with the AI provider, reads what it found, and k
     assert.equal(result.status, 200);
     assert.equal(result.body.execution.executed, true);
     assert.equal(result.body.execution.text, 'Current research result, from example.com.');
-    console.error('DEBUG_RESEARCH_CALLS', JSON.stringify(calls.map(body => ({ tools: body.tools ?? null, last: body.contents?.at(-1)?.parts?.map(part => part.text ?? '').join('') ?? '' }))));
-    console.error('DEBUG_RESEARCH_EXECUTION', JSON.stringify(result.body.execution));
     assert.equal(result.body.execution.citations[0].url, 'https://example.com/source');
     const research = result.body.run.tasks.find(task => task.id === 'investigate');
     // The sources and the tools used stay with the research, so the chat can show them.
@@ -396,14 +394,31 @@ test('research searches the web with the AI provider, reads what it found, and k
     assert.deepEqual(research.evidence.tools.map(item => [item.tool, item.outcome]), [['web.search', 'ok']]);
     assert.equal(research.status, 'complete');
     // Only the search itself used the provider's web search tool.
-    assert.deepEqual(calls.map(body => Boolean(body.tools)), [false, true, false]);
+    assert.deepEqual(calls.map(body => Boolean(body.tools)), [false, false, true, false]);
   }, {
     env: GOOGLE,
     fetchImpl: async (_url, options) => {
       const body = JSON.parse(options.body);
       calls.push(body);
+      const requestText = body.contents?.flatMap(item => item.parts ?? []).map(part => part.text ?? '').join('\n') ?? '';
+      // The adaptive control plane is a real model participant before the
+      // main executor. Keep its response separate so the research fixture
+      // tests the actual tool-call -> grounded search -> synthesis sequence.
+      if (requestText.includes('"controlTask"')) {
+        return modelReply(JSON.stringify({
+          status: 'ready',
+          summary: 'Use the current research step.',
+          toolsToUse: ['web.search'],
+          toolsToAdd: [],
+          toolsToRemove: [],
+          dependencies: ['public-web'],
+          data: { needed: true, sources: ['public-web'], handling: 'Public research only.' },
+          terminalNeeded: false,
+          testsNeeded: false,
+          approvals: []
+        }));
+      }
       if (body.tools) {
-        // The exact Gemini tool ({ google_search: {} }) is checked in runtime.test.js.
         assert.ok(body.tools?.length, 'the search call asks for web search');
         return modelReply(
           'The newest study (2026) reports X.',
@@ -411,12 +426,10 @@ test('research searches the web with the AI provider, reads what it found, and k
           { groundingChunks: [{ web: { uri: 'https://example.com/source', title: 'Example source' } }] }
         );
       }
-      const text = calls.length === 1
-        ? '{"tool":"web.search","input":{"query":"latest evidence unfamiliar topic"}}'
-        : calls.some(item => item.tools)
-          ? 'Current research result, from example.com.'
-          : 'Current research result, from example.com.';
-      return modelReply(text, { input_tokens: 5, output_tokens: 5 });
+      if (requestText.includes('"task":{"id":"investigate"')) {
+        return modelReply('{"tool":"web.search","input":{"query":"latest evidence unfamiliar topic"}}');
+      }
+      return modelReply('Current research result, from example.com.', { inputTokens: 5, outputTokens: 5 });
     }
   });
 });
