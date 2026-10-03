@@ -370,7 +370,10 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
       if (source?.url) sources.set(source.url, source);
     }
     const call = answer.incomplete ? null : parseToolCall(answer.text);
-    const cited = () => [...new Map([...(answer.citations ?? []).map(item => [item.url, item]), ...sources]).values()];
+    const cited = () => [...new Map([
+      ...sources.values(),
+      ...(answer.citations ?? [])
+    ].filter(item => item?.url).map(item => [item.url, item])).values()];
     if (!call) return { ...answer, citations: cited(), usage, toolLog };
     if (round >= maxRounds) {
       // One last call without tools: the person gets an answer, not a loop.
