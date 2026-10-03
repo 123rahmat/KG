@@ -1299,18 +1299,29 @@ async function runCodeWorkspaceAgentPanels({
   }]));
   let tokensSpent = 0;
   const parallelMode = config?.agents?.parallel ?? config?.parallel?.mode ?? 'auto';
+  // Parallel capacity here is execution capacity for specialist jobs, not the
+  // number of subsystem panels. Keep those dimensions independent so a project
+  // with multiple panels can still recruit each panel's justified specialist
+  // set while the scheduler enforces the provider/budget concurrency ceiling.
+  const initialSpecialistCapacity = Math.max(
+    1,
+    Math.min(providerParallelCap, maxAgents)
+  );
   const initialParallel = adaptiveParallelLimit({
     mode: parallelMode,
-    current: maxAgents,
+    current: initialSpecialistCapacity,
     min: 1,
     max: providerParallelCap,
     pressure: initialDecision.pressure,
-    concurrencyOpportunity: subsystemPlan.subsystems.length > 1 ? 0.8 : 0,
+    concurrencyOpportunity: subsystemPlan.subsystems.length > 1 ? 0.8 : 0.5,
     risk: run?.situation?.risk ?? 'ordinary',
-    itemCount: subsystemPlan.subsystems.length,
+    itemCount: initialSpecialistCapacity,
     remainingBudgetRatio: 1,
     explicit: mode === 'always' || parallelMode === 'always'
   });
+  const explicitSpecialistFloor = mode === 'always'
+    ? Math.max(1, Math.min(2, providerParallelCap, maxAgents))
+    : 1;
   let effectiveMaxParallel = Math.min(providerParallelCap, initialParallel.maxParallel);
 
   const remainingBudgetRatio = () => run?.maxTokens === null || run?.maxTokens === undefined
@@ -1392,16 +1403,18 @@ async function runCodeWorkspaceAgentPanels({
         : pressureMonitor.topologyAction === 'contract'
           ? Math.max(1, basePanelWidth - 1)
           : basePanelWidth;
+      // Topology controls how many independent subsystem panels can be active;
+      // specialist concurrency is enforced separately by the shared scheduler.
       const maxPanels = singlePanel
         ? 1
-        : Math.min(ready.length, Math.max(1, Math.floor(Math.max(1, effectiveMaxParallel) / 2)));
+        : Math.min(ready.length, Math.max(1, Math.floor(providerParallelCap / 2)));
       const batch = ready.slice(0, maxPanels);
       const jobs = [];
 
       for (const subsystem of batch) {
         const state = subsystemState.get(subsystem.id);
         const iteration = Math.max(1, Number(state?.iteration ?? 0) + 1);
-        const width = Math.min(panelWidth, maxAgents, Math.max(1, Math.floor(Math.max(1, effectiveMaxParallel) / Math.max(1, maxPanels))));
+        const width = Math.min(panelWidth, maxAgents);
         const roles = codeWorkspacePanelRoles(run, task, subsystem, {
           width,
           iteration,
@@ -1749,8 +1762,14 @@ async function runCodeWorkspaceAgentPanels({
         risk: run?.situation?.risk ?? 'ordinary',
         benefit: Math.min(1, 0.65 + (batch.length > 1 ? 0.2 : 0))
       });
-      effectiveMaxParallel = concurrency.next;
-      waveRecord.concurrency = concurrency;
+      effectiveMaxParallel = Math.max(explicitSpecialistFloor, concurrency.next);
+      // Never exceed the provider ceiling even when the adaptive controller
+      // expands after a healthy cycle.
+      effectiveMaxParallel = Math.min(providerParallelCap, effectiveMaxParallel);
+      waveRecord.concurrency = {
+        ...concurrency,
+        next: effectiveMaxParallel
+      };
       waves.push(waveRecord);
 
       const merged = mergeSubsystemMessages(blackboard?.subsystemMessages ?? [], currentWaveMessages);
