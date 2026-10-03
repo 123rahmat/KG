@@ -387,24 +387,50 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
       .join('\n');
     const synthesisPrompt = [
       system,
-      'FINAL SYNTHESIS MODE: use the available tool results to answer the task now. Do not emit a tool-call JSON object and do not request another tool.'
+      'FINAL SYNTHESIS MODE: use the available tool results to answer the task now.',
+      'No more tools may be executed in this mode. Return only the final natural-language answer; never emit a tool-call JSON object and never request another tool.'
     ].join('\n\n');
-    const synthesis = await callModel([
-      { role: 'system', content: synthesisPrompt },
-      { role: 'user', content: 'Task context:\n' + clip(taskContext, 6000) + '\n\nAvailable tool results:\n' + clip(toolResults, MAX_TOOL_CHARS * 2) }
-    ], {
-      config,
-      fetchImpl,
-      ...options,
-      webSearch: false
-    });
-    if (!synthesis) return null;
-    usage.inputTokens += synthesis.usage?.inputTokens ?? 0;
-    usage.outputTokens += synthesis.usage?.outputTokens ?? 0;
-    for (const source of Array.isArray(synthesis.citations) ? synthesis.citations : []) {
-      if (source?.url) sources.set(source.url, source);
+    let last = null;
+    const maxSynthesisAttempts = 2;
+    for (let attempt = 0; attempt < maxSynthesisAttempts; attempt += 1) {
+      const correction = attempt === 0
+        ? ''
+        : '\n\nThe previous response requested another tool. Tool execution is finished. Use only the supplied results and return the final answer now.';
+      const synthesis = await callModel([
+        { role: 'system', content: synthesisPrompt + correction },
+        {
+          role: 'user',
+          content: 'Task context:\n'
+            + clip(taskContext, 6000)
+            + '\n\nAvailable tool results:\n'
+            + JSON.stringify(clip(toolResults, MAX_TOOL_CHARS * 2))
+        }
+      ], {
+        config,
+        fetchImpl,
+        ...options,
+        webSearch: false
+      });
+      if (!synthesis) return null;
+      last = synthesis;
+      usage.inputTokens += synthesis.usage?.inputTokens ?? 0;
+      usage.outputTokens += synthesis.usage?.outputTokens ?? 0;
+      for (const source of Array.isArray(synthesis.citations) ? synthesis.citations : []) {
+        if (source?.url) sources.set(source.url, source);
+      }
+      if (!synthesis.incomplete && !parseToolCall(synthesis.text)) {
+        return { ...synthesis, citations: [...sources.values()], usage, toolLog };
+      }
     }
-    return { ...synthesis, citations: [...sources.values()], usage, toolLog };
+    if (!last) return null;
+    return {
+      ...last,
+      text: '',
+      incomplete: last.incomplete || 'tool-call-without-budget',
+      citations: [...sources.values()],
+      usage,
+      toolLog
+    };
   };
 
   for (let round = 0; ; round += 1) {
