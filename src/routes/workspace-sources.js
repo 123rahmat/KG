@@ -142,6 +142,7 @@ export function registerWorkspaceSourcesRoutes(app, {
     const files = Array.isArray(req.body?.files) ? req.body.files : [];
     if (!files.length) return res.status(400).json({ error: 'Select a folder containing at least one readable file.', code: 'local-files-required' });
     const normalized = normalizeSourceFiles(files);
+    if (!normalized.length) return res.status(400).json({ error: 'No safe readable source files were found in that folder.', code: 'local-files-empty' });
     const manifest = sourceManifest(normalized);
     const object = await snapshotObject(objects, req.scope, req.principal, normalized, text(req.body?.name) || 'Local folder.workspace', {
       kind: 'local-folder', contentHash: manifest.contentHash, fileCount: manifest.fileCount
