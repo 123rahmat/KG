@@ -2841,4 +2841,17 @@ export const MIGRATIONS = [
         );
     `
   }
+  ,{
+    version: 70,
+    name: 'restore-local-code-workspace-sources',
+    sql: `
+      -- Code Workspace accepts both explicit GitHub sources and browser-selected
+      -- local-folder snapshots. Local snapshots are tenant-scoped objects and
+      -- never expose the host filesystem path to the server.
+      DROP CONSTRAINT IF EXISTS workspace_sources_kind_check;
+      ALTER TABLE workspace_sources
+        ADD CONSTRAINT workspace_sources_kind_check CHECK (kind IN ('local-folder', 'github'));
+    `
+  }
+
 ];
