@@ -180,6 +180,8 @@ export function loadConfig(env = process.env) {
   if (!['auto', 'always', 'off'].includes(reviewMode)) errors.push(`AGENTS_REVIEW must be auto, always or off (got "${reviewMode}")`);
   const multiAgentMode = (text(env.MULTI_AGENT_MODE) || 'auto').toLowerCase();
   if (!['auto', 'always', 'off'].includes(multiAgentMode)) errors.push(`MULTI_AGENT_MODE must be auto, always or off (got "${multiAgentMode}")`);
+  const parallelMode = (text(env.AGENTS_PARALLEL_MODE) || 'auto').toLowerCase();
+  if (!['auto', 'always', 'off'].includes(parallelMode)) errors.push(`AGENTS_PARALLEL_MODE must be auto, always or off (got "${parallelMode}")`);
   const multiAgentMax = integer(env.MULTI_AGENT_MAX_AGENTS, 11, { min: 1, max: 11, name: 'MULTI_AGENT_MAX_AGENTS', errors });
 
   // PostgreSQL is the only datastore. Object content lives in it too, so
@@ -448,6 +450,7 @@ export function loadConfig(env = process.env) {
       // Advisory specialist panel (src/multi-agent.js).
       // auto = expands only for material complexity/uncertainty; always; off.
       multiAgent: multiAgentMode,
+      parallel: parallelMode,
       maxAgents: multiAgentMax
     },
 
