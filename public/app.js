@@ -1156,68 +1156,77 @@ initSettingsWindow();
    A lightweight, deterministic product animation: no canvas, no video asset,
    and no fabricated runtime telemetry. It simply illustrates the real
    adaptive sequence and the real role catalog. */
-function initLandingSystemVisual() {
-  const root = document.querySelector('[data-system-visual]');
-  if (!root) return;
-
-  const agents = [...root.querySelectorAll('[data-agent]')];
-  const work = [...root.querySelectorAll('[data-work]')];
-  const stages = [
-    { work: 'execute', agents: ['step', 'executor', 'researcher'] },
-    { work: 'observe', agents: ['resource', 'executor', 'analyst'] },
-    { work: 'verify', agents: ['critic', 'tester', 'security'] },
-    { work: 'execute', agents: ['step', 'executor', 'debugger', 'architect'] }
-  ];
-
-  let index = 0;
-  let timer = null;
-
+function initLandingWorkflowDemos() {
   const reduceMotion = () => {
     try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
     catch { return false; }
   };
 
-  const render = () => {
-    const stage = stages[index % stages.length];
-    work.forEach(node => node.setAttribute('data-active', String(node.dataset.work === stage.work)));
-    agents.forEach(node => {
-      const active = stage.agents.includes(node.dataset.agent);
-      node.setAttribute('data-active', String(active));
-    });
-    root.dataset-stage = stage.work;
-  };
-
-  const start = () => {
-    if (reduceMotion() || timer) return;
-    timer = window.setInterval(() => {
-      index = (index + 1) % stages.length;
-      render();
-    }, 2600);
-  };
-
-  render();
-  start();
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      if (timer) { clearInterval(timer); timer = null; }
-    } else {
-      start();
+  const controllers = [
+    {
+      root: document.querySelector('[data-demo="chat"]'),
+      itemSelector: '[data-chat-step]',
+      progressSelector: '[data-chat-progress]',
+      stepCount: 5,
+      duration: 2300
+    },
+    {
+      root: document.querySelector('[data-demo="code"]'),
+      itemSelector: '[data-code-step]',
+      progressSelector: '[data-code-progress]',
+      stepCount: 6,
+      duration: 2500
     }
-  });
+  ].filter(item => item.root);
 
-  try {
-    window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', () => {
-      if (reduceMotion()) {
-        if (timer) { clearInterval(timer); timer = null; }
+  controllers.forEach(controller => {
+    const { root, itemSelector, progressSelector, stepCount, duration } = controller;
+    const items = [...root.querySelectorAll(itemSelector)];
+    const progress = [...root.querySelectorAll(progressSelector)];
+    const status = root.querySelector('[data-demo-status]');
+    let step = 0;
+    let timer = null;
+
+    const render = () => {
+      items.forEach((node, index) => node.classList.toggle('is-active', index === step));
+      progress.forEach((node, index) => node.classList.toggle('is-active', index === step));
+      root.dataset.currentStep = String(step);
+      if (status) status.textContent = step === stepCount - 1 ? 'verifying' : 'running';
+    };
+
+    const start = () => {
+      if (reduceMotion() || timer) return;
+      timer = window.setInterval(() => {
+        step = (step + 1) % stepCount;
         render();
-      } else {
-        start();
-      }
+      }, duration);
+    };
+
+    const stop = () => {
+      if (timer) { clearInterval(timer); timer = null; }
+    };
+
+    render();
+    start();
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) stop();
+      else start();
     });
-  } catch {}
+
+    try {
+      window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', () => {
+        if (reduceMotion()) {
+          stop();
+          render();
+        } else {
+          start();
+        }
+      });
+    } catch {}
+  });
 }
-initLandingSystemVisual();
+initLandingWorkflowDemos();
 
 /* ---------------------------------------------------------------- wire-up */
 
