@@ -97,7 +97,7 @@ export function registerWorkspaceSourcesRoutes(app, {
   app.get('/api/workspace/sources', scoped('viewer'), route(async (req, res) => {
     const { rows } = await pool.query(
       `SELECT * FROM workspace_sources
-         WHERE workspace_id = $1 AND principal_id = $2 AND kind = 'github' AND revoked_at IS NULL
+         WHERE workspace_id = $1 AND principal_id = $2 AND kind IN ('github', 'local-folder') AND revoked_at IS NULL
        ORDER BY updated_at DESC, id DESC`,
       [req.scope.workspaceId, req.principal.id]
     );
@@ -134,6 +134,35 @@ export function registerWorkspaceSourcesRoutes(app, {
       principalId: req.principal.id, workspaceId: req.scope.workspaceId,
       action: 'workspace.source.connect', target: sourceId, outcome: 'allowed',
       detail: { kind: 'github', owner, repo, ref: read.source.ref, write: req.body?.write === true }, requestId: req.requestId
+    });
+    res.status(201).json({ source: sourcePublic(row), manifest });
+  }));
+
+  app.post('/api/workspace/sources/local', scoped('editor'), idempotent, route(async (req, res) => {
+    const files = Array.isArray(req.body?.files) ? req.body.files : [];
+    if (!files.length) return res.status(400).json({ error: 'Select a folder containing at least one readable file.', code: 'local-files-required' });
+    const normalized = normalizeSourceFiles(files);
+    const manifest = sourceManifest(normalized);
+    const object = await snapshotObject(objects, req.scope, req.principal, normalized, text(req.body?.name) || 'Local folder.workspace', {
+      kind: 'local-folder', contentHash: manifest.contentHash, fileCount: manifest.fileCount
+    });
+    const sourceId = createSourceId();
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO workspace_sources
+        (id, workspace_id, principal_id, kind, name, snapshot_object_id, permissions, metadata)
+       VALUES ($1, $2, $3, 'local-folder', $4, $5, $6::jsonb, $7::jsonb)
+       RETURNING *`,
+      [
+        sourceId, req.scope.workspaceId, req.principal.id, text(req.body?.name) || 'Local folder',
+        object.id,
+        JSON.stringify({ read: true, write: false }),
+        JSON.stringify({ contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files, localSnapshot: true })
+      ]
+    );
+    await audit?.record({
+      principalId: req.principal.id, workspaceId: req.scope.workspaceId,
+      action: 'workspace.source.connect', target: sourceId, outcome: 'allowed',
+      detail: { kind: 'local-folder', fileCount: manifest.fileCount }, requestId: req.requestId
     });
     res.status(201).json({ source: sourcePublic(row), manifest });
   }));
