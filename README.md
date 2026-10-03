@@ -140,7 +140,7 @@ executed; it never returns a fabricated result.
 
 ### Outside services
 
-Kindgleam uses exactly two outside services: the **Google Gemini API** (Gemini 3.8 Flash) and **Stripe** for payments. Everything else is
+Kindgleam's core AI/payment stack uses the **Google Gemini API** (Gemini 3.8 Flash) and **Stripe** for payments. **GitHub** is an additional optional authenticated source for Code Workspace projects and write-back. Everything else is
 its own code: document reading, web search (through Gemini's Google Search grounding)
 and page and file downloads (through its own guarded fetcher), the sandbox
 and scheduling. It does not connect to accounts such as Google
