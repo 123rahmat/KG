@@ -560,7 +560,6 @@ test('Code Workspace gives every subsystem its own multi-agent panel with bounde
   assert.equal(result.waves[0].subsystemIds.length, 2);
   assert.ok(result.waves[0].roles.length >= 6);
   assert.equal(result.allocation.subsystemPanels.length, 2);
-  console.error('DEBUG_SUBSYSTEM_PANELS', JSON.stringify(result.allocation.subsystemPanels));
   assert.equal(result.allocation.subsystemPanels.every(item => item.status === 'complete'), true);
   assert.equal(result.allocation.subsystemPanels.every(item => item.iterations === 1), true);
   assert.equal(result.allocation.subsystemPanels.every(item => item.iterationCeiling >= 1), true);
