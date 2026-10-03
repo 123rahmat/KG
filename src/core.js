@@ -2,9 +2,9 @@
  * Open-world adaptive workflow.
  *
  * One lifecycle serves known, unknown and future goals:
- * goal → understand → investigate when justified → discover capabilities
- * → adapt → plan → approval when required → execute → observe → verify
- * → deliver → iterate.
+ * goal → situation → choose the next justified work → execute/observe →
+ * reassess → verify → deliver/iterate.
+ * The graph grows one server-owned step at a time; later work is not pre-created.
  */
 
 import { declinedPurpose } from './safety.js';
