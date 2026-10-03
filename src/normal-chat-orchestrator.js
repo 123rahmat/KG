@@ -294,16 +294,28 @@ export async function runNormalChatControlPlane({
   if (!managerRoles.length) return { ...base, enabled: true, reason: 'main-executor-sufficient' };
 
   const parallelMode = config?.agents?.parallel ?? config?.parallel?.mode ?? 'auto';
+  const providerCap = Math.max(
+    1,
+    Math.min(
+      managerRoles.length,
+      Number(config?.providerConcurrency?.max) || managerRoles.length
+    )
+  );
+  const maxTokens = Number(run?.maxTokens);
+  const tokensUsed = Number(run?.tokensUsed ?? 0);
+  const remainingBudgetRatio = Number.isFinite(maxTokens) && maxTokens > 0
+    ? Math.max(0, Math.min(1, (maxTokens - tokensUsed) / maxTokens))
+    : 1;
   const parallel = adaptiveParallelLimit({
     mode: parallelMode,
-    current: managerRoles.length,
+    current: providerCap,
     min: 1,
-    max: managerRoles.length,
+    max: providerCap,
     pressure: managerRoles.length > 1 ? 0.5 : 0,
     concurrencyOpportunity: managerRoles.length > 1 ? 0.7 : 0,
     risk: run?.situation?.risk ?? 'ordinary',
     itemCount: managerRoles.length,
-    remainingBudgetRatio: 1,
+    remainingBudgetRatio,
     explicit: parallelMode === 'always'
   });
   const results = [];
