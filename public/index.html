@@ -66,38 +66,189 @@
       <svg class="logo" aria-hidden="true"><use href="#i-logo"/></svg>
       <span>Kindgleam</span>
     </a>
+    <nav class="landing-nav-links" aria-label="Landing page">
+      <a href="#system">How it works</a>
+      <a href="#chat">Normal chat</a>
+      <a href="#code">Code workspace</a>
+    </nav>
     <button class="landing-signin" id="landingSignIn" type="button">Sign in</button>
   </header>
 
   <main class="landing-main">
-    <div class="landing-copy">
-      <p class="landing-kicker">Adaptive intelligence workspace</p>
-      <h1 id="landingTitle">One system for complex work.</h1>
-      <p class="landing-lead">Kindgleam adapts its reasoning, evidence, tools, verification, and specialist support to the task in front of you.</p>
-      <div class="landing-actions">
-        <button class="primary landing-cta" id="landingSignInPrimary" type="button">Sign in</button>
-        <a class="landing-policy" href="/policy.html">Terms and usage policy</a>
+    <section class="landing-hero" aria-labelledby="landingTitle">
+      <div class="landing-copy">
+        <p class="landing-kicker">Situation-adaptive intelligence</p>
+        <h1 id="landingTitle">One system.<br><em>Different work.</em></h1>
+        <p class="landing-lead">Kindgleam does not force every request through the same workflow. It reads the current situation, chooses only the work the task needs, executes it, verifies the evidence, and adapts the next step.</p>
+        <div class="landing-actions">
+          <button class="primary landing-cta" id="landingSignInPrimary" type="button">Enter Kindgleam</button>
+          <a class="landing-text-link" href="#system">See the architecture <span aria-hidden="true">↓</span></a>
+        </div>
+        <div class="landing-proof" aria-label="Architecture properties">
+          <span><i class="landing-status-dot"></i> One server-owned workflow</span>
+          <span>One next justified step</span>
+          <span>GitHub-only coding workspace</span>
+        </div>
       </div>
-    </div>
 
-    <div class="landing-capabilities" aria-label="Core capabilities">
-      <article>
-        <strong>Adaptive workflow</strong>
-        <span>The system determines the next justified step from the current situation.</span>
-      </article>
-      <article>
-        <strong>Selective multi-agent reasoning</strong>
-        <span>Independent specialist perspectives are added only when they provide material value.</span>
-      </article>
-      <article>
-        <strong>Verification and controls</strong>
-        <span>Execution, data access, evidence, budgets, and approvals remain server-governed.</span>
-      </article>
-    </div>
+      <div class="landing-hero-panel" aria-label="Adaptive runtime preview">
+        <div class="preview-top">
+          <div>
+            <span class="preview-eyebrow">UNIFIED ADAPTIVE RUNTIME</span>
+            <strong>Current decision</strong>
+          </div>
+          <span class="preview-live"><i></i> adaptive</span>
+        </div>
+        <div class="preview-request">
+          <span class="preview-label">USER REQUEST</span>
+          <p>“Review this project, find the risky part, and fix it.”</p>
+        </div>
+        <div class="preview-flow" aria-hidden="true">
+          <div class="preview-node">
+            <span>Situation</span>
+            <b>context + goal</b>
+          </div>
+          <span class="preview-arrow">→</span>
+          <div class="preview-node active">
+            <span>Next step</span>
+            <b>inspect project</b>
+          </div>
+          <span class="preview-arrow">→</span>
+          <div class="preview-node">
+            <span>Evidence</span>
+            <b>verify result</b>
+          </div>
+        </div>
+        <div class="preview-footer">
+          <span>No unnecessary future steps are created.</span>
+          <span class="mono">step 1 / adaptive</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="landing-section" id="system" aria-labelledby="systemTitle">
+      <div class="section-heading">
+        <p class="landing-kicker">The architecture</p>
+        <h2 id="systemTitle">The workflow is one loop, not a pile of features.</h2>
+        <p>Normal chat and coding enter the same adaptive runtime. The specialized path changes with the situation, while authority stays on the server.</p>
+      </div>
+
+      <div class="architecture-card" aria-label="Kindgleam unified architecture diagram">
+        <div class="architecture-input">
+          <span class="architecture-index">01</span>
+          <div>
+            <strong>User request + context</strong>
+            <span>Conversation, files, constraints, and the current state of the work.</span>
+          </div>
+        </div>
+
+        <div class="architecture-spine">
+          <div class="architecture-step emphasis">
+            <span>02</span>
+            <div><strong>Situation + need</strong><small>What is actually needed now?</small></div>
+          </div>
+          <div class="architecture-connector"></div>
+          <div class="architecture-step">
+            <span>03</span>
+            <div><strong>Adaptive scope</strong><small>Select only required data, tools, and effort.</small></div>
+          </div>
+          <div class="architecture-connector"></div>
+          <div class="architecture-split">
+            <article class="architecture-branch">
+              <span class="branch-tag">NORMAL CHAT</span>
+              <strong>Reason · search · inspect · answer</strong>
+              <small>Optional control agents advise; the server remains authoritative.</small>
+            </article>
+            <article class="architecture-branch code">
+              <span class="branch-tag">CODE WORKSPACE</span>
+              <strong>GitHub snapshot · edit · test · verify</strong>
+              <small>GitHub only. Revision-bound context and explicit write-back.</small>
+            </article>
+          </div>
+          <div class="architecture-connector"></div>
+          <div class="architecture-step">
+            <span>04</span>
+            <div><strong>Execute + observe</strong><small>Model calls, tools, files, runners, and receipts.</small></div>
+          </div>
+          <div class="architecture-connector"></div>
+          <div class="architecture-step">
+            <span>05</span>
+            <div><strong>Verify</strong><small>Check evidence and decide what is justified next.</small></div>
+          </div>
+          <div class="architecture-connector loop"></div>
+        </div>
+
+        <div class="architecture-output">
+          <div class="output-card">
+            <span>06</span>
+            <strong>Deliver</strong>
+            <small>When the goal is satisfied.</small>
+          </div>
+          <div class="output-card alt">
+            <span>↻</span>
+            <strong>Adapt again</strong>
+            <small>When more work is actually required.</small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="landing-section split-section" id="chat" aria-labelledby="chatTitle">
+      <div class="section-heading compact">
+        <p class="landing-kicker">Normal chat</p>
+        <h2 id="chatTitle">Start with a question. The system decides what the question requires.</h2>
+        <p>Simple questions can stay simple. Research, files, data, web access, or verification appear only when they are justified by the situation.</p>
+      </div>
+      <div class="workflow-proof">
+        <div class="proof-row">
+          <span class="proof-num">A</span>
+          <div><strong>Understand</strong><small>Goal, context, constraints</small></div>
+          <span class="proof-line"></span>
+          <div><strong>Scope</strong><small>Tools + data actually needed</small></div>
+        </div>
+        <div class="proof-row">
+          <span class="proof-num">B</span>
+          <div><strong>Execute</strong><small>Reason / tools / evidence</small></div>
+          <span class="proof-line"></span>
+          <div><strong>Verify</strong><small>Answer or adapt</small></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="landing-section split-section" id="code" aria-labelledby="codeTitle">
+      <div class="section-heading compact">
+        <p class="landing-kicker">Code workspace</p>
+        <h2 id="codeTitle">A real coding path inside the same adaptive system.</h2>
+        <p>Code work is specialized without becoming a separate brain: GitHub supplies the project snapshot, coding intelligence supplies context, and execution evidence drives the next decision.</p>
+      </div>
+      <div class="code-proof">
+        <div class="code-path">
+          <span class="path-node">GitHub</span>
+          <span class="path-arrow">→</span>
+          <span class="path-node">Project context</span>
+          <span class="path-arrow">→</span>
+          <span class="path-node active">Edit + test</span>
+          <span class="path-arrow">→</span>
+          <span class="path-node">Verify</span>
+        </div>
+        <div class="code-note">
+          <strong>GitHub only</strong>
+          <span>No local project-folder browser access. Writes stay tied to the selected revision.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="landing-principles" aria-label="Core principles">
+      <div><strong>One authority</strong><span>The server owns transitions, permissions, tools, writes, and verification.</span></div>
+      <div><strong>One next step</strong><span>Later work is not pre-created just because it might become useful.</span></div>
+      <div><strong>Adaptive effort</strong><span>Simple requests stay lightweight; complex requests earn more capability.</span></div>
+      <div><strong>Same conversation</strong><span>Work continues from the current state instead of restarting the whole process.</span></div>
+    </section>
   </main>
 
   <footer class="landing-footer">
-    <span>Reasoning, research, creation, analysis, and execution in one workspace.</span>
+    <span>Kindgleam — adaptive intelligence for reasoning, research, creation, analysis, and governed execution.</span>
+    <a href="/policy.html">Terms and usage policy</a>
   </footer>
 </section>
 
