@@ -176,7 +176,11 @@ export function adaptConcurrency({
   if (errors >= 0.25 || (latency >= 8000 && errors >= 0.20) || budget < 0.25) next -= 1;
   else if (errors <= 0.05 && benefit >= 0.45 && budget >= 0.5) next += 1;
 
+  // High-risk work keeps concurrency narrow, while low remaining budget
+  // becomes a hard resource signal rather than a soft preference.
   if (highRisk) next = Math.min(next, 2);
+  if (budget < 0.12) next = 1;
+  else if (budget < 0.25) next = Math.min(next, 2);
   next = Math.max(Number(min) || 1, Math.min(Number(max) || DEFAULT_MAX_PARALLEL, next));
   return {
     current: Math.max(1, Math.min(ABSOLUTE_MAX_PARALLEL, Number(current) || DEFAULT_MAX_PARALLEL)),
@@ -188,6 +192,59 @@ export function adaptConcurrency({
     reason: next < current ? 'reduce-concurrency-on-load-or-failure'
       : next > current ? 'increase-concurrency-when-healthy-and-beneficial'
       : 'hold-concurrency'
+  };
+}
+
+
+export function adaptiveParallelLimit({
+  mode = 'auto',
+  current = DEFAULT_MAX_PARALLEL,
+  min = 1,
+  max = DEFAULT_MAX_PARALLEL,
+  pressure = 0,
+  concurrencyOpportunity = 0,
+  risk = 'ordinary',
+  itemCount = 0,
+  remainingBudgetRatio = 1,
+  explicit = false
+} = {}) {
+  const budget = Math.max(0, Math.min(1, Number(remainingBudgetRatio) || 0));
+  const decision = parallelDecision({
+    mode,
+    pressure,
+    concurrencyOpportunity,
+    risk,
+    maxParallel: max,
+    itemCount,
+    explicit
+  });
+  const budgetCap = budget < 0.12
+    ? 1
+    : budget < 0.25
+      ? Math.min(2, decision.maxParallel)
+      : decision.maxParallel;
+  const adapted = adaptConcurrency({
+    current: Math.min(Math.max(1, Number(current) || 1), Math.max(1, budgetCap)),
+    min,
+    max: Math.max(1, budgetCap),
+    averageLatencyMs: 0,
+    errorRate: 0,
+    remainingBudgetRatio: budget,
+    risk,
+    benefit: concurrencyOpportunity
+  });
+  const next = Math.max(
+    Number(min) || 1,
+    Math.min(Number(max) || DEFAULT_MAX_PARALLEL, budgetCap, adapted.next)
+  );
+  return {
+    ...decision,
+    maxParallel: next,
+    budgetCap,
+    remainingBudgetRatio: Number(budget.toFixed(3)),
+    reason: next < decision.maxParallel
+      ? 'budget-or-adaptive-cap'
+      : decision.reason
   };
 }
 
