@@ -2641,6 +2641,20 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
 .settings-actions button.ghost { border: 1px solid var(--line); color: var(--ink); }
 
 @media (max-width: 920px) {
+  .visual-heading { align-items: start; }
+  .visual-heading h2 { font-size: clamp(1.85rem, 5vw, 2.8rem); }
+  .system-visual { min-height: 0; }
+  .visual-request-row { grid-template-columns: 1fr; max-width: 720px; }
+  .visual-path-arrow { transform: rotate(90deg); }
+  .visual-network { grid-template-columns: 1fr; min-height: 0; gap: 18px; }
+  .visual-core { order: 0; width: 150px; height: 150px; }
+  .visual-core-center { width: 92px; height: 92px; }
+  .visual-agent-cluster { min-height: 0; order: 1; }
+  .visual-work-column { min-height: 0; order: 2; }
+  .visual-rail { display: none; }
+  .visual-bottom { grid-template-columns: 1fr; }
+}
+@media (max-width: 920px) {
   .agent-core-grid { grid-template-columns: 1fr; }
   .agent-specialist-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
