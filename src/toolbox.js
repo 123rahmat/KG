@@ -359,7 +359,13 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
     ctx.onUsage?.(used, source);
   } };
   for (let round = 0; ; round += 1) {
-    const answer = await callModel(conversation, { config, fetchImpl, ...options });
+    // Once a tool has run, the next model turn is synthesis. Do not re-open
+    // provider web search on that turn, or a tool result can start another
+    // search cycle instead of converging on the requested answer.
+    const answer = await callModel(conversation, {
+      config, fetchImpl, ...options,
+      ...(round > 0 ? { webSearch: false } : {})
+    });
     if (!answer) return null;
     usage.inputTokens += answer.usage?.inputTokens ?? 0;
     usage.outputTokens += answer.usage?.outputTokens ?? 0;
