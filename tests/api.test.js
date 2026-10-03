@@ -426,6 +426,9 @@ test('research searches the web with the AI provider, reads what it found, and k
           { groundingChunks: [{ web: { uri: 'https://example.com/source', title: 'Example source' } }] }
         );
       }
+      if (requestText.includes('"Tool result for web.search"')) {
+        return modelReply('Current research result, from example.com.', { inputTokens: 5, outputTokens: 5 });
+      }
       if (requestText.includes('"task":{"id":"investigate"')) {
         return modelReply('{"tool":"web.search","input":{"query":"latest evidence unfamiliar topic"}}');
       }
