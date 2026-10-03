@@ -30,7 +30,7 @@ const HUMAN_GATE_TASKS = new Set(['clarify', 'approval', 'iterate', 'observe', '
 
 function hasDedicatedCodingControl(task, payload) {
   if (!isCodeTask(task, payload)) return false;
-  if (payload?.workspace?.projectId && payload?.codeIntelligence?.project) return true;
+  if (payload?.workspace?.projectId && payload?.workspace?.revisionId && payload?.codeIntelligence?.project) return true;
   if (payload?.subsystemPlan?.subsystems?.length) return true;
   const attachments = Array.isArray(payload?.attachments) ? payload.attachments : [];
   return Boolean(payload?.codeIntelligence?.project && attachments.some(item => /\.zip$/i.test(text(typeof item === 'string' ? item : item?.name ?? ''))));
