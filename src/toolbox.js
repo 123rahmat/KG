@@ -362,7 +362,53 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
     usage.outputTokens += used?.outputTokens ?? 0;
     ctx.onUsage?.(used, source);
   } };
+  const finalSynthesis = async () => {
+    const system = conversation.find(message => message?.role === 'system')?.content ?? '';
+    const taskContext = messages
+      .filter(message => message?.role !== 'system')
+      .map(message => {
+        const content = text(message?.content);
+        const parsed = parseJsonObject(content);
+        if (parsed?.task || parsed?.goal) {
+          return JSON.stringify({
+            goal: parsed.goal ?? null,
+            task: parsed.task ?? null,
+            purpose: parsed.purpose ?? null
+          });
+        }
+        return content;
+      })
+      .filter(Boolean)
+      .join('\n');
+    const toolResults = conversation
+      .filter(message => message?.role === 'user' && /^Tool result for /i.test(text(message.content)))
+      .slice(-8)
+      .map(message => text(message.content))
+      .join('\n');
+    const synthesisPrompt = [
+      system,
+      'FINAL SYNTHESIS MODE: use the available tool results to answer the task now. Do not emit a tool-call JSON object and do not request another tool.'
+    ].join('\n\n');
+    const synthesis = await callModel([
+      { role: 'system', content: synthesisPrompt },
+      { role: 'user', content: 'Task context:\n' + clip(taskContext, 6000) + '\n\nAvailable tool results:\n' + clip(toolResults, MAX_TOOL_CHARS * 2) }
+    ], {
+      config,
+      fetchImpl,
+      ...options,
+      webSearch: false
+    });
+    if (!synthesis) return null;
+    usage.inputTokens += synthesis.usage?.inputTokens ?? 0;
+    usage.outputTokens += synthesis.usage?.outputTokens ?? 0;
+    for (const source of Array.isArray(synthesis.citations) ? synthesis.citations : []) {
+      if (source?.url) sources.set(source.url, source);
+    }
+    return { ...synthesis, citations: [...sources.values()], usage, toolLog };
+  };
+
   for (let round = 0; ; round += 1) {
+    if (round > 0 && round >= effectiveMaxRounds) return finalSynthesis();
     // Once a tool has run, the next model turn is synthesis. Do not re-open
     // provider web search on that turn, or a tool result can start another
     // search cycle instead of converging on the requested answer.
@@ -385,15 +431,7 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
       ...(answer.citations ?? [])
     ].filter(item => item?.url).map(item => [item.url, item])).values()];
     if (!call) return { ...answer, citations: cited(), usage, toolLog };
-    if (round >= effectiveMaxRounds) {
-      // One last call without tools: the person gets an answer, not a loop.
-      conversation.push({ role: 'assistant', content: answer.text }, { role: 'user', content: 'No more tools can be used. Answer now with what you have.' });
-      const last = await callModel(conversation, { config, fetchImpl, ...options });
-      if (!last) return null;
-      usage.inputTokens += last.usage?.inputTokens ?? 0;
-      usage.outputTokens += last.usage?.outputTokens ?? 0;
-      return { ...last, citations: [...sources.values()], usage, toolLog };
-    }
+    if (round >= effectiveMaxRounds) return finalSynthesis();
     const result = REACHING_TOOLS.has(text(call.tool)) && !reach.allows(call.input?.url)
       ? { error: UNREACHABLE, code: 'address-not-from-a-trusted-source' }
       : await useTool(call.tool, call.input, toolCtx);
