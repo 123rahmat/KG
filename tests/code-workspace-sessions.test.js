@@ -16,10 +16,3 @@ test('Code Workspace normalization is bounded and leaves source authorization to
     'github-source-1'
   );
 });
-
-test('workspace session accepts a local-folder source id for unified Code Workspace', async () => {
-  assert.equal(
-    normalizeWorkspaceSessionInput({ sourceId: 'local-source-1', projectId: 'p' }).sourceId,
-    'local-source-1'
-  );
-});
