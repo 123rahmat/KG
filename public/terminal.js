@@ -34,7 +34,7 @@ function setChangeStatus(message) {
 function updateApplyButton() {
   const button = $('terminalApply');
   if (!button) return;
-  const writable = (currentSource?.kind === 'github' && currentSource?.permissions?.write === true) || currentSource?.kind === 'local-folder';
+  const writable = currentSource?.kind === 'github' && currentSource?.permissions?.write === true;
   button.disabled = !capturedChanges.length || !writable;
   button.title = !writable && currentSource?.kind === 'github'
     ? 'GitHub source is read-only'
@@ -75,8 +75,8 @@ async function applyCapturedChanges() {
   const changes = capturedChanges;
   if (!confirm('Apply the captured terminal changes to the connected project?')) return;
   const source = currentSource;
-  if (source.kind !== 'local-folder' && (source.kind !== 'github' || source.permissions?.write !== true)) {
-    setChangeStatus('This project source is read-only.');
+  if (source.kind !== 'github' || source.permissions?.write !== true) {
+    setChangeStatus('This GitHub source is read-only. Reconnect with explicit write permission to enable write-back.');
     return;
   }
   try {
@@ -87,7 +87,7 @@ async function applyCapturedChanges() {
       message: 'workspace: apply reviewed terminal changes'
     }, { idempotencyKey: crypto.randomUUID() });
     state.workspaceSource = payload.source;
-    setChangeStatus(source.kind === 'local-folder' ? 'Changes saved to the private local-folder workspace snapshot.' : 'Changes committed to ' + source.repoOwner + '/' + source.repoName + ' · ' + source.repoRef);
+    setChangeStatus('Changes committed to ' + source.repoOwner + '/' + source.repoName + ' · ' + source.repoRef);
     closeSocket();
     capturedChanges = [];
     updateApplyButton();
@@ -136,9 +136,9 @@ async function openTerminal() {
     capturedChanges = [];
     currentSource = state.workspaceSource || null;
     updateApplyButton();
-    setChangeStatus(currentSource?.kind === 'local-folder' ? 'Changes stay in the temporary sandbox until you explicitly save them to the private local-folder snapshot.' : 'Changes stay in the temporary sandbox until you explicitly commit them to GitHub.');
-    if (!currentSource || !['github', 'local-folder'].includes(currentSource.kind)) throw new Error('Connect a project source before opening the Code Workspace terminal.');
-    setStatus((currentSource.kind === 'local-folder' ? 'Local project terminal · ' : 'GitHub project terminal · ') + currentSource.name);
+    setChangeStatus('Changes stay in the temporary sandbox until you explicitly commit them to GitHub.');
+    if (!currentSource || currentSource.kind !== 'github') throw new Error('Connect a GitHub repository before opening the Code Workspace terminal.');
+    setStatus('GitHub project terminal · ' + currentSource.name);
     dialog.showModal();
     fitAddon.fit();
 
@@ -146,7 +146,7 @@ async function openTerminal() {
     socket = new WebSocket(websocketUrl());
     socket.binaryType = 'arraybuffer';
     socket.addEventListener('open', () => {
-      setStatus('Connected · ' + (currentSource.kind === 'local-folder' ? 'Local folder' : 'GitHub') + ' · ' + currentSource.name);
+      setStatus('Connected · GitHub · ' + currentSource.name);
       terminal.focus();
     });
     socket.addEventListener('message', event => {
@@ -159,7 +159,7 @@ async function openTerminal() {
         const sandbox = message.sandbox || {};
         terminal?.writeln('\r\nKindgleam sandbox terminal ready.\r');
         terminal?.writeln('Environment: ' + (sandbox.image || 'sandbox') + ' · network ' + (sandbox.network || 'restricted') + ' · user ' + (sandbox.user || 'unprivileged') + ' · ' + (sandbox.workspace || '/work') + '\r');
-        terminal?.writeln('Project source: ' + (currentSource?.kind === 'local-folder' ? 'Local folder snapshot' : 'GitHub') + ' · temporary sandbox at /work; host filesystem access is disabled.\r');
+        terminal?.writeln('Project source: GitHub · temporary sandbox at /work; local folder access is disabled.\r');
         return;
       }
       if (message.type === 'output') {
