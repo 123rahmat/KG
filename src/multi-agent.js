@@ -713,7 +713,7 @@ function arbiterMessages(basePayload, findings) {
 function panelEarlyConvergence({ run, task, findings = [], iteration = 1 } = {}) {
   if (findings.length < 2) return { stop: false, reason: 'insufficient-independent-evidence' };
   const signals = observedPanelSignals({ findings });
-  const retrying = Number(run?.attempt ?? 1) > 1 || iteration > 1 || Boolean(run?.situation?.failure || run?.situation?.error);
+  const retrying = Number(run?.attempt ?? 1) > 1 || Boolean(run?.situation?.failure || run?.situation?.error);
   const highStake = HIGH_STAKES.has(text(run?.situation?.risk).toLowerCase());
   if (!signals.disagreement && signals.confidence >= 0.86 && !retrying && !highStake) {
     return {
@@ -1981,6 +1981,16 @@ export async function runAdaptiveAgentPanel({
       evidenceSoFar: basePayload?.evidenceSoFar,
       findings
     };
+    // Reassess convergence before recruiting another specialist wave. A
+    // clean pair of independent findings can terminate the generic panel even
+    // when the original allocation had a larger theoretical floor.
+    if (findings.length >= 2) {
+      const convergence = panelEarlyConvergence({ run, task, findings, iteration: allocationRounds });
+      if (convergence.stop) {
+        earlyConvergence = convergence;
+        break;
+      }
+    }
     allocationResult = rolesFor(run, task, { maxAgents, mode, progress, minimumAgents: initialPanelFloor });
     lastAllocation = allocationResult.allocation ?? lastAllocation;
 
