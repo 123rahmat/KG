@@ -238,6 +238,74 @@
       </div>
     </section>
 
+    <section class="landing-section agents-section" id="agents" aria-labelledby="agentsTitle">
+      <div class="section-heading">
+        <p class="landing-kicker">Agentic roles</p>
+        <h2 id="agentsTitle">Specialists are recruited by the situation, not switched on by default.</h2>
+        <p>Kindgleam has a role catalog for strategy, evidence, analysis, architecture, implementation, critique, communication, diagnosis, debugging, testing, security, and performance. The runtime chooses the smallest useful team and can stay with one executor when that is enough.</p>
+      </div>
+
+      <div class="agent-system-card">
+        <div class="agent-authority">
+          <span class="agent-core-tag">CORE CONTROL</span>
+          <strong>Three logical roles shape a turn.</strong>
+          <small>The Step Manager and Resource &amp; Data Manager are advisory. The Main Executor produces the user-facing work. The server remains authoritative.</small>
+        </div>
+
+        <div class="agent-core-grid">
+          <article class="agent-card primary-agent">
+            <span class="agent-role-number">01</span>
+            <div>
+              <strong>Step Manager</strong>
+              <p>Finds the smallest next justified step and keeps the adaptive workflow coherent.</p>
+            </div>
+            <span class="agent-mode">advisory control</span>
+          </article>
+          <article class="agent-card primary-agent">
+            <span class="agent-role-number">02</span>
+            <div>
+              <strong>Resource &amp; Data Manager</strong>
+              <p>Scopes the tools, resources, dependencies, and data handling needed for the current turn.</p>
+            </div>
+            <span class="agent-mode">advisory control</span>
+          </article>
+          <article class="agent-card executor-agent">
+            <span class="agent-role-number">03</span>
+            <div>
+              <strong>Main Executor</strong>
+              <p>Performs the user-facing reasoning or coding work using the authorized context and services.</p>
+            </div>
+            <span class="agent-mode">user-facing</span>
+          </article>
+        </div>
+
+        <div class="agent-specialists-heading">
+          <span>ADAPTIVE SPECIALISTS</span>
+          <small>Selected only when their expertise adds material value</small>
+        </div>
+
+        <div class="agent-specialist-grid">
+          <article class="specialist-card"><b>Strategist</b><span>Decomposes goals and dependencies.</span></article>
+          <article class="specialist-card"><b>Researcher</b><span>Targets unknowns and evidence.</span></article>
+          <article class="specialist-card"><b>Analyst</b><span>Tests trade-offs and consistency.</span></article>
+          <article class="specialist-card"><b>Architect</b><span>Designs boundaries and failure containment.</span></article>
+          <article class="specialist-card"><b>Implementer</b><span>Translates decisions into concrete changes.</span></article>
+          <article class="specialist-card"><b>Critic</b><span>Challenges assumptions and likely failure modes.</span></article>
+          <article class="specialist-card"><b>Communicator</b><span>Shapes clear audience-ready results.</span></article>
+          <article class="specialist-card"><b>Diagnostician</b><span>Separates symptoms, causes, and next tests.</span></article>
+          <article class="specialist-card"><b>Debugger</b><span>Finds software root causes.</span></article>
+          <article class="specialist-card"><b>Test Engineer</b><span>Builds focused regression checks.</span></article>
+          <article class="specialist-card"><b>Security Reviewer</b><span>Checks trust boundaries and data flow.</span></article>
+          <article class="specialist-card"><b>Performance Reviewer</b><span>Finds measurable resource risks.</span></article>
+        </div>
+
+        <div class="agent-flow-note">
+          <span class="mono">situation → role utility → smallest useful team → execution → evidence → reassess</span>
+          <strong>Independent review can be added when complexity, stakes, code, or a retry justify a second opinion.</strong>
+        </div>
+      </div>
+    </section>
+
     <section class="landing-principles" aria-label="Core principles">
       <div><strong>One authority</strong><span>The server owns transitions, permissions, tools, writes, and verification.</span></div>
       <div><strong>One next step</strong><span>Later work is not pre-created just because it might become useful.</span></div>
