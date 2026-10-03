@@ -21,13 +21,13 @@ export class CodeWorkspaceSessionStore {
   constructor(pool) { this.pool = pool; }
   async create(scope, body = {}) {
     const input = normalizeWorkspaceSessionInput(body);
-    if (!input.sourceId) throw new Error('A Code Workspace sourceId is required');
+    if (!input.sourceId) throw new Error('GitHub sourceId is required for a Code Workspace session');
     if (input.sourceId) {
       const { rows: [source] } = await this.pool.query(
         `SELECT id, kind FROM workspace_sources WHERE id = $1 AND workspace_id = $2 AND principal_id = $3 AND revoked_at IS NULL LIMIT 1`,
         [input.sourceId, scope.workspaceId, scope.principalId]
       );
-      if (!source || !['github', 'local-folder'].includes(source.kind)) { const error = new Error('Unsupported Code Workspace source.'); error.status = 404; error.code = 'unsupported-source'; throw error; }
+      if (!source || source.kind !== 'github') { const error = new Error('Only GitHub repositories are supported as Code Workspace sources.'); error.status = 404; error.code = 'github-source-required'; throw error; }
     }
     const id = crypto.randomUUID();
     const { rows: [row] } = await this.pool.query(
