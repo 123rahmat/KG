@@ -573,6 +573,75 @@ test('Code Workspace gives every subsystem its own multi-agent panel with bounde
 });
 
 
+
+test('Code Workspace does not mark a panel complete when a specialist is budget-blocked', async () => {
+  const project = {
+    revisionId: 'rev-budget',
+    contentHash: 'hash-budget',
+    scale: 'large',
+    fileCount: 20,
+    files: [
+      ...Array.from({ length: 10 }, (_, i) => ({ path: `auth/file-${i}.js`, bytes: 100, test: i === 9 })),
+      ...Array.from({ length: 10 }, (_, i) => ({ path: `orders/file-${i}.js`, bytes: 100, test: i === 9 }))
+    ],
+    dependencies: [],
+    totals: { bytes: 2000, dependencies: 0 },
+    hierarchy: { scale: 'large', root: { path: '', depth: 0, fileCount: 20, bytes: 2000, digest: 'root' } }
+  };
+  let spendChecks = 0;
+  let calls = 0;
+  const result = await runAdaptiveAgentPanel({
+    run: run({ adaptation: { scale: 'complex' }, maxTokens: 100000 }),
+    task: { id: 'build-code', type: 'code' },
+    basePayload: {
+      goal: 'Build the project',
+      task: { id: 'build-code', type: 'code' },
+      workspace: { projectId: 'p-budget', revisionId: 'rev-budget', paths: project.files.map(file => file.path) },
+      codeIntelligence: { project, files: project.files }
+    },
+    selection,
+    primaryModelId: 'google:gemini-3.8-flash',
+    config: { agents: { multiAgent: 'always', maxAgents: 3 } },
+    canSpend: async () => spendChecks++ === 0,
+    modelCaller: async (_messages, options) => {
+      calls += 1;
+      return {
+        text: JSON.stringify(finding('proceed', 'one specialist completed', { confidence: 0.95 })),
+        provider: 'google',
+        model: options.modelId,
+        usage: null
+      };
+    }
+  });
+  assert.equal(calls, 1);
+  assert.equal(result.allocation.subsystemPanels.every(item => item.status !== 'complete'), true);
+  assert.equal(result.allocation.subsystemPanels.some(item =>
+    item.unavailableRoles.some(role => role.reason === 'budget-blocked')
+  ), true);
+  assert.equal(result.allocation.efficiency.earlyConvergence, false);
+});
+
+test('adaptive parallel capacity contracts when the remaining budget is thin', async () => {
+  const result = await runAdaptiveAgentPanel({
+    run: run({ adaptation: { scale: 'complex' }, maxTokens: 2000 }),
+    task: { id: 'plan', type: 'plan' },
+    basePayload: { goal: 'Plan a deterministic implementation', task: { id: 'plan', type: 'plan' } },
+    selection,
+    primaryModelId: 'google:gemini-3.8-flash',
+    config: { agents: { multiAgent: 'always', maxAgents: 4 } },
+    canSpend: async () => true,
+    modelCaller: async (_messages, options) => ({
+      text: JSON.stringify(finding('proceed', 'budget-constrained evidence', { confidence: 0.94 })),
+      provider: 'google',
+      model: options.modelId,
+      usage: null
+    })
+  });
+  assert.ok(result.waves.length >= 1);
+  assert.equal(result.waves[0].parallel, false);
+  assert.equal(result.allocation.efficiency.parallelWaves, 0);
+});
+
 test('normal-chat ZIP projects use exactly one adaptive coding panel', async () => {
   const calls = [];
   const project = {
