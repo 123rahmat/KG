@@ -106,7 +106,7 @@ const PROVIDERS = {
         ...(Array.isArray(data?.groundingMetadata?.groundingChunks) ? data.groundingMetadata.groundingChunks : [])
       ];
       const citations = [...new Map(groundingChunks
-        .map(chunk => chunk?.web ?? chunk?.web?.uri ? chunk.web : chunk)
+        .map(chunk => chunk?.web ?? chunk)
         .filter(web => web?.uri)
         .map(web => [web.uri, { url: text(web.uri), title: text(web.title) }]))
         .values()];
