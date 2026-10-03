@@ -9,7 +9,7 @@
 
 import crypto from 'node:crypto';
 import { encryptJson, decryptField } from './data-protection.js';
-import { workspacePath } from './workspace-path.js';
+import { workspacePath, isSensitiveWorkspacePath } from './workspace-path.js';
 
 const text = value => String(value ?? '').trim();
 const SOURCE_ID = /^[A-Za-z0-9_-]{8,80}$/;
@@ -53,7 +53,7 @@ export function normalizeSourceFiles(files = []) {
   let total = 0;
   for (const item of list) {
     const path = safePath(item?.path || item?.name);
-    if (!path) continue;
+    if (!path || isSensitiveWorkspacePath(path)) continue;
     const content = typeof item?.content === 'string' ? item.content : '';
     if (content.includes('\0')) throw new Error(`Source file contains invalid binary data: ${path}`);
     const bytes = Buffer.byteLength(content, 'utf8');
