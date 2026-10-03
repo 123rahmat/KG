@@ -6,7 +6,7 @@ The platform uses one server-owned Run/Task lifecycle. Memory, RAG, Skills, orch
 Request -> identity/tenant scope -> situation -> governance -> capability discovery -> Skills + Memory + RAG -> context compilation -> task DAG -> adaptive agent allocation -> bounded parallel waves -> governed Tool Gateway -> isolated execution/workspace -> evidence -> verification -> approval when required -> delivery -> state/memory update -> evaluation signal -> controlled evolution.
 
 ## Parallelism
-The scheduler chooses auto, always, or off. Independent cognitive work runs in bounded waves. Dependencies, shared state, and overlapping code writes are serialized. A shared code project requires an exact revision and disjoint write set before concurrent writes are allowed.
+The same scheduler governs specialist panels, normal-chat control agents and other independent cognitive work. It chooses `auto`, `always`, or `off` through `AGENTS_PARALLEL_MODE`. Independent work runs in bounded waves; dependencies, shared state, and overlapping code writes are serialized. Provider concurrency, task pressure, risk and remaining usage budget can narrow or expand the runtime ceiling, while hard provider and budget limits remain authoritative. A shared code project requires an exact revision and disjoint write set before concurrent work is allowed.
 
 ## Skills
 Skills use SKILL.md with progressive disclosure. Metadata is cheap to discover; full instructions are loaded only after selection. A skill does not grant authority.
