@@ -97,7 +97,7 @@ export function registerWorkspaceSourcesRoutes(app, {
   app.get('/api/workspace/sources', scoped('viewer'), route(async (req, res) => {
     const { rows } = await pool.query(
       `SELECT * FROM workspace_sources
-         WHERE workspace_id = $1 AND principal_id = $2 AND kind IN ('github', 'local-folder') AND revoked_at IS NULL
+         WHERE workspace_id = $1 AND principal_id = $2 AND kind = 'github' AND revoked_at IS NULL
        ORDER BY updated_at DESC, id DESC`,
       [req.scope.workspaceId, req.principal.id]
     );
@@ -138,36 +138,6 @@ export function registerWorkspaceSourcesRoutes(app, {
     res.status(201).json({ source: sourcePublic(row), manifest });
   }));
 
-  app.post('/api/workspace/sources/local', scoped('editor'), idempotent, route(async (req, res) => {
-    const files = Array.isArray(req.body?.files) ? req.body.files : [];
-    if (!files.length) return res.status(400).json({ error: 'Select a folder containing at least one readable file.', code: 'local-files-required' });
-    const normalized = normalizeSourceFiles(files);
-    if (!normalized.length) return res.status(400).json({ error: 'No safe readable source files were found in that folder.', code: 'local-files-empty' });
-    const manifest = sourceManifest(normalized);
-    const object = await snapshotObject(objects, req.scope, req.principal, normalized, text(req.body?.name) || 'Local folder.workspace', {
-      kind: 'local-folder', contentHash: manifest.contentHash, fileCount: manifest.fileCount
-    });
-    const sourceId = createSourceId();
-    const { rows: [row] } = await pool.query(
-      `INSERT INTO workspace_sources
-        (id, workspace_id, principal_id, kind, name, snapshot_object_id, permissions, metadata)
-       VALUES ($1, $2, $3, 'local-folder', $4, $5, $6::jsonb, $7::jsonb)
-       RETURNING *`,
-      [
-        sourceId, req.scope.workspaceId, req.principal.id, text(req.body?.name) || 'Local folder',
-        object.id,
-        JSON.stringify({ read: true, write: false }),
-        JSON.stringify({ contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files, localSnapshot: true })
-      ]
-    );
-    await audit?.record({
-      principalId: req.principal.id, workspaceId: req.scope.workspaceId,
-      action: 'workspace.source.connect', target: sourceId, outcome: 'allowed',
-      detail: { kind: 'local-folder', fileCount: manifest.fileCount }, requestId: req.requestId
-    });
-    res.status(201).json({ source: sourcePublic(row), manifest });
-  }));
-
   app.post('/api/workspace/sources/github/repositories', scoped('viewer'), route(async (req, res) => {
     const token = text(req.body?.token);
     if (!token) return res.status(400).json({ error: 'A GitHub credential is required.', code: 'github-credential-required' });
@@ -204,37 +174,6 @@ export function registerWorkspaceSourcesRoutes(app, {
       [text(req.params.id), req.scope.workspaceId, req.principal.id]
     );
     if (!source) return res.status(404).json({ error: 'Workspace source not found', code: 'no-source' });
-    if (source.kind === 'local-folder') {
-      const changes = Array.isArray(req.body?.changes) ? req.body.changes : [];
-      if (!changes.length) return res.status(400).json({ error: 'No changes supplied.', code: 'changes-required' });
-      const baseFiles = await readSnapshotFiles(objects, req.scope, source.snapshot_object_id);
-      const effective = effectiveGithubChanges(baseFiles, changes);
-      const baseMap = new Map(baseFiles.map(file => [file.path, file.content]));
-      for (const change of effective) {
-        if (change.kind === 'delete') baseMap.delete(change.path);
-        else baseMap.set(change.path, String(change.content ?? ''));
-      }
-      const refreshedFiles = normalizeSourceFiles([...baseMap].map(([path, content]) => ({ path, content })));
-      const manifest = sourceManifest(refreshedFiles);
-      const object = await snapshotObject(objects, req.scope, req.principal, refreshedFiles, source.name + '.workspace', {
-        kind: 'local-folder', sourceId: source.id, contentHash: manifest.contentHash, fileCount: manifest.fileCount
-      });
-      const { rows: [updated] } = await pool.query(
-        `UPDATE workspace_sources
-            SET snapshot_object_id = $4,
-                metadata = metadata || $5::jsonb,
-                updated_at = now()
-          WHERE id = $1 AND workspace_id = $2 AND principal_id = $3
-          RETURNING *`,
-        [source.id, req.scope.workspaceId, req.principal.id, object.id, JSON.stringify({ contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files, localSnapshot: true })]
-      );
-      await audit?.record({
-        principalId: req.principal.id, workspaceId: req.scope.workspaceId,
-        action: 'workspace.source.write', target: source.id, outcome: 'allowed',
-        detail: { kind: 'local-folder', changedFiles: effective.map(item => item.path) }, requestId: req.requestId
-      });
-      return res.json({ source: sourcePublic(updated), result: { kind: 'local-folder', changedFiles: effective.map(item => item.path), contentHash: manifest.contentHash } });
-    }
     if (source.kind !== 'github') return res.status(404).json({ error: 'Only GitHub repositories are supported as Code Workspace sources.', code: 'github-source-required' });
     const token = decryptSourceCredentials(encryptionKey, source.credentials_enc);
     if (!token) return res.status(409).json({ error: 'GitHub credentials are unavailable. Reconnect the repository.', code: 'source-credentials-missing' });
