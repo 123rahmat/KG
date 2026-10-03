@@ -316,18 +316,31 @@ test('GitHub write-back builds one revision and rejects stale bases', async () =
 });
 
 
-test('Code Workspace sources are GitHub-only', async () => {
-  assert.deepEqual(SOURCE_KINDS, ['github']);
+test('Code Workspace supports GitHub and local-folder sources', async () => {
+  assert.deepEqual(SOURCE_KINDS, ['github', 'local-folder']);
 });
 
 
-test('Code Workspace has no local-folder terminal or write-back path', async () => {
+test('Code Workspace local folders stay in snapshots and the terminal never gets host filesystem access', async () => {
   const { readFile } = await import('node:fs/promises');
   const terminal = await readFile(new URL('../public/terminal.js', import.meta.url), 'utf8');
   const sourceClient = await readFile(new URL('../public/workspace-sources.js', import.meta.url), 'utf8');
   const terminalServer = await readFile(new URL('../src/terminal.js', import.meta.url), 'utf8');
-  assert.equal(/local-folder|applyLocalWorkspaceChanges/.test(terminal), false);
-  assert.equal(/local-folder|applyLocalWorkspaceChanges/.test(sourceClient), false);
-  assert.match(terminalServer, /github-source-required/);
-  assert.match(terminalServer, /source\.kind !== 'github'/);
+  assert.match(sourceClient, /api\\('POST', '\\/api\\/workspace\\/sources\\/local'/);
+  assert.match(terminal, /source\.kind === 'local-folder'/);
+  assert.match(terminalServer, /\['github', 'local-folder'\]/);
+  assert.match(terminalServer, /host shell, host environment/);
+});
+test('workspace source normalization excludes credential-bearing files', () => {
+  assert.deepEqual(
+    normalizeSourceFiles([
+      { path: '.env', content: 'TOKEN=secret' },
+      { path: '.env.example', content: 'TOKEN=' },
+      { path: 'src/app.js', content: 'ok' }
+    ]),
+    [
+      { path: '.env.example', content: 'TOKEN=' },
+      { path: 'src/app.js', content: 'ok' }
+    ]
+  );
 });
