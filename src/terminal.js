@@ -285,7 +285,7 @@ export function attachTerminalServer(server, {
       if (workspaceCount >= config.terminal.maxSessionsPerWorkspace) throw Object.assign(new Error('Workspace terminal limit reached'), { code: 'terminal-workspace-limit' });
 
       const requiredSourceId = text(sourceId);
-      if (!requiredSourceId) throw Object.assign(new Error('A GitHub repository source is required for the Code Workspace terminal.'), { code: 'github-source-required' });
+      if (!requiredSourceId) throw Object.assign(new Error('A Code Workspace source is required for the terminal.'), { code: 'source-required' });
       let source = null;
       let baseFiles = [];
       if (requiredSourceId) {
@@ -297,7 +297,7 @@ export function attachTerminalServer(server, {
 [requiredSourceId, scope.workspaceId, principal.id]
         );
         source = row || null;
-        if (!source || source.kind !== 'github') throw Object.assign(new Error('Only GitHub repositories can be opened in the Code Workspace terminal.'), { code: 'github-source-required' });
+        if (!source || !['github', 'local-folder'].includes(source.kind)) throw Object.assign(new Error('Unsupported Code Workspace source.'), { code: 'unsupported-source' });
         baseFiles = await readSnapshot(objects, scope, source.snapshot_object_id);
       }
 
