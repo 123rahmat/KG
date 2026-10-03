@@ -102,12 +102,54 @@ export async function syncActiveWorkspaceSource() {
   });
 }
 
+async function connectLocalFolder() {
+  const input = $('localFolderInput');
+  const files = [...(input?.files ?? [])];
+  const status = $('localFolderStatus');
+  const button = $('connectLocalFolder');
+  if (!files.length) { notify('projectSourcesNotice', 'warn', 'Choose a local folder first.'); return null; }
+  const readable = [];
+  for (const file of files) {
+    const relative = file.webkitRelativePath || file.name;
+    try { readable.push({ path: relative, content: await file.text() }); } catch { /* omit unreadable/binary files */ }
+  }
+  if (!readable.length) { notify('projectSourcesNotice', 'warn', 'No readable source files were found in that folder.'); return null; }
+  try {
+    if (button) button.disabled = true;
+    if (status) status.textContent = 'Creating private workspace snapshot…';
+    const rootName = files[0]?.webkitRelativePath?.split('/')[0] || 'Local folder';
+    const result = await api('POST', '/api/workspace/sources/local', { name: rootName, files: readable });
+    state.workspaceSourceId = result.source.id; state.workspaceSource = result.source;
+    if (state.chat) state.chat.workspaceSourceId = result.source.id;
+    updateSourceUI(); $('projectSourcesDialog')?.close();
+    notify('runNotice', 'info', 'Connected local folder ' + rootName + ' · ' + readable.length + ' files');
+    return result.source;
+  } catch (error) {
+    notify('projectSourcesNotice', 'warn', error.message || 'Local folder could not be connected.'); return null;
+  } finally {
+    if (button) button.disabled = false;
+    if (status) status.textContent = readable.length + ' readable files selected';
+  }
+}
+
+function selectSourcePanel(kind) {
+  const local = $('sourcePanelLocal'); const github = $('sourcePanelGithub');
+  const isLocal = kind === 'local';
+  if (local) local.hidden = !isLocal;
+  if (github) github.hidden = isLocal;
+}
+
 export async function initWorkspaceSources() {
   updateSourceUI();
   const dialog = $('projectSourcesDialog'); const open = $('openProjectSources'); const close = $('projectSourcesClose');
   const github = $('connectGithub'); const sync = $('syncWorkspaceSource'); const repoButton = $('loadGithubRepositories');
+  const localInput = $('localFolderInput'); const localButton = $('connectLocalFolder');
   const repoSelect = $('githubRepository'); const branchSelect = $('githubBranch');
-  open?.addEventListener('click', () => dialog?.showModal()); close?.addEventListener('click', () => dialog?.close());
+  const localTab = $('chooseLocalSource'); const githubTab = $('chooseGithubSource');
+  open?.addEventListener('click', () => { selectSourcePanel('github'); dialog?.showModal(); }); close?.addEventListener('click', () => dialog?.close());
+  localTab?.addEventListener('click', () => selectSourcePanel('local')); githubTab?.addEventListener('click', () => selectSourcePanel('github'));
+  localInput?.addEventListener('change', () => { if (localButton) localButton.disabled = !(localInput.files?.length); const status = $('localFolderStatus'); if (status) status.textContent = localInput.files?.length ? localInput.files.length + ' files selected' : 'No folder selected'; });
+  localButton?.addEventListener('click', () => connectLocalFolder());
   repoButton?.addEventListener('click', () => loadGithubRepositories()); repoSelect?.addEventListener('change', () => loadGithubBranches());
   branchSelect?.addEventListener('change', () => { if (github) github.disabled = !branchSelect.value; });
   github?.addEventListener('click', () => connectGitHub());
