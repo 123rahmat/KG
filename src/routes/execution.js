@@ -1859,7 +1859,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       structured: stepJudgement ?? (['understand', 'discover-capabilities', 'reassess', 'plan'].includes(task.type) || task.metadata?.outputSchema
         ? parseJsonObject(answer.text)
         : null),
-      citations: answer.citations ?? [],
+      citations: (answer.citations?.length ? answer.citations : (answer.toolLog ?? []).flatMap(item => item.sources ?? [])),
       provider: answer.provider,
       model: answer.model,
       usage: answer.usage,
