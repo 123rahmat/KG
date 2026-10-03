@@ -387,6 +387,7 @@ test('research searches the web with the AI provider, reads what it found, and k
     assert.equal(result.status, 200);
     assert.equal(result.body.execution.executed, true);
     assert.equal(result.body.execution.text, 'Current research result, from example.com.');
+    console.error('DEBUG_RESEARCH_EXECUTION', JSON.stringify(result.body.execution));
     assert.equal(result.body.execution.citations[0].url, 'https://example.com/source');
     const research = result.body.run.tasks.find(task => task.id === 'investigate');
     // The sources and the tools used stay with the research, so the chat can show them.
