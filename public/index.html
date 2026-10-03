@@ -126,102 +126,154 @@
       </div>
     </section>
 
-    <section class="landing-visual" aria-labelledby="visualTitle">
-      <div class="visual-heading">
+        <section class="landing-demos" aria-labelledby="demoTitle">
+      <div class="visual-heading demo-heading">
         <div>
-          <p class="landing-kicker">See it work</p>
-          <h2 id="visualTitle">One adaptive system, visibly moving through the work.</h2>
+          <p class="landing-kicker">See the system work</p>
+          <h2 id="demoTitle">Two real workflows. One adaptive intelligence.</h2>
         </div>
-        <div class="visual-live"><i></i><span>live architecture</span></div>
+        <span class="demo-caption">Product animation · not prerecorded telemetry</span>
       </div>
 
-      <div class="system-visual" data-system-visual>
-        <div class="visual-noise" aria-hidden="true"></div>
-
-        <div class="visual-topline">
-          <span>REQUEST TRACE</span>
-          <span class="mono">adaptive-runtime / same conversation</span>
+      <article class="workflow-demo" id="chat-demo" data-demo="chat" aria-labelledby="chatDemoTitle">
+        <div class="demo-head">
+          <div>
+            <span class="demo-number">01 / NORMAL CHAT</span>
+            <h3 id="chatDemoTitle">Normal Chat adapts the amount of reasoning to the request.</h3>
+            <p>Simple requests stay lightweight. When evidence or tools are justified, the workflow expands, executes, observes, verifies, and continues in the same conversation.</p>
+          </div>
+          <div class="demo-status"><i></i><span data-demo-status>running</span></div>
         </div>
 
-        <div class="visual-request-row">
-          <div class="visual-request-card">
-            <span class="visual-label">USER</span>
-            <strong>“Fix the failing research path and verify the result.”</strong>
+        <div class="demo-screen chat-screen">
+          <div class="demo-screen-bar">
+            <span>Kindgleam · normal chat</span>
+            <span class="mono">adaptive-three-agent-control-plane</span>
           </div>
-          <div class="visual-path-arrow" aria-hidden="true">→</div>
-          <div class="visual-runtime-card active" data-runtime-card>
-            <span class="visual-label">UNIFIED ADAPTIVE RUNTIME</span>
-            <strong>Situation → scope → next justified step</strong>
+          <div class="demo-scene">
+            <div class="chat-message user-message" data-chat-step="0">
+              <span>USER</span>
+              <strong>“What changed in this report, and what should I verify?”</strong>
+            </div>
+
+            <div class="scene-connector"><span></span></div>
+
+            <div class="chat-core-row" data-chat-step="1">
+              <div class="scene-core">
+                <svg aria-hidden="true"><use href="#i-logo"/></svg>
+                <b>Adaptive Runtime</b>
+                <small>reads the situation</small>
+              </div>
+              <div class="scene-decision">
+                <span>DECISION</span>
+                <strong>Need evidence + a focused check</strong>
+                <small>Only the justified capabilities are recruited.</small>
+              </div>
+            </div>
+
+            <div class="scene-connector split"><span></span></div>
+
+            <div class="chat-role-row" data-chat-step="2">
+              <div class="scene-role active"><i></i><b>Step Manager</b><small>next justified step</small></div>
+              <div class="scene-role active"><i></i><b>Resource &amp; Data</b><small>scope tools + data</small></div>
+              <div class="scene-role executor"><i></i><b>Main Executor</b><small>produce the answer</small></div>
+            </div>
+
+            <div class="scene-connector"><span></span></div>
+
+            <div class="chat-tools-row" data-chat-step="3">
+              <span class="tool-chip">web.search</span>
+              <span class="tool-chip">file.read</span>
+              <span class="tool-chip">data.analyze</span>
+              <span class="tool-chip muted-chip">only when needed</span>
+            </div>
+
+            <div class="scene-connector"><span></span></div>
+
+            <div class="chat-result-row" data-chat-step="4">
+              <div class="result-node"><span>OBSERVE</span><b>evidence collected</b></div>
+              <div class="result-arrow">→</div>
+              <div class="result-node active"><span>VERIFY</span><b>answer supported</b></div>
+              <div class="result-arrow">→</div>
+              <div class="result-node"><span>DELIVER</span><b>continue or finish</b></div>
+            </div>
+          </div>
+          <div class="demo-timeline" aria-hidden="true">
+            <span data-chat-progress="0"></span><span data-chat-progress="1"></span><span data-chat-progress="2"></span><span data-chat-progress="3"></span><span data-chat-progress="4"></span>
           </div>
         </div>
+        <div class="demo-footer">
+          <span><b>Adaptive behavior:</b> one next justified step, not a fixed chain.</span>
+          <span class="mono">roles selected by current situation</span>
+        </div>
+      </article>
 
-        <div class="visual-network">
-          <div class="visual-rail rail-a" aria-hidden="true"></div>
-          <div class="visual-rail rail-b" aria-hidden="true"></div>
-
-          <div class="visual-core" data-core>
-            <div class="visual-core-ring"></div>
-            <div class="visual-core-center">
-              <svg aria-hidden="true"><use href="#i-logo"/></svg>
-              <span>ADAPT</span>
-              <small>one authority</small>
-            </div>
+      <article class="workflow-demo" id="code-demo" data-demo="code" aria-labelledby="codeDemoTitle">
+        <div class="demo-head">
+          <div>
+            <span class="demo-number">02 / CODE WORKSPACE</span>
+            <h3 id="codeDemoTitle">Code Workspace turns the same adaptive core into a GitHub-bound engineering loop.</h3>
+            <p>The repository snapshot provides context. Coding intelligence narrows the change. Tests and execution produce evidence. Write-back is explicit and revision-bound.</p>
           </div>
-
-          <div class="visual-agent-cluster">
-            <article class="visual-agent selected" data-agent="step">
-              <span class="visual-agent-dot"></span>
-              <b>Step Manager</b>
-              <small>next justified step</small>
-            </article>
-            <article class="visual-agent" data-agent="resource">
-              <span class="visual-agent-dot"></span>
-              <b>Resource &amp; Data</b>
-              <small>scope only what's needed</small>
-            </article>
-            <article class="visual-agent selected" data-agent="executor">
-              <span class="visual-agent-dot"></span>
-              <b>Main Executor</b>
-              <small>reason + act</small>
-            </article>
-
-            <article class="visual-specialist" data-agent="researcher"><span>Researcher</span><i></i></article>
-            <article class="visual-specialist" data-agent="analyst"><span>Analyst</span><i></i></article>
-            <article class="visual-specialist" data-agent="architect"><span>Architect</span><i></i></article>
-            <article class="visual-specialist" data-agent="debugger"><span>Debugger</span><i></i></article>
-            <article class="visual-specialist" data-agent="tester"><span>Test Engineer</span><i></i></article>
-            <article class="visual-specialist" data-agent="security"><span>Security Reviewer</span><i></i></article>
-          </div>
-
-          <div class="visual-work-column">
-            <div class="visual-work-node active" data-work="execute">
-              <span>01</span><b>Execute</b><small>model · tools · code</small>
-            </div>
-            <div class="visual-work-line"></div>
-            <div class="visual-work-node" data-work="observe">
-              <span>02</span><b>Observe</b><small>results · receipts · evidence</small>
-            </div>
-            <div class="visual-work-line"></div>
-            <div class="visual-work-node" data-work="verify">
-              <span>03</span><b>Verify</b><small>does the goal hold?</small>
-            </div>
-          </div>
+          <div class="demo-status"><i></i><span data-demo-status>running</span></div>
         </div>
 
-        <div class="visual-bottom">
-          <div class="visual-decision" data-decision>
-            <span>THEN</span>
-            <strong>Deliver — or adapt again.</strong>
-            <small>The next step is created only when the observed result justifies it.</small>
+        <div class="demo-screen code-screen">
+          <div class="demo-screen-bar">
+            <span>Kindgleam · code workspace</span>
+            <span class="mono">GitHub-only · revision-bound</span>
           </div>
-          <div class="visual-lanes">
-            <span class="visual-lane chat">NORMAL CHAT <small>reason · research · files · data · web</small></span>
-            <span class="visual-lane code">CODE WORKSPACE <small>GitHub · context · edit · test · write-back</small></span>
+          <div class="code-scene">
+            <div class="code-stage" data-code-step="0">
+              <div class="github-badge"><svg aria-hidden="true"><use href="#i-branch"/></svg></div>
+              <div><span>GITHUB REPOSITORY</span><b>Project snapshot + selected revision</b><small>source context is server-scoped</small></div>
+            </div>
+
+            <div class="scene-connector"><span></span></div>
+
+            <div class="code-stage" data-code-step="1">
+              <div class="github-badge"><svg aria-hidden="true"><use href="#i-search"/></svg></div>
+              <div><span>CODE INTELLIGENCE</span><b>Project structure + affected files</b><small>dependencies · tests · change risk</small></div>
+            </div>
+
+            <div class="scene-connector"><span></span></div>
+
+            <div class="code-stage" data-code-step="2">
+              <div class="github-badge"><svg aria-hidden="true"><use href="#i-sliders"/></svg></div>
+              <div><span>ADAPTIVE CODING STEP</span><b>Choose the smallest safe change</b><small>architect → implement → inspect as justified</small></div>
+            </div>
+
+            <div class="scene-connector"><span></span></div>
+
+            <div class="code-stage code-execution" data-code-step="3">
+              <div class="github-badge"><svg aria-hidden="true"><use href="#i-run"/></svg></div>
+              <div><span>EXECUTE + TEST</span><b>Patch → run → collect receipts</b><small>server-governed terminal and test execution</small></div>
+              <div class="code-mini-role"><span>ACTIVE ROLES</span><b>Architect · Implementer · Debugger · Test Engineer</b></div>
+            </div>
+
+            <div class="scene-connector"><span></span></div>
+
+            <div class="code-stage" data-code-step="4">
+              <div class="github-badge"><svg aria-hidden="true"><use href="#i-shield"/></svg></div>
+              <div><span>VERIFY</span><b>Check evidence against the goal</b><small>independent review can join when justified</small></div>
+            </div>
+
+            <div class="scene-connector"><span></span></div>
+
+            <div class="code-stage writeback" data-code-step="5">
+              <div class="github-badge"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+              <div><span>WRITE-BACK GATE</span><b>Explicit GitHub revision update</b><small>no local project-folder browser access</small></div>
+            </div>
+          </div>
+          <div class="demo-timeline" aria-hidden="true">
+            <span data-code-progress="0"></span><span data-code-progress="1"></span><span data-code-progress="2"></span><span data-code-progress="3"></span><span data-code-progress="4"></span><span data-code-progress="5"></span>
           </div>
         </div>
-      </div>
-
-      <p class="visual-caption">The animation is a product model, not a separate engine: one server-owned workflow adapts the depth, resources, roles, and execution path to the current situation.</p>
+        <div class="demo-footer">
+          <span><b>Engineering path:</b> GitHub → context → change → test → verify → explicit write-back.</span>
+          <span class="mono">same unified runtime underneath</span>
+        </div>
+      </article>
     </section>
 
     <section class="landing-section" id="system" aria-labelledby="systemTitle">
