@@ -1,7 +1,7 @@
 /**
  * External project sources for the intelligent workspace.
  *
- * Code Workspace sources are GitHub repositories only. GitHub is an authenticated source using
+ * Code Workspace supports GitHub repositories and browser-selected local-folder snapshots. GitHub is an authenticated source using
  * a user-supplied fine-grained token stored encrypted at rest.
  *
  * This module never exposes credentials to model prompts or workspace files.
@@ -33,7 +33,7 @@ function isUsefulSourcePath(path) {
   return dot > 0 && SOURCE_EXTENSIONS.has(name.slice(dot + 1).toLowerCase());
 }
 
-export const SOURCE_KINDS = Object.freeze(['github']);
+export const SOURCE_KINDS = Object.freeze(['github', 'local-folder']);
 
 function safePath(value) {
   const path = String(value ?? '').replaceAll('\\', '/').replace(/^\.\//, '');
