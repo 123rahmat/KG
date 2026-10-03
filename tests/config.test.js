@@ -284,6 +284,14 @@ test('adaptive multi-agent configuration accepts bounded modes and agent counts'
   assert.throws(() => loadConfig({ ...base, MULTI_AGENT_MAX_AGENTS: '12' }), /MULTI_AGENT_MAX_AGENTS must be/);
 });
 
+test('unified adaptive parallel scheduling is configurable and bounded', () => {
+  const base = { DATABASE_URL: 'postgres://u:p@localhost:5432/kindgleam', AI_PROVIDER: 'google', AI_API_KEY: 'k' };
+  assert.equal(loadConfig(base).agents.parallel, 'auto');
+  assert.equal(loadConfig({ ...base, AGENTS_PARALLEL_MODE: 'always' }).agents.parallel, 'always');
+  assert.equal(loadConfig({ ...base, AGENTS_PARALLEL_MODE: 'off' }).agents.parallel, 'off');
+  assert.throws(() => loadConfig({ ...base, AGENTS_PARALLEL_MODE: 'sometimes' }), /AGENTS_PARALLEL_MODE must be/);
+});
+
 test('AI_EFFORT chooses how deeply Gemini reasons, and only real levels are accepted', () => {
   const env = { DATABASE_URL: 'postgres://u:p@h:5432/d', AI_PROVIDER: 'google', AI_API_KEY: 'k' };
   assert.equal(loadConfig(env).ai.effort, null, 'unset keeps the model default');
