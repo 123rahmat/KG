@@ -92,7 +92,11 @@ export async function connectGitHub() {
 export async function syncActiveWorkspaceSource() {
   const sourceId = state.chat?.workspaceSourceId ?? state.workspaceSourceId;
   if (!sourceId) return null;
-  if (state.workspaceSource?.kind !== 'github') return state.workspaceSource;
+  if (state.workspaceSource?.kind !== 'github') {
+    state.workspaceSource = null; state.workspaceSourceId = null;
+    if (state.chat) state.chat.workspaceSourceId = null;
+    updateSourceUI(); return null;
+  }
   return api('POST', `/api/workspace/sources/${encodeURIComponent(sourceId)}/sync`).then(result => {
     state.workspaceSource = result.source; updateSourceUI(); return result;
   });
