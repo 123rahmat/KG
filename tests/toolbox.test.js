@@ -73,6 +73,31 @@ test('the AI reads a file and analyses a table before answering', async () => {
   assert.match(results[3], /"value":13\.91/);
 });
 
+test('a tool budget of zero still executes one tool and forces a real synthesis answer', async () => {
+  const sent = [];
+  const answer = await answerWithTools(
+    [
+      { role: 'system', content: 'You help.' },
+      { role: 'user', content: JSON.stringify({ goal: 'Research current facts', task: { id: 'investigate', type: 'investigate', purpose: 'Use the available search result.' } }) }
+    ],
+    { config },
+    {
+      config,
+      maxRounds: 0,
+      fetchImpl: scripted([
+        '{"tool":"math.evaluate","input":{"expression":"1+1"}}',
+        '{"tool":"math.evaluate","input":{"expression":"1+1"}}',
+        'The result is 2.'
+      ], sent)
+    }
+  );
+  assert.equal(answer.text, 'The result is 2.');
+  assert.equal(answer.toolLog.length, 1);
+  assert.equal(answer.toolLog[0].tool, 'math.evaluate');
+  assert.match(sent.at(-1).input.at(-1).content, /Available tool results/);
+  assert.equal(sent.at(-1).input.at(-1).content.includes('"task":{"id":"investigate"'), false);
+});
+
 test('tools that are missing or not ready are reported, and the loop always ends with an answer', async () => {
   assert.match((await useTool('teleport', {}, { config })).error, /no tool "teleport"/);
   assert.equal((await useTool('file.read', { file: 'x' }, { config })).needs, 'files');
