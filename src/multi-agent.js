@@ -1614,12 +1614,9 @@ async function runCodeWorkspaceAgentPanels({
         for (const to of externalTargets) {
           const message = codeWorkspaceSubsystemMessage({
             type: stability.blocked ? 'blocker' : (
-                parsed.length
-                  && parsed.every(item => item.recommendation === 'proceed' && !(item.risks ?? []).length && !(item.unknowns ?? []).length)
-                  && !stability.disagreement
-                  && !stability.materialRisk
+                !stability.disagreement && !stability.materialRisk && parsed.length
                   ? 'handoff'
-                  : stability.confidence < 0.65 ? 'dependency-request' : 'handoff'
+                  : 'dependency-request'
               ),
             from: `panel:${subsystem.id}`,
             to,
