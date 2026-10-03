@@ -402,7 +402,9 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
       round, tool: call.tool, why: call.why,
       outcome: result?.error ? 'error' : result?.notReady ? 'not-ready' : result?.proposed ? 'proposed' : 'ok',
       ...(result?.error ? { error: result.error } : {}), ...(result?.needs ? { needs: result.needs } : {}),
-      ...(result?.actionId ? { actionId: result.actionId } : {})
+      ...(result?.actionId ? { actionId: result.actionId } : {}),
+      ...(Array.isArray(result?.citations) && result.citations.length ? { sources: result.citations } : {}),
+      ...(Array.isArray(result?.sources) && result.sources.length ? { sources: result.sources } : {})
     });
     conversation.push(
       { role: 'assistant', content: answer.text },
