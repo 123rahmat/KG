@@ -110,8 +110,11 @@ export function normalChatControlNeeds({ run = {}, task = {}, payload = {} } = {
   // normal-chat control plane must not insert extra model calls into them.
   const dedicatedExecutionStage = ['investigate', 'tool', 'discover', 'discover-capabilities', 'clarify', 'approval', 'observe', 'verify'].includes(type);
   const directWorkflow = run?.adaptation?.workflow === 'direct' || run?.workflow === 'direct';
+  const pendingSiblingTasks = (run?.tasks ?? []).filter(item =>
+    item?.status === 'pending' && item?.id !== task?.id
+  ).length;
   const steps = !dedicatedExecutionStage && CONTROL_TASKS.has(type)
-    && ((run?.tasks?.length ?? 0) > 1 && !directWorkflow
+    && ((pendingSiblingTasks > 0 && !directWorkflow)
       || ['plan', 'step', 'reassess', 'build-code', 'code'].includes(type)
       || Boolean(run?.adaptation?.workflowBlueprint && !directWorkflow)
       || Boolean(payload?.workPlan?.steps?.length || payload?.workPlan?.length));
