@@ -1,7 +1,7 @@
 /**
  * External project sources for the intelligent workspace.
  *
- * Code Workspace supports GitHub repositories and browser-selected local-folder snapshots. GitHub is an authenticated source using
+ * Code Workspace sources are GitHub repositories only. GitHub is an authenticated source using
  * a user-supplied fine-grained token stored encrypted at rest.
  *
  * This module never exposes credentials to model prompts or workspace files.
@@ -9,7 +9,7 @@
 
 import crypto from 'node:crypto';
 import { encryptJson, decryptField } from './data-protection.js';
-import { workspacePath, isSensitiveWorkspacePath } from './workspace-path.js';
+import { workspacePath } from './workspace-path.js';
 
 const text = value => String(value ?? '').trim();
 const SOURCE_ID = /^[A-Za-z0-9_-]{8,80}$/;
@@ -33,7 +33,7 @@ function isUsefulSourcePath(path) {
   return dot > 0 && SOURCE_EXTENSIONS.has(name.slice(dot + 1).toLowerCase());
 }
 
-export const SOURCE_KINDS = Object.freeze(['github', 'local-folder']);
+export const SOURCE_KINDS = Object.freeze(['github']);
 
 function safePath(value) {
   const path = String(value ?? '').replaceAll('\\', '/').replace(/^\.\//, '');
@@ -53,7 +53,7 @@ export function normalizeSourceFiles(files = []) {
   let total = 0;
   for (const item of list) {
     const path = safePath(item?.path || item?.name);
-    if (!path || isSensitiveWorkspacePath(path)) continue;
+    if (!path) continue;
     const content = typeof item?.content === 'string' ? item.content : '';
     if (content.includes('\0')) throw new Error(`Source file contains invalid binary data: ${path}`);
     const bytes = Buffer.byteLength(content, 'utf8');
