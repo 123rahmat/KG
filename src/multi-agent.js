@@ -1745,7 +1745,13 @@ async function runCodeWorkspaceAgentPanels({
   for (const state of subsystemState.values()) {
     if (state.status === 'blocked' || !state.findings?.length) continue;
     const stability = subsystemPanelStability(state.findings);
-    if (stability.stable) {
+    const cleanProceedEvidence = state.findings.every(item =>
+      item.recommendation === 'proceed'
+      && confidenceValue(item.confidence) >= 0.80
+      && !(item.risks ?? []).length
+      && !(item.unknowns ?? []).length
+    );
+    if (stability.stable || cleanProceedEvidence) {
       // A panel may have been marked needs-integration-review at its iteration
       // ceiling before the final accumulated evidence was reconciled. Stable
       // evidence is sufficient to close it; do not leave a converged panel
