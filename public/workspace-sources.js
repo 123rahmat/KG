@@ -4,9 +4,9 @@ function updateSourceUI() {
   const sync = $('syncWorkspaceSource');
   const status = $('workspaceSourceStatus');
   const source = state.workspaceSource;
-  if (sync) { sync.hidden = !source; sync.textContent = 'Sync GitHub'; }
+  if (sync) { sync.hidden = !source || source.kind !== 'github'; sync.textContent = 'Sync GitHub'; }
   if (status) {
-    const base = source ? `GitHub · ${source.name || 'GitHub repository'}` : 'No GitHub repository connected';
+    const base = source ? (source.kind === 'local-folder' ? `Local folder · ${source.name || 'Local folder'}` : `GitHub · ${source.name || 'GitHub repository'}`) : 'No project connected';
     const ingestion = source?.metadata?.ingestion;
     status.textContent = ingestion?.partial
       ? `${base} · incomplete (${Number(ingestion.skippedCount) || 0} files omitted)`
@@ -92,11 +92,7 @@ export async function connectGitHub() {
 export async function syncActiveWorkspaceSource() {
   const sourceId = state.chat?.workspaceSourceId ?? state.workspaceSourceId;
   if (!sourceId) return null;
-  if (state.workspaceSource?.kind !== 'github') {
-    state.workspaceSource = null; state.workspaceSourceId = null;
-    if (state.chat) state.chat.workspaceSourceId = null;
-    updateSourceUI(); return null;
-  }
+  if (state.workspaceSource?.kind !== 'github') return state.workspaceSource;
   return api('POST', `/api/workspace/sources/${encodeURIComponent(sourceId)}/sync`).then(result => {
     state.workspaceSource = result.source; updateSourceUI(); return result;
   });
