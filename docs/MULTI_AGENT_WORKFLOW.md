@@ -21,6 +21,7 @@ The same provider/model policy and data-transfer governance used by the primary 
 ```env
 MULTI_AGENT_MODE=auto
 MULTI_AGENT_MAX_AGENTS=11
+AGENTS_PARALLEL_MODE=auto
 ```
 
 `auto` enables the panel only when its coordination value clears the adaptive threshold. `always` enables the panel but still uses the task-specific allocator rather than blindly spawning the maximum. `off` disables it. Auto mode may choose 0 specialists for routine work, then 1-5 when extra perspectives have enough marginal value, subject to the configured ceiling and the same spend/data governance as the primary model.
