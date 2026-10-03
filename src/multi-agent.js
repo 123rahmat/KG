@@ -1223,6 +1223,10 @@ async function runCodeWorkspaceAgentPanels({
 } = {}) {
   const mode = config?.agents?.multiAgent ?? 'auto';
   const maxAgents = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(config?.agents?.maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
+  const providerParallelCap = Math.max(
+    1,
+    Math.min(maxAgents, Number(config?.providerConcurrency?.max) || maxAgents)
+  );
 
   const initialDecision = multiAgentDecision(run, task, { mode, progress: {} });
   if (!initialDecision.enabled) {
@@ -1299,7 +1303,7 @@ async function runCodeWorkspaceAgentPanels({
     mode: parallelMode,
     current: maxAgents,
     min: 1,
-    max: maxAgents,
+    max: providerParallelCap,
     pressure: initialDecision.pressure,
     concurrencyOpportunity: subsystemPlan.subsystems.length > 1 ? 0.8 : 0,
     risk: run?.situation?.risk ?? 'ordinary',
@@ -1307,14 +1311,14 @@ async function runCodeWorkspaceAgentPanels({
     remainingBudgetRatio: 1,
     explicit: mode === 'always' || parallelMode === 'always'
   });
-  let effectiveMaxParallel = initialParallel.maxParallel;
+  let effectiveMaxParallel = Math.min(providerParallelCap, initialParallel.maxParallel);
 
   const remainingBudgetRatio = () => run?.maxTokens === null || run?.maxTokens === undefined
     ? 1
     : Math.max(0, Math.min(1, (Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent) / Math.max(1, Number(run.maxTokens))));
   const budgetParallelLimit = () => run?.maxTokens === null || run?.maxTokens === undefined
-    ? maxAgents
-    : Math.max(1, Math.min(maxAgents, Math.floor(Math.max(1, Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent) / (AGENT_MAX_OUTPUT_TOKENS * 2))));
+    ? providerParallelCap
+    : Math.max(1, Math.min(providerParallelCap, Math.floor(Math.max(1, Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent) / (AGENT_MAX_OUTPUT_TOKENS * 2))));
 
   let topologyRevision = 0;
   while (true) {
@@ -1486,7 +1490,7 @@ async function runCodeWorkspaceAgentPanels({
       effectiveMaxParallel = parallelPlan.maxParallel;
       const lanePlan = buildWorkspaceParallelPlan({
         lanes: jobs.map(job => job.lane),
-        maxParallel: Math.min(effectiveMaxParallel, budgetParallelLimit())
+        maxParallel: Math.min(effectiveMaxParallel, providerParallelCap, budgetParallelLimit())
       });
 
       const results = [];
@@ -1941,6 +1945,10 @@ export async function runAdaptiveAgentPanel({
 } = {}) {
   const mode = config?.agents?.multiAgent ?? 'auto';
   const maxAgents = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(config?.agents?.maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
+  const providerParallelCap = Math.max(
+    1,
+    Math.min(maxAgents, Number(config?.providerConcurrency?.max) || maxAgents)
+  );
   const singleNormalChatZipPanel = normalChatZipCodeTask(run, basePayload, task);
   const scratchProject = scratchCodeTask(basePayload, task);
   if (codeWorkspaceTask(basePayload, task) || singleNormalChatZipPanel || scratchProject) {
@@ -2025,7 +2033,7 @@ export async function runAdaptiveAgentPanel({
       Number(allocationResult.allocation?.targetAgents) || Number(allocationResult.roles?.length) || 1
     ),
     min: 1,
-    max: maxAgents,
+    max: providerParallelCap,
     pressure: Number(allocationResult.allocation?.pressure ?? allocationResult.decision?.pressure ?? 0),
     concurrencyOpportunity: Number(allocationResult.allocation?.dimensions?.concurrencyOpportunity ?? 0),
     risk: run?.situation?.risk ?? 'ordinary',
@@ -2037,6 +2045,7 @@ export async function runAdaptiveAgentPanel({
     1,
     Math.min(
       genericParallelCeiling,
+      providerParallelCap,
       initialParallel.maxParallel,
       budgetParallelLimit()
     )
