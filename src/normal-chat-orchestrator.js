@@ -14,6 +14,7 @@
 
 import { parseJsonObject } from './structured.js';
 import { callModel } from './runtime.js';
+import { adaptiveParallelLimit } from './parallel-orchestrator.js';
 
 const text = value => String(value ?? '').trim();
 const clip = (value, max = 700) => {
@@ -292,38 +293,54 @@ export async function runNormalChatControlPlane({
   ];
   if (!managerRoles.length) return { ...base, enabled: true, reason: 'main-executor-sufficient' };
 
-  const jobs = managerRoles.map(async role => {
-    if (!(await canSpend())) {
-      return { role, status: 'budget-blocked', summary: 'Global usage capacity did not permit another control call.' };
-    }
-    try {
-      const result = await modelCaller(
-        [
-          { role: 'system', content: managerSystem(role) },
-          { role: 'user', content: JSON.stringify(managerBody(role, { run, task, payload, needs })) }
-        ],
-        {
-          config,
-          fetchImpl,
-          modelId,
-          allowBackup,
-          effort: 'minimal',
-          json: true,
-          usageGate,
-          usageSource: 'normal-chat-control'
-        }
-      );
-      if (result?.usage) await recordUsage(result.usage, result.provider, result.model);
-      return {
-        ...parseManager(result, role),
-        model: result?.model ?? modelId
-      };
-    } catch {
-      return { role, status: 'unavailable', summary: 'The control agent was unavailable; the server retained normal execution authority.' };
-    }
+  const parallelMode = config?.agents?.parallel ?? config?.parallel?.mode ?? 'auto';
+  const parallel = adaptiveParallelLimit({
+    mode: parallelMode,
+    current: managerRoles.length,
+    min: 1,
+    max: managerRoles.length,
+    pressure: managerRoles.length > 1 ? 0.5 : 0,
+    concurrencyOpportunity: managerRoles.length > 1 ? 0.7 : 0,
+    risk: run?.situation?.risk ?? 'ordinary',
+    itemCount: managerRoles.length,
+    remainingBudgetRatio: 1,
+    explicit: parallelMode === 'always'
   });
-
-  const results = await Promise.all(jobs);
+  const results = [];
+  for (let i = 0; i < managerRoles.length; i += Math.max(1, parallel.maxParallel)) {
+    const waveRoles = managerRoles.slice(i, i + Math.max(1, parallel.maxParallel));
+    const waveResults = await Promise.all(waveRoles.map(async role => {
+      if (!(await canSpend())) {
+        return { role, status: 'budget-blocked', summary: 'Global usage capacity did not permit another control call.' };
+      }
+      try {
+        const result = await modelCaller(
+          [
+            { role: 'system', content: managerSystem(role) },
+            { role: 'user', content: JSON.stringify(managerBody(role, { run, task, payload, needs })) }
+          ],
+          {
+            config,
+            fetchImpl,
+            modelId,
+            allowBackup,
+            effort: 'minimal',
+            json: true,
+            usageGate,
+            usageSource: 'normal-chat-control'
+          }
+        );
+        if (result?.usage) await recordUsage(result.usage, result.provider, result.model);
+        return {
+          ...parseManager(result, role),
+          model: result?.model ?? modelId
+        };
+      } catch {
+        return { role, status: 'unavailable', summary: 'The control agent was unavailable; the server retained normal execution authority.' };
+      }
+    }));
+    results.push(...waveResults);
+  }
   const byRole = new Map(results.map(item => [item.role, item]));
   return {
     ...base,
