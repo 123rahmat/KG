@@ -326,7 +326,7 @@ test('Code Workspace local folders stay in snapshots and the terminal never gets
   const terminal = await readFile(new URL('../public/terminal.js', import.meta.url), 'utf8');
   const sourceClient = await readFile(new URL('../public/workspace-sources.js', import.meta.url), 'utf8');
   const terminalServer = await readFile(new URL('../src/terminal.js', import.meta.url), 'utf8');
-  assert.match(sourceClient, /api\\('POST', '\\/api\\/workspace\\/sources\\/local'/);
+  assert.match(sourceClient, /api\('POST', '\/api\/workspace\/sources\/local'/);
   assert.match(terminal, /source\.kind === 'local-folder'/);
   assert.match(terminalServer, /\['github', 'local-folder'\]/);
   assert.match(terminalServer, /host shell, host environment/);
