@@ -1613,7 +1613,12 @@ async function runCodeWorkspaceAgentPanels({
         const externalTargets = subsystem.consumers?.length ? subsystem.consumers : ['shared-integration'];
         for (const to of externalTargets) {
           const message = codeWorkspaceSubsystemMessage({
-            type: stability.blocked ? 'blocker' : stability.confidence < 0.65 ? 'dependency-request' : 'handoff',
+            type: stability.blocked ? 'blocker' : (
+                parsed.length
+                  && parsed.every(item => item.recommendation === 'proceed' && !(item.risks ?? []).length && !(item.unknowns ?? []).length)
+                  ? 'handoff'
+                  : stability.confidence < 0.65 ? 'dependency-request' : 'handoff'
+              ),
             from: `panel:${subsystem.id}`,
             to,
             subsystem,
