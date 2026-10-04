@@ -1,7 +1,8 @@
 /**
  * Reading documents people attach: PDF, Word, Excel, PowerPoint, CSV and
  * plain text become text (and tables) the AI can use; images are passed to
- * the model to look at; a zipped code project becomes its source files.
+ * the model to look at; a ZIP is classified from its contents as a code
+ * project or a general document/data bundle.
  *
  * These files come from users, so they are untrusted: this module runs in a
  * worker thread with time and memory limits (see document-runner.js), and
