@@ -113,7 +113,8 @@ export function buildUnifiedAdaptiveWorkflow({
   const behavior = adaptiveBehaviorContract(p, {
     situation: { ...s, consequence: consequenceOf(s) },
     acceptance: a,
-    candidates
+    candidates,
+    authorityDecision: authority
   });
 
   return {
