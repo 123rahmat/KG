@@ -249,7 +249,7 @@ const ARCHIVE_RESEARCH_HINT = /\b(?:paper|study|studies|article|literature|citat
 
 function archiveEntries(buffer) {
   const zip = readZip(buffer);
-  const entries = new Map([...zip].map(([name, read]) => [name.replaceAll('\\\\', '/'), read]));
+  const entries = new Map([...zip].map(([name, read]) => [name.replaceAll('\\', '/'), read]));
   const names = [...entries.keys()]
     .filter(name => !name.endsWith('/')
       && !SKIP_DIRS.test('/' + name)
@@ -270,7 +270,7 @@ function archiveProfile(names) {
   let researchHints = 0;
   for (const name of names) {
     const format = archiveFormat(name);
-    if (format === 'project') code += 1;
+    if (format === 'project' && !/\.zip$/i.test(name)) code += 1;
     else if (['pdf', 'docx', 'xlsx', 'pptx', 'text'].includes(format)) documents += 1;
     else if (format === 'image') images += 1;
     else if (format === 'csv') data += 1;
