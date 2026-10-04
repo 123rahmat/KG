@@ -128,7 +128,7 @@ function progressSnapshot(run) {
     attachments.length,
     Number(run?.adaptation?.projectOverlay?.length) || 0
   );
-  const images = attachments.filter(file => /^image\\//i.test(String(file?.contentType ?? file?.type ?? ''))).length;
+  const images = attachments.filter(file => /^image\//i.test(String(file?.contentType ?? file?.type ?? ''))).length;
   const research = run?.adaptation?.researchWorkspace ?? {};
   const agentCounts = tasks.reduce((sum, task) => {
     const brief = task?.evidence?.multiAgent ?? task?.evidence?.structured?.multiAgent ?? null;
