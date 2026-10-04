@@ -16,6 +16,34 @@ const RESEARCH_DEEP = /\b(?:research|deep research|investigate|literature review
 const CURRENT_FACTS = /\b(?:latest|today|current|currently|right now|this week|live|recent|news|price|prices|rate|rates|weather|scores?)\b/i;
 const DEEP_RESEARCH_ACTION = /\b(?:research|investigat(?:e|ion)|literature review|systematic review|survey|fact[- ]check|find and compare|compare sources|source-backed|with citations|cite sources)\b/i;
 const DEEP_CODE_ACTION = /\b(?:debug|fix|refactor|implement|build|develop|modify|edit|run|test|compile|deploy|commit|push|pull request|change the code|write the code|create the code|update the repo|review the repository|analy[sz]e the repository|review the code|analy[sz]e the code)\b/i;
+const CODE_PROJECT_SCOPE = /\b(?:repository|repo|codebase|project|code workspace|github|pull request|branch|commit|multi[- ]file|multiple files|whole app|whole application|whole website|full app|full application|full website|service|backend|frontend|api|deployment|deploy)\b/i;
+const CODE_SINGLE_SCOPE = /\b(?:function|method|class|variable|snippet|script|single file|this file|one file|small fix|small change|edit this file|fix this file|explain this code|review this code|run this script|test this file|small program|utility script)\b/i;
+
+function attachmentNames(attachments) {
+  return (Array.isArray(attachments) ? attachments : [])
+    .map(item => text(typeof item === 'string' ? item : item?.name))
+    .filter(Boolean);
+}
+
+function hasProjectCodeContext(value, attachments) {
+  const names = attachmentNames(attachments);
+  const sourceCount = names.filter(name =>
+    /\.(?:py|js|mjs|cjs|jsx|ts|tsx|go|rs|java|kt|c|cc|cpp|h|hpp|cs|rb|php|swift|sql|sh|html|css|json)$/i.test(name)
+  ).length;
+  return CODE_PROJECT_SCOPE.test(value)
+    || names.some(name => /\.zip$/i.test(name))
+    || sourceCount > 1;
+}
+
+function shouldUseCodeWorkspace(value, attachments, { actions = [], explicitCodeSwitch = false } = {}) {
+  if (explicitCodeSwitch) return true;
+  if (!CODE.test(value)) return false;
+  if (hasProjectCodeContext(value, attachments)) return true;
+  const names = attachmentNames(attachments);
+  if (names.length === 1 || CODE_SINGLE_SCOPE.test(value)) return false;
+  return Array.isArray(actions)
+    && actions.some(action => ['create', 'transform', 'execute'].includes(String(action).toLowerCase()));
+}
 const EXPLICIT_MODE_SWITCH = Object.freeze({
   code: /\b(?:switch|move|open|use|take me to|continue in|work in)\s+(?:the\s+)?(?:code|coding)(?:\s+workspace)?\b|\b(?:code|coding)\s+workspace\b/i,
   research: /\b(?:switch|move|open|use|take me to|continue in|work in)\s+(?:the\s+)?research(?:\s+workspace)?\b|\b(?:research|deep research)\s+workspace\b/i
@@ -43,10 +71,10 @@ export const SURFACE_WORKSPACE_CONTRACTS = Object.freeze({
     toolPolicy: 'Just-in-time tools only. Any capability may be selected when the situation justifies it; specialized Code or Research work moves into its corresponding workspace rather than losing capability.',
     agentPolicy: 'Use the same server-owned adaptive agent policy as the other workspaces: one executor by default, with advisory or specialized roles added only when their independent value exceeds coordination cost.',
     verificationPolicy: 'Verify claims or produced content when stakes, uncertainty or user intent justify a check; do not add a redundant verification pass to pure conversation.',
-    creationPolicy: 'Writing, translation, explanation, planning, analysis, file and image understanding, design, visuals, canvas concepts and presentations stay here unless the situation genuinely crosses a Code or Research workspace boundary.',
-    escalationPolicy: 'Escalate to Code for software-project work and to Research for source-heavy/current evidence work; otherwise continue adapting, reasoning, using tools, coordinating agents and iterating inside Normal Chat.',
+    creationPolicy: 'Writing, translation, explanation, planning, analysis, file and image understanding, design, visuals, canvas concepts and presentations stay here; micro code work and single-file edits/tests stay here too unless a project/multi-file Code boundary is genuinely present.',
+    escalationPolicy: 'Escalate to Code for repository, project, multi-file or full software-engineering work and to Research for source-heavy/current evidence work; keep bounded single-file/micro work in Normal Chat.',
     uiPolicy: 'Keep the composer central; reveal only the controls and adaptive surfaces relevant to the current situation.',
-    selectionPolicy: 'Default general mode. Remain here for the rest of the system’s work and adapt depth, tools, files, reasoning and iteration to the situation; switch modes only when deep Code or deep Research is actually justified.'
+    selectionPolicy: 'Default general workspace. Keep bounded single-file, micro-artifact and design-oriented work here; switch to Code for durable project/multi-file engineering and to Research for durable source/evidence work.'
   }),
   code: Object.freeze({
     id: 'code',
@@ -125,11 +153,12 @@ export const SURFACE_POLICY = Object.freeze({
 export function classifySurfaceBoundary(goal, { activeSurface = '', attachments = [], flags = {}, actions = [] } = {}) {
   const value = text(goal);
   const active = normalizeSurfaceId(activeSurface);
+  const explicitCodeSwitch = EXPLICIT_MODE_SWITCH.code.test(value);
   const codeAction = Array.isArray(actions) && actions.some(action => ['create', 'transform', 'execute'].includes(String(action).toLowerCase()));
-  const explicitCode = EXPLICIT_MODE_SWITCH.code.test(value)
-    || DEEP_CODE_ACTION.test(value)
-    || (CODE.test(value) && codeAction)
-    || flags.code === true && codeAction;
+  const explicitCode = shouldUseCodeWorkspace(value, attachments, {
+    actions,
+    explicitCodeSwitch
+  }) || flags.code === true && codeAction && hasProjectCodeContext(value, attachments);
   const explicitResearch = EXPLICIT_MODE_SWITCH.research.test(value)
     || DEEP_RESEARCH_ACTION.test(value)
     || (CURRENT_FACTS.test(value) && /\b(?:search|find|check|verify|compare|source|price|rate|news|weather|score|latest|current)\b/i.test(value))
