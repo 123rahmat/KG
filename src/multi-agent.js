@@ -1048,19 +1048,36 @@ function codeWorkspacePanelWidth(run, task, maxAgents, iteration = 1, {
     evidenceSoFar: []
   });
   if (maxAgents < CODE_WORKSPACE_MIN_PANEL_AGENTS) return 1;
-  // Start with the smallest panel that can cover discovery + architecture +
-  // implementation. Add specialist breadth only when live signals justify it.
-  let desired = 3;
-  if (signals.scaleComplexity >= 0.32 || signals.decomposition >= 0.15 || signals.unknowns >= 0.15) desired = 4;
-  if (signals.securityFocus || signals.performanceFocus || signals.retrying || iteration > 1) desired = 5;
-  if (signals.securityFocus && signals.performanceFocus) desired = 6;
+  // Start with the smallest panel that can answer the current decision.
+  // A Code Workspace does not automatically justify three or more model calls.
+  // Breadth is earned by complexity, uncertainty, recovery, or risk.
+  let desired = 1;
+  if (
+    signals.scaleComplexity >= 0.16
+    || signals.implementationComplexity >= 0.30
+    || signals.decomposition >= 0.08
+    || signals.unknowns >= 0.08
+  ) {
+    desired = 2;
+  }
+  if (
+    signals.scaleComplexity >= 0.32
+    || signals.decomposition >= 0.15
+    || signals.unknowns >= 0.15
+    || signals.evidenceGap >= 0.50
+  ) {
+    desired = 3;
+  }
+  if (signals.securityFocus || signals.performanceFocus || signals.retrying || iteration > 1) {
+    desired = Math.max(desired, 4);
+  }
+  if (signals.securityFocus && signals.performanceFocus) desired = 5;
 
-  // Small projects do not benefit from a wide panel unless risk or active
-  // recovery makes the additional independent view decision-relevant.
+  // Small, healthy projects do not benefit from a wide panel.
   if (fileCount > 0 && fileCount <= 12
       && !signals.securityFocus && !signals.performanceFocus
       && !signals.retrying && iteration === 1) {
-    desired = 3;
+    desired = Math.min(desired, 2);
   }
   if (remainingBudgetRatio < 0.35) desired = Math.min(desired, 4);
   if (remainingBudgetRatio < 0.18) desired = Math.min(desired, 3);
@@ -1087,16 +1104,18 @@ function codeWorkspacePanelRoles(run, task, subsystem, {
   };
   const signals = taskSignals(run, task, progress);
 
-  // Executable work keeps architecture and implementation in the
-  // smallest capable panel. Research is added when width permits or when
-  // uncertainty makes it decision-relevant.
+  // Executable work starts with the smallest role that can improve the
+  // current decision. Architecture and implementation are complementary, not
+  // mandatory separate calls on every small task.
   if (signals.executable) {
-    addRequired('architect');
-    addRequired('implementer');
-    addRequired('researcher');
+    addRequired(width >= 2 ? 'architect' : 'implementer');
+    if (width >= 2) addRequired('implementer');
+    if (width >= 3 && (signals.unknowns >= 0.08 || signals.evidenceDiversity >= 0.08)) {
+      addRequired('researcher');
+    }
   } else {
     addRequired('researcher');
-    addRequired('architect');
+    if (width >= 2) addRequired('analyst');
   }
 
   const needsValidation = signals.executable && (
