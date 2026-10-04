@@ -68,6 +68,8 @@ These are **adaptive roles**, not permanent background agents. The runtime choos
 
 For Code Workspace, parallel work is bounded by the repository revision and write-set rules. For Research Workspace, independent source work is used only when it materially improves coverage or resolves disagreement.
 
+Background execution is durable: safe next steps can be re-queued by the server worker after a completed step, so closing the browser does not normally strand an adaptive run. Human approval, clarification, local-machine execution, waiting states, attempt limits and workflow budgets remain hard stops.
+
 There is no separate legacy Normal Chat control plane.
 
 ## Agentic escalation ladder
@@ -124,6 +126,7 @@ It can handle:
 - conversation, explanations, planning and analysis
 - writing, rewriting and translation
 - images and visual understanding
+- multiple images with bounded visual context
 - design, canvas concepts and presentations
 - documents, spreadsheets and other attachments
 - one or a few files when the work is bounded
@@ -167,6 +170,7 @@ It provides:
 - source-backed synthesis
 
 Research depth is adaptive. A simple factual question does not require a large source set; an uncertain, current, or high-stakes question can trigger deeper evidence collection and cross-checking.
+The research workflow can add another evidence step when gaps or conflicts remain and converge toward verification when the evidence becomes sufficient.
 
 ## Adaptive surface selection
 
