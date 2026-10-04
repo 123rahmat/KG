@@ -144,3 +144,41 @@ test('adaptive workspace exposes distinct Normal Chat, Code and Research surface
   assert.match(app, /state\.activeSurface = 'code'/);
   assert.match(actions, /Research Workspace/);
 });
+
+
+test('workspace mode exposes the required capability dock in the sidebar', async () => {
+  const html = await read('public/index.html');
+  const js = await read('public/adaptive-workspace.js');
+  const css = await read('public/app.css');
+  assert.match(html, /id="workspaceCapabilityDock"/);
+  assert.match(js, /function capabilityItems/);
+  assert.match(js, /ZIP \+ single-file inputs/);
+  assert.match(js, /GitHub project/);
+  assert.match(js, /Tests \+ verification/);
+  assert.match(js, /Search \+ gather/);
+  assert.match(js, /Source set/);
+  assert.match(js, /Evidence \+ gaps/);
+  assert.match(js, /Citations \+ provenance/);
+  assert.match(css, /\.workspace-capability-dock/);
+});
+
+test('Code Workspace keeps GitHub, ZIP and single-file inputs on one server-owned project context', async () => {
+  const runs = await read('src/routes/runs.js');
+  const attachments = await read('src/attachments.js');
+  assert.match(runs, /workspaceSourceId/);
+  assert.match(attachments, /export async function projectFiles/);
+  assert.match(attachments, /workspace-file-conflict/);
+  assert.match(attachments, /read\.format === 'project'/);
+  assert.match(attachments, /CODE_FILE\.test/);
+});
+
+test('Research Workspace persists bounded source and evidence continuity', async () => {
+  const runs = await read('src/runs.js');
+  const research = await read('src/research-workspace.js');
+  assert.match(runs, /researchWorkspace/);
+  assert.match(runs, /updateResearchWorkspaceState/);
+  assert.match(research, /RESEARCH_WORKSPACE_LIMITS/);
+  assert.match(research, /sourceSet/);
+  assert.match(research, /evidenceLedger/);
+  assert.match(research, /unresolvedQuestions/);
+});
