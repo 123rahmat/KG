@@ -141,3 +141,19 @@ test('adaptive context exposes exactly three public operating modes', () => {
   assert.equal(context.adaptiveSnapshot.modeRouting.primary, 'code');
   assert.ok(context.adaptiveSnapshot.modeRouting.supporting.includes('research'));
 });
+
+
+test('Normal Chat remains the general adaptive mode for non-deep workspace work', () => {
+  const contract = SURFACE_WORKSPACE_CONTRACTS['normal-chat'];
+  assert.match(contract.objective, /general adaptive operating mode/i);
+  assert.match(contract.creationPolicy, /planning|analysis|file understanding/i);
+  assert.match(contract.escalationPolicy, /otherwise continue adapting inside Normal Chat/i);
+
+  const decision = classifySurfaceBoundary('Help me plan a business launch and organize the work.', {
+    activeSurface: 'normal-chat',
+    flags: {},
+    actions: ['answer', 'create']
+  });
+  assert.equal(decision.surface, 'normal-chat');
+  assert.equal(decision.redirect, false);
+});
