@@ -1617,6 +1617,14 @@ button.send:disabled { background: var(--brand-mark); box-shadow: none; }
   background: var(--panel); border: 1px solid var(--line); color: var(--ink-2); box-shadow: var(--shadow-sm);
 }
 .file-chip.removable { padding-right: 4px; background: var(--soft); box-shadow: none; }
+.attachment-thumb{
+  width:28px;height:28px;flex:none;
+  object-fit:cover;
+  border-radius:7px;
+  border:1px solid var(--line);
+  background:var(--panel);
+}
+.file-chip:has(.attachment-thumb){padding-left:4px}
 .attachment-scope-chip { padding-left: 7px; }
 .attachment-scope { display: inline-flex; align-items: center; gap: 6px; min-width: 0; cursor: pointer; }
 .attachment-scope input { margin: 0; width: auto; flex: none; accent-color: var(--accent); }
@@ -3048,6 +3056,32 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
 .work-details-grid dd{color:var(--ink)}
 .work-details-card>p{margin:0;padding:0 10px 10px}
 .work-timeline{padding:8px 13px 12px}
+.work-progress-track{
+  height:4px;
+  margin:2px 0 8px;
+  border-radius:999px;
+  overflow:hidden;
+  background:var(--line);
+}
+.work-progress-meter{height:100%}
+.work-progress-meter i{
+  display:block;
+  height:100%;
+  min-width:3px;
+  border-radius:inherit;
+  background:linear-gradient(90deg,var(--accent),var(--accent-2));
+  transition:width .25s var(--ease);
+}
+.adaptive-progress-grid{
+  grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+  padding-top:6px;
+}
+.work-progress-alerts{
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px;
+  padding:0 13px 5px;
+}
 .work-timeline-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:7px}
 .work-timeline-head>*{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .work-timeline-list{display:grid;gap:4px}
