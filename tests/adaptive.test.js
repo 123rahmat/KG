@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   resolveAdaptiveContext, inspectGoal, discoverCapabilityRequirements
 } from '../src/adaptive.js';
+import { advanceAdaptiveWorkflow } from '../src/core.js';
 
 test('ordinary conversation stays a single chat surface', () => {
   const context = resolveAdaptiveContext('Explain recursion.', {
@@ -127,4 +128,45 @@ test('authorized adaptive expansion increases scope by one depth level only', ()
   assert.equal(context.resourcePlan.control.depth, 'standard');
   assert.equal(context.resourcePlan.expansion.expanded, true);
   assert.equal(context.resourcePlan.expansion.fromDepth, 'brief');
+});
+
+
+test('research work deepens on evidence gaps and converges back to verification', () => {
+  const intelligence = { surface: 'research', coding: false, reasoning: { depth: 'structured' } };
+  const initial = [{ id: 'understand', type: 'understand', status: 'pending', dependsOn: [] }];
+  const modeled = advanceAdaptiveWorkflow(initial, 'understand', {
+    status: 'complete',
+    intelligence,
+    situation: { needsInvestigation: true, evidenceGap: true }
+  });
+  assert.equal(modeled.next, 'model-situation');
+
+  const researched = advanceAdaptiveWorkflow(modeled.tasks, 'model-situation', {
+    status: 'complete',
+    intelligence,
+    needsInvestigation: true,
+    situation: { needsInvestigation: true, evidenceGap: true, unresolvedQuestions: ['Which source is current?'] }
+  });
+  assert.equal(researched.next, 'investigate');
+
+  const evidenceReady = advanceAdaptiveWorkflow(researched.tasks, 'investigate', {
+    status: 'complete',
+    intelligence,
+    situation: { needsInvestigation: false, evidenceGap: false }
+  });
+  assert.equal(evidenceReady.next, 'reason');
+
+  const reasoned = advanceAdaptiveWorkflow(evidenceReady.tasks, 'reason', {
+    status: 'complete',
+    intelligence,
+    situation: { needsInvestigation: false, evidenceGap: false }
+  });
+  assert.equal(reasoned.next, 'challenge');
+
+  const challenged = advanceAdaptiveWorkflow(reasoned.tasks, 'challenge', {
+    status: 'complete',
+    intelligence,
+    situation: { needsInvestigation: false, evidenceGap: false }
+  });
+  assert.equal(challenged.next, 'verify');
 });
