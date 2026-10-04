@@ -55,7 +55,8 @@ function activeWorkspace(run) {
 
 function surfaceSet(run) {
   const surfaces = new Set(['runs']);
-  const workspace = activeWorkspace(run);
+  const selected = ['code', 'research', 'normal-chat'].includes(state.activeSurface) ? state.activeSurface : null;
+  const workspace = selected ?? activeWorkspace(run);
   if (workspace === 'code') surfaces.add('code');
   if (workspace === 'research') surfaces.add('research');
   if (fileNeed(run)) surfaces.add('objects');
@@ -262,7 +263,13 @@ function renderCapabilityDock() {
     control.disabled = !item.action;
     control.title = item.detail;
     control.dataset.ready = String(item.ready);
-    control.innerHTML = `<span class="workspace-capability-dot" aria-hidden="true"></span><span class="workspace-capability-copy"><strong>${item.label}</strong><small>${item.detail}</small></span>`;
+    control.replaceChildren(
+      element('span', { class: 'workspace-capability-dot', 'aria-hidden': 'true' }),
+      element('span', { class: 'workspace-capability-copy' }, [
+        element('strong', { text: item.label }),
+        element('small', { text: item.detail })
+      ])
+    );
     control.addEventListener('click', item.action);
     return control;
   }));
