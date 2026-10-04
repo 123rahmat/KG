@@ -21,7 +21,8 @@ import { executionTargetsFor, defaultExecutionRequirements } from './execution.j
 import { normalizeCapabilityDiscovery, verificationContract } from './capabilities.js';
 import { buildSituationModel, evolveSituation, situationQualityGate } from './situation.js';
 import { adaptiveBudgetStatus, adaptiveBudgetForRun, reconcileAdaptiveTransition } from './adaptive-control.js';
-import { adaptiveEffortProfile } from './adaptive-efficiency.js';
+import { adaptiveEffortProfile, adaptiveBehaviorContract } from './adaptive-efficiency.js';
+import { buildAcceptanceContract, adaptiveDecisionAuthority } from './adaptive-decision-authority.js';
 import { updateAdaptiveRuntimeState, decideRecovery, recoveryLesson } from './adaptive-runtime-state.js';
 import { buildUnifiedWorkContext, applyWorkChange } from './unified-work-context.js';
 import { reevaluateSituationGovernance } from './situation-governance.js';
@@ -288,6 +289,49 @@ export class RunStore {
       regulated: situation.regulated === true || situation.flags?.regulated === true,
       peopleDecision: situation.peopleDecision === true || situation.flags?.highImpact === true
     });
+    const acceptanceContract = buildAcceptanceContract({
+      goal: goalText,
+      criteria: [...successCriteria, ...(situation.successCriteria ?? [])],
+      evidenceRequired: situation.evidenceRequired ?? [],
+      evidence,
+      authorizationRequired: situation.authorizationRequired === true,
+      authorizationSatisfied: situation.authorizationSatisfied !== false,
+      verificationRequired: plan.adaptation.effortProfile.maturity?.independentVerificationRequired === true,
+      verificationSatisfied: false
+    });
+    plan.adaptation.acceptanceContract = acceptanceContract;
+    plan.adaptation.adaptiveBehavior = adaptiveBehaviorContract(plan.adaptation.effortProfile, {
+      situation: {
+        goal: goalText,
+        uncertainty: Number(situation.uncertainty ?? 0),
+        riskScore: Number(situation.riskScore ?? 0),
+        verificationGap: Number(situation.verificationGap ?? 0),
+        consequence: Number(situation.consequence ?? 0),
+        irreversible: situation.irreversible === true,
+        externalSideEffect: situation.externalSideEffect === true,
+        physical: situation.physical === true,
+        regulated: situation.regulated === true,
+        peopleDecision: situation.peopleDecision === true
+      },
+      acceptance: acceptanceContract
+    });
+    plan.adaptation.adaptiveDecision = adaptiveDecisionAuthority({
+      situation: {
+        goal: goalText,
+        uncertainty: Number(situation.uncertainty ?? 0),
+        riskScore: Number(situation.riskScore ?? 0),
+        verificationGap: Number(situation.verificationGap ?? 0),
+        consequence: Number(situation.consequence ?? 0),
+        irreversible: situation.irreversible === true,
+        externalSideEffect: situation.externalSideEffect === true,
+        physical: situation.physical === true,
+        regulated: situation.regulated === true,
+        peopleDecision: situation.peopleDecision === true
+      },
+      profile: plan.adaptation.effortProfile,
+      acceptance: acceptanceContract
+    });
+
     // Later steps (schedules, dates) work in the person's own time zone.
     plan.adaptation.timeZone = plan.context?.timeZone ?? 'UTC';
     if (history.length) plan.adaptation.conversation = history;
