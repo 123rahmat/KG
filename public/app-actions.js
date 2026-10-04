@@ -677,49 +677,6 @@ function requirementsCard(run) {
 }
 
 
-function normalChatControlCard(run) {
-  const latest = [...(run?.tasks ?? [])].reverse().find(task => task.evidence?.normalChatControl)?.evidence?.normalChatControl;
-  if (!latest) return null;
-  const agent = (latest.agents ?? {});
-  const statusText = value => String(value || 'not-needed').replaceAll('-', ' ');
-  const changes = agent.resourceDataManager ?? {};
-  const add = Array.isArray(changes.toolsToAdd) ? changes.toolsToAdd : [];
-  const remove = Array.isArray(changes.toolsToRemove) ? changes.toolsToRemove : [];
-  const deps = Array.isArray(changes.dependencies) ? changes.dependencies : [];
-  const step = agent.stepManager ?? {};
-  const main = agent.mainExecutor ?? {};
-  const item = (title, owner, status, detail) => element('div', { class: 'agent-control-item' }, [
-    element('div', { class: 'agent-control-head' }, [
-      element('strong', { text: title }),
-      element('span', { class: 'small muted', text: owner + ' · ' + statusText(status) })
-    ]),
-    detail ? element('span', { class: 'small muted', text: detail }) : null
-  ].filter(Boolean));
-  const resourceDetail = [
-    add.length ? 'Suggested add: ' + add.join(', ') : '',
-    remove.length ? 'Suggested remove: ' + remove.join(', ') : '',
-    deps.length ? 'Dependencies: ' + deps.join(', ') : '',
-    changes.data?.needed === true ? 'Data: ' + (changes.data.handling || 'managed in scoped context') : ''
-  ].filter(Boolean).join(' · ');
-  const mainDetail = main.code
-    ? 'Code writes, tests and terminal are server-controlled.'
-    : 'User-facing answer stays in the main chat.';
-  return section(run, 'normal-chat-control', {
-    className: 'agent-control-card',
-    open: run.state !== 'complete',
-    label: 'Three-agent normal-chat control plane',
-    summary: element('div', { class: 'agent-control-summary' }, [
-      element('strong', { text: 'Three-agent control' }),
-      element('span', { class: 'small muted', text: latest.reason === 'main-executor-sufficient' ? 'Main executor only' : 'Adaptive managers active' })
-    ])
-  }, [
-    element('div', { class: 'agent-control-grid' }, [
-      item('Steps', 'Step Manager', step.status, step.summary || (step.status === 'not-needed' ? 'No extra step management needed.' : 'Managing the next justified step.')),
-      item('Tools & data', 'Resource & Data Manager', changes.status, resourceDetail || (changes.status === 'not-needed' ? 'No resource/data control call needed.' : changes.summary || 'Managing tools, dependencies and data scope.')),
-      item('Main chat', 'Main Executor', main.status, mainDetail)
-    ])
-  ]);
-}
 
 function workDetailsCard(run) {
   const situation = run?.situation ?? {};
@@ -839,7 +796,6 @@ export function workStatusCard(run) {
         element('strong', { class: 'small', text: value })
       ]))),
     renderWorkStatus(run),
-    normalChatControlCard(run),
     workDetailsCard(run),
     failed ? element('p', { class: 'work-status-warning small', text: failed + ' step' + (failed === 1 ? '' : 's') + ' failed; failure evidence is available for repair or replanning.' }) : null
   ].filter(Boolean));
