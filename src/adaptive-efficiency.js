@@ -108,7 +108,9 @@ export function adaptiveEffortProfile({
 }
 
 
-export function adaptiveBehaviorContract(profile = adaptiveEffortProfile({}), { situation = {}, acceptance = {}, candidates = [] } = {}) {
+export function adaptiveBehaviorContract(profile = adaptiveEffortProfile({}), {
+  situation = {}, acceptance = {}, candidates = [], authorityDecision = null
+} = {}) {
   const p = profile ?? adaptiveEffortProfile({});
   const maturity = p.maturity ?? realWorldMaturity({});
   const level = String(p.level ?? 'standard');
@@ -123,7 +125,7 @@ export function adaptiveBehaviorContract(profile = adaptiveEffortProfile({}), { 
     verificationRequired: acceptance.verificationRequired ?? maturity.independentVerificationRequired,
     verificationSatisfied: acceptance.verificationSatisfied === true
   });
-  const authority = adaptiveDecisionAuthority({
+  const authority = authorityDecision ?? adaptiveDecisionAuthority({
     situation: { ...situation,
       uncertainty: situation.uncertainty ?? p.scores?.uncertainty ?? 0,
       riskScore: situation.riskScore ?? p.scores?.risk ?? 0,
