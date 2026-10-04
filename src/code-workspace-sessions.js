@@ -24,15 +24,34 @@ export class CodeWorkspaceSessionStore {
     if (!input.sourceId) throw new Error('GitHub sourceId is required for a Code Workspace session');
     if (input.sourceId) {
       const { rows: [source] } = await this.pool.query(
-        `SELECT id, kind FROM workspace_sources WHERE id = $1 AND workspace_id = $2 AND principal_id = $3 AND revoked_at IS NULL LIMIT 1`,
+        `SELECT id, kind, repo_ref, metadata
+           FROM workspace_sources
+          WHERE id = $1 AND workspace_id = $2 AND principal_id = $3 AND revoked_at IS NULL
+          LIMIT 1`,
         [input.sourceId, scope.workspaceId, scope.principalId]
       );
-      if (!source || source.kind !== 'github') { const error = new Error('Only GitHub repositories are supported as Code Workspace sources.'); error.status = 404; error.code = 'github-source-required'; throw error; }
+      if (!source || source.kind !== 'github') {
+        const error = new Error('Only GitHub repositories are supported as Code Workspace sources.');
+        error.status = 404; error.code = 'github-source-required'; throw error;
+      }
+      const currentRevision = text(source.metadata?.commitSha);
+      if (!input.baseRevision) input.baseRevision = currentRevision || null;
+      if (currentRevision && input.baseRevision && input.baseRevision !== currentRevision) {
+        const error = new Error('The Code Workspace session is based on a stale GitHub revision. Sync the repository before opening the session.');
+        error.status = 409; error.code = 'stale-github-revision'; throw error;
+      }
     }
     const id = crypto.randomUUID();
     const { rows: [row] } = await this.pool.query(
       'INSERT INTO code_workspace_sessions (id, workspace_id, principal_id, project_id, source_id, conversation_id, branch, base_revision, metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING *',
-      [id, scope.workspaceId, scope.principalId, input.projectId, input.sourceId, input.conversationId, input.branch, input.baseRevision, JSON.stringify(input.metadata)]
+      [id, scope.workspaceId, scope.principalId, input.projectId, input.sourceId, input.conversationId, input.branch, input.baseRevision, JSON.stringify({
+        ...input.metadata,
+        consistency: {
+          mode: 'immutable-github-revision',
+          baseRevision: input.baseRevision,
+          sourceBound: true
+        }
+      })]
     );
     return row;
   }
