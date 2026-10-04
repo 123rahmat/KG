@@ -230,8 +230,18 @@ export function completionGate({
   const evidenceList = Array.isArray(evidence) ? evidence : [];
   const summary = summarizeEvidence(evidenceList);
   const hasVerifiedEvidence = summary.counts.verified > 0 || Boolean(verification?.verdict === 'pass');
-  const verificationRequired = workflow.authority?.controls?.independentVerificationRequired === true
-    || acceptance.verificationRequired === true;
+  // Independent verification is a completion requirement for the
+  // verification/finalization boundary, not for every intermediate step. A
+  // high-uncertainty run may therefore gather, reason, build or observe before
+  // it reaches its explicit verification task. This keeps the gate rigorous
+  // without turning the whole workflow into repeated premature verification.
+  const verificationGate = taskType === 'verify'
+    || taskType === 'deliver'
+    || acceptance.finalizationRequired === true;
+  const verificationRequired = verificationGate && (
+    workflow.authority?.controls?.independentVerificationRequired === true
+      || acceptance.verificationRequired === true
+  );
   const verificationPassed = verification?.verdict === 'pass'
     || verification?.verification?.verdict === 'pass'
     || acceptance.verificationSatisfied === true;
