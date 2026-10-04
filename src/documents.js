@@ -246,7 +246,24 @@ const MAX_ARCHIVE_ITEMS = 80;
 const MAX_ARCHIVE_ITEM_BYTES = 2 * 1024 * 1024;
 const MAX_ARCHIVE_CONTENT_BYTES = 12 * 1024 * 1024;
 const MAX_ARCHIVE_IMAGES = 4;
-const ARCHIVE_RESEARCH_HINT = /\b(?:paper|study|studies|article|literature|citation|citations|reference|references|bibliograph(?:y|ies)|thesis|journal|publication|preprint|survey|systematic|review)\b/i;
+const MAX_ARCHIVE_PROFILE_SAMPLE_BYTES = 8 * 1024;
+const ARCHIVE_RESEARCH_HINT = /\b(?:paper|study|studies|article|literature|citation|citations|reference|references|bibliograph(?:y|ies)|thesis|journal|publication|preprint|survey|systematic|review|doi|arxiv)\b/i;
+const ARCHIVE_CODE_CONTENT_HINT = /(?:^|\n)\s*(?:import\s+|from\s+\S+\s+import\s+|export\s+(?:default\s+)?(?:class|function|const|let|var)|(?:async\s+)?function\s+\w+\s*\(|class\s+\w+[\s:{]|def\s+\w+\s*\(|fn\s+\w+\s*\(|package\s+main\b|#include\s*[<"]|using\s+System\s*;|SELECT\s+.+\s+FROM\s+|require\s*\(|if\s+__name__\s*==)/im;
+const ARCHIVE_RESEARCH_CONTENT_HINT = /(?:\babstract\b[\s:,-]|\bintroduction\b[\s:,-]|\bmethod(?:s|ology)?\b[\s:,-]|\bresults?\b[\s:,-]|\bdiscussion\b[\s:,-]|\bconclusion\b[\s:,-]|\bdoi\b|\barxiv\b|\bet\s+al\.\b|\bbibliograph(?:y|ies)\b)/i;
+
+const CODE_ARCHIVE_EXT = new Set([
+  'py','pyi','js','mjs','cjs','jsx','ts','tsx','go','mod','rs','java','kt','kts',
+  'c','cc','cxx','cpp','h','hh','hpp','cs','rb','php','swift','sql','sh','html',
+  'css','scss','proto','cmake','gradle'
+]);
+const CODE_PROJECT_MARKERS = new Set([
+  ...SOURCE_NAMES,
+  'package-lock.json','npm-shrinkwrap.json','pnpm-lock.yaml','yarn.lock',
+  'composer.json','Gemfile','mix.exs','mix.lock','build.gradle.kts',
+  'gradlew','gradlew.bat','requirements.in','Pipfile','Pipfile.lock'
+]);
+const RESEARCH_DOCUMENT_FORMATS = new Set(['pdf', 'docx', 'pptx']);
+const DOCUMENT_FORMATS = new Set(['pdf', 'docx', 'xlsx', 'pptx', 'text']);
 
 function archiveEntries(buffer) {
   const zip = readZip(buffer);
@@ -263,43 +280,196 @@ function archiveFormat(name) {
   return formatOf({ name, contentType: '' });
 }
 
-const CODE_ARCHIVE_EXT = new Set([
-  'py','pyi','js','mjs','cjs','jsx','ts','tsx','go','mod','rs','java','kt','kts',
-  'c','cc','cxx','cpp','h','hh','hpp','cs','rb','php','swift','sql','sh','html',
-  'css','scss','proto','cmake','gradle'
-]);
+function pathExtension(name) {
+  const base = String(name ?? '').split('/').pop() ?? '';
+  const dot = base.lastIndexOf('.');
+  return dot > 0 ? base.slice(dot + 1).toLowerCase() : '';
+}
+
+function archiveTextSignals(bytes) {
+  if (!bytes?.length) return { code: 0, research: 0 };
+  const sample = bytes.subarray(0, MAX_ARCHIVE_PROFILE_SAMPLE_BYTES).toString('utf8').replace(/\0/g, '');
+  const code = ARCHIVE_CODE_CONTENT_HINT.test(sample) ? 2 : 0;
+  const research = ARCHIVE_RESEARCH_CONTENT_HINT.test(sample) ? 2 : 0;
+  return { code, research };
+}
 
 function isCodeArchivePath(name) {
   const base = String(name ?? '').split('/').pop() ?? '';
-  if (SOURCE_NAMES.has(base)) return true;
-  const dot = base.lastIndexOf('.');
-  return dot > 0 && CODE_ARCHIVE_EXT.has(base.slice(dot + 1).toLowerCase());
+  if (CODE_PROJECT_MARKERS.has(base)) return true;
+  return CODE_ARCHIVE_EXT.has(pathExtension(name));
 }
 
-function archiveProfile(names) {
-  let code = 0;
+function archiveProfile(names, entries = null) {
+  let codeFiles = 0;
+  let codeMarkers = 0;
   let documents = 0;
+  let researchDocuments = 0;
   let images = 0;
   let data = 0;
   let researchHints = 0;
+  let codeContentSignals = 0;
+  let researchContentSignals = 0;
   for (const name of names) {
     const format = archiveFormat(name);
-    if (isCodeArchivePath(name)) code += 1;
-    else if (['pdf', 'docx', 'xlsx', 'pptx', 'text'].includes(format)) documents += 1;
-    else if (format === 'image') images += 1;
+    const base = String(name).split('/').pop() ?? '';
+    const codePath = CODE_ARCHIVE_EXT.has(pathExtension(name));
+    if (codePath) codeFiles += 1;
+    if (CODE_PROJECT_MARKERS.has(base)) codeMarkers += 1;
+    if (DOCUMENT_FORMATS.has(format)) documents += 1;
+    if (RESEARCH_DOCUMENT_FORMATS.has(format)) researchDocuments += 1;
+    else if (format === 'text' && ARCHIVE_RESEARCH_HINT.test(name)) researchDocuments += 1;
     else if (format === 'csv') data += 1;
+    else if (format === 'image') images += 1;
     if (ARCHIVE_RESEARCH_HINT.test(name)) researchHints += 1;
+
+    if (entries?.has(name) && (codePath || DOCUMENT_FORMATS.has(format) || format === 'text')) {
+      try {
+        const signals = archiveTextSignals(entries.get(name)());
+        codeContentSignals += signals.code;
+        researchContentSignals += signals.research;
+      } catch {
+        // Classification remains deterministic from names/types when sampling fails.
+      }
+    }
   }
-  if (code > 0 && code >= Math.max(2, documents + images + data)) {
-    return { archiveKind: 'code-project', code, documents, images, data, researchHints };
+
+  const projectShape = codeFiles >= 2 || (codeFiles >= 1 && codeMarkers >= 1);
+  const codeScore = codeFiles * 3 + codeMarkers * 2 + codeContentSignals;
+  const researchScore = researchDocuments * 2 + researchHints * 2 + researchContentSignals;
+  const strongCode = projectShape && codeScore >= 6 && codeScore > researchScore + 1;
+  const strongResearch = researchDocuments > 0 && researchScore >= 6 && researchScore > codeScore + 1;
+
+  if (strongCode) {
+    return {
+      archiveKind: 'code-project',
+      confidence: Math.min(1, 0.55 + Math.min(0.4, (codeScore - researchScore) / 12)),
+      code: codeFiles,
+      codeFiles,
+      codeMarkers,
+      codeScore,
+      codeContentSignals,
+      documents,
+      researchDocuments,
+      images,
+      data,
+      researchHints,
+      researchScore,
+      researchContentSignals
+    };
   }
-  if (documents > 0 && researchHints > 0) {
-    return { archiveKind: 'research-bundle', code, documents, images, data, researchHints };
+  if (strongResearch) {
+    return {
+      archiveKind: 'research-bundle',
+      confidence: Math.min(1, 0.55 + Math.min(0.4, (researchScore - codeScore) / 12)),
+      code: codeFiles,
+      codeFiles,
+      codeMarkers,
+      codeScore,
+      codeContentSignals,
+      documents,
+      researchDocuments,
+      images,
+      data,
+      researchHints,
+      researchScore,
+      researchContentSignals
+    };
   }
   if (documents > 0 || images > 0 || data > 0) {
-    return { archiveKind: code > 0 ? 'mixed-bundle' : 'document-bundle', code, documents, images, data, researchHints };
+    return {
+      archiveKind: codeFiles > 0 || codeMarkers > 0 || researchDocuments > 0 ? 'mixed-bundle' : 'document-bundle',
+      confidence: 0.5,
+      code: codeFiles,
+      codeFiles,
+      codeMarkers,
+      codeScore,
+      codeContentSignals,
+      documents,
+      researchDocuments,
+      images,
+      data,
+      researchHints,
+      researchScore,
+      researchContentSignals
+    };
   }
-  return { archiveKind: 'unknown-bundle', code, documents, images, data, researchHints };
+  return {
+    archiveKind: 'unknown-bundle',
+    confidence: 0.45,
+    code: codeFiles,
+    codeFiles,
+    codeMarkers,
+    codeScore,
+    codeContentSignals,
+    documents,
+    researchDocuments,
+    images,
+    data,
+    researchHints,
+    researchScore,
+    researchContentSignals
+  };
+}
+
+/** Aggregate attachment metadata into a conservative work-context profile. */
+export function classifyAttachmentSet(attachments = []) {
+  const list = Array.isArray(attachments) ? attachments : [];
+  let codeSignals = 0;
+  let researchSignals = 0;
+  let neutralSignals = 0;
+  const codeFiles = [];
+  const researchFiles = [];
+  for (const item of list) {
+    const name = String(item?.name ?? '');
+    const archiveKind = String(item?.archiveKind ?? '');
+    const format = String(item?.format ?? '').toLowerCase();
+    const ext = pathExtension(name);
+    if (archiveKind === 'code-project') {
+      codeSignals += 8;
+      codeFiles.push(name);
+      continue;
+    }
+    if (archiveKind === 'research-bundle') {
+      researchSignals += 8;
+      researchFiles.push(name);
+      continue;
+    }
+    if (['project', 'workspace-project'].includes(format)) {
+      codeSignals += 8;
+      codeFiles.push(name);
+      continue;
+    }
+    if (CODE_ARCHIVE_EXT.has(ext)) {
+      codeSignals += 3;
+      codeFiles.push(name);
+    } else if (RESEARCH_DOCUMENT_FORMATS.has(format) && ARCHIVE_RESEARCH_HINT.test(name)) {
+      researchSignals += 4;
+      researchFiles.push(name);
+    } else if (RESEARCH_DOCUMENT_FORMATS.has(format) || format === 'bundle') {
+      neutralSignals += 1;
+    } else {
+      neutralSignals += 1;
+    }
+  }
+  const code = codeSignals >= 6 && codeSignals >= researchSignals + 3;
+  const research = researchSignals >= 6 && researchSignals >= codeSignals + 3;
+  const kind = code ? 'code' : research ? 'research' : 'neither';
+  const confidence = kind === 'code'
+    ? Math.min(1, 0.62 + Math.min(0.3, (codeSignals - researchSignals) / 20))
+    : kind === 'research'
+      ? Math.min(1, 0.62 + Math.min(0.3, (researchSignals - codeSignals) / 20))
+      : Math.max(0.4, 0.7 - Math.min(0.25, Math.abs(codeSignals - researchSignals) / 20));
+  return {
+    kind,
+    confidence,
+    codeSignals,
+    researchSignals,
+    neutralSignals,
+    fileCount: list.length,
+    codeFiles: codeFiles.slice(0, 20),
+    researchFiles: researchFiles.slice(0, 20)
+  };
 }
 
 /**
@@ -437,16 +607,16 @@ async function readArchiveBundle(buffer, profile) {
 }
 
 export function inspectArchive(buffer) {
-  const { names } = archiveEntries(buffer);
+  const { entries, names } = archiveEntries(buffer);
   return {
     itemCount: names.length,
-    ...archiveProfile(names)
+    ...archiveProfile(names, entries)
   };
 }
 
 export async function readArchive(buffer) {
-  const { names } = archiveEntries(buffer);
-  const profile = archiveProfile(names);
+  const { names, entries } = archiveEntries(buffer);
+  const profile = archiveProfile(names, entries);
   if (profile.archiveKind === 'code-project') return { ...readProject(buffer), archiveKind: 'code-project', profile };
   return readArchiveBundle(buffer, profile);
 }
