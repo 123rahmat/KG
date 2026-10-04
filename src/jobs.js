@@ -343,8 +343,12 @@ export function createJobWorker({ jobs, identity, runs, executeNext, logger, met
       const job = await jobs.claim({ workerId: effectiveWorkerId, leaseMs: safeLeaseMs });
       if (!job) break;
       metrics?.increment('background_jobs_total', { phase: 'claimed' });
-      await process(job);
+      const continuationQueued = await process(job);
       processed += 1;
+      // Keep each adaptive continuation checkpointed between worker cycles.
+      // This prevents one poll from draining a long run and preserves fair
+      // access for unrelated queued work.
+      if (continuationQueued) break;
     }
     return processed;
   }
