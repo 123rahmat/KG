@@ -135,6 +135,33 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
     };
   }
 
+  const codeWorkspaceContext = activeSurface === 'code'
+    && (flags.code === true || Array.isArray(attachments) && attachments.length > 0
+      || codeAction);
+  if (codeWorkspaceContext) {
+    return {
+      requested: 'code',
+      surface: 'code',
+      redirect: false,
+      reason: 'continue-coding-in-code-workspace',
+      complexity: 'deep-eligible',
+      workspace: SURFACE_WORKSPACE_CONTRACTS.code
+    };
+  }
+
+  const researchWorkspaceContext = activeSurface === 'research'
+    && (flags.research === true || actions.includes('investigate'));
+  if (researchWorkspaceContext) {
+    return {
+      requested: 'research',
+      surface: 'research',
+      redirect: false,
+      reason: 'continue-research-in-research-workspace',
+      complexity: 'deep-eligible',
+      workspace: SURFACE_WORKSPACE_CONTRACTS.research
+    };
+  }
+
   return {
     requested: activeSurface || 'normal-chat',
     surface: 'normal-chat',
