@@ -142,6 +142,132 @@ export function renderWorkStatus(run) {
     }))
   ]);
 }
+function capabilityItems(data) {
+  const run = data.run;
+  const source = state.workspaceSource;
+  if (data.workspace === 'code') {
+    const sourceConnected = source?.kind === 'github' || Boolean(run?.adaptation?.workspaceSourceId);
+    const required = new Set(
+      (run?.capabilities?.required ?? []).map(text)
+    );
+    return [
+      {
+        id: 'github',
+        label: sourceConnected ? 'GitHub connected' : 'GitHub project',
+        detail: sourceConnected ? 'revision-bound' : 'connect a repository',
+        action: () => $('openProjectSources')?.click(),
+        ready: sourceConnected
+      },
+      {
+        id: 'files',
+        label: 'ZIP + single-file inputs',
+        detail: 'combine into one project',
+        action: () => $('attachBtn')?.click(),
+        ready: true
+      },
+      {
+        id: 'terminal',
+        label: 'Terminal',
+        detail: required.has('code-execution') ? 'available for this run' : 'open when execution is needed',
+        action: () => $('openTerminal')?.click(),
+        ready: sourceConnected && Boolean($('openTerminal'))
+      },
+      {
+        id: 'verify',
+        label: 'Tests + verification',
+        detail: 'driven by the active change',
+        action: () => $('thread')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }),
+        ready: Boolean(run)
+      },
+      {
+        id: 'writeback',
+        label: 'Review + GitHub write-back',
+        detail: source?.permissions?.write === true ? 'explicit approval required' : 'read-only until enabled',
+        action: () => $('thread')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }),
+        ready: sourceConnected
+      }
+    ];
+  }
+  if (data.workspace === 'research') {
+    const evidence = run?.adaptation?.researchWorkspace;
+    const sourceCount = Number(evidence?.sourceCount ?? 0);
+    const evidenceCount = Number(evidence?.evidenceCount ?? 0);
+    return [
+      {
+        id: 'question',
+        label: 'Research question',
+        detail: evidence?.activeQuestion || run?.goal || 'define the question',
+        action: () => {
+          $('goal')?.focus({ preventScroll: false });
+          $('goal')?.select();
+        },
+        ready: Boolean(run?.goal)
+      },
+      {
+        id: 'search',
+        label: 'Search + gather',
+        detail: 'only justified sources',
+        action: () => $('goal')?.focus({ preventScroll: false }),
+        ready: true
+      },
+      {
+        id: 'sources',
+        label: 'Source set',
+        detail: `${sourceCount} tracked source${sourceCount === 1 ? '' : 's'}`,
+        action: () => $('thread')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }),
+        ready: sourceCount > 0
+      },
+      {
+        id: 'evidence',
+        label: 'Evidence + gaps',
+        detail: evidence?.status === 'needs-resolution'
+          ? 'conflicts need resolution'
+          : evidence?.status === 'needs-evidence'
+            ? 'more evidence may be needed'
+            : `${evidenceCount} ledger item${evidenceCount === 1 ? '' : 's'}`,
+        action: () => $('thread')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }),
+        ready: evidenceCount > 0
+      },
+      {
+        id: 'citations',
+        label: 'Citations + provenance',
+        detail: 'claims remain traceable to sources',
+        action: () => $('thread')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }),
+        ready: sourceCount > 0
+      }
+    ];
+  }
+  return [];
+}
+
+function renderCapabilityDock() {
+  const dock = $('workspaceCapabilityDock');
+  const list = $('workspaceCapabilityList');
+  const title = $('workspaceCapabilityTitle');
+  const hint = $('workspaceCapabilityHint');
+  if (!dock || !list) return;
+  const data = adaptiveWorkspaceState();
+  const active = data.workspace === 'code' || data.workspace === 'research';
+  dock.hidden = !active;
+  if (!active) {
+    list.replaceChildren();
+    return;
+  }
+  title.textContent = data.workspace === 'code' ? 'Code Workspace' : 'Research Workspace';
+  hint.textContent = 'Adaptive tools for this work';
+  list.replaceChildren(...capabilityItems(data).map(item => {
+    const control = document.createElement('button');
+    control.type = 'button';
+    control.className = 'workspace-capability';
+    control.disabled = !item.action;
+    control.title = item.detail;
+    control.dataset.ready = String(item.ready);
+    control.innerHTML = `<span class="workspace-capability-dot" aria-hidden="true"></span><span class="workspace-capability-copy"><strong>${item.label}</strong><small>${item.detail}</small></span>`;
+    control.addEventListener('click', item.action);
+    return control;
+  }));
+}
+
 export function renderAdaptiveWorkspace(host, mode = 'chat') {
   if (!host) return;
   const data = adaptiveWorkspaceState();
@@ -166,6 +292,7 @@ export function renderAdaptiveWorkspace(host, mode = 'chat') {
 
 export function syncAdaptiveWorkspace() {
   renderAdaptiveWorkspace($('adaptiveWorkspaceBar'), 'chat');
+  renderCapabilityDock();
 
   const data = adaptiveWorkspaceState();
   const selected = state.activeSurface === 'code' || state.activeSurface === 'research'
