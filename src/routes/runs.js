@@ -5,7 +5,7 @@ import { classifyGoal } from '../classifier.js';
 import { chooseExecutionTarget, executionTarget } from '../execution.js';
 import { planningInput, publicClassification } from '../http/context.js';
 import { RunError } from '../runs.js';
-import { formatOf, inspectArchive } from '../documents.js';
+import { classifyAttachmentSet, formatOf, inspectArchive } from '../documents.js';
 import { assertUsageAllowed, createUsageGate, UsageLimitError, recordUsage } from '../usage.js';
 import { screenRequest, combineDecisions, recordRefusal, inCooldown, careNote, blockedTopicsFrom, ethicsOf, FIXED_REPLY_CATEGORIES } from '../safety.js';
 import { assertTermsAccepted } from '../terms.js';
@@ -170,6 +170,7 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
     });
     const attachments = await resolveAttachments(req);
     const classification = await classifyFor(req, policies);
+    const attachmentProfile = classifyAttachmentSet(attachments);
     const modelSelection = await resolveModelSelection(pool, config, {
       workspaceId: req.scope.workspaceId,
       principalId: req.principal.id
@@ -183,6 +184,7 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
         req.body?.project
         || (req.body?.files ?? req.body?.artifacts ?? []).length
         || attachments.some(item => item.format === 'project' || item.sourceKind === 'github')
+        || attachmentProfile.kind === 'code'
       ),
       language: req.body?.language ?? ''
     });
@@ -225,6 +227,7 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
     });
     const attachments = await resolveAttachments(req);
     const classification = await classifyFor(req, policies);
+    const attachmentProfile = classifyAttachmentSet(attachments);
     const modelSelection = await resolveModelSelection(pool, config, {
       workspaceId: req.scope.workspaceId,
       principalId: req.principal.id
@@ -234,7 +237,7 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
       taskType: 'plan',
       intent: classification.hints?.intent?.kind ?? '',
       coding: req.body?.activeSurface === 'code' || /\b(?:code|coding|debug|repository|repo|software|program)\b/i.test(String(req.body?.goal ?? '')),
-      projectWork: Boolean(req.body?.project || (req.body?.files ?? req.body?.artifacts ?? []).length),
+      projectWork: Boolean(req.body?.project || (req.body?.files ?? req.body?.artifacts ?? []).length || attachmentProfile.kind === 'code'),
       language: req.body?.language ?? ''
     });
     const learnedSkills = await skillLearning.profiles(req.scope, { limit: 48, contextSignature: runSkillContext });
