@@ -142,6 +142,11 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
   };
 }
 
+export function workspaceContract(surface = 'normal-chat') {
+  const id = surface === 'chat' ? 'normal-chat' : text(surface) || 'normal-chat';
+  return SURFACE_WORKSPACE_CONTRACTS[id] ?? SURFACE_WORKSPACE_CONTRACTS['normal-chat'];
+}
+
 export function surfaceRuntimePolicy(surface = 'normal-chat') {
   const id = surface === 'chat' ? 'normal-chat' : text(surface) || 'normal-chat';
   return SURFACE_POLICY.surfaces[id] ?? SURFACE_POLICY.surfaces['normal-chat'];
