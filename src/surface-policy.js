@@ -1,12 +1,13 @@
 /**
  * Product surface policy.
  *
- * One adaptive intelligence core, three user-facing operating envelopes:
- *   normal-chat -> simple/medium adaptive help
- *   code        -> deep software engineering
- *   research    -> deep evidence gathering/investigation
+ * One adaptive intelligence core, three user-facing workspaces:
+ *   normal-chat -> general adaptive work
+ *   code        -> software engineering context
+ *   research    -> evidence/research context
  *
- * Surface policy is a routing boundary, not a weaker intelligence model.
+ * Workspaces change context, tools and continuity; they do not create
+ * separate intelligence levels or separate agentic brains.
  */
 const text = value => String(value ?? '').trim();
 
@@ -37,13 +38,13 @@ export const SURFACE_WORKSPACE_CONTRACTS = Object.freeze({
     id: 'normal-chat',
     label: 'Normal Chat',
     mode: 'conversation-first',
-    objective: 'Act as the general adaptive operating mode for non-Code and non-deep-Research work, using the smallest reliable amount of reasoning, context, tooling and iteration.'
-    contextPolicy: 'Use the active conversation and only the files, memory and external context that materially improve this request.',
-    toolPolicy: 'Just-in-time tools only. Never open deep research or code execution merely because they are available.',
-    agentPolicy: 'Single executor by default; add advisory roles only when uncertainty or complexity justifies them.',
+    objective: 'Act as the general adaptive operating mode for work that does not belong to the dedicated Code or Research workspace, using the minimum sufficient effort and expanding as the situation genuinely requires.',
+    contextPolicy: 'Use the active conversation plus only the files, memory, images and external context that materially improve the current request; allow the adaptive controller to deepen context when evidence requires it.',
+    toolPolicy: 'Just-in-time tools only. Any capability may be selected when the situation justifies it; specialized Code or Research work moves into its corresponding workspace rather than losing capability.',
+    agentPolicy: 'Use the same server-owned adaptive agent policy as the other workspaces: one executor by default, with advisory or specialized roles added only when their independent value exceeds coordination cost.',
     verificationPolicy: 'Verify claims or produced content when stakes, uncertainty or user intent justify a check; do not add a redundant verification pass to pure conversation.',
-    creationPolicy: 'Writing, translation, explanation, planning, analysis, file understanding, lightweight design, visuals, canvas concepts and presentations stay here unless the situation genuinely crosses a deep Code or Research boundary.'
-    escalationPolicy: 'Escalate to Code only for repository/software engineering work and to Research only for source-heavy/current evidence work; otherwise continue adapting inside Normal Chat.'
+    creationPolicy: 'Writing, translation, explanation, planning, analysis, file and image understanding, design, visuals, canvas concepts and presentations stay here unless the situation genuinely crosses a Code or Research workspace boundary.',
+    escalationPolicy: 'Escalate to Code for software-project work and to Research for source-heavy/current evidence work; otherwise continue adapting, reasoning, using tools, coordinating agents and iterating inside Normal Chat.'
     uiPolicy: 'Keep the composer central; reveal only the controls and adaptive surfaces relevant to the current situation.',
     selectionPolicy: 'Default general mode. Remain here for the rest of the system’s work and adapt depth, tools, files, reasoning and iteration to the situation; switch modes only when deep Code or deep Research is actually justified.'
   }),
@@ -82,8 +83,8 @@ export const SURFACE_POLICY = Object.freeze({
   surfaces: Object.freeze({
     'normal-chat': {
       id: 'normal-chat',
-      maxDepth: 'medium',
-      heavyAutonomy: false,
+      maxDepth: 'adaptive',
+      heavyAutonomy: 'adaptive',
       deepCode: false,
       deepResearch: false,
       richMultimodal: true,
@@ -214,11 +215,11 @@ export function normalChatAllowsTask({ goal = '', taskType = '', flags = {}, att
     boundary,
     taskType: text(taskType) || 'respond',
     richMultimodal: true,
-    maxDepth: 'medium',
+    maxDepth: 'adaptive',
     lightweightCreation: true,
     design: true,
     visualCanvas: true,
     presentationCreation: true,
-    agents: 'minimal-and-justified'
+    agents: 'shared-adaptive-and-justified'
   };
 }
