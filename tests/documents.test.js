@@ -42,6 +42,34 @@ test('broken and hostile files fail clearly instead of hurting the server', asyn
   assert.equal(readZip(declared).size, 0);
 });
 
+test('ZIP archives adapt to their contents instead of always becoming code projects', async () => {
+  const makeEntry = (name, value) => ({ name, compressed: zlib.deflateRawSync(Buffer.from(value)), size: Buffer.byteLength(value) });
+  const code = await readDocument(zipRaw([
+    makeEntry('src/index.js', 'export const ok = true;'),
+    makeEntry('package.json', '{"name":"demo"}')
+  ]), { name: 'code.zip', contentType: 'application/zip' });
+  assert.equal(code.format, 'project');
+  assert.equal(code.archiveKind, 'code-project');
+  assert.deepEqual(code.files.map(file => file.path), ['package.json', 'src/index.js']);
+
+  const documents = await readDocument(zipRaw([
+    makeEntry('report.txt', 'Quarterly report'),
+    makeEntry('notes.md', '# Notes')
+  ]), { name: 'documents.zip', contentType: 'application/zip' });
+  assert.equal(documents.format, 'bundle');
+  assert.equal(documents.archiveKind, 'document-bundle');
+  assert.equal(documents.items.length, 2);
+  assert.equal(documents.items[0].text, 'Quarterly report');
+
+  const research = await readDocument(zipRaw([
+    makeEntry('paper-results.txt', 'Study results'),
+    makeEntry('references.txt', 'References')
+  ]), { name: 'research.zip', contentType: 'application/zip' });
+  assert.equal(research.format, 'bundle');
+  assert.equal(research.archiveKind, 'research-bundle');
+  assert.equal(research.items.length, 2);
+});
+
 test('workspace snapshots preserve explicit source completeness metadata', async () => {
   const snapshot = Buffer.from(JSON.stringify({
     version: 1,
