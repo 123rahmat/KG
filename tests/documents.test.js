@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import zlib from 'node:zlib';
-import { readDocument, describeTable, parseDelimited, formatOf, readZip } from '../src/documents.js';
+import { readDocument, describeTable, parseDelimited, formatOf, readZip, classifyAttachmentSet } from '../src/documents.js';
 import { readDocumentIsolated } from '../src/document-runner.js';
 import { docx, pptx, xlsx, pdf, png, zipRaw } from './document-fixtures.js';
 
@@ -68,6 +68,31 @@ test('ZIP archives adapt to their contents instead of always becoming code proje
   assert.equal(research.format, 'bundle');
   assert.equal(research.archiveKind, 'research-bundle');
   assert.equal(research.items.length, 2);
+});
+
+test('ZIP profiling distinguishes real projects, research bundles, mixed archives and neutral archives', async () => {
+  const makeEntry = (name, value) => ({ name, compressed: zlib.deflateRawSync(Buffer.from(value)), size: Buffer.byteLength(value) });
+  const neutral = await readDocument(zipRaw([
+    makeEntry('meeting.md', '# Meeting notes'),
+    makeEntry('budget.xlsx', 'not-real-xlsx')
+  ]), { name: 'neutral.zip', contentType: 'application/zip' }).catch(error => ({ error }));
+  // The invalid spreadsheet is skipped, but the archive must not become a code project.
+  assert.equal(neutral.error ?? neutral.archiveKind, neutral.error ? 'document-format-unsupported' : 'document-bundle');
+
+  const mixed = await readDocument(zipRaw([
+    makeEntry('src/app.py', 'def run():\n    return 1'),
+    makeEntry('paper.pdf.txt', 'Abstract: study results. References and DOI included.')
+  ]), { name: 'mixed.zip', contentType: 'application/zip' });
+  assert.equal(mixed.archiveKind, 'mixed-bundle');
+});
+
+test('multiple attachment metadata is classified conservatively', () => {
+  assert.equal(classifyAttachmentSet([{ name: 'a.py', format: 'text' }, { name: 'b.py', format: 'text' }]).kind, 'code');
+  assert.equal(classifyAttachmentSet([{ name: 'paper-one.pdf', format: 'pdf' }, { name: 'paper-two.pdf', format: 'pdf' }]).kind, 'research');
+  assert.equal(classifyAttachmentSet([{ name: 'report.pdf', format: 'pdf' }, { name: 'notes.docx', format: 'docx' }]).kind, 'neither');
+  assert.equal(classifyAttachmentSet([{ name: 'project.zip', format: 'bundle', archiveKind: 'mixed-bundle' }]).kind, 'neither');
+  assert.equal(classifyAttachmentSet([{ name: 'project.zip', format: 'project', archiveKind: 'code-project' }]).kind, 'code');
+  assert.equal(classifyAttachmentSet([{ name: 'papers.zip', format: 'bundle', archiveKind: 'research-bundle' }]).kind, 'research');
 });
 
 test('workspace snapshots preserve explicit source completeness metadata', async () => {
