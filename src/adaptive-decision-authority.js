@@ -10,8 +10,6 @@ const text = value => String(value ?? '').trim();
 const clamp01 = value => Math.min(1, Math.max(0, Number.isFinite(Number(value)) ? Number(value) : 0));
 const uniq = values => [...new Set((Array.isArray(values) ? values : []).map(text).filter(Boolean))];
 
-const CONSEQUENT = new Set(['high', 'critical', 'regulated', 'physical', 'human-decision']);
-
 export function evidenceState(value) {
   if (value && typeof value === 'object') {
     const kind = text(value.kind || value.state).toLowerCase();
