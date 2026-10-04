@@ -389,12 +389,12 @@ export function discoverCapabilityRequirements(goal, analysis = inspectGoal(goal
 }
 
 export const SURFACE_CATALOG = Object.freeze({
-  chat: { type: 'conversation', label: 'Normal Chat', purpose: 'Adaptive simple-to-medium conversation, explanation and rich multimodal understanding.' },
-  research: { type: 'investigation', label: 'Research Workspace', purpose: 'Evidence gathering, source tracking, analysis and verification when justified.' },
-  code: { type: 'workspace', label: 'Code Workspace', purpose: 'Repository-aware software creation, debugging, testing and authorized execution.' },
-  creation: { type: 'conversation', label: 'Normal Chat', purpose: 'Creation is handled as adaptive normal-chat work unless it crosses into Coding or Research.' },
-  workspace: { type: 'conversation', label: 'Normal Chat', purpose: 'Files and artifacts can be understood in Normal Chat without opening a deep workspace workflow.' },
-  adaptive: { type: 'adaptive', label: 'Adaptive', purpose: 'A server-selected work surface for a capability not represented by a fixed domain surface.' }
+  chat: { type: 'conversation', label: 'Normal Chat', publicMode: 'normal-chat', purpose: 'Adaptive simple-to-medium conversation, explanation and rich multimodal understanding.' },
+  research: { type: 'investigation', label: 'Research Workspace', publicMode: 'research', purpose: 'Evidence gathering, source tracking, analysis and verification when justified.' },
+  code: { type: 'workspace', label: 'Code Workspace', publicMode: 'code', purpose: 'Repository-aware software creation, debugging, testing and authorized execution.' },
+  creation: { type: 'conversation', label: 'Normal Chat', publicMode: 'normal-chat', internalAlias: true, purpose: 'Creation is handled as adaptive normal-chat work unless it crosses into Coding or Research.' },
+  workspace: { type: 'conversation', label: 'Normal Chat', publicMode: 'normal-chat', internalAlias: true, purpose: 'Files and artifacts can be understood in Normal Chat without opening a deep workspace workflow.' },
+  adaptive: { type: 'adaptive', label: 'Adaptive', publicMode: 'normal-chat', internalAlias: true, purpose: 'A server-selected internal work surface for a capability not represented by a fixed domain surface.' }
 });
 
 function surfaceDescriptors(ids) {
@@ -556,6 +556,26 @@ export function resolveAdaptiveContext(goal, {
     : boundary.surface === 'research' ? 'research' : 'chat';
   resourcePlan.selected.surfaces = [...new Set(selectedSurfaces.filter(surface => ['chat','code','research'].includes(surface)).concat(selectedPrimarySurface))];
   resourcePlan.selected.primarySurface = selectedPrimarySurface;
+  const modeRouting = {
+    version: 1,
+    publicModes: ['normal-chat', 'code', 'research'],
+    activeMode: text(activeSurface) === 'chat' || text(activeSurface) === 'normal-chat'
+      ? 'normal-chat'
+      : ['code', 'research'].includes(text(activeSurface))
+        ? text(activeSurface)
+        : null,
+    primary: selectedPrimarySurface === 'chat' ? 'normal-chat' : selectedPrimarySurface,
+    supporting: [...new Set((resourcePlan.selected.surfaces ?? [])
+      .filter(surface => ['chat', 'code', 'research'].includes(surface))
+      .map(surface => surface === 'chat' ? 'normal-chat' : surface))]
+      .filter(surface => surface !== (selectedPrimarySurface === 'chat' ? 'normal-chat' : selectedPrimarySurface)),
+    transition: boundary.transition ?? 'stay',
+    reason: boundary.reason,
+    authority: 'server-owned',
+    stabilityRule: 'Keep a selected deep workspace across ordinary follow-ups; switch only on explicit or strongly evidenced cross-mode intent.',
+    compositionRule: 'Supporting modes may contribute capabilities without replacing the primary mode unless the next situation explicitly requires a different operating envelope.'
+  };
+
   const selectedSourceIds = new Set(resourcePlan.selected.dataSources);
   const dataClasses = [...new Set([
     'user-content',
@@ -640,6 +660,7 @@ export function resolveAdaptiveContext(goal, {
     primarySurface: selectedPrimarySurface,
     surfacePolicy: surfaceRuntimePolicy(selectedPrimarySurface),
     surfaceBoundary: boundary,
+    modeRouting,
     compound: model.compound || selectedSurfaces.length > 2,
     investigation: {
       needed: analysis.investigationNeeded,
