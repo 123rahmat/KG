@@ -144,6 +144,23 @@ test('adaptive context exposes exactly three public operating modes', () => {
 });
 
 
+test('ZIP workspace routing follows archive contents', () => {
+  const code = classifySurfaceBoundary('Review this zip project and fix the bug.', {
+    attachments: [{ name: 'project.zip', archiveKind: 'code-project' }]
+  });
+  assert.equal(code.surface, 'code');
+
+  const research = classifySurfaceBoundary('Work from the supplied research archive.', {
+    attachments: [{ name: 'papers.zip', archiveKind: 'research-bundle' }]
+  });
+  assert.equal(research.surface, 'research');
+
+  const documents = classifySurfaceBoundary('Summarize the supplied archive.', {
+    attachments: [{ name: 'documents.zip', archiveKind: 'document-bundle' }]
+  });
+  assert.equal(documents.surface, 'normal-chat');
+});
+
 test('Normal Chat remains the general adaptive mode for non-deep workspace work', () => {
   const contract = SURFACE_WORKSPACE_CONTRACTS['normal-chat'];
   assert.match(contract.objective, /general adaptive operating mode/i);
