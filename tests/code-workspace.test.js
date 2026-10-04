@@ -117,7 +117,6 @@ test('context selection never returns more bytes than its hard budget', () => {
 
 
 test('combined Code Workspace inputs keep GitHub, ZIP-project and single-file sources in one project', async () => {
-  const { projectFiles } = await import('../src/attachments.js');
   const objects = {
     get: async (_scope, id) => ({
       id, name: id, contentType: 'text/plain', size: 10, content: id === 'github' ? JSON.stringify({
