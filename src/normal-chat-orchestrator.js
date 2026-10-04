@@ -166,7 +166,8 @@ function managerBody(role, { run, task, payload, needs }) {
       status: payload.codeRepair.status ?? null,
       message: clip(payload.codeRepair.message, 500)
     } : null
-  };
+,
+    adaptiveBehavior: payload?.adaptiveBehavior ?? run?.adaptation?.adaptiveBehavior ?? null  };
   if (role === 'step-manager') {
     return {
       ...base,
