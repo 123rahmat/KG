@@ -1317,6 +1317,59 @@ function toggleVoiceInput() {
   }
 }
 
+/* Lightweight creation controls stay inside Normal Chat. They are intent helpers,
+   not a second workflow: the server still decides depth, tools and routing. */
+const CREATE_MODES = Object.freeze({
+  design: {
+    hint: 'Design stays lightweight here; deeper product/UI implementation can switch to Code.',
+    placeholder: 'Describe the design you want…',
+    starter: 'Create a clean design for '
+  },
+  canvas: {
+    hint: 'Build a visual canvas, diagram, layout, or concept board in this conversation.',
+    placeholder: 'Describe the canvas or visual layout…',
+    starter: 'Create a visual canvas for '
+  },
+  visual: {
+    hint: 'Generate or explain a visual; attach an image when you want it adapted.',
+    placeholder: 'Describe the visual you want…',
+    starter: 'Create a visual for '
+  },
+  slides: {
+    hint: 'Create a lightweight presentation structure; evidence-heavy work can move to Research.',
+    placeholder: 'Describe the presentation you want…',
+    starter: 'Create a presentation about '
+  }
+});
+
+function setCreateMode(mode, { seed = false } = {}) {
+  const config = CREATE_MODES[mode] ?? CREATE_MODES.design;
+  const strip = $('adaptiveCreateStrip');
+  if (!strip) return;
+  strip.dataset.mode = mode;
+  for (const chip of strip.querySelectorAll('[data-create-mode]')) {
+    const active = chip.dataset.createMode === mode;
+    chip.classList.toggle('active', active);
+    chip.setAttribute('aria-pressed', String(active));
+  }
+  const hint = $('adaptiveCreateHint');
+  if (hint) hint.textContent = config.hint;
+  const goal = $('goal');
+  if (!goal) return;
+  goal.placeholder = config.placeholder;
+  if (seed && !goal.value.trim()) {
+    goal.value = config.starter;
+    growComposer();
+    goal.focus({ preventScroll: true });
+  }
+}
+
+$('adaptiveCreateStrip')?.addEventListener('click', event => {
+  const chip = event.target.closest('[data-create-mode]');
+  if (!chip) return;
+  setCreateMode(chip.dataset.createMode, { seed: true });
+});
+
 $('attachBtn').addEventListener('click', () => $('attachInput').click());
 $('voiceBtn').addEventListener('click', toggleVoiceInput);
 $('attachInput').addEventListener('change', event => {
