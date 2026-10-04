@@ -167,9 +167,14 @@ export function syncAdaptiveWorkspace() {
   renderAdaptiveWorkspace($('adaptiveWorkspaceBar'), 'chat');
 
   const data = adaptiveWorkspaceState();
-  document.body.dataset.adaptiveWorkspace = data.workspace;
+  const selected = state.activeSurface === 'code' || state.activeSurface === 'research'
+    ? state.activeSurface
+    : data.workspace;
+  document.body.dataset.adaptiveWorkspace = selected;
   const sourceBar = $('workspaceSourceBar');
-  if (sourceBar) sourceBar.hidden = data.workspace !== 'code';
+  if (sourceBar) sourceBar.hidden = selected !== 'code';
+  const createStrip = $('adaptiveCreateStrip');
+  if (createStrip) createStrip.hidden = selected !== 'normal-chat';
   for (const name of Object.keys(SURFACE_META)) {
     const tab = document.querySelector('#tabs [data-tab="' + name + '"]');
     if (!tab) continue;
