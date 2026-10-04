@@ -598,7 +598,18 @@ export function planGoal(goal, {
     && analysis.flags?.highImpact !== true
     && analysis.situation?.clarificationRequired !== true
     && analysis.situation?.externalData?.hasExternalDataNeed !== true;
-  const direct = crisis || declined || (smallTalk || reminder) && !attachments.length || normalChatBounded || (intent.kind === 'chat' || writing || physicalQuestion)
+  // Normal Chat is the universal surface, not a bypass around the adaptive
+  // workflow. Creation, investigation, execution, modeling, invention,
+  // attachments and project context are still real work and enter the same
+  // server-owned step lifecycle. Only an unscoped conversational request is
+  // allowed to take the lightweight direct path.
+  const workActions = new Set(['investigate', 'create', 'transform', 'execute', 'model', 'invent', 'discover']);
+  const hasRealWork = (analysis.goalModel?.actions ?? []).some(action => workActions.has(action))
+    || attachments.length > 0
+    || files.length > 0
+    || project != null;
+  const directConversation = normalChatBounded && !hasRealWork;
+  const direct = crisis || declined || (smallTalk || reminder) && !attachments.length || directConversation || (intent.kind === 'chat' || writing || physicalQuestion)
     && blocked.length === 0
     && dedupedApprovalReasons.length === 0
     && (writing || capabilityRequirements.every(item => BASE_CAPABILITIES.includes(item.id)))
