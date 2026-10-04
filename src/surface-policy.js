@@ -19,6 +19,48 @@ const MEDIUM_ANALYSIS = /\b(?:explain|compare|analy[sz]e|solve|calculate|derive|
 
 export const SURFACE_POLICY_VERSION = '1';
 
+export const SURFACE_WORKSPACE_CONTRACTS = Object.freeze({
+  'normal-chat': Object.freeze({
+    id: 'normal-chat',
+    label: 'Normal Chat',
+    mode: 'conversation-first',
+    objective: 'Resolve the user need with the smallest reliable amount of reasoning, context and tooling.',
+    contextPolicy: 'Use the active conversation and only the files, memory and external context that materially improve this request.',
+    toolPolicy: 'Just-in-time tools only. Never open deep research or code execution merely because they are available.',
+    agentPolicy: 'Single executor by default; add advisory roles only when uncertainty or complexity justifies them.',
+    verificationPolicy: 'Verify claims or produced content when stakes, uncertainty or user intent justify a check; do not add a redundant verification pass to pure conversation.',
+    creationPolicy: 'Lightweight writing, visual ideas, diagrams, canvas concepts and presentation structures stay in the conversation.',
+    escalationPolicy: 'Escalate to Code for repository/software changes and to Research for source-heavy, current or evidence-gathering work.',
+    uiPolicy: 'Keep the composer central; reveal only the controls and adaptive surfaces relevant to the current situation.'
+  }),
+  code: Object.freeze({
+    id: 'code',
+    label: 'Code Workspace',
+    mode: 'repository-engineering',
+    objective: 'Change software safely against an exact project revision and prove the resulting state.',
+    contextPolicy: 'Start from the selected GitHub snapshot; retrieve affected files and dependencies first, then expand context only when evidence shows it is needed.',
+    toolPolicy: 'Use terminal, tests, repository inspection and write-back only when the current coding step requires them and the server authorizes them.',
+    agentPolicy: 'Use specialized coding roles only when their independent value exceeds their coordination cost; parallel writers require the same immutable revision and disjoint write sets.',
+    verificationPolicy: 'Treat tests, diffs, build output and repository state as evidence; re-check only the affected regression surface after each material change.',
+    creationPolicy: 'Edits are scoped to the approved plan and exact workspace state; no hidden files or unapproved write paths.',
+    escalationPolicy: 'Escalate when the revision is stale, scope changes, permissions are missing, evidence conflicts, or a new capability is required.',
+    uiPolicy: 'Keep project source, current revision, change scope, terminal state, tests, diff and write-back approval visible in the workspace.'
+  }),
+  research: Object.freeze({
+    id: 'research',
+    label: 'Research Workspace',
+    mode: 'evidence-first-investigation',
+    objective: 'Reduce the highest-impact unknowns and produce traceable claims from real sources.',
+    contextPolicy: 'Maintain a bounded source set, prefer the smallest useful evidence collection, and expand only when claims remain unsupported or sources conflict.',
+    toolPolicy: 'Search and fetch only the sources justified by the current questions; preserve URLs, titles, timestamps and provenance for retrieved evidence.',
+    agentPolicy: 'Add independent researchers or analysts only when parallel source discovery or disagreement resolution materially improves confidence.',
+    verificationPolicy: 'Check important claims against source evidence, distinguish observed facts from inference, and surface conflicts instead of silently choosing a side.',
+    creationPolicy: 'Synthesis, comparisons, briefs and source-backed explanations are native outputs; code execution is not a default research capability.',
+    escalationPolicy: 'Escalate when evidence is contradictory, current information is unavailable, a domain specialist is required, or the question turns into software modification.',
+    uiPolicy: 'Keep the research question, active source set, evidence quality, unresolved claims and citations visible without exposing hidden model reasoning.'
+  })
+});
+
 export const SURFACE_POLICY = Object.freeze({
   version: SURFACE_POLICY_VERSION,
   surfaces: Object.freeze({
