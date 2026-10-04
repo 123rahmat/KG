@@ -75,6 +75,7 @@ export const SURFACE_POLICY = Object.freeze({
       design: true,
       visualCanvas: true,
       presentationCreation: true,
+      contract: SURFACE_WORKSPACE_CONTRACTS['normal-chat'],
       principle: 'Same adaptive intelligence, bounded to simple and medium user-facing work, including lightweight design and Canva-style creation.'
     },
     code: {
@@ -84,6 +85,7 @@ export const SURFACE_POLICY = Object.freeze({
       deepCode: true,
       deepResearch: false,
       richMultimodal: true,
+      contract: SURFACE_WORKSPACE_CONTRACTS.code,
       principle: 'Adaptive software engineering with repository-aware execution and verification.'
     },
     research: {
@@ -93,6 +95,7 @@ export const SURFACE_POLICY = Object.freeze({
       deepCode: false,
       deepResearch: true,
       richMultimodal: true,
+      contract: SURFACE_WORKSPACE_CONTRACTS.research,
       principle: 'Adaptive evidence gathering, analysis, cross-checking and synthesis.'
     }
   })
