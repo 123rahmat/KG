@@ -1,12 +1,18 @@
 /**
  * Server-owned adaptive runtime projection.
- * run_tasks remains authoritative; this is a bounded recovery/UI projection.
+ *
+ * Decision authority lives in adaptive-decision-authority.js and the unified
+ * workflow kernel. This module stores bounded runtime history and keeps a
+ * small compatibility facade for older callers; it does not own recovery.
  */
+import { classifyAdaptiveFailure, recoveryDecision } from './adaptive-decision-authority.js';
+
 const text = value => String(value ?? '').trim();
 const clip = (value, max = 500) => {
   const raw = text(value);
   return raw.length > max ? raw.slice(0, max) + '…' : raw;
 };
+
 export function updateAdaptiveRuntimeState(previous = {}, {
   run, target, nextTask = null, status = 'complete', evidence = null,
   execution = false, verification = null, reason = ''
@@ -27,8 +33,10 @@ export function updateAdaptiveRuntimeState(previous = {}, {
   };
   const history = Array.isArray(prior.history) ? prior.history : [];
   const next = {
-    version: 1, attempt: transition.attempt,
-    currentTask: transition.nextTask, currentStage: transition.nextType,
+    version: 1,
+    attempt: transition.attempt,
+    currentTask: transition.nextTask,
+    currentStage: transition.nextType,
     lastCompletedTask: transition.completedTask,
     lastCompletedType: transition.completedType,
     lastStatus: transition.status,
@@ -36,34 +44,43 @@ export function updateAdaptiveRuntimeState(previous = {}, {
     executionObserved: transition.executionObserved,
     verificationPassed: transition.verificationPassed
       || (prior.verificationPassed === true && transition.completedType !== 'verify'),
-    lastTransition: transition, history: [...history, transition].slice(-32)
+    lastTransition: transition,
+    history: [...history, transition].slice(-32)
   };
-  if (status === 'failed') next.lastFailure = {
-    task: transition.completedTask, type: transition.completedType, reason: clip(reason)
-  };
-  else if (transition.completedType === 'verify' && transition.verificationPassed) next.lastFailure = null;
+  if (status === 'failed') {
+    next.lastFailure = {
+      task: transition.completedTask,
+      type: transition.completedType,
+      reason: clip(reason)
+    };
+  } else if (transition.completedType === 'verify' && transition.verificationPassed) {
+    next.lastFailure = null;
+  }
   return next;
 }
 
-
-const RETRYABLE_RECOVERY = new Set(['timeout', 'dependency', 'stale-state']);
-const REPLAN_RECOVERY = new Set(['tests', 'syntax', 'verification', 'other']);
-const ESCALATE_RECOVERY = new Set(['authorization', 'security']);
-
+/**
+ * Compatibility classification for callers that still use this module.
+ * The canonical failure taxonomy is shared with the main recovery authority.
+ */
 export function classifyRecoveryFailure(reason = '') {
-  const value = text(reason).toLowerCase();
-  if (!value) return 'other';
-  if (/syntax|parse/.test(value)) return 'syntax';
-  if (/test|assert|regression/.test(value)) return 'tests';
-  if (/timeout|timed.?out|slow/.test(value)) return 'timeout';
-  if (/permission|forbidden|unauthori[sz]ed|approval/.test(value)) return 'authorization';
-  if (/stale|revision|conflict|concurrency/.test(value)) return 'stale-state';
-  if (/security|secret|injection|privacy/.test(value)) return 'security';
-  if (/provider|model|network|connector|dependency/.test(value)) return 'dependency';
-  if (/verification|evidence|unsupported/.test(value)) return 'verification';
-  return 'other';
+  const canonical = classifyAdaptiveFailure(reason);
+  if (canonical === 'implementation') return 'syntax';
+  if (canonical === 'verification') {
+    return /test|assert|regression/i.test(String(reason)) ? 'tests' : 'verification';
+  }
+  if (canonical === 'transient') {
+    return /timeout|timed.?out|slow/i.test(String(reason)) ? 'timeout' : 'dependency';
+  }
+  if (canonical === 'missing-capability') return 'dependency';
+  if (canonical === 'unknown' || canonical === 'fundamental' || canonical === 'wrong-assumption') return 'other';
+  return canonical;
 }
 
+/**
+ * Legacy compatibility facade. New run code uses unifiedRecoveryDecision()
+ * directly; this function delegates to the canonical recovery authority.
+ */
 export function decideRecovery({
   taskType = '',
   reason = '',
@@ -73,34 +90,44 @@ export function decideRecovery({
   humanReviewRequired = false,
   repairAvailable = false
 } = {}) {
-  const failureClass = classifyRecoveryFailure(reason);
   const currentAttempt = Math.max(1, Number(attempt) || 1);
   const maximum = Math.max(1, Number(maxAttempts) || 1);
+  const failureClass = classifyRecoveryFailure(reason);
 
   if (governanceStatus === 'blocked') {
     return { action: 'stop', failureClass, reason: 'governance-blocked', terminal: true };
   }
-  if (humanReviewRequired || ESCALATE_RECOVERY.has(failureClass)) {
-    return {
-      action: 'escalate',
-      failureClass,
-      reason: humanReviewRequired ? 'human-review-required' : 'safety-or-authorization-boundary',
-      terminal: false
-    };
+
+  // Human review remains a compatibility signal for callers that have not yet
+  // moved to the unified workflow's authority contract.
+  if (humanReviewRequired) {
+    return { action: 'escalate', failureClass, reason: 'human-review-required', terminal: false };
   }
-  if (currentAttempt >= maximum) {
-    return { action: 'stop', failureClass, reason: 'attempt-budget-exhausted', terminal: true };
-  }
-  if (repairAvailable && ['tests', 'syntax', 'other'].includes(failureClass) && String(taskType).startsWith('code')) {
-    return { action: 'repair', failureClass, reason: 'targeted-code-repair-available', terminal: false };
-  }
-  if (RETRYABLE_RECOVERY.has(failureClass)) {
-    return { action: 'retry', failureClass, reason: 'transient-failure-class', terminal: false };
-  }
-  if (REPLAN_RECOVERY.has(failureClass)) {
-    return { action: 'replan', failureClass, reason: 'new-plan-needed-from-failure-evidence', terminal: false };
-  }
-  return { action: 'replan', failureClass, reason: 'bounded-general-recovery', terminal: false };
+
+  const canonical = recoveryDecision({
+    reason,
+    attempts: currentAttempt,
+    maxAttempts: maximum,
+    humanControlRequired: false
+  });
+
+  const compatibilityAction = canonical.action === 'retry'
+    ? 'retry'
+    : canonical.action === 'stop'
+      ? 'stop'
+      : 'replan';
+
+  // The old repair flag no longer creates a second decision path. Code repair
+  // is now selected by the unified workflow after reassessment.
+  void taskType;
+  void repairAvailable;
+
+  return {
+    action: compatibilityAction,
+    failureClass,
+    reason: canonical.reason,
+    terminal: compatibilityAction === 'stop'
+  };
 }
 
 export function recoveryLesson(decision, { taskId = '', summary = '' } = {}) {
