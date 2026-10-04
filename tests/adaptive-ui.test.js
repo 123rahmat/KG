@@ -151,6 +151,7 @@ test('workspace mode exposes the required capability dock in the sidebar', async
   const js = await read('public/adaptive-workspace.js');
   const css = await read('public/app.css');
   assert.match(html, /id="workspaceCapabilityDock"/);
+  assert.match(html, /id="attachCodeInput"/);
   assert.match(js, /function capabilityItems/);
   assert.match(js, /ZIP \+ single-file inputs/);
   assert.match(js, /GitHub project/);
