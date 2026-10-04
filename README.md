@@ -70,6 +70,28 @@ For Code Workspace, parallel work is bounded by the repository revision and writ
 
 There is no separate legacy Normal Chat control plane.
 
+## Agentic escalation ladder
+
+Agentic behavior is **situational**, not permanently on.
+
+```
+direct response
+  ↓
+one focused specialist
+  ↓
+two complementary specialists
+  ↓
+broader independent panel
+  ↓
+arbitration only when disagreement matters
+```
+
+The controller considers task complexity, uncertainty, evidence gaps, decomposition, risk, retries/failures, affected project scope, and the likely value of another independent view. It can also contract again when evidence converges or the remaining budget becomes tight.
+
+For software work, roles such as architect, implementer, researcher, tester, debugger, security reviewer and performance reviewer are recruited only when their contribution is relevant. For general work, the same shared runtime can recruit strategist, researcher, analyst, critic, communicator or diagnostician when those roles add decision value.
+
+Agents are advisory and isolated from tool authority. The server remains the authority for permissions, execution, mutation, evidence and completion.
+
 ## Adaptive economy
 
 Kindgleam separates **available resources** from **resources actually selected for the current situation**.
