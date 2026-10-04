@@ -241,6 +241,174 @@ function capabilityItems(data) {
   return [];
 }
 
+function workspaceValue(...values) {
+  for (const value of values) {
+    const normalized = text(value);
+    if (normalized) return normalized;
+  }
+  return '';
+}
+
+function currentTask(run) {
+  return run?.tasks?.find(task => task.id === run.next)
+    ?? run?.tasks?.find(task => !['complete', 'skipped'].includes(task.status))
+    ?? null;
+}
+
+function codeWorkspaceProject(data) {
+  const run = data.run;
+  const source = state.workspaceSource ?? {};
+  const repo = workspaceValue(source.repoFullName, source.repositoryFullName, source.repo, source.repository?.fullName, source.name) || 'No GitHub project connected';
+  const revision = workspaceValue(source.commitSha, source.repoRef, source.revision, source.currentRevision, source.metadata?.commitSha, run?.adaptation?.workspaceSourceRevision, run?.adaptation?.codeWorkspace?.baseRevision) || 'Revision selected by workspace';
+  const attached = Array.isArray(run?.adaptation?.attachments) ? run.adaptation.attachments.length : state.attachments?.length ?? 0;
+  const overlay = Array.isArray(run?.adaptation?.projectOverlay) ? run.adaptation.projectOverlay.length : 0;
+  const task = currentTask(run);
+  const tests = (run?.tasks ?? []).filter(item => item.type === 'code' || /test|verif/i.test(text(item?.id) + ' ' + text(item?.metadata?.title)));
+  return [
+    element('div', { class: 'deep-workspace-head code' }, [
+      element('div', { class: 'deep-workspace-identity' }, [
+        element('span', { class: 'deep-workspace-kicker', text: 'CODE PROJECT' }),
+        element('strong', { text: repo }),
+        element('span', { class: 'muted small', text: 'Revision · ' + revision })
+      ]),
+      element('div', { class: 'deep-workspace-state' }, [
+        element('i', { 'aria-hidden': 'true' }),
+        element('span', { text: run?.state === 'complete' ? 'verified' : run ? 'active' : 'ready' })
+      ])
+    ]),
+    element('nav', { class: 'deep-workspace-nav', 'aria-label': 'Code project areas' }, [
+      button('Overview', () => {}, 'active small'),
+      button('Files', () => $('attachBtn')?.click(), 'small'),
+      button('Changes', () => $('thread')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 'small'),
+      button('Tests', () => $('openTerminal')?.click(), 'small')
+    ]),
+    element('div', { class: 'deep-workspace-grid' }, [
+      element('section', { class: 'deep-workspace-card project-card' }, [
+        element('div', { class: 'deep-workspace-card-head' }, [
+          element('span', { class: 'mono', text: 'PROJECT' }),
+          element('span', { class: 'small muted', text: source?.kind === 'github' ? 'GitHub' : attached ? 'Attached input' : 'Not connected' })
+        ]),
+        element('strong', { text: repo }),
+        element('div', { class: 'deep-workspace-metrics' }, [
+          metric('Revision', revision, true),
+          metric('Attached inputs', String(attached), false),
+          metric('Working overlay', String(overlay), false)
+        ])
+      ]),
+      element('section', { class: 'deep-workspace-card work-card' }, [
+        element('div', { class: 'deep-workspace-card-head' }, [
+          element('span', { class: 'mono', text: 'CURRENT WORK' }),
+          element('span', { class: 'small muted', text: task?.status || 'ready' })
+        ]),
+        element('strong', { text: taskLabel(task) }),
+        element('p', { class: 'small muted', text: run ? currentStatus(run) : 'Start a coding request to build the project context.' }),
+        element('div', { class: 'deep-workspace-badges' }, [
+          badge('Tests', tests.length ? tests.length + ' tracked' : 'on demand'),
+          badge('Write-back', source?.permissions?.write === true ? 'approval' : 'read-only'),
+          badge('Agents', 'adaptive')
+        ])
+      ])
+    ]),
+    element('div', { class: 'deep-workspace-actions' }, [
+      button('GitHub project', () => $('openProjectSources')?.click(), 'small'),
+      button('ZIP / code file', () => $('attachCodeInput')?.click(), 'small'),
+      button('Terminal', () => $('openTerminal')?.click(), 'small'),
+      button('Review changes', () => $('thread')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 'primary small')
+    ])
+  ];
+}
+
+function researchWorkspaceProject(data) {
+  const run = data.run;
+  const research = run?.adaptation?.researchWorkspace ?? {};
+  const sourceCount = Number(research.sourceCount ?? 0);
+  const evidenceCount = Number(research.evidenceCount ?? 0);
+  const unresolved = Array.isArray(research.unresolvedQuestions) ? research.unresolvedQuestions.length : Number(research.unresolvedCount ?? 0);
+  const conflicts = Array.isArray(research.conflicts) ? research.conflicts.length : Number(research.conflictCount ?? 0);
+  const task = currentTask(run);
+  const sourceStatus = sourceCount ? sourceCount + ' tracked' : 'not started';
+  const evidenceStatus = conflicts ? conflicts + ' conflicts' : evidenceCount ? evidenceCount + ' ledger items' : 'awaiting evidence';
+  return [
+    element('div', { class: 'deep-workspace-head research' }, [
+      element('div', { class: 'deep-workspace-identity' }, [
+        element('span', { class: 'deep-workspace-kicker', text: 'RESEARCH PROJECT' }),
+        element('strong', { text: research.activeQuestion || run?.goal || 'Research dossier' }),
+        element('span', { class: 'muted small', text: workspaceValue(research.status, 'evidence-first investigation') })
+      ]),
+      element('div', { class: 'deep-workspace-state' }, [
+        element('i', { 'aria-hidden': 'true' }),
+        element('span', { text: run?.state === 'complete' ? 'synthesized' : run ? 'investigating' : 'ready' })
+      ])
+    ]),
+    element('nav', { class: 'deep-workspace-nav', 'aria-label': 'Research project areas' }, [
+      button('Overview', () => {}, 'active small'),
+      button('Sources', () => $('thread')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 'small'),
+      button('Evidence', () => $('thread')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 'small'),
+      button('Gaps', () => $('goal')?.focus({ preventScroll: false }), 'small')
+    ]),
+    element('div', { class: 'deep-workspace-grid' }, [
+      element('section', { class: 'deep-workspace-card project-card' }, [
+        element('div', { class: 'deep-workspace-card-head' }, [
+          element('span', { class: 'mono', text: 'SOURCE SET' }),
+          element('span', { class: 'small muted', text: sourceStatus })
+        ]),
+        element('strong', { text: research.rootQuestion || research.activeQuestion || run?.goal || 'Research question' }),
+        element('div', { class: 'deep-workspace-metrics' }, [
+          metric('Sources', String(sourceCount), false),
+          metric('Evidence', String(evidenceCount), false),
+          metric('History', String(Array.isArray(research.history) ? research.history.length : 0), false)
+        ])
+      ]),
+      element('section', { class: 'deep-workspace-card work-card' }, [
+        element('div', { class: 'deep-workspace-card-head' }, [
+          element('span', { class: 'mono', text: 'INVESTIGATION' }),
+          element('span', { class: 'small muted', text: task?.status || 'ready' })
+        ]),
+        element('strong', { text: taskLabel(task) || 'Evidence-driven next step' }),
+        element('p', { class: 'small muted', text: currentStatus(run) }),
+        element('div', { class: 'deep-workspace-badges' }, [
+          badge('Evidence', evidenceStatus),
+          badge('Open gaps', String(unresolved)),
+          badge('Conflicts', String(conflicts))
+        ])
+      ])
+    ]),
+    element('div', { class: 'deep-workspace-actions' }, [
+      button('Search + gather', () => $('goal')?.focus({ preventScroll: false }), 'primary small'),
+      button('Review sources', () => $('thread')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 'small'),
+      button('Review evidence', () => $('thread')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 'small'),
+      button('Add research direction', () => $('goal')?.focus({ preventScroll: false }), 'small')
+    ])
+  ];
+}
+
+function metric(label, value, mono = false) {
+  return element('div', { class: 'deep-workspace-metric' }, [
+    element('span', { class: 'small muted', text: label }),
+    element('b', { class: mono ? 'mono' : '', text: value })
+  ]);
+}
+
+function badge(label, value) {
+  return element('span', { class: 'deep-workspace-badge' }, [
+    element('b', { text: label }),
+    element('span', { text: value })
+  ]);
+}
+
+function renderDeepWorkspaceShell() {
+  const host = $('deepWorkspaceShell');
+  if (!host) return;
+  const data = adaptiveWorkspaceState();
+  const active = data.workspace === 'code' || data.workspace === 'research';
+  host.hidden = !active;
+  if (!active) {
+    host.replaceChildren();
+    return;
+  }
+  host.dataset.workspace = data.workspace;
+  host.replaceChildren(...(data.workspace === 'code' ? codeWorkspaceProject(data) : researchWorkspaceProject(data)));
+}
 function renderCapabilityDock() {
   const dock = $('workspaceCapabilityDock');
   const list = $('workspaceCapabilityList');
@@ -299,6 +467,7 @@ export function renderAdaptiveWorkspace(host, mode = 'chat') {
 
 export function syncAdaptiveWorkspace() {
   renderAdaptiveWorkspace($('adaptiveWorkspaceBar'), 'chat');
+  renderDeepWorkspaceShell();
   renderCapabilityDock();
 
   const data = adaptiveWorkspaceState();
