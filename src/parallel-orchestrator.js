@@ -1,3 +1,4 @@
+import { adaptiveDecisionAuthority } from './adaptive-decision-authority.js';
 /**
  * Unified parallel orchestration.
  *
@@ -209,6 +210,15 @@ export function adaptiveParallelLimit({
   explicit = false
 } = {}) {
   const budget = Math.max(0, Math.min(1, Number(remainingBudgetRatio) || 0));
+  const authority = adaptiveDecisionAuthority({
+    situation: {
+      uncertainty: Number(pressure) || 0,
+      riskScore: HIGH_STAKES.has(text(risk).toLowerCase()) ? 0.75 : Number(pressure) || 0
+    },
+    profile: { pressure, expansionAllowed: concurrencyOpportunity >= 0.2 },
+    acceptance: { satisfied: true, evidenceSummary: { unresolved: 0 }, authorizationSatisfied: true },
+    previousAction: 'execute'
+  });
   const decision = parallelDecision({
     mode,
     pressure,
@@ -239,6 +249,7 @@ export function adaptiveParallelLimit({
   );
   return {
     ...decision,
+    authorityDecision: authority,
     maxParallel: next,
     budgetCap,
     remainingBudgetRatio: Number(budget.toFixed(3)),
