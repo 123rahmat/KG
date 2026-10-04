@@ -63,7 +63,8 @@ function acceptanceFrom(situation = {}, acceptance = {}, profile = {}) {
     authorizationRequired: acceptance.authorizationRequired === true || situation.authorizationRequired === true,
     authorizationSatisfied: acceptance.authorizationSatisfied !== false && situation.authorizationSatisfied !== false,
     verificationRequired: acceptance.verificationRequired === true || profile.maturity?.independentVerificationRequired === true,
-    verificationSatisfied: acceptance.verificationSatisfied === true
+    verificationSatisfied: acceptance.verificationSatisfied === true,
+    finalizationRequired: acceptance.finalizationRequired === true
   });
 }
 
