@@ -5,8 +5,7 @@ import { classifyGoal } from '../classifier.js';
 import { chooseExecutionTarget, executionTarget } from '../execution.js';
 import { planningInput, publicClassification } from '../http/context.js';
 import { RunError } from '../runs.js';
-import { formatOf } from '../documents.js';
-import { readDocumentIsolated } from '../document-runner.js';
+import { formatOf, inspectArchive } from '../documents.js';
 import { assertUsageAllowed, createUsageGate, UsageLimitError, recordUsage } from '../usage.js';
 import { screenRequest, combineDecisions, recordRefusal, inCooldown, careNote, blockedTopicsFrom, ethicsOf, FIXED_REPLY_CATEGORIES } from '../safety.js';
 import { assertTermsAccepted } from '../terms.js';
@@ -66,13 +65,10 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
       if (detectedFormat === 'project' && /\\.zip$/i.test(String(object.name ?? '')) && readable) {
         try {
           const stored = await objects.read(req.scope, object.id);
-          const inspected = await readDocumentIsolated(Buffer.from(stored.content), {
-            name: object.name,
-            contentType: object.contentType
-          });
-          attachmentFormat = inspected.format;
+          const inspected = inspectArchive(Buffer.from(stored.content));
+          attachmentFormat = inspected.archiveKind === 'code-project' ? 'project' : 'bundle';
           archiveKind = inspected.archiveKind ?? null;
-          archiveItemCount = Array.isArray(inspected.items) ? inspected.items.length : null;
+          archiveItemCount = Number(inspected.itemCount) || 0;
         } catch {
           // The normal attachment reader reports the exact parse failure later.
           // Do not let profile inspection turn a readable upload into a planning failure.
