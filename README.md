@@ -383,20 +383,22 @@ The important architectural boundary is simple:
 ```
 shared intelligence
     +
-adaptive workflow
+one canonical adaptive workflow kernel
+    +
+one canonical decision/recovery authority
     +
 workspace-specific context
     +
 authorized tools / execution
 ```
 
-Not:
+Internal modules are intentionally narrow:
+- workflow selection and reassessment live in the unified workflow kernel;
+- decision, acceptance and recovery semantics live in the adaptive decision authority;
+- runtime-state stores bounded projections/history rather than making independent decisions;
+- agent orchestration schedules specialists without creating another workflow.
 
-```
-three separate brains
-three separate adaptive loops
-three separate control planes
-```
+This keeps implementation modular while reducing duplicated decision authority.
 
 ## Quick start
 
