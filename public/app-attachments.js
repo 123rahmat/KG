@@ -16,6 +16,29 @@ import { syncActiveWorkspaceSource } from './workspace-sources.js';
 
 const MAX_ATTACH_FILES = 10;
 const MAX_ATTACH_BYTES = 5 * 1024 * 1024;
+const attachmentPreviewUrls = new Map();
+
+function isImageAttachment(file) {
+  return /^image\/(?:png|jpe?g|webp|gif)$/i.test(String(file?.type ?? ''));
+}
+
+function previewUrl(file) {
+  if (!isImageAttachment(file)) return null;
+  if (!attachmentPreviewUrls.has(file)) attachmentPreviewUrls.set(file, URL.createObjectURL(file));
+  return attachmentPreviewUrls.get(file);
+}
+
+function releasePreview(file) {
+  const url = attachmentPreviewUrls.get(file);
+  if (!url) return;
+  URL.revokeObjectURL(url);
+  attachmentPreviewUrls.delete(file);
+}
+
+function releaseAllPreviews() {
+  for (const url of attachmentPreviewUrls.values()) URL.revokeObjectURL(url);
+  attachmentPreviewUrls.clear();
+}
 
 function renderAttachments() {
   const list = $('attachList');
@@ -23,9 +46,16 @@ function renderAttachments() {
   if (state.attachments.length && !(state.attachmentScope instanceof Set)) {
     state.attachmentScope = new Set(state.attachments.map(file => file.name));
   }
+  const live = new Set(state.attachments);
+  for (const file of [...attachmentPreviewUrls.keys()]) if (!live.has(file)) releasePreview(file);
   list.replaceChildren(...state.attachments.map((file, index) => {
     const inScope = state.attachmentScope?.has(file.name) === true;
+    const imageUrl = previewUrl(file);
+    const image = imageUrl
+      ? element('img', { class: 'attachment-thumb', src: imageUrl, alt: 'Preview of ' + file.name, loading: 'lazy', decoding: 'async' })
+      : null;
     return element('span', { class: 'file-chip removable attachment-scope-chip' }, [
+      image,
       element('label', { class: 'attachment-scope', title: 'Use this file for this request' }, [
         element('input', {
           type: 'checkbox',
@@ -43,13 +73,15 @@ function renderAttachments() {
       element('button', {
         type: 'button', class: 'chip-x', 'aria-label': 'Remove ' + file.name, text: '✕',
         onclick: () => {
+          const removed = state.attachments[index];
           state.attachments.splice(index, 1);
+          releasePreview(removed);
           state.attachmentScope?.delete(file.name);
           if (!state.attachments.length) state.attachmentScope = null;
           renderAttachments();
         }
       })
-    ]);
+    ].filter(Boolean));
   }));
 }
 
@@ -390,6 +422,7 @@ async function queueOfflineMessage(goal, files, visibility, idempotencyKey = cry
     offline: true
   };
   state.attachments = [];
+  releaseAllPreviews();
   renderAttachments();
   updateConnectionUI();
   clearDraft();
@@ -504,6 +537,7 @@ export async function sendMessage(text) {
     state.chat.pending = null;
     state.attachments = [];
     state.attachmentScope = null;
+    releaseAllPreviews();
     renderAttachments();
     clearDraft();
     if (state.chat.consent) state.consented.add(run.id);
