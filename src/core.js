@@ -515,13 +515,11 @@ export function planGoal(goal, {
   // runner would stop at a step that can never finish; instead the work is
   // done as code and instructions, and the limitation is stated.
   const notAvailableHere = [];
-  // Normal Chat keeps the same adaptive intelligence but never opens deep
-  // research or code execution. Explicit code/research requests are routed to
-  // their dedicated surfaces instead of becoming heavyweight chat runs.
-  let capabilityRequirements = discovered;
-  if (surfaceBoundary.surface === 'normal-chat') {
-    capabilityRequirements = capabilityRequirements.filter(item => !['evidence-retrieval', 'external-data-routing', 'adaptive-execution', 'code-generation', 'code-execution'].includes(item.id));
-  }
+  // The workspace boundary is not an intelligence boundary. All three
+  // workspaces use the same adaptive capability compiler and agentic control
+  // loop; Code/Research simply provide specialized context when selected.
+  // Normal Chat may therefore retain any justified capability when the
+  // situation requires it rather than being artificially downgraded.
   if (executionAvailable?.code === false && capabilityRequirements.some(item => item.id === 'code-execution')) {
     capabilityRequirements = capabilityRequirements.filter(item => item.id !== 'code-execution');
     notAvailableHere.push('code-execution');
