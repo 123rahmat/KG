@@ -411,7 +411,7 @@ export function planGoal(goal, {
     // Every attached file is part of the working set; only unreadable ones
     // (in files) need a file tool.
     attachedArtifacts: attachments.map(item => (typeof item === 'string' ? item : item?.name)).filter(Boolean),
-    // A zipped project or a source file attached makes this code work.
+    // A classified code project or source file attached makes this code work.
     attachedCode: attachments.some(item => item && typeof item === 'object'
       && (item.format === 'project' || ATTACHED_CODE.test(String(item.name ?? ''))))
   };
