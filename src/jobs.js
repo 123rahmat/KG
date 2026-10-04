@@ -182,6 +182,37 @@ export class JobStore {
     );
   }
 
+  /**
+   * Queue one safe continuation for the same run. The worker, not the browser,
+   * owns continuation so a disconnected client cannot strand an adaptive run.
+   * Human gates, waiting/iterate states and completed runs are never auto-queued.
+   */
+  async enqueueContinuation(scope, principal, run, request = {}) {
+    if (!run || ['complete', 'failed', 'blocked', 'exhausted', 'waiting', 'iterate'].includes(text(run.state))) return null;
+    const next = Array.isArray(run.tasks) ? run.tasks.find(task => task.id === run.next) : null;
+    if (!next || next.status !== 'pending') return null;
+    if (next.type === 'approval' || next.type === 'clarify' || next.metadata?.humanInput === true
+        || next.metadata?.approvalRequired === true || next.metadata?.requiresHumanApproval === true) return null;
+    const continuationRequest = {
+      ...(request && typeof request === 'object' ? request : {}),
+      taskId: next.id,
+      background: true
+    };
+    try {
+      return await this.enqueue(scope, principal, {
+        runId: run.id,
+        taskId: next.id,
+        request: continuationRequest,
+        requestId: request?.requestId ?? null
+      });
+    } catch (error) {
+      // A competing browser/worker continuation is harmless; the run remains
+      // owned by the server and the existing job wins.
+      if (error?.code === '23505') return this.active(scope, run.id, next.id);
+      throw error;
+    }
+  }
+
   /** Record the outcome only for the worker/attempt that still owns the lease. */
   async finish(job, state, outcome, { workerId = job.worker_id, attempts = job.attempts } = {}) {
     const owner = text(workerId);
@@ -253,7 +284,29 @@ export function createJobWorker({ jobs, identity, runs, executeNext, logger, met
           scope: access, principal, runId: job.run_id, body: job.request ?? {},
           requestId: job.request_id, expectedTaskId: job.task_id
         });
-        await jobs.finish(job, reply.status < 400 ? 'succeeded' : 'refused', summarizeOutcome(reply));
+        const outcome = summarizeOutcome(reply);
+        await jobs.finish(job, reply.status < 400 ? 'succeeded' : 'refused', outcome);
+
+        // Continue from the server-owned next task after a successful step.
+        // Do not follow a stale task or a human gate, and never continue when
+        // execution explicitly requires the user's local machine.
+        if (reply.status < 400 && reply.body?.run
+            && outcome.execution?.status !== 'local-agent-required'
+            && outcome.execution?.status !== 'consent-required') {
+          try {
+            const continuation = await jobs.enqueueContinuation(
+              access,
+              principal,
+              reply.body.run,
+              { ...job.request, requestId: job.request_id }
+            );
+            if (continuation) metrics?.increment('background_jobs_total', { phase: 'continued' });
+          } catch (error) {
+            logger?.warn('background job continuation could not be queued', {
+              error, runId: job.run_id, jobId: job.id, nextTask: reply.body.run.next ?? null
+            });
+          }
+        }
       } catch (error) {
         // A refusal with a reason (a gate that is not met) is not a crash.
         if (Number.isInteger(error?.status) && error.status >= 400 && error.status < 500) {
