@@ -612,6 +612,7 @@ export function planGoal(goal, {
   const directConversation = normalChatBounded && !hasRealWork;
   const direct = crisis
     || declined
+    || writingDocument
     || ((smallTalk || reminder) && !attachments.length)
     || directConversation;
   const scale = direct ? 'single' : workScale({
