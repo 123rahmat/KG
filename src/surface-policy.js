@@ -30,7 +30,7 @@ function normalizeSurfaceId(value = '') {
 }
 const MEDIUM_ANALYSIS = /\b(?:explain|compare|analy[sz]e|solve|calculate|derive|show|teach|why|how|which|evaluate|recommend|suggest|summari[sz]e|interpret)\b/i;
 
-export const SURFACE_POLICY_VERSION = '1';
+export const SURFACE_POLICY_VERSION = '2';
 
 export const SURFACE_WORKSPACE_CONTRACTS = Object.freeze({
   'normal-chat': Object.freeze({
@@ -44,7 +44,8 @@ export const SURFACE_WORKSPACE_CONTRACTS = Object.freeze({
     verificationPolicy: 'Verify claims or produced content when stakes, uncertainty or user intent justify a check; do not add a redundant verification pass to pure conversation.',
     creationPolicy: 'Lightweight writing, visual ideas, diagrams, canvas concepts and presentation structures stay in the conversation.',
     escalationPolicy: 'Escalate to Code for repository/software changes and to Research for source-heavy, current or evidence-gathering work.',
-    uiPolicy: 'Keep the composer central; reveal only the controls and adaptive surfaces relevant to the current situation.'
+    uiPolicy: 'Keep the composer central; reveal only the controls and adaptive surfaces relevant to the current situation.',
+    selectionPolicy: 'Default mode. Stay here for ordinary conversation, files and lightweight design/creation; escalate only when deeper Code or Research work is justified.'
   }),
   code: Object.freeze({
     id: 'code',
@@ -57,7 +58,8 @@ export const SURFACE_WORKSPACE_CONTRACTS = Object.freeze({
     verificationPolicy: 'Treat tests, diffs, build output and repository state as evidence; re-check only the affected regression surface after each material change.',
     creationPolicy: 'Edits are scoped to the approved plan and exact workspace state; no hidden files or unapproved write paths.',
     escalationPolicy: 'Escalate when the revision is stale, scope changes, permissions are missing, evidence conflicts, or a new capability is required.',
-    uiPolicy: 'Keep project source, current revision, change scope, terminal state, tests, diff and write-back approval visible in the workspace.'
+    uiPolicy: 'Keep project source, current revision, change scope, terminal state, tests, diff and write-back approval visible in the workspace.',
+    selectionPolicy: 'Sticky while selected. Keep repository continuity across follow-ups; switch only for explicit or strongly evidenced Research/Normal Chat intent.'
   }),
   research: Object.freeze({
     id: 'research',
@@ -70,7 +72,8 @@ export const SURFACE_WORKSPACE_CONTRACTS = Object.freeze({
     verificationPolicy: 'Check important claims against source evidence, distinguish observed facts from inference, and surface conflicts instead of silently choosing a side.',
     creationPolicy: 'Synthesis, comparisons, briefs and source-backed explanations are native outputs; code execution is not a default research capability.',
     escalationPolicy: 'Escalate when evidence is contradictory, current information is unavailable, a domain specialist is required, or the question turns into software modification.',
-    uiPolicy: 'Keep the research question, active source set, evidence quality, unresolved claims and citations visible without exposing hidden model reasoning.'
+    uiPolicy: 'Keep the research question, active source set, evidence quality, unresolved claims and citations visible without exposing hidden model reasoning.',
+    selectionPolicy: 'Sticky while selected. Keep question/source continuity across follow-ups; switch only for explicit or strongly evidenced Code/Normal Chat intent.'
   })
 });
 
