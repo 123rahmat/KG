@@ -81,7 +81,8 @@ function surfaceButton(name, active) {
 
 export function adaptiveWorkspaceState() {
   const run = lastRun();
-  const workspace = activeWorkspace(run);
+  const selected = ['code', 'research', 'normal-chat'].includes(state.activeSurface) ? state.activeSurface : null;
+  const workspace = selected ?? activeWorkspace(run);
   return {
     run,
     focus: runFocus(run),
