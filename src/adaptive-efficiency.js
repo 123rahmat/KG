@@ -105,6 +105,42 @@ export function adaptiveEffortProfile({
   };
 }
 
+
+export function adaptiveBehaviorContract(profile = adaptiveEffortProfile({})) {
+  const p = profile ?? adaptiveEffortProfile({});
+  const maturity = p.maturity ?? realWorldMaturity({});
+  const level = String(p.level ?? 'standard');
+  const rounds = level === 'minimal' ? 2 : level === 'standard' ? 4 : level === 'deep' ? 6 : 8;
+  return {
+    version: 1,
+    principle: 'Adapt every behavior to the current situation; do not maximize intelligence, tools, agents, context, or verification unless the evidence justifies them.',
+    maturity: level,
+    pressure: p.pressure ?? 0,
+    behavior: {
+      understand: p.contextDepth,
+      plan: p.contextDepth === 'broad' ? 'deep' : p.contextDepth === 'targeted' ? 'targeted' : 'minimal',
+      resources: p.expansionAllowed ? 'expand-when-justified' : 'minimum-necessary',
+      tools: 'minimum-necessary',
+      agents: p.expansionAllowed ? 'adaptive-specialists' : 'single-agent-when-sufficient',
+      context: p.contextDepth,
+      execution: maturity.rollbackRequired ? 'guarded-with-rollback' : 'normal',
+      verification: p.verificationDepth,
+      recovery: maturity.recoveryMode,
+      humanControl: maturity.humanControlRequired ? 'required' : 'situational',
+      provenance: maturity.provenanceRequired ? 'required' : 'normal',
+      stopping: p.stopRule
+    },
+    toolRoundsCeiling: rounds,
+    independentVerificationRequired: maturity.independentVerificationRequired,
+    rollbackRequired: maturity.rollbackRequired,
+    humanControlRequired: maturity.humanControlRequired,
+    provenanceRequired: maturity.provenanceRequired,
+    escalationTriggers: maturity.escalationTriggers,
+    deescalateAfter: p.adaptation?.deescalateAfter ?? ['verified-success', 'stable-observation', 'acceptance-evidence-satisfied'],
+    neverAutoPromoteAuthority: true
+  };
+}
+
 export function adaptiveResourceDecision({
   profile, estimatedCost = 0, expectedBenefit = 0,
   requiredConfidence = 0.9, currentConfidence = 0, consequence = 0
