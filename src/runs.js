@@ -1474,8 +1474,8 @@ export class RunStore {
             adaptive: true,
             dynamicGraph: true,
             createdFrom: target.id,
-            recoveryAction: recovery.action,
-            failureClass: recovery.failureClass
+            recoveryAction: effectiveRecovery.action,
+            failureClass: effectiveRecovery.failureClass
           }
         });
       }
