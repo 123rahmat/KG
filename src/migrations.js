@@ -2841,4 +2841,23 @@ export const MIGRATIONS = [
         );
     `
   }
+  ,{
+    version: 70,
+    name: 'code-workspace-session-revision-discipline',
+    sql: `
+      -- Code Workspace sessions are only useful while their immutable GitHub
+      -- base still matches the connected source. Once a source moves, an
+      -- active session becomes stale rather than silently editing an old view.
+      ALTER TABLE code_workspace_sessions
+        DROP CONSTRAINT IF EXISTS code_workspace_sessions_state_check;
+      ALTER TABLE code_workspace_sessions
+        ADD CONSTRAINT code_workspace_sessions_state_check
+        CHECK (state IN ('active','stale','closed'));
+
+      CREATE INDEX IF NOT EXISTS code_workspace_sessions_stale_idx
+        ON code_workspace_sessions(workspace_id, principal_id, state, updated_at DESC)
+        WHERE state = 'stale';
+    `
+  }
+
 ];
