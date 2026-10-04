@@ -8,9 +8,10 @@
 import { state, $, element, button } from './ui-core.js';
 
 const SURFACE_META = {
-  runs: { label: 'Chat', icon: 'chat' },
-  objects: { label: 'Files', icon: 'files' },
-  explore: { label: 'Explore', icon: 'explore' }
+  runs: { label: 'Normal Chat', icon: 'chat', kind: 'normal-chat' },
+  code: { label: 'Code Workspace', icon: 'terminal', kind: 'code' },
+  research: { label: 'Research Workspace', icon: 'explore', kind: 'research' },
+  objects: { label: 'Files', icon: 'files', kind: 'files' }
 };
 
 const text = value => String(value ?? '').trim();
@@ -46,14 +47,30 @@ function runFocus(run) {
   return text(situation.title || classification.title || run?.goal) || 'Current situation';
 }
 
+function activeWorkspace(run) {
+  if (run?.surface === 'code' || run?.tasks?.some(task => ['code', 'build-code', 'test-code'].includes(task.id))) return 'code';
+  if (run?.surface === 'research' || researchNeed(run)) return 'research';
+  return 'normal-chat';
+}
+
 function surfaceSet(run) {
   const surfaces = new Set(['runs']);
+  const workspace = activeWorkspace(run);
+  if (workspace === 'code') surfaces.add('code');
+  if (workspace === 'research') surfaces.add('research');
   if (fileNeed(run)) surfaces.add('objects');
-  if (researchNeed(run)) surfaces.add('explore');
   return [...surfaces];
 }
 
 function dispatchSurface(name) {
+  if (name === 'code') {
+    document.dispatchEvent(new CustomEvent('kindgleam:open-code-workspace'));
+    return;
+  }
+  if (name === 'research') {
+    document.dispatchEvent(new CustomEvent('kindgleam:select-surface', { detail: { name: 'explore', workspace: 'research' } }));
+    return;
+  }
   document.dispatchEvent(new CustomEvent('kindgleam:select-surface', { detail: { name } }));
 }
 
@@ -64,10 +81,12 @@ function surfaceButton(name, active) {
 
 export function adaptiveWorkspaceState() {
   const run = lastRun();
+  const workspace = activeWorkspace(run);
   return {
     run,
     focus: runFocus(run),
     status: currentStatus(run),
+    workspace,
     surfaces: surfaceSet(run)
   };
 }
@@ -127,11 +146,12 @@ export function renderAdaptiveWorkspace(host, mode = 'chat') {
   const data = adaptiveWorkspaceState();
   const surfaces = data.surfaces;
 
+  const workspaceLabel = SURFACE_META[data.workspace === 'normal-chat' ? 'runs' : data.workspace]?.label ?? 'Normal Chat';
   host.replaceChildren(
     element('div', { class: 'adaptive-workspace-main' }, [
       element('span', { class: 'adaptive-workspace-dot' }),
       element('div', { class: 'adaptive-workspace-copy' }, [
-        element('span', { class: 'adaptive-workspace-kicker', text: 'Current work' }),
+        element('span', { class: 'adaptive-workspace-kicker', text: workspaceLabel }),
         element('strong', { class: 'truncate', text: data.focus }),
         element('span', { class: 'muted small truncate', text: data.status })
       ])
@@ -147,6 +167,9 @@ export function syncAdaptiveWorkspace() {
   renderAdaptiveWorkspace($('adaptiveWorkspaceBar'), 'chat');
 
   const data = adaptiveWorkspaceState();
+  document.body.dataset.adaptiveWorkspace = data.workspace;
+  const sourceBar = $('workspaceSourceBar');
+  if (sourceBar) sourceBar.hidden = data.workspace !== 'code';
   for (const name of Object.keys(SURFACE_META)) {
     const tab = document.querySelector('#tabs [data-tab="' + name + '"]');
     if (!tab) continue;
