@@ -493,6 +493,46 @@ test('coding panel converges without a needless second iteration on clean eviden
   assert.equal(calls.every(item => item.options.maxOutputTokens === AGENT_MAX_OUTPUT_TOKENS), true);
 });
 
+test('small Code Workspace tasks use a single specialist until more depth is justified', async () => {
+  const project = {
+    revisionId: 'rev-small',
+    contentHash: 'hash-small',
+    scale: 'small',
+    fileCount: 4,
+    files: Array.from({ length: 4 }, (_, i) => ({ path: `src/file-${i}.js`, bytes: 100 })),
+    dependencies: [],
+    totals: { bytes: 400, dependencies: 0 },
+    hierarchy: { scale: 'small', root: { path: '', depth: 0, fileCount: 4, bytes: 400, digest: 'root' } }
+  };
+  let calls = 0;
+  const result = await runAdaptiveAgentPanel({
+    run: run({ adaptation: { scale: 'small' } }),
+    task: { id: 'code', type: 'code' },
+    basePayload: {
+      goal: 'Make this small code change',
+      task: { id: 'code', type: 'code' },
+      workspace: { projectId: 'p-small', revisionId: 'rev-small', paths: project.files.map(file => file.path) },
+      codeIntelligence: { project, files: project.files }
+    },
+    selection,
+    primaryModelId: 'google:gemini-3.8-flash',
+    config: { agents: { multiAgent: 'auto', maxAgents: 6 } },
+    canSpend: async () => true,
+    modelCaller: async (_messages, options) => {
+      calls += 1;
+      return {
+        text: JSON.stringify(finding('proceed', 'small change is understood', { confidence: 0.94 })),
+        provider: 'google',
+        model: options.modelId,
+        usage: null
+      };
+    }
+  });
+  assert.equal(calls, 1);
+  assert.equal(result.allocation.subsystemPanels[0].roles.length, 1);
+  assert.equal(result.allocation.subsystemPanels[0].roles[0], 'implementer');
+});
+
 test('Code Workspace gives every subsystem its own multi-agent panel with bounded A2A', async () => {
   const calls = [];
   const project = {
