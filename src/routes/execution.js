@@ -30,7 +30,6 @@ import { gradedCriteria } from '../requirements.js';
 import { groundedCheckDecision, verificationBrief, groundVerdict } from '../verification.js';
 import { reviewDecision, reviewerModelFor, reviewMessages, readReview, mergeReview, REVIEW_MAX_OUTPUT_TOKENS } from '../agents.js';
 import { runAdaptiveAgentPanel, multiAgentDecision } from '../multi-agent.js';
-import { runNormalChatControlPlane } from '../normal-chat-orchestrator.js';
 import { workPlan, readStepAnswer } from '../step-plan.js';
 import { adaptationFor, compact } from '../prompt-scope.js';
 import { codeFailure, codeRunOutput, repairDecision, repairCeiling, codeNotRunNow, repairsThisAttempt, repairContext, untestedCode, missingTests, compactCodeEvidence, TESTS_REQUIRED_PROMPT, isProject, sandboxPayload, hasCode, compactProject, mergeFix, materializeCodePackage } from '../code-workflow.js';
@@ -1584,42 +1583,6 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     // Backups obey the same rules: governance, and a model an admin turned off.
     const allowBackup = name => modelPolicyAllows(run, `google:${name}`, 'medium')
       && (!selection.configuredModelIds.includes(`google:${name}`) || selection.enabledModelIds.includes(`google:${name}`));
-
-    const specialistPanelOwnsCoordination = multiAgentDecision(run, task, {
-      mode: config?.agents?.multiAgent ?? 'auto'
-    }).enabled && !(
-      task?.id === 'build-code'
-      || ['code', 'implement'].includes(String(task?.type ?? '').toLowerCase())
-      || payload?.workspace?.projectId
-      || payload?.subsystemPlan?.subsystems?.length
-      || payload?.codeIntelligence?.project
-    );
-
-    const normalChatControl = await runNormalChatControlPlane({
-      run,
-      task,
-      payload,
-      modelId: effectiveModelId,
-      config,
-      fetchImpl,
-      allowBackup,
-      usageGate,
-      canSpend: async () => !(await usageBlock(scope)),
-      recordUsage: async (usage, provider, providerModel) => {
-        await runs.addTokens(run.id, {
-          ...usage,
-          provider,
-          model: providerModel
-        }, { source: 'normal-chat-control' });
-      },
-      specialistPanelOwnsCoordination
-    });
-    if (normalChatControl?.enabled) {
-      payload = {
-        ...payload,
-        normalChatControl: normalChatControl.agents
-      };
-    }
 
     const multiAgent = await runAdaptiveAgentPanel({
       run,
