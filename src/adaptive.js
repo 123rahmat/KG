@@ -481,6 +481,15 @@ export function resolveAdaptiveContext(goal, {
   if (boundary.surface === 'research') surfaces.add('research');
   if (boundary.surface === 'code') surfaces.add('code');
   if (boundary.surface === 'normal-chat') surfaces.add('chat');
+  // Compound situations can legitimately require a second workspace surface.
+  // The primary surface stays stable, while supporting research/code is exposed
+  // only when the current situation actually contains that need.
+  const codeNeed = f.code === true && ['create', 'transform', 'execute'].some(action => model.actions.includes(action));
+  const researchNeed = analysis.investigationNeeded
+    || model.actions.includes('investigate')
+    || externalData.hasExternalDataNeed === true;
+  if (boundary.surface === 'code' && researchNeed) surfaces.add('research');
+  if (boundary.surface === 'research' && codeNeed) surfaces.add('code');
   if (analysis.unknownSituation || capabilityRequirements.some(item => item.dynamic)) surfaces.add('adaptive');
 
   const allowed = ['auto', 'local', 'hosted', 'hybrid'];
