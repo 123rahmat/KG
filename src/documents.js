@@ -422,6 +422,14 @@ async function readArchiveBundle(buffer, profile) {
   };
 }
 
+export function inspectArchive(buffer) {
+  const { names } = archiveEntries(buffer);
+  return {
+    itemCount: names.length,
+    ...archiveProfile(names)
+  };
+}
+
 export async function readArchive(buffer) {
   const { names } = archiveEntries(buffer);
   const profile = archiveProfile(names);
