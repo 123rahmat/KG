@@ -197,6 +197,16 @@ export function registerWorkspaceSourcesRoutes(app, {
         JSON.stringify({ url: read.source.url, private: read.source.private, commitSha: read.source.commitSha, treeSha: read.source.treeSha, repoPath: read.source.repoPath, contentHash: manifest.contentHash, fileCount: manifest.fileCount, manifest: manifest.files, ingestion: read.ingestion, syncedAt: new Date().toISOString() })
       ]
     );
+    await pool.query(
+      `UPDATE code_workspace_sessions
+          SET state = 'stale', updated_at = now()
+        WHERE source_id = $1
+          AND workspace_id = $2
+          AND principal_id = $3
+          AND state = 'active'
+          AND (base_revision IS NULL OR base_revision <> $4)`,
+      [source.id, req.scope.workspaceId, req.principal.id, read.source.commitSha]
+    );
     res.json({ source: sourcePublic(updated), manifest, unchanged: false });
   }));
 
@@ -386,6 +396,16 @@ export function registerWorkspaceSourcesRoutes(app, {
       detail: { kind: 'github', ref: source.repo_ref, changedFiles: result.changedFiles ?? [], commitSha: result.commitSha },
       requestId: req.requestId
     });
+    await pool.query(
+      `UPDATE code_workspace_sessions
+          SET state = 'stale', updated_at = now()
+        WHERE source_id = $1
+          AND workspace_id = $2
+          AND principal_id = $3
+          AND state = 'active'
+          AND (base_revision IS NULL OR base_revision <> $4)`,
+      [source.id, req.scope.workspaceId, req.principal.id, result.commitSha]
+    );
     res.json({ source: sourcePublic(updated), result });
   }));
 
