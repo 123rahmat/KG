@@ -251,11 +251,14 @@ export function completionGate({
     || acceptance.authorizationRequired === true
     || acceptance.verificationRequired === true
   );
+  const finalizationGate = taskType === 'verify'
+    || taskType === 'deliver'
+    || acceptance.finalizationRequired === true;
   const gaps = [
-    ...(acceptanceHasExplicitGate ? (Array.isArray(acceptance.gaps) ? acceptance.gaps : []) : []),
-    ...(!authorizationSatisfied ? ['authorization-missing'] : []),
+    ...(finalizationGate && acceptanceHasExplicitGate ? (Array.isArray(acceptance.gaps) ? acceptance.gaps : []) : []),
+    ...(finalizationGate && !authorizationSatisfied ? ['authorization-missing'] : []),
     ...(verificationRequired && !verificationPassed ? ['verification-missing'] : []),
-    ...(status === 'complete' && acceptanceHasExplicitGate && !acceptance.satisfied ? ['acceptance-unsatisfied'] : []),
+    ...(status === 'complete' && finalizationGate && acceptanceHasExplicitGate && !acceptance.satisfied ? ['acceptance-unsatisfied'] : []),
     ...(status === 'complete' && !hasVerifiedEvidence && taskType !== 'respond' && verificationRequired ? ['evidence-insufficient'] : [])
   ];
   return {
