@@ -1075,6 +1075,13 @@ function startFromSuggestion(group, prompt) {
 
 /** Explore: every capability with its suggestions, to pick from. */
 export function renderExplore() {
+  const title = document.querySelector('#tab-explore .page-head h1');
+  const lead = document.querySelector('#tab-explore .page-head p');
+  const research = state.activeSurface === 'research';
+  if (title) title.textContent = research ? 'Research Workspace' : 'Explore';
+  if (lead) lead.textContent = research
+    ? 'Follow the active research question, source set, evidence gaps and citations without leaving the same adaptive run.'
+    : 'What I can help with in this workspace. Pick one to start a new chat.';
   const groups = availableSuggestions();
   const host = $('exploreList');
   if (!groups.length) {
