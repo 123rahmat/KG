@@ -25,6 +25,7 @@ import { adaptiveEffortProfile, adaptiveBehaviorContract } from './adaptive-effi
 import { buildAcceptanceContract, adaptiveDecisionAuthority } from './adaptive-decision-authority.js';
 import { buildUnifiedAdaptiveWorkflow, reassessUnifiedWorkflow, completionGate, unifiedRecoveryDecision } from './unified-adaptive-workflow.js';
 import { updateAdaptiveRuntimeState, decideRecovery, recoveryLesson } from './adaptive-runtime-state.js';
+import { createResearchWorkspaceState, updateResearchWorkspaceState } from './research-workspace.js';
 import { buildUnifiedWorkContext, applyWorkChange } from './unified-work-context.js';
 import { reevaluateSituationGovernance } from './situation-governance.js';
 import { MAX_CODE_REPAIRS, canRepair, builtCode, staleAfterRepair, repairRecord, hasCode, isProject, codeFiles, deletedPaths, mergeFix, repairsThisAttempt, normalizePackage } from './code-workflow.js';
@@ -380,6 +381,16 @@ export class RunStore {
     }
     if (attachments.length) plan.adaptation.attachments = attachments;
     if (workspaceSourceId) plan.adaptation.workspaceSourceId = workspaceSourceId;
+    const usesResearchWorkspace = plan.surface === 'research'
+      || (Array.isArray(plan.adaptation?.surfaces) && plan.adaptation.surfaces.includes('research'));
+    if (usesResearchWorkspace) {
+      plan.adaptation.researchWorkspace = createResearchWorkspaceState({
+        goal: goalText,
+        question: goalText,
+        prior: previousState?.adaptation?.researchWorkspace ?? null,
+        conversationId: conversation || null
+      });
+    }
     if (projectOverlay?.length) plan.adaptation.projectOverlay = projectOverlay;
     // Later stages (understanding) may add work only this deployment can run.
     if (executionAvailable) plan.adaptation.executionAvailable = executionAvailable;
@@ -1315,6 +1326,19 @@ export class RunStore {
             : (run.adaptation?.lastReassessment ?? null)
         };
     if (approvedPlanUpdate) adaptiveUpdate.approvedPlan = approvedPlanUpdate;
+    const usesResearchWorkspace = run.surface === 'research'
+      || (Array.isArray(run.adaptation?.surfaces) && run.adaptation.surfaces.includes('research'));
+    if (usesResearchWorkspace && (result.evidence != null || result.citations?.length || result.toolLog?.length)) {
+      adaptiveUpdate.researchWorkspace = updateResearchWorkspaceState(run.adaptation?.researchWorkspace ?? null, {
+        goal: run.goal,
+        question: run.goal,
+        runId: run.id,
+        conversationId: run.conversation_id ?? null,
+        evidence: result.evidence ?? null,
+        citations: result.citations ?? result.evidence?.citations ?? [],
+        toolLog: result.toolLog ?? result.evidence?.toolLog ?? []
+      });
+    }
 
     // Code changes are written back into the same unified context used by
     // planning and file reads. This keeps workflow state, editable files and
