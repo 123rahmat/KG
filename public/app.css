@@ -3508,6 +3508,208 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
 
 /* ------------------------------------------------ adaptive normal-chat creation */
 
+
+/* Dedicated deep-workspace chrome: Code and Research are projects/dossiers,
+   not chat skins. Normal Chat never shows this shell. */
+.deep-workspace-shell {
+  width: min(1080px, calc(100% - 28px));
+  margin: 2px auto 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  box-shadow: var(--shadow-sm);
+}
+.deep-workspace-shell[hidden] { display: none; }
+.deep-workspace-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  min-width:0;
+  padding:6px 4px 10px;
+}
+.deep-workspace-identity {
+  display:grid;
+  gap:3px;
+  min-width:0;
+}
+.deep-workspace-kicker {
+  color:var(--accent);
+  font:700 .58rem/1 var(--mono);
+  letter-spacing:.1em;
+}
+.deep-workspace-identity strong {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:.95rem;
+  font-weight:680;
+}
+.deep-workspace-state {
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  flex:none;
+  padding:5px 9px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:var(--softer);
+  color:var(--muted);
+  font:650 .62rem/1 var(--mono);
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+.deep-workspace-state i {
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:var(--ok);
+}
+.deep-workspace-head.research .deep-workspace-state i { background:var(--accent); }
+.deep-workspace-nav {
+  display:flex;
+  gap:4px;
+  padding:0 4px 9px;
+  border-bottom:1px solid var(--line);
+  overflow-x:auto;
+  scrollbar-width:none;
+}
+.deep-workspace-nav::-webkit-scrollbar { display:none; }
+.deep-workspace-nav button {
+  flex:none;
+  background:transparent;
+  border-color:transparent;
+  color:var(--muted);
+  font-weight:620;
+}
+.deep-workspace-nav button:hover:not(:disabled) {
+  background:var(--soft);
+  border-color:var(--line);
+  color:var(--ink);
+}
+.deep-workspace-nav button.active {
+  background:var(--accent-soft);
+  border-color:color-mix(in srgb,var(--accent) 28%,var(--line));
+  color:var(--accent);
+}
+.deep-workspace-grid {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:8px;
+  padding-top:9px;
+}
+.deep-workspace-card {
+  min-width:0;
+  padding:11px 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--softer);
+}
+.deep-workspace-card.work-card {
+  background:color-mix(in srgb,var(--panel) 92%, transparent);
+}
+.deep-workspace-card-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  margin-bottom:8px;
+}
+.deep-workspace-card-head .mono {
+  color:var(--muted);
+  font-size:.56rem;
+  font-weight:760;
+  letter-spacing:.09em;
+}
+.deep-workspace-card > strong {
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:.8rem;
+}
+.deep-workspace-card > p {
+  margin-top:5px;
+  line-height:1.45;
+}
+.deep-workspace-metrics {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:7px;
+  margin-top:10px;
+}
+.deep-workspace-metric {
+  display:grid;
+  gap:2px;
+  min-width:0;
+}
+.deep-workspace-metric span {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:.59rem;
+}
+.deep-workspace-metric b {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:.68rem;
+}
+.deep-workspace-badges {
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px;
+  margin-top:9px;
+}
+.deep-workspace-badge {
+  display:inline-flex;
+  gap:5px;
+  align-items:center;
+  min-width:0;
+  padding:4px 7px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:var(--panel);
+  color:var(--muted);
+  font-size:.58rem;
+}
+.deep-workspace-badge b {
+  color:var(--ink-2);
+  font-weight:680;
+}
+.deep-workspace-actions {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  padding:9px 4px 1px;
+}
+.deep-workspace-actions button {
+  min-height:30px;
+}
+body[data-adaptive-workspace="code"] .deep-workspace-shell {
+  border-color:color-mix(in srgb,var(--accent) 26%,var(--line));
+}
+body[data-adaptive-workspace="research"] .deep-workspace-shell {
+  border-color:color-mix(in srgb,var(--accent) 20%,var(--line));
+}
+@media (max-width:760px) {
+  .deep-workspace-shell {
+    width:calc(100% - 16px);
+    padding:8px;
+    border-radius:14px;
+  }
+  .deep-workspace-head {
+    align-items:flex-start;
+  }
+  .deep-workspace-grid {
+    grid-template-columns:1fr;
+  }
+  .deep-workspace-metrics {
+    grid-template-columns:repeat(3,minmax(0,1fr));
+  }
+}
+
 /* The composer mirrors the operating envelope: chat stays primary while lightweight
    creation capabilities are always reachable without turning the surface into a
    heavyweight design suite. */
