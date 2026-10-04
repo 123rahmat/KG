@@ -69,7 +69,7 @@ function normalizeSurfaceId(value = '') {
 }
 const MEDIUM_ANALYSIS = /\b(?:explain|compare|analy[sz]e|solve|calculate|derive|show|teach|why|how|which|evaluate|recommend|suggest|summari[sz]e|interpret)\b/i;
 
-export const SURFACE_POLICY_VERSION = '2';
+export const SURFACE_POLICY_VERSION = '3';
 
 export const SURFACE_WORKSPACE_CONTRACTS = Object.freeze({
   'normal-chat': Object.freeze({
