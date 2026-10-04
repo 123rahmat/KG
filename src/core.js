@@ -515,6 +515,7 @@ export function planGoal(goal, {
   // runner would stop at a step that can never finish; instead the work is
   // done as code and instructions, and the limitation is stated.
   const notAvailableHere = [];
+  let capabilityRequirements = discovered;
   // The workspace boundary is not an intelligence boundary. All three
   // workspaces use the same adaptive capability compiler and agentic control
   // loop; Code/Research simply provide specialized context when selected.
