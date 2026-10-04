@@ -108,32 +108,36 @@ export function adaptiveEffortProfile({
 }
 
 
-export function adaptiveBehaviorContract(profile = adaptiveEffortProfile({})) {
+export function adaptiveBehaviorContract(profile = adaptiveEffortProfile({}), { situation = {}, acceptance = {}, candidates = [] } = {}) {
   const p = profile ?? adaptiveEffortProfile({});
   const maturity = p.maturity ?? realWorldMaturity({});
   const level = String(p.level ?? 'standard');
   const rounds = level === 'minimal' ? 2 : level === 'standard' ? 4 : level === 'deep' ? 6 : 8;
+  const contract = buildAcceptanceContract({
+    goal: situation.goal ?? '',
+    criteria: acceptance.criteria ?? [],
+    evidenceRequired: acceptance.evidenceRequired ?? [],
+    evidence: acceptance.evidence ?? [],
+    authorizationRequired: acceptance.authorizationRequired === true,
+    authorizationSatisfied: acceptance.authorizationSatisfied !== false,
+    verificationRequired: acceptance.verificationRequired ?? maturity.independentVerificationRequired,
+    verificationSatisfied: acceptance.verificationSatisfied === true
+  });
   const authority = adaptiveDecisionAuthority({
-    situation: {
-      uncertainty: p.scores?.uncertainty ?? 0,
-      riskScore: p.scores?.risk ?? 0,
-      verificationGap: p.scores?.verificationGap ?? 0,
-      irreversible: p.scores?.irreversible >= 1,
-      consequence: p.scores?.consequence ?? 0
+    situation: { ...situation,
+      uncertainty: situation.uncertainty ?? p.scores?.uncertainty ?? 0,
+      riskScore: situation.riskScore ?? p.scores?.risk ?? 0,
+      verificationGap: situation.verificationGap ?? p.scores?.verificationGap ?? 0,
+      consequence: situation.consequence ?? p.scores?.consequence ?? 0
     },
     profile: p,
-    acceptance: buildAcceptanceContract({
-      criteria: [],
-      evidenceRequired: [],
-      evidence: [],
-      verificationRequired: maturity.independentVerificationRequired,
-      verificationSatisfied: false
-    }),
-    previousAction: null
+    acceptance: contract,
+    candidates,
+    failedAttempts: situation.failedAttempts ?? 0
   });
   return {
-    version: 2,
-    principle: 'Adapt every behavior to the current situation; do not maximize intelligence, tools, agents, context, or verification unless the evidence justifies them.',
+    version: 3,
+    principle: 'Adapt every behavior to the current situation; do not maximize intelligence, tools, agents, context, verification, or parallelism unless justified by need and evidence.',
     maturity: level,
     pressure: p.pressure ?? 0,
     behavior: {
@@ -142,6 +146,7 @@ export function adaptiveBehaviorContract(profile = adaptiveEffortProfile({})) {
       resources: p.expansionAllowed ? 'expand-when-justified' : 'minimum-necessary',
       tools: 'minimum-necessary',
       agents: p.expansionAllowed ? 'adaptive-specialists' : 'single-agent-when-sufficient',
+      parallelism: p.expansionAllowed ? 'independent-work-only' : 'off-unless-necessary',
       context: p.contextDepth,
       execution: maturity.rollbackRequired ? 'guarded-with-rollback' : 'normal',
       verification: p.verificationDepth,
@@ -161,16 +166,9 @@ export function adaptiveBehaviorContract(profile = adaptiveEffortProfile({})) {
     provenanceRequired: maturity.provenanceRequired,
     escalationTriggers: maturity.escalationTriggers,
     deescalateAfter: p.adaptation?.deescalateAfter ?? ['verified-success', 'stable-observation', 'acceptance-evidence-satisfied'],
-    neverAutoPromoteAuthority: true
-    },
+    neverAutoPromoteAuthority: true,
     authorityDecision: authority,
-    acceptanceContract: buildAcceptanceContract({
-      criteria: [],
-      evidenceRequired: [],
-      evidence: [],
-      verificationRequired: maturity.independentVerificationRequired,
-      verificationSatisfied: false
-    })
+    acceptanceContract: contract
   };
 }
 
