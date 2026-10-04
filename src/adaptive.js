@@ -473,7 +473,7 @@ export function resolveAdaptiveContext(goal, {
   const model = analysis.goalModel ?? compileGoalModel(goal);
   const boundary = classifySurfaceBoundary(goal, {
     activeSurface,
-    attachments,
+    attachments: attachedArtifacts,
     flags: f,
     actions: model.actions
   });
@@ -483,7 +483,6 @@ export function resolveAdaptiveContext(goal, {
   if (boundary.surface === 'normal-chat') surfaces.add('chat');
   if (analysis.unknownSituation || capabilityRequirements.some(item => item.dynamic)) surfaces.add('adaptive');
 
-  const ordered = ['chat', 'research', 'code', 'adaptive'].filter(surface => surfaces.has(surface));
   const allowed = ['auto', 'local', 'hosted', 'hybrid'];
   const requested = allowed.includes(text(runtimeMode)) ? text(runtimeMode) : 'auto';
   const mode = requested === 'auto' ? 'hosted' : requested;
