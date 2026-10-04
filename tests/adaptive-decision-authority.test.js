@@ -84,3 +84,18 @@ test('adaptive behavior exposes the unified authority decision', () => {
   assert.ok(contract.acceptanceContract);
   assert.equal(contract.controls?.neverAutoPromoteAuthority, undefined);
 });
+
+
+import { adaptiveBehaviorContract } from '../src/adaptive-efficiency.js';
+
+test('adaptive behavior contract is structurally complete', () => {
+  const contract = adaptiveBehaviorContract(undefined, {
+    situation: { goal: 'simple answer', uncertainty: 0.05, riskScore: 0.1 },
+    acceptance: { criteria: ['answer provided'], evidence: [] }
+  });
+  assert.equal(contract.authorityDecision.authority, 'server-owned');
+  assert.equal(contract.neverAutoPromoteAuthority, true);
+  assert.ok(contract.behavior.agents);
+  assert.ok(contract.behavior.parallelism);
+  assert.ok(contract.acceptanceContract);
+});
