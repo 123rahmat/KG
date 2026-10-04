@@ -24,7 +24,7 @@ import { adaptiveBudgetStatus, adaptiveBudgetForRun, reconcileAdaptiveTransition
 import { adaptiveEffortProfile, adaptiveBehaviorContract } from './adaptive-efficiency.js';
 import { buildAcceptanceContract, adaptiveDecisionAuthority } from './adaptive-decision-authority.js';
 import { buildUnifiedAdaptiveWorkflow, reassessUnifiedWorkflow, completionGate, unifiedRecoveryDecision } from './unified-adaptive-workflow.js';
-import { updateAdaptiveRuntimeState, decideRecovery, recoveryLesson } from './adaptive-runtime-state.js';
+import { updateAdaptiveRuntimeState, recoveryLesson } from './adaptive-runtime-state.js';
 import { createResearchWorkspaceState, updateResearchWorkspaceState } from './research-workspace.js';
 import { buildUnifiedWorkContext, applyWorkChange } from './unified-work-context.js';
 import { reevaluateSituationGovernance } from './situation-governance.js';
@@ -1433,16 +1433,9 @@ export class RunStore {
 
     if (decision.status === 'failed') {
       const recoveryReason = text(result?.summary) || text(result?.reason) || 'workflow-step-failed';
-      const recovery = decideRecovery({
-        taskType: target.type,
-        reason: recoveryReason,
-        attempt: run.attempt,
-        maxAttempts: run.max_attempts,
-        governanceStatus: run.adaptation?.governance?.status ?? 'ready',
-        humanReviewRequired: run.adaptation?.verification?.humanReviewRequired === true,
-        repairAvailable: target.type === 'code'
-      });
-      const unifiedRecovery = unifiedRecoveryDecision({
+      // Recovery has one decision authority: the unified adaptive workflow.
+      // The runtime-state module records the resulting projection/history only.
+      const effectiveRecovery = unifiedRecoveryDecision({
         reason: recoveryReason,
         attempts: run.attempt,
         maxAttempts: run.max_attempts,
@@ -1450,7 +1443,6 @@ export class RunStore {
         humanControlRequired: run.adaptation?.unifiedAdaptiveWorkflow?.authority?.controls?.humanControlRequired === true,
         governanceStatus: run.adaptation?.governance?.status ?? 'ready'
       });
-      const effectiveRecovery = unifiedRecovery.action === 'stop' ? { ...recovery, action: 'stop', reason: unifiedRecovery.reason } : recovery;
       const recoveryRecord = recoveryLesson(effectiveRecovery, {
         taskId: target.id,
         summary: result?.summary
