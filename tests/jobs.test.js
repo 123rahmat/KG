@@ -151,8 +151,9 @@ test('a successful background step queues a safe server-side continuation', () =
       token, workspace, body: { background: true }
     });
     assert.equal(queued.status, 202);
-    assert.equal(await worker.runOnce(), 2);
+    assert.equal(await worker.runOnce(), 1);
     const { body: after } = await call('GET', `/api/runs/${run.id}`, { token, workspace });
     assert.ok(after.tasks.some(task => task.id === 'verify'));
     assert.equal(after.tasks.find(task => task.id === 'respond')?.status, 'complete');
+    assert.equal(await worker.runOnce(), 1);
   }, { env: ANTHROPIC, fetchImpl: async () => answer('A function that calls itself.') }));
