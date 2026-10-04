@@ -173,3 +173,31 @@ test('Normal Chat retains adaptive depth and shared agent policy', () => {
   assert.equal(task.maxDepth, 'adaptive');
   assert.equal(task.agents, 'shared-adaptive-and-justified');
 });
+
+
+test('Normal Chat owns bounded micro and single-file work', () => {
+  const single = classifySurfaceBoundary('Fix this Python file and run its tests.', {
+    activeSurface: 'normal-chat',
+    flags: { code: true },
+    actions: ['answer', 'transform', 'execute'],
+    attachments: [{ name: 'tool.py' }]
+  });
+  assert.equal(single.surface, 'normal-chat');
+  assert.equal(single.complexity, 'adaptive');
+
+  const twoFiles = classifySurfaceBoundary('Fix these Python files and run the tests.', {
+    activeSurface: 'normal-chat',
+    flags: { code: true },
+    actions: ['answer', 'transform', 'execute'],
+    attachments: [{ name: 'a.py' }, { name: 'b.py' }]
+  });
+  assert.equal(twoFiles.surface, 'code');
+
+  const project = classifySurfaceBoundary('Build and deploy the application.', {
+    activeSurface: 'normal-chat',
+    flags: { code: true },
+    actions: ['answer', 'create', 'execute'],
+    attachments: [{ name: 'main.py' }]
+  });
+  assert.equal(project.surface, 'code');
+});
