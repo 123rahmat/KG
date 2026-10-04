@@ -815,6 +815,18 @@ const STAGE_REQUIREMENTS = Object.freeze({
   deliver: ['reasoning', 'verification']
 });
 
+function situationGapCount({ verificationEvidenceAvailable, needsInvestigation, situation } = {}) {
+  if (situation && typeof situation === 'object') {
+    return [
+      needsInvestigation,
+      situation?.evidenceGap === true,
+      situation?.conflicts?.length > 0,
+      situation?.unresolvedQuestions?.length > 0
+    ].filter(Boolean).length;
+  }
+  return [needsInvestigation, !verificationEvidenceAvailable].filter(Boolean).length;
+}
+
 function adaptiveNextStage(current, {
   verificationFailed = false,
   materialChange = false,
@@ -825,12 +837,29 @@ function adaptiveNextStage(current, {
   verified = false,
   blocked = false,
   depth = 'full',
-  coding = false
+  coding = false,
+  research = false
 } = {}) {
   if (blocked) return null;
   if (verificationFailed || materialChange) return 'replan';
   if (current === 'verify' && !verified && !verificationEvidenceAvailable) return 'replan';
   if (verified) return 'deliver';
+
+  // Research uses the same adaptive loop, but prioritizes evidence gaps
+  // and unresolved conflicts rather than software execution stages.
+  if (research) {
+    const gaps = Number(situationGapCount({ verificationEvidenceAvailable, needsInvestigation, situation: null })) || 0;
+    void gaps;
+    if (depth === 'focused' && current === 'reason' && !needsInvestigation && verificationEvidenceAvailable) return 'verify';
+    if (current === 'understand') return 'model-situation';
+    if (current === 'model-situation') return needsInvestigation ? 'investigate' : 'reason';
+    if (current === 'investigate') return verificationEvidenceAvailable ? 'reason' : 'investigate';
+    if (current === 'reason') return depth === 'focused' ? 'verify' : 'challenge';
+    if (current === 'challenge') return needsInvestigation ? 'investigate' : 'verify';
+    if (current === 'verify') return verified ? 'deliver' : (verificationEvidenceAvailable ? 'replan' : 'investigate');
+    if (current === 'replan') return 'investigate';
+    if (current === 'deliver') return null;
+  }
 
   // Simple work still uses the same control loop, but shallowly. It should
   // not pay for project-management stages that cannot materially improve it.
@@ -960,7 +989,10 @@ export function advanceAdaptiveWorkflow(tasks, taskId, {
     verified: verified || situation.verified === true,
     blocked: blocked || situation.blocked === true,
     depth: adaptiveProfile.depth ?? 'full',
-    coding: intelligence?.coding === true
+    coding: intelligence?.coding === true,
+    research: intelligence?.surface === 'research'
+      || intelligence?.research === true
+      || situation?.research === true
   });
 
   if (!nextStage) return { ok: true, status, tasks: applied, next: null, state: 'complete' };
