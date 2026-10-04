@@ -21,6 +21,7 @@ import { executionTargetsFor, defaultExecutionRequirements } from './execution.j
 import { normalizeCapabilityDiscovery, verificationContract } from './capabilities.js';
 import { buildSituationModel, evolveSituation, situationQualityGate } from './situation.js';
 import { adaptiveBudgetStatus, adaptiveBudgetForRun, reconcileAdaptiveTransition } from './adaptive-control.js';
+import { adaptiveEffortProfile } from './adaptive-efficiency.js';
 import { updateAdaptiveRuntimeState, decideRecovery, recoveryLesson } from './adaptive-runtime-state.js';
 import { buildUnifiedWorkContext, applyWorkChange } from './unified-work-context.js';
 import { reevaluateSituationGovernance } from './situation-governance.js';
@@ -274,6 +275,19 @@ export class RunStore {
       plan.adaptation.classification = { ...plan.adaptation.classification, ...classification };
     }
     plan.adaptation.workflow = plan.workflow;
+    // Server-owned maturity contract: agentic breadth and rigor adapt to the situation.
+    plan.adaptation.effortProfile = adaptiveEffortProfile({
+      complexity: Number(situation.complexity ?? plan.adaptation?.complexity ?? 0),
+      uncertainty: Number(situation.uncertainty ?? 0),
+      risk: situation.risk ?? 'medium',
+      verificationGap: Number(situation.verificationGap ?? 0),
+      failureCount: Array.isArray(failedSteps) ? failedSteps.length : 0,
+      irreversible: situation.irreversible === true,
+      externalSideEffect: situation.externalSideEffect === true,
+      physical: situation.physical === true || situation.flags?.physical === true,
+      regulated: situation.regulated === true || situation.flags?.regulated === true,
+      peopleDecision: situation.peopleDecision === true || situation.flags?.highImpact === true
+    });
     // Later steps (schedules, dates) work in the person's own time zone.
     plan.adaptation.timeZone = plan.context?.timeZone ?? 'UTC';
     if (history.length) plan.adaptation.conversation = history;
