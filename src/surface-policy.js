@@ -9,6 +9,8 @@
  * Workspaces change context, tools and continuity; they do not create
  * separate intelligence levels or separate agentic brains.
  */
+import { classifyAttachmentSet } from './documents.js';
+
 const text = value => String(value ?? '').trim();
 
 const CODE = /\b(?:code|coding|program|programming|debug|debugging|refactor|repository|repo|pull request|branch|commit|function|class|variable|bug|stack trace|compile|compiler|test suite|unit test|typescript|javascript|python|rust|golang|java|sql|api|backend|frontend|software|app|application|website|web app|github)\b|\b[\w-]+\.(?:py|js|mjs|cjs|ts|tsx|jsx|go|rs|java|kt|c|cc|cpp|h|hpp|cs|rb|php|swift|sql|sh|html|css|json)\b/i;
@@ -30,19 +32,18 @@ function attachmentKinds(attachments) {
     .filter(Boolean);
 }
 
-function hasProjectCodeContext(value, attachments) {
-  const names = attachmentNames(attachments);
-  const kinds = attachmentKinds(attachments);
-  const sourceCount = names.filter(name =>
-    /\.(?:py|js|mjs|cjs|jsx|ts|tsx|go|rs|java|kt|c|cc|cpp|h|hpp|cs|rb|php|swift|sql|sh|html|css|json)$/i.test(name)
-  ).length;
-  return CODE_PROJECT_SCOPE.test(value)
-    || kinds.includes('code-project')
-    || sourceCount > 1;
+function attachmentWorkProfile(attachments) {
+  return classifyAttachmentSet(attachments);
 }
 
-function hasResearchArchiveContext(attachments) {
-  return attachmentKinds(attachments).includes('research-bundle');
+function hasProjectCodeContext(value, attachments, profile = attachmentWorkProfile(attachments)) {
+  return CODE_PROJECT_SCOPE.test(value)
+    || profile.kind === 'code'
+    || profile.codeFiles.some(name => /(?:package\.json|pyproject\.toml|Cargo\.toml|go\.mod|Dockerfile|Makefile|requirements\.txt)$/i.test(name));
+}
+
+function hasResearchArchiveContext(attachments, profile = attachmentWorkProfile(attachments)) {
+  return attachmentKinds(attachments).includes('research-bundle') || profile.kind === 'research';
 }
 
 function shouldUseCodeWorkspace(value, attachments, { actions = [], explicitCodeSwitch = false } = {}) {
@@ -163,13 +164,14 @@ export const SURFACE_POLICY = Object.freeze({
 export function classifySurfaceBoundary(goal, { activeSurface = '', attachments = [], flags = {}, actions = [] } = {}) {
   const value = text(goal);
   const active = normalizeSurfaceId(activeSurface);
+  const attachmentProfile = attachmentWorkProfile(attachments);
   const explicitCodeSwitch = EXPLICIT_MODE_SWITCH.code.test(value);
   const codeAction = Array.isArray(actions) && actions.some(action => ['create', 'transform', 'execute'].includes(String(action).toLowerCase()));
   const explicitCode = shouldUseCodeWorkspace(value, attachments, {
     actions,
     explicitCodeSwitch
-  }) || flags.code === true && codeAction && hasProjectCodeContext(value, attachments);
-  const explicitResearch = hasResearchArchiveContext(attachments)
+  }) || flags.code === true && codeAction && hasProjectCodeContext(value, attachments, attachmentProfile);
+  const explicitResearch = hasResearchArchiveContext(attachments, attachmentProfile)
     || EXPLICIT_MODE_SWITCH.research.test(value)
     || DEEP_RESEARCH_ACTION.test(value)
     || (CURRENT_FACTS.test(value) && /\b(?:search|find|check|verify|compare|source|price|rate|news|weather|score|latest|current)\b/i.test(value))
@@ -186,7 +188,8 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
       transition: active === 'code' ? 'stay' : 'switch',
       reason: 'coding-work-requires-code-surface',
       complexity: 'deep-eligible',
-      workspace: SURFACE_WORKSPACE_CONTRACTS.code
+      workspace: SURFACE_WORKSPACE_CONTRACTS.code,
+      attachmentProfile
     };
   }
 
@@ -198,7 +201,8 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
       transition: active === 'research' ? 'stay' : 'switch',
       reason: 'deep-research-work-requires-research-surface',
       complexity: 'deep-eligible',
-      workspace: SURFACE_WORKSPACE_CONTRACTS.research
+      workspace: SURFACE_WORKSPACE_CONTRACTS.research,
+      attachmentProfile
     };
   }
 
@@ -235,7 +239,8 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
     transition: active === 'normal-chat' ? 'stay' : 'switch',
     reason: visualOrFile ? 'adaptive-file-or-image-context' : MEDIUM_ANALYSIS.test(value) ? 'adaptive-analysis' : 'adaptive-general-chat',
     complexity: 'adaptive',
-    workspace: SURFACE_WORKSPACE_CONTRACTS['normal-chat']
+    workspace: SURFACE_WORKSPACE_CONTRACTS['normal-chat'],
+    attachmentProfile
   };
 }
 export function workspaceContract(surface = 'normal-chat') {
