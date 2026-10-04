@@ -69,7 +69,7 @@ function dispatchSurface(name) {
     return;
   }
   if (name === 'research') {
-    document.dispatchEvent(new CustomEvent('kindgleam:select-surface', { detail: { name: 'explore', workspace: 'research' } }));
+    document.dispatchEvent(new CustomEvent('kindgleam:select-surface', { detail: { name: 'runs', workspace: 'research' } }));
     return;
   }
   document.dispatchEvent(new CustomEvent('kindgleam:select-surface', { detail: { name } }));
