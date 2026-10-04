@@ -294,12 +294,6 @@ function archiveTextSignals(bytes) {
   return { code, research };
 }
 
-function isCodeArchivePath(name) {
-  const base = String(name ?? '').split('/').pop() ?? '';
-  if (CODE_PROJECT_MARKERS.has(base)) return true;
-  return CODE_ARCHIVE_EXT.has(pathExtension(name));
-}
-
 function archiveProfile(names, entries = null) {
   let codeFiles = 0;
   let codeMarkers = 0;
