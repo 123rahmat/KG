@@ -16,6 +16,7 @@ import { mergeBlackboard } from './blackboard.js';
 import { adaptConcurrency, adaptiveParallelLimit, agentWorkspaceLane, buildWorkspaceParallelPlan } from './parallel-orchestrator.js';
 import { buildSubsystemPlan, compactSubsystemPlan, createSubsystemMessage, mergeSubsystemMessages, subsystemAssignment, subsystemCommunicationContext } from './subsystem-orchestrator.js';
 import { realWorldMaturity } from './adaptive-efficiency.js';
+import { adaptiveDecisionAuthority, buildAcceptanceContract, recoveryDecision } from './adaptive-decision-authority.js';
 
 export const MULTI_AGENT_MODES = Object.freeze(['auto', 'always', 'off']);
 export const DEFAULT_MULTI_AGENT_MAX_AGENTS = 11;
@@ -335,10 +336,37 @@ export function multiAgentDecision(run, task, { mode = 'auto', progress = {} } =
     irreversible: run?.situation?.irreversible === true
   });
   const maturityPressure = Number(maturity?.pressure ?? 0);
+  const adaptiveAuthority = adaptiveDecisionAuthority({
+    situation: {
+      uncertainty: Number(run?.situation?.uncertainty ?? 0),
+      riskScore: run?.situation?.risk === 'critical' ? 1 : run?.situation?.risk === 'high' ? 0.75 : run?.situation?.risk === 'medium' ? 0.45 : 0.15,
+      verificationGap: Number(run?.situation?.verificationGap ?? 0),
+      irreversible: run?.situation?.irreversible === true,
+      externalSideEffect: run?.situation?.externalSideEffect === true,
+      physical: run?.situation?.physical === true,
+      regulated: run?.situation?.regulated === true,
+      peopleDecision: run?.situation?.peopleDecision === true
+    },
+    profile: run?.adaptation?.effortProfile ?? {},
+    acceptance: buildAcceptanceContract({
+      goal: run?.goal,
+      criteria: run?.situation?.successCriteria ?? [],
+      evidence: progress?.evidenceSoFar ?? [],
+      authorizationRequired: run?.situation?.authorizationRequired === true,
+      authorizationSatisfied: run?.situation?.authorizationSatisfied !== false,
+      verificationRequired: maturity?.independentVerificationRequired === true,
+      verificationSatisfied: progress?.verificationSatisfied === true
+    }),
+    failedAttempts: Math.max(0, Number(run?.attempt ?? 1) - 1)
+  });
+
   const pressure = Math.max(basePressure, maturityPressure);
-  if (normalizedMode === 'off') return { enabled: false, reason: 'disabled', pressure, maturity };
+  const authorityPressure = Number(adaptiveAuthority.pressure ?? 0);
+  if (normalizedMode === 'off') return { enabled: false, reason: 'disabled', pressure, maturity, adaptiveAuthority };
+  if (adaptiveAuthority.action === 'human-control') return { enabled: false, reason: 'human-control-required', pressure: Math.max(pressure, authorityPressure), maturity, adaptiveAuthority };
+  if (adaptiveAuthority.action === 'stop') return { enabled: false, reason: 'authority-stop', pressure: Math.max(pressure, authorityPressure), maturity, adaptiveAuthority };
   if (run?.situation?.risk === 'crisis' || run?.adaptation?.safetyAdaptive === true) {
-    return { enabled: false, reason: 'crisis-or-safety-adaptive', pressure, maturity };
+    return { enabled: false, reason: 'crisis-or-safety-adaptive', pressure: Math.max(pressure, authorityPressure), maturity, adaptiveAuthority };
   }
   if (task?.metadata?.declined === true || task?.metadata?.conversational === true) {
     return { enabled: false, reason: 'declined-or-conversational', pressure, maturity };
@@ -346,7 +374,7 @@ export function multiAgentDecision(run, task, { mode = 'auto', progress = {} } =
   if (task?.type === 'verify') return { enabled: false, reason: 'dedicated-verification-review', pressure, maturity };
   if (normalizedMode === 'always') return { enabled: true, reason: 'always', pressure, maturity };
   if (maturity?.independentVerificationRequired && maturityPressure >= 0.65 && task?.type !== 'deliver') {
-    return { enabled: true, reason: 'real-world-maturity-justified', pressure, maturity };
+    return { enabled: true, adaptiveAuthority, reason: 'real-world-maturity-justified', pressure, maturity };
   }
   if (pressure >= AUTO_PANEL_THRESHOLD) return { enabled: true, reason: 'adaptive-value-justified', pressure, maturity };
   return { enabled: false, reason: 'single-agent-sufficient', pressure, maturity };
