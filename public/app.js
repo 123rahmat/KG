@@ -1444,7 +1444,15 @@ $('tabs').addEventListener('click', event => {
 
 document.addEventListener('kindgleam:select-surface', event => {
   const name = event.detail?.name;
+  const workspace = event.detail?.workspace;
+  if (workspace) state.activeSurface = workspace;
+  else if (name === 'explore') state.activeSurface = 'research';
+  else if (name === 'runs') state.activeSurface = 'normal-chat';
   if (name) selectTab(name);
+});
+
+document.addEventListener('kindgleam:open-code-workspace', () => {
+  state.activeSurface = 'code';
 });
 
 $('workspace').addEventListener('change', event => {
