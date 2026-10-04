@@ -149,17 +149,33 @@ const CODE_FILE = /\.(py|pyi|js|mjs|cjs|jsx|ts|tsx|json|toml|cfg|ini|ya?ml|txt|m
  */
 export async function projectFiles(objects, scope, attachments, { overlay = null } = {}) {
   const files = new Map();
+  const origins = new Map();
+  const addFile = (path, content, origin) => {
+    if (!path || isSensitiveWorkspacePath(path)) return;
+    const value = String(content ?? '');
+    const prior = files.get(path);
+    if (prior !== undefined && prior !== value) {
+      const error = new Error(`Combined Code Workspace inputs contain conflicting versions of ${path}. Keep one version or make the file contents match.`);
+      error.code = 'workspace-file-conflict';
+      error.path = path;
+      error.origins = [origins.get(path), origin].filter(Boolean);
+      throw error;
+    }
+    if (prior === undefined) {
+      files.set(path, value);
+      origins.set(path, origin);
+    }
+  };
   for (const file of Array.isArray(attachments) ? attachments : []) {
     if (!file.readable) continue;
     const read = await readAttachment(objects, scope, file);
     if (read.error) continue;
+    const origin = String(file.name ?? file.id ?? 'attached input');
     if (read.format === 'project') {
-      for (const item of read.files ?? []) {
-        if (!isSensitiveWorkspacePath(item.path)) files.set(item.path, item.content);
-      }
+      for (const item of read.files ?? []) addFile(item.path, item.content, origin);
     } else if (['text', 'csv'].includes(read.format) && CODE_FILE.test(String(file.name)) && !read.truncated) {
       const name = String(file.name).split('/').pop();
-      if (!isSensitiveWorkspacePath(name)) files.set(name, read.text ?? '');
+      addFile(name, read.text ?? '', origin);
     }
   }
   return withOverlay([...files].map(([path, content]) => ({ path, content })), overlay);
