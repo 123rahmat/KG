@@ -640,6 +640,7 @@ export function agentMessages(role, basePayload) {
         evidenceSoFar: basePayload?.evidenceSoFar ?? [],
                  skillLearning: basePayload?.skillLearning ?? null,
          adaptiveContext: basePayload?.adaptiveContext ?? null,
+        adaptiveBehavior: basePayload?.adaptiveBehavior ?? null,
          precedents: Array.isArray(basePayload?.precedents) ? basePayload.precedents.slice(0, 6) : [],
 skills: Array.isArray(basePayload?.skills) ? basePayload.skills.slice(0, 6).map(skill => ({
           name: skill.name, version: skill.version, description: skill.description,
