@@ -636,6 +636,12 @@ export function buildUnifiedAdaptiveIntelligence(goal, {
   const verification = buildAdaptiveVerification({
     coding, complexity, scale, successCriteria, changeImpact, failureDiagnosis
   });
+  const management = buildManagementModel({
+    scale, complexity, projectWork, coding, unknown, executionAvailable
+  });
+  const decisionModel = buildDecisionModel({
+    scale, complexity, projectWork, coding, unknown
+  });
 
   return {
     schemaVersion: '1',
@@ -676,12 +682,8 @@ export function buildUnifiedAdaptiveIntelligence(goal, {
     reasoning: inferReasoningProfile({
       complexity, broad, unknown, projectWork, coding, actions
     }),
-    management: buildManagementModel({
-      scale, complexity, projectWork, coding, unknown, executionAvailable
-    }),
-    decisionModel: buildDecisionModel({
-      scale, complexity, projectWork, coding, unknown
-    }),
+    management,
+    decisionModel,
     metaReasoning,
     resourceDecision,
     failureDiagnosis,
@@ -689,8 +691,8 @@ export function buildUnifiedAdaptiveIntelligence(goal, {
     situationalControl: buildSituationalControl({ goal, analysis, currentState, successCriteria, constraints, resourceDecision, failureDiagnosis, changeImpact }),
     controlLoop: buildUnifiedControlLoop({
       metaReasoning,
-      management: buildManagementModel({ scale, complexity, projectWork, coding, unknown, executionAvailable }),
-      decisionModel: buildDecisionModel({ scale, complexity, projectWork, coding, unknown })
+      management,
+      decisionModel
     })
   };
 }
