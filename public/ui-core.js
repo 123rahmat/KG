@@ -39,7 +39,9 @@ export const state = {
   voice: { recognition: null, listening: false, baseText: '' },
   network: { online: navigator.onLine !== false, reachable: true, queue: [] },
   draftSaveTimer: null,
-  feedbackByRun: new Map()
+  feedbackByRun: new Map(),
+  // The person can move the current conversation between adaptive workspace envelopes.
+  activeSurface: 'normal-chat'
 };
 
 export function updateConnectionUI() {
