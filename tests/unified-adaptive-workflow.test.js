@@ -46,12 +46,28 @@ test('completion gate blocks consequential completion without verification', () 
   const gate = completionGate({
     workflow,
     status: 'complete',
-    taskType: 'code',
+    taskType: 'verify',
     evidence: [{ kind: 'observed', text: 'implemented' }],
     verification: { verdict: 'fail' }
   });
   assert.equal(gate.allowed, false);
   assert.ok(gate.gaps.includes('verification-missing'));
+});
+
+
+test('intermediate work can complete before the final acceptance gate', () => {
+  const workflow = buildUnifiedAdaptiveWorkflow({
+    goal: 'build a consequential change',
+    situation: { riskScore: 0.9, uncertainty: 0.4, peopleDecision: true },
+    acceptance: { criteria: ['decision supported'], evidenceRequired: ['independent review'] }
+  });
+  const gate = completionGate({
+    workflow,
+    status: 'complete',
+    taskType: 'code',
+    evidence: [{ kind: 'observed', text: 'implementation finished' }]
+  });
+  assert.equal(gate.allowed, true);
 });
 
 test('ordinary conversational completion is not forced through an artificial evidence gate', () => {
