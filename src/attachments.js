@@ -86,7 +86,9 @@ function attachmentPriority(file, focus = '') {
   return score;
 }
 
-export async function attachmentContext(objects, scope, attachments, { maxChars = 60_000, maxImages = 4, focus = '', overlay = null } = {}) {
+export async function attachmentContext(objects, scope, attachments, { maxChars = 60_000, maxImages = 6, focus = '', overlay = null } = {}) {
+  const visualFocus = /\\b(?:image|images|diagram|visual|design|canvas|figure|photo|photos|screenshot|presentation|slide|slides)\\b/i.test(String(focus ?? ''));
+  const imageLimit = Math.max(1, Math.min(Number(maxImages) || 6, visualFocus ? 6 : 4));
   let overlaid = false;
   const singles = [];
   const files = [];
@@ -106,10 +108,10 @@ export async function attachmentContext(objects, scope, attachments, { maxChars 
       continue;
     }
     if (read.kind === 'image') {
-      if (images.length < maxImages) {
+      if (images.length < imageLimit) {
         images.push(read.image);
         files.push({ name: file.name, readable: true, kind: 'image', note: 'Shown to you as an image.' });
-      } else files.push({ name: file.name, readable: false, note: `Only ${maxImages} images are shown per step.` });
+      } else files.push({ name: file.name, readable: false, note: `Only ${imageLimit} images are shown per step.` });
       continue;
     }
     // A code project larger than the budget shows the files this step needs.
@@ -133,9 +135,9 @@ export async function attachmentContext(objects, scope, attachments, { maxChars 
     if (read.format === 'bundle' && Array.isArray(read.items)) {
       const view = archiveView(read.items, focus, budget);
       const bundleImages = view.shown
-        .filter(item => item?.kind === 'image' && item?.image && images.length < maxImages)
+        .filter(item => item?.kind === 'image' && item?.image && images.length < imageLimit)
         .map(item => item.image);
-      images.push(...bundleImages.slice(0, Math.max(0, maxImages - images.length)));
+      images.push(...bundleImages.slice(0, Math.max(0, imageLimit - images.length)));
       const imagePaths = new Set(view.shown.filter(item => item?.kind === 'image').map(item => item?.path));
       const imageText = view.shown
         .filter(item => item?.kind !== 'image' || !imagePaths.has(item?.path))
