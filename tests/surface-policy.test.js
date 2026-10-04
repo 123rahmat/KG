@@ -161,6 +161,41 @@ test('ZIP workspace routing follows archive contents', () => {
   assert.equal(documents.surface, 'normal-chat');
 });
 
+test('neutral and mixed attachments remain in Normal Chat', () => {
+  const neutral = classifySurfaceBoundary('Summarize these files for me.', {
+    activeSurface: 'normal-chat',
+    attachments: [
+      { name: 'report.pdf', format: 'pdf' },
+      { name: 'notes.docx', format: 'docx' }
+    ],
+    actions: ['answer']
+  });
+  assert.equal(neutral.surface, 'normal-chat');
+
+  const mixed = classifySurfaceBoundary('Explain what is in this archive.', {
+    activeSurface: 'normal-chat',
+    attachments: [{ name: 'bundle.zip', format: 'bundle', archiveKind: 'mixed-bundle' }],
+    actions: ['answer']
+  });
+  assert.equal(mixed.surface, 'normal-chat');
+});
+
+test('archive contents outrank the .zip extension', () => {
+  const code = classifySurfaceBoundary('Fix the project in this archive.', {
+    activeSurface: 'normal-chat',
+    attachments: [{ name: 'anything.zip', format: 'project', archiveKind: 'code-project' }],
+    actions: ['answer', 'transform', 'execute']
+  });
+  assert.equal(code.surface, 'code');
+
+  const research = classifySurfaceBoundary('Use the supplied papers to answer this.', {
+    activeSurface: 'normal-chat',
+    attachments: [{ name: 'anything.zip', format: 'bundle', archiveKind: 'research-bundle' }],
+    actions: ['answer', 'investigate']
+  });
+  assert.equal(research.surface, 'research');
+});
+
 test('Normal Chat remains the general adaptive mode for non-deep workspace work', () => {
   const contract = SURFACE_WORKSPACE_CONTRACTS['normal-chat'];
   assert.match(contract.objective, /general adaptive operating mode/i);
