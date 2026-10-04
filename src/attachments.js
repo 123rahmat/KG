@@ -64,13 +64,37 @@ export function withOverlay(files, overlay) {
   return [...merged.values()];
 }
 
+function attachmentPriority(file, focus = '') {
+  const name = String(file?.name ?? '').toLowerCase();
+  const value = String(focus ?? '').toLowerCase();
+  const words = new Set(value.split(/[^a-z0-9]+/).filter(word => word.length >= 3));
+  let score = 0;
+  for (const word of words) if (name.includes(word)) score += 5;
+
+  const codeFocus = /\b(?:code|coding|debug|program|software|repository|repo|function|class|test|script|implementation|bug|refactor)\b/.test(value);
+  const researchFocus = /\b(?:research|paper|study|literature|citation|source|evidence|reference|review|investigate|current|latest)\b/.test(value);
+  const visualFocus = /\b(?:image|diagram|visual|design|canvas|figure|photo|screenshot|presentation|slide)\b/.test(value);
+  const dataFocus = /\b(?:data|dataset|spreadsheet|table|csv|xlsx|budget|metrics|statistics|calculate|analysis)\b/.test(value);
+
+  const format = String(file?.format ?? '').toLowerCase();
+  const archiveKind = String(file?.archiveKind ?? '').toLowerCase();
+  if (codeFocus && (format === 'project' || archiveKind === 'code-project' || /\.(?:py|js|ts|tsx|jsx|go|rs|java|c|cpp|cs|rb|php|swift|sql|sh|html|css|json)$/i.test(name))) score += 4;
+  if (researchFocus && (archiveKind === 'research-bundle' || /\.(?:pdf|docx|pptx)$/i.test(name))) score += 4;
+  if (visualFocus && /\.(?:png|jpe?g|webp|gif)$/i.test(name)) score += 4;
+  if (dataFocus && /\.(?:csv|xlsx|tsv)$/i.test(name)) score += 4;
+  if (archiveKind === 'mixed-bundle') score += 1;
+  return score;
+}
+
 export async function attachmentContext(objects, scope, attachments, { maxChars = 60_000, maxImages = 4, focus = '', overlay = null } = {}) {
   let overlaid = false;
   const singles = [];
   const files = [];
   const images = [];
   let budget = maxChars;
-  for (const file of Array.isArray(attachments) ? attachments : []) {
+  const orderedAttachments = [...(Array.isArray(attachments) ? attachments : [])]
+    .sort((a, b) => attachmentPriority(b, focus) - attachmentPriority(a, focus));
+  for (const file of orderedAttachments) {
     if (!file.readable) {
       files.push({ name: file.name, readable: false, note: 'This file type cannot be read; ask the person what it contains, or use a tool that can.' });
       continue;
