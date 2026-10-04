@@ -357,6 +357,7 @@ async function createRunFromQueuedItem(item) {
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     ...personalContext(),
     adaptiveControl: item.adaptiveControl ?? personalContext().adaptiveControl,
+    activeSurface: item.activeSurface ?? state.activeSurface ?? 'normal-chat',
     attachments,
     ...(item.workspaceSourceId ? { workspaceSourceId: item.workspaceSourceId } : {}),
     visibility,
@@ -375,6 +376,7 @@ async function queueOfflineMessage(goal, files, visibility, idempotencyKey = cry
     workspaceId: state.workspaceId,
     visibility,
     workspaceSourceId: state.chat.workspaceSourceId ?? state.workspaceSourceId ?? null,
+    activeSurface: state.activeSurface ?? 'normal-chat',
     attachmentIds: [],
     files
   };
@@ -495,6 +497,7 @@ export async function sendMessage(text) {
       ...personalContext(),
       attachments,
       ...(chatSourceId ? { workspaceSourceId: chatSourceId } : {}),
+      activeSurface: state.activeSurface ?? 'normal-chat',
       visibility,
       privacyConsent: { modelProvider: state.chat.consent }
     }, { idempotencyKey });
