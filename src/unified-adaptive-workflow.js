@@ -16,7 +16,6 @@ import {
   adaptiveDecisionAuthority,
   buildAcceptanceContract,
   recoveryDecision,
-  evidenceState,
   summarizeEvidence
 } from './adaptive-decision-authority.js';
 
