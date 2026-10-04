@@ -729,6 +729,7 @@ export function planGoal(goal, {
       : analysis.unknownSituation ? 'adaptive-open-world' : 'adaptive',
     surface: adaptive.primarySurface,
     surfacePolicy: surfaceRuntimePolicy(adaptive.primarySurface),
+    workspaceContract: surfaceBoundary.workspace ?? surfaceRuntimePolicy(adaptive.primarySurface).contract ?? null,
     surfaceBoundary,
     capabilities: {
       required: scopedRequirements.map(item => item.id),
