@@ -9,6 +9,8 @@
 const clamp01 = value => Math.min(1, Math.max(0, Number.isFinite(Number(value)) ? Number(value) : 0));
 const RISK = Object.freeze({ low: 0.15, medium: 0.45, high: 0.75, critical: 1 });
 
+import { adaptiveDecisionAuthority, buildAcceptanceContract } from './adaptive-decision-authority.js';
+
 export function normalizeAdaptiveRisk(value = 'medium') {
   const key = String(value ?? '').trim().toLowerCase();
   return RISK[key] === undefined ? 'medium' : key;
@@ -111,8 +113,26 @@ export function adaptiveBehaviorContract(profile = adaptiveEffortProfile({})) {
   const maturity = p.maturity ?? realWorldMaturity({});
   const level = String(p.level ?? 'standard');
   const rounds = level === 'minimal' ? 2 : level === 'standard' ? 4 : level === 'deep' ? 6 : 8;
+  const authority = adaptiveDecisionAuthority({
+    situation: {
+      uncertainty: p.scores?.uncertainty ?? 0,
+      riskScore: p.scores?.risk ?? 0,
+      verificationGap: p.scores?.verificationGap ?? 0,
+      irreversible: p.scores?.irreversible >= 1,
+      consequence: p.scores?.consequence ?? 0
+    },
+    profile: p,
+    acceptance: buildAcceptanceContract({
+      criteria: [],
+      evidenceRequired: [],
+      evidence: [],
+      verificationRequired: maturity.independentVerificationRequired,
+      verificationSatisfied: false
+    }),
+    previousAction: null
+  });
   return {
-    version: 1,
+    version: 2,
     principle: 'Adapt every behavior to the current situation; do not maximize intelligence, tools, agents, context, or verification unless the evidence justifies them.',
     maturity: level,
     pressure: p.pressure ?? 0,
@@ -142,6 +162,15 @@ export function adaptiveBehaviorContract(profile = adaptiveEffortProfile({})) {
     escalationTriggers: maturity.escalationTriggers,
     deescalateAfter: p.adaptation?.deescalateAfter ?? ['verified-success', 'stable-observation', 'acceptance-evidence-satisfied'],
     neverAutoPromoteAuthority: true
+    },
+    authorityDecision: authority,
+    acceptanceContract: buildAcceptanceContract({
+      criteria: [],
+      evidenceRequired: [],
+      evidence: [],
+      verificationRequired: maturity.independentVerificationRequired,
+      verificationSatisfied: false
+    })
   };
 }
 
