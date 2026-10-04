@@ -290,6 +290,7 @@ export function createJobWorker({ jobs, identity, runs, executeNext, logger, met
         // Continue from the server-owned next task after a successful step.
         // Do not follow a stale task or a human gate, and never continue when
         // execution explicitly requires the user's local machine.
+        let continuationQueued = false;
         if (reply.status < 400 && reply.body?.run
             && outcome.execution?.status !== 'local-agent-required'
             && outcome.execution?.status !== 'consent-required') {
@@ -300,13 +301,15 @@ export function createJobWorker({ jobs, identity, runs, executeNext, logger, met
               reply.body.run,
               { ...job.request, requestId: job.request_id }
             );
-            if (continuation) metrics?.increment('background_jobs_total', { phase: 'continued' });
+            continuationQueued = Boolean(continuation);
+            if (continuationQueued) metrics?.increment('background_jobs_total', { phase: 'continued' });
           } catch (error) {
             logger?.warn('background job continuation could not be queued', {
               error, runId: job.run_id, jobId: job.id, nextTask: reply.body.run.next ?? null
             });
           }
         }
+        return continuationQueued;
       } catch (error) {
         // A refusal with a reason (a gate that is not met) is not a crash.
         if (Number.isInteger(error?.status) && error.status >= 400 && error.status < 500) {
