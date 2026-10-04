@@ -1275,6 +1275,28 @@ main > #notice { margin: 14px auto 0; width: min(var(--read), calc(100% - 32px))
 .rail-nav button[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); }
 .rail-nav button[aria-selected="true"] .i { color: var(--accent); }
 .rail-footer { display: grid; gap: 8px; border-top: 1px solid var(--line); padding: 10px 2px 0; }
+.workspace-capability-dock {
+  display: grid;
+  gap: 7px;
+  padding: 9px 0 10px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.workspace-capability-head { display:flex; align-items:baseline; justify-content:space-between; gap:8px; padding:0 8px; }
+.workspace-capability-head > span:first-child { font-size:.68rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+.workspace-capability-list { display:grid; gap:2px; }
+.workspace-capability {
+  display:grid; grid-template-columns:7px 1fr; gap:8px; width:100%; padding:7px 8px; text-align:left;
+  background:transparent; border:1px solid transparent; border-radius:9px; color:var(--ink-2);
+}
+.workspace-capability:hover:not(:disabled) { background:var(--soft); border-color:var(--line); color:var(--ink); }
+.workspace-capability:disabled { opacity:.65; cursor:default; }
+.workspace-capability-dot { width:6px; height:6px; margin-top:5px; border-radius:50%; background:var(--muted); box-shadow:0 0 0 2px var(--soft); }
+.workspace-capability[data-ready="true"] .workspace-capability-dot { background:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); }
+.workspace-capability-copy { display:grid; gap:1px; min-width:0; }
+.workspace-capability-copy strong { font-size:.77rem; font-weight:650; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.workspace-capability-copy small { font-size:.66rem; line-height:1.25; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
 .rail-footer select { padding: 7px 30px 7px 10px; font-size: .84rem; background-color: var(--panel); border-color: var(--line); }
 .who-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .who { flex: 1; min-width: 0; font-size: .86rem; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
