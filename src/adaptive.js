@@ -35,7 +35,7 @@ import {
   planAdaptiveResources,
   adaptiveScopeForNextStep
 } from './adaptive-control.js';
-import { selectAdaptiveWorkflow } from './adaptive-workflow.js';
+import { selectAdaptiveWorkflow } from './unified-adaptive-workflow.js';
 import { adaptiveEffortProfile } from './adaptive-efficiency.js';
 import { classifySurfaceBoundary, surfaceRuntimePolicy } from './surface-policy.js';
 
