@@ -86,3 +86,58 @@ test('active workspace context is preserved and compound work exposes only the s
   assert.ok(adaptive.adaptiveSnapshot.resourcePlan.selected.surfaces.includes('code'));
   assert.ok(adaptive.adaptiveSnapshot.resourcePlan.selected.surfaces.includes('research'));
 });
+
+
+test('selected Code Workspace remains stable for context-dependent follow-ups', () => {
+  const decision = classifySurfaceBoundary('Why did that fail?', {
+    activeSurface: 'code',
+    flags: {},
+    actions: ['answer']
+  });
+  assert.equal(decision.surface, 'code');
+  assert.equal(decision.transition, 'stay');
+  assert.equal(decision.redirect, false);
+});
+
+test('selected Research Workspace remains stable for context-dependent follow-ups', () => {
+  const decision = classifySurfaceBoundary('Summarize the strongest finding so far.', {
+    activeSurface: 'research',
+    flags: {},
+    actions: ['answer']
+  });
+  assert.equal(decision.surface, 'research');
+  assert.equal(decision.transition, 'stay');
+  assert.equal(decision.redirect, false);
+});
+
+test('explicit cross-mode intent switches the operating workspace', () => {
+  const research = classifySurfaceBoundary('Switch to Research Workspace and verify the current dependency release.', {
+    activeSurface: 'code',
+    flags: { research: true },
+    actions: ['answer', 'investigate']
+  });
+  assert.equal(research.surface, 'research');
+  assert.equal(research.transition, 'switch');
+  assert.equal(research.redirect, true);
+
+  const code = classifySurfaceBoundary('Open the Code Workspace and fix the failing test.', {
+    activeSurface: 'research',
+    flags: { code: true },
+    actions: ['answer', 'transform']
+  });
+  assert.equal(code.surface, 'code');
+  assert.equal(code.transition, 'switch');
+  assert.equal(code.redirect, true);
+});
+
+test('adaptive context exposes exactly three public operating modes', () => {
+  const context = resolveAdaptiveContext('Research the current dependency release and then update the repository.', {
+    activeSurface: 'code',
+    attachedCode: true,
+    files: [{ name: 'package.json' }],
+    attachments: [{ name: 'package.json' }]
+  });
+  assert.deepEqual(context.adaptiveSnapshot.modeRouting.publicModes, ['normal-chat', 'code', 'research']);
+  assert.equal(context.adaptiveSnapshot.modeRouting.primary, 'code');
+  assert.ok(context.adaptiveSnapshot.modeRouting.supporting.includes('research'));
+});
