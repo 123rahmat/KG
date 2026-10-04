@@ -21,8 +21,8 @@ import { executionTargetsFor, defaultExecutionRequirements } from './execution.j
 import { normalizeCapabilityDiscovery, verificationContract } from './capabilities.js';
 import { buildSituationModel, evolveSituation, situationQualityGate } from './situation.js';
 import { adaptiveBudgetStatus, adaptiveBudgetForRun, reconcileAdaptiveTransition } from './adaptive-control.js';
-import { adaptiveEffortProfile, adaptiveBehaviorContract } from './adaptive-efficiency.js';
-import { buildAcceptanceContract, adaptiveDecisionAuthority } from './adaptive-decision-authority.js';
+import { adaptiveEffortProfile } from './adaptive-efficiency.js';
+import { buildAcceptanceContract } from './adaptive-decision-authority.js';
 import { buildUnifiedAdaptiveWorkflow, reassessUnifiedWorkflow, completionGate, unifiedRecoveryDecision } from './unified-adaptive-workflow.js';
 import { updateAdaptiveRuntimeState, recoveryLesson } from './adaptive-runtime-state.js';
 import { createResearchWorkspaceState, updateResearchWorkspaceState } from './research-workspace.js';
@@ -302,44 +302,23 @@ export class RunStore {
       verificationSatisfied: false
     });
     plan.adaptation.acceptanceContract = acceptanceContract;
-    plan.adaptation.adaptiveBehavior = adaptiveBehaviorContract(plan.adaptation.effortProfile, {
-      situation: {
-        goal: goalText,
-        uncertainty: Number(situation.uncertainty ?? 0),
-        riskScore: Number(situation.riskScore ?? 0),
-        verificationGap: Number(situation.verificationGap ?? 0),
-        consequence: Number(situation.consequence ?? 0),
-        irreversible: situation.irreversible === true,
-        externalSideEffect: situation.externalSideEffect === true,
-        physical: situation.physical === true,
-        regulated: situation.regulated === true,
-        peopleDecision: situation.peopleDecision === true
-      },
-      acceptance: acceptanceContract
-    });
-    plan.adaptation.adaptiveDecision = adaptiveDecisionAuthority({
-      situation: {
-        goal: goalText,
-        uncertainty: Number(situation.uncertainty ?? 0),
-        riskScore: Number(situation.riskScore ?? 0),
-        verificationGap: Number(situation.verificationGap ?? 0),
-        consequence: Number(situation.consequence ?? 0),
-        irreversible: situation.irreversible === true,
-        externalSideEffect: situation.externalSideEffect === true,
-        physical: situation.physical === true,
-        regulated: situation.regulated === true,
-        peopleDecision: situation.peopleDecision === true
-      },
-      profile: plan.adaptation.effortProfile,
-      acceptance: acceptanceContract
-    });
+    // The unified workflow kernel is the single authority calculation. Reuse
+    // its profile, acceptance, behavior and decision projection instead of
+    // calculating equivalent contracts in parallel.
     plan.adaptation.unifiedAdaptiveWorkflow = buildUnifiedAdaptiveWorkflow({
       goal: goalText,
-      situation: { ...situation, riskScore: Number(situation.riskScore ?? 0), consequence: Number(situation.consequence ?? 0) },
+      situation: {
+        ...situation,
+        riskScore: Number(situation.riskScore ?? 0),
+        consequence: Number(situation.consequence ?? 0)
+      },
       acceptance: acceptanceContract,
       evidence,
-      failedAttempts: Array.isArray(failedSteps) ? failedSteps.length : 0
+      failedAttempts: Array.isArray(failedSteps) ? failedSteps.length : 0,
+      profile: plan.adaptation.effortProfile
     });
+    plan.adaptation.adaptiveBehavior = plan.adaptation.unifiedAdaptiveWorkflow.behavior;
+    plan.adaptation.adaptiveDecision = plan.adaptation.unifiedAdaptiveWorkflow.authority;
 
     // Later steps (schedules, dates) work in the person's own time zone.
     plan.adaptation.timeZone = plan.context?.timeZone ?? 'UTC';
