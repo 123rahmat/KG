@@ -15,6 +15,19 @@ const RESEARCH_DEEP = /\b(?:research|deep research|investigate|literature review
 const CURRENT_FACTS = /\b(?:latest|today|current|currently|right now|this week|live|recent|news|price|prices|rate|rates|weather|scores?)\b/i;
 const DEEP_RESEARCH_ACTION = /\b(?:research|investigat(?:e|ion)|literature review|systematic review|survey|fact[- ]check|find and compare|compare sources|source-backed|with citations|cite sources)\b/i;
 const DEEP_CODE_ACTION = /\b(?:debug|fix|refactor|implement|build|develop|modify|edit|run|test|compile|deploy|commit|push|pull request|change the code|write the code|create the code|update the repo|review the repository|analy[sz]e the repository|review the code|analy[sz]e the code)\b/i;
+const EXPLICIT_MODE_SWITCH = Object.freeze({
+  code: /\b(?:switch|move|open|use|take me to|continue in|work in)\s+(?:the\s+)?(?:code|coding)(?:\s+workspace)?\b|\b(?:code|coding)\s+workspace\b/i,
+  research: /\b(?:switch|move|open|use|take me to|continue in|work in)\s+(?:the\s+)?research(?:\s+workspace)?\b|\b(?:research|deep research)\s+workspace\b/i
+});
+const SURFACE_ALIASES = Object.freeze({
+  chat: 'normal-chat',
+  'normal-chat': 'normal-chat',
+  code: 'code',
+  research: 'research'
+});
+function normalizeSurfaceId(value = '') {
+  return SURFACE_ALIASES[String(value ?? '').trim().toLowerCase()] ?? 'normal-chat';
+}
 const MEDIUM_ANALYSIS = /\b(?:explain|compare|analy[sz]e|solve|calculate|derive|show|teach|why|how|which|evaluate|recommend|suggest|summari[sz]e|interpret)\b/i;
 
 export const SURFACE_POLICY_VERSION = '1';
@@ -103,21 +116,26 @@ export const SURFACE_POLICY = Object.freeze({
 
 export function classifySurfaceBoundary(goal, { activeSurface = '', attachments = [], flags = {}, actions = [] } = {}) {
   const value = text(goal);
+  const active = normalizeSurfaceId(activeSurface);
   const codeAction = Array.isArray(actions) && actions.some(action => ['create', 'transform', 'execute'].includes(String(action).toLowerCase()));
-  const explicitCode = DEEP_CODE_ACTION.test(value)
+  const explicitCode = EXPLICIT_MODE_SWITCH.code.test(value)
+    || DEEP_CODE_ACTION.test(value)
     || (CODE.test(value) && codeAction)
     || flags.code === true && codeAction;
-  const explicitResearch = DEEP_RESEARCH_ACTION.test(value)
+  const explicitResearch = EXPLICIT_MODE_SWITCH.research.test(value)
+    || DEEP_RESEARCH_ACTION.test(value)
     || (CURRENT_FACTS.test(value) && /\b(?:search|find|check|verify|compare|source|price|rate|news|weather|score|latest|current)\b/i.test(value))
     || (RESEARCH_DEEP.test(value) && /\b(?:research|investigat|paper|source|evidence|citation|literature|latest|current|browse|search)\w*\b/i.test(value))
     || flags.research === true && /\b(?:source|evidence|latest|current|paper|literature|research|investigat)\w*\b/i.test(value);
   const visualOrFile = Array.isArray(attachments) && attachments.length > 0;
+  const requested = activeSurface || 'normal-chat';
 
   if (explicitCode) {
     return {
-      requested: activeSurface || 'normal-chat',
+      requested,
       surface: 'code',
-      redirect: activeSurface === 'chat' || activeSurface === 'normal-chat',
+      redirect: active !== 'code',
+      transition: active === 'code' ? 'stay' : 'switch',
       reason: 'coding-work-requires-code-surface',
       complexity: 'deep-eligible',
       workspace: SURFACE_WORKSPACE_CONTRACTS.code
@@ -126,59 +144,60 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
 
   if (explicitResearch) {
     return {
-      requested: activeSurface || 'normal-chat',
+      requested,
       surface: 'research',
-      redirect: activeSurface === 'chat' || activeSurface === 'normal-chat',
+      redirect: active !== 'research',
+      transition: active === 'research' ? 'stay' : 'switch',
       reason: 'deep-research-work-requires-research-surface',
       complexity: 'deep-eligible',
       workspace: SURFACE_WORKSPACE_CONTRACTS.research
     };
   }
 
-  const codeWorkspaceContext = activeSurface === 'code'
-    && (flags.code === true || Array.isArray(attachments) && attachments.length > 0
-      || codeAction);
-  if (codeWorkspaceContext) {
+  // Deep workspaces are sticky across ordinary follow-ups. This preserves
+  // repository/source-set continuity without requiring the user to restate
+  // the mode on every turn. Explicit signals above can still switch modes.
+  if (active === 'code') {
     return {
-      requested: 'code',
+      requested,
       surface: 'code',
       redirect: false,
-      reason: 'continue-coding-in-code-workspace',
+      transition: 'stay',
+      reason: 'selected-code-workspace-stays-authoritative',
       complexity: 'deep-eligible',
       workspace: SURFACE_WORKSPACE_CONTRACTS.code
     };
   }
 
-  const researchWorkspaceContext = activeSurface === 'research'
-    && (flags.research === true || actions.includes('investigate'));
-  if (researchWorkspaceContext) {
+  if (active === 'research') {
     return {
-      requested: 'research',
+      requested,
       surface: 'research',
       redirect: false,
-      reason: 'continue-research-in-research-workspace',
+      transition: 'stay',
+      reason: 'selected-research-workspace-stays-authoritative',
       complexity: 'deep-eligible',
       workspace: SURFACE_WORKSPACE_CONTRACTS.research
     };
   }
 
   return {
-    requested: activeSurface || 'normal-chat',
+    requested,
     surface: 'normal-chat',
     redirect: false,
+    transition: active === 'normal-chat' ? 'stay' : 'switch',
     reason: visualOrFile ? 'rich-normal-chat-understanding' : MEDIUM_ANALYSIS.test(value) ? 'adaptive-medium-chat' : 'direct-chat',
     complexity: MEDIUM_ANALYSIS.test(value) ? 'medium' : 'simple',
     workspace: SURFACE_WORKSPACE_CONTRACTS['normal-chat']
   };
 }
-
 export function workspaceContract(surface = 'normal-chat') {
-  const id = surface === 'chat' ? 'normal-chat' : text(surface) || 'normal-chat';
+  const id = normalizeSurfaceId(surface);
   return SURFACE_WORKSPACE_CONTRACTS[id] ?? SURFACE_WORKSPACE_CONTRACTS['normal-chat'];
 }
 
 export function surfaceRuntimePolicy(surface = 'normal-chat') {
-  const id = surface === 'chat' ? 'normal-chat' : text(surface) || 'normal-chat';
+  const id = normalizeSurfaceId(surface);
   return SURFACE_POLICY.surfaces[id] ?? SURFACE_POLICY.surfaces['normal-chat'];
 }
 
