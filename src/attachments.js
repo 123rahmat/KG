@@ -87,7 +87,7 @@ function attachmentPriority(file, focus = '') {
 }
 
 export async function attachmentContext(objects, scope, attachments, { maxChars = 60_000, maxImages = 6, focus = '', overlay = null } = {}) {
-  const visualFocus = /\\b(?:image|images|diagram|visual|design|canvas|figure|photo|photos|screenshot|presentation|slide|slides)\\b/i.test(String(focus ?? ''));
+  const visualFocus = /\b(?:image|images|diagram|visual|design|canvas|figure|photo|photos|screenshot|presentation|slide|slides)\b/i.test(String(focus ?? ''));
   const imageLimit = Math.max(1, Math.min(Number(maxImages) || 6, visualFocus ? 6 : 4));
   let overlaid = false;
   const singles = [];
