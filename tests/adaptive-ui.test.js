@@ -183,3 +183,24 @@ test('Research Workspace persists bounded source and evidence continuity', async
   assert.match(research, /evidenceLedger/);
   assert.match(research, /unresolvedQuestions/);
 });
+
+
+test('deep modes have dedicated project-grade workspace shells instead of chat-only chrome', async () => {
+  const html = await read('public/index.html');
+  const js = await read('public/adaptive-workspace.js');
+  const css = await read('public/app.css');
+  assert.match(html, /id="deepWorkspaceShell"/);
+  assert.match(js, /function codeWorkspaceProject/);
+  assert.match(js, /function researchWorkspaceProject/);
+  assert.match(js, /CODE PROJECT/);
+  assert.match(js, /RESEARCH PROJECT/);
+  assert.match(js, /Source set/);
+  assert.match(css, /\.deep-workspace-shell/);
+  assert.match(css, /\.deep-workspace-grid/);
+});
+
+test('Research Workspace opens in the dedicated workspace surface, not Explore', async () => {
+  const js = await read('public/adaptive-workspace.js');
+  assert.match(js, /name: 'runs', workspace: 'research'/);
+  assert.doesNotMatch(js, /name: 'explore', workspace: 'research'/);
+});
