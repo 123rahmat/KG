@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { selectAdaptiveWorkflow } from '../src/adaptive-workflow.js';
+import { selectAdaptiveWorkflow } from '../src/unified-adaptive-workflow.js';
 
 const caps = (...ids) => ids.map(id => ({ id }));
 
