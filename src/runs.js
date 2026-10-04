@@ -23,6 +23,7 @@ import { buildSituationModel, evolveSituation, situationQualityGate } from './si
 import { adaptiveBudgetStatus, adaptiveBudgetForRun, reconcileAdaptiveTransition } from './adaptive-control.js';
 import { adaptiveEffortProfile, adaptiveBehaviorContract } from './adaptive-efficiency.js';
 import { buildAcceptanceContract, adaptiveDecisionAuthority } from './adaptive-decision-authority.js';
+import { buildUnifiedAdaptiveWorkflow, reassessUnifiedWorkflow, completionGate, unifiedRecoveryDecision } from './unified-adaptive-workflow.js';
 import { updateAdaptiveRuntimeState, decideRecovery, recoveryLesson } from './adaptive-runtime-state.js';
 import { buildUnifiedWorkContext, applyWorkChange } from './unified-work-context.js';
 import { reevaluateSituationGovernance } from './situation-governance.js';
@@ -330,6 +331,13 @@ export class RunStore {
       },
       profile: plan.adaptation.effortProfile,
       acceptance: acceptanceContract
+    });
+    plan.adaptation.unifiedAdaptiveWorkflow = buildUnifiedAdaptiveWorkflow({
+      goal: goalText,
+      situation: { ...situation, riskScore: Number(situation.riskScore ?? 0), consequence: Number(situation.consequence ?? 0) },
+      acceptance: acceptanceContract,
+      evidence,
+      failedAttempts: Array.isArray(failedSteps) ? failedSteps.length : 0
     });
 
     // Later steps (schedules, dates) work in the person's own time zone.
