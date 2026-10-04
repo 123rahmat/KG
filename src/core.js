@@ -815,18 +815,6 @@ const STAGE_REQUIREMENTS = Object.freeze({
   deliver: ['reasoning', 'verification']
 });
 
-function situationGapCount({ verificationEvidenceAvailable, needsInvestigation, situation } = {}) {
-  if (situation && typeof situation === 'object') {
-    return [
-      needsInvestigation,
-      situation?.evidenceGap === true,
-      situation?.conflicts?.length > 0,
-      situation?.unresolvedQuestions?.length > 0
-    ].filter(Boolean).length;
-  }
-  return [needsInvestigation, !verificationEvidenceAvailable].filter(Boolean).length;
-}
-
 function adaptiveNextStage(current, {
   verificationFailed = false,
   materialChange = false,
@@ -838,7 +826,8 @@ function adaptiveNextStage(current, {
   blocked = false,
   depth = 'full',
   coding = false,
-  research = false
+  research = false,
+  situation = {}
 } = {}) {
   if (blocked) return null;
   if (verificationFailed || materialChange) return 'replan';
@@ -848,15 +837,16 @@ function adaptiveNextStage(current, {
   // Research uses the same adaptive loop, but prioritizes evidence gaps
   // and unresolved conflicts rather than software execution stages.
   if (research) {
-    const gaps = Number(situationGapCount({ verificationEvidenceAvailable, needsInvestigation, situation: null })) || 0;
-    void gaps;
-    if (depth === 'focused' && current === 'reason' && !needsInvestigation && verificationEvidenceAvailable) return 'verify';
+    const researchNeedsMoreEvidence = needsInvestigation
+      || situation?.evidenceGap === true
+      || (Array.isArray(situation?.conflicts) && situation.conflicts.length > 0)
+      || (Array.isArray(situation?.unresolvedQuestions) && situation.unresolvedQuestions.length > 0);
     if (current === 'understand') return 'model-situation';
-    if (current === 'model-situation') return needsInvestigation ? 'investigate' : 'reason';
-    if (current === 'investigate') return verificationEvidenceAvailable ? 'reason' : 'investigate';
+    if (current === 'model-situation') return researchNeedsMoreEvidence ? 'investigate' : 'reason';
+    if (current === 'investigate') return researchNeedsMoreEvidence ? 'investigate' : 'reason';
     if (current === 'reason') return depth === 'focused' ? 'verify' : 'challenge';
-    if (current === 'challenge') return needsInvestigation ? 'investigate' : 'verify';
-    if (current === 'verify') return verified ? 'deliver' : (verificationEvidenceAvailable ? 'replan' : 'investigate');
+    if (current === 'challenge') return researchNeedsMoreEvidence ? 'investigate' : 'verify';
+    if (current === 'verify') return verified ? 'deliver' : researchNeedsMoreEvidence ? 'investigate' : 'replan';
     if (current === 'replan') return 'investigate';
     if (current === 'deliver') return null;
   }
@@ -992,7 +982,8 @@ export function advanceAdaptiveWorkflow(tasks, taskId, {
     coding: intelligence?.coding === true,
     research: intelligence?.surface === 'research'
       || intelligence?.research === true
-      || situation?.research === true
+      || situation?.research === true,
+    situation
   });
 
   if (!nextStage) return { ok: true, status, tasks: applied, next: null, state: 'complete' };
