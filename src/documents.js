@@ -241,6 +241,53 @@ const MAX_PROJECT_FILES = 250;
 const MAX_PROJECT_FILE_BYTES = 256 * 1024;
 const MAX_PROJECT_BYTES = 4 * 1024 * 1024;
 
+const MAX_ARCHIVE_ITEMS = 80;
+const MAX_ARCHIVE_ITEM_BYTES = 2 * 1024 * 1024;
+const MAX_ARCHIVE_CONTENT_BYTES = 12 * 1024 * 1024;
+const MAX_ARCHIVE_IMAGES = 4;
+const ARCHIVE_RESEARCH_HINT = /\b(?:paper|study|studies|article|literature|citation|citations|reference|references|bibliograph(?:y|ies)|thesis|journal|publication|preprint|survey|systematic|review)\b/i;
+
+function archiveEntries(buffer) {
+  const zip = readZip(buffer);
+  const entries = new Map([...zip].map(([name, read]) => [name.replaceAll('\\\\', '/'), read]));
+  const names = [...entries.keys()]
+    .filter(name => !name.endsWith('/')
+      && !SKIP_DIRS.test('/' + name)
+      && !name.split('/').some(part => part.startsWith('.') && part !== '.env.example'))
+    .sort();
+  return { entries, names };
+}
+
+function archiveFormat(name) {
+  return formatOf({ name, contentType: '' });
+}
+
+function archiveProfile(names) {
+  let code = 0;
+  let documents = 0;
+  let images = 0;
+  let data = 0;
+  let researchHints = 0;
+  for (const name of names) {
+    const format = archiveFormat(name);
+    if (format === 'project') code += 1;
+    else if (['pdf', 'docx', 'xlsx', 'pptx', 'text'].includes(format)) documents += 1;
+    else if (format === 'image') images += 1;
+    else if (format === 'csv') data += 1;
+    if (ARCHIVE_RESEARCH_HINT.test(name)) researchHints += 1;
+  }
+  if (code > 0 && code >= Math.max(2, documents + images + data)) {
+    return { archiveKind: 'code-project', code, documents, images, data, researchHints };
+  }
+  if (documents > 0 && researchHints > 0) {
+    return { archiveKind: 'research-bundle', code, documents, images, data, researchHints };
+  }
+  if (documents > 0 || images > 0 || data > 0) {
+    return { archiveKind: code > 0 ? 'mixed-bundle' : 'document-bundle', code, documents, images, data, researchHints };
+  }
+  return { archiveKind: 'unknown-bundle', code, documents, images, data, researchHints };
+}
+
 /**
  * A zipped code project: its source files as { path, content }, with the
  * one top folder most archives have taken off, and a text view (the file
@@ -318,6 +365,70 @@ export function readProject(buffer) {
   return { kind: 'project', format: 'project', files, skipped: skipped.slice(0, 50), text };
 }
 
+async function readArchiveBundle(buffer, profile) {
+  const { entries, names } = archiveEntries(buffer);
+  const items = [];
+  const skipped = [];
+  let total = 0;
+  let images = 0;
+  for (const name of names.slice(0, MAX_ARCHIVE_ITEMS)) {
+    const format = archiveFormat(name);
+    if (!['pdf', 'docx', 'xlsx', 'pptx', 'csv', 'text', 'image'].includes(format)) {
+      skipped.push(name);
+      continue;
+    }
+    const bytes = entries.get(name)();
+    if (bytes.length > MAX_ARCHIVE_ITEM_BYTES || total + bytes.length > MAX_ARCHIVE_CONTENT_BYTES) {
+      skipped.push(name);
+      continue;
+    }
+    if (format === 'image' && images >= MAX_ARCHIVE_IMAGES) {
+      skipped.push(name);
+      continue;
+    }
+    try {
+      const result = await readDocument(bytes, { name });
+      items.push({
+        path: name,
+        name: name.split('/').pop(),
+        kind: result.kind,
+        format: result.format,
+        ...(result.text ? { text: result.text } : {}),
+        ...(result.pages ? { pages: result.pages } : {}),
+        ...(result.tables ? { tables: result.tables } : {}),
+        ...(result.image ? { image: result.image } : {})
+      });
+      total += bytes.length;
+      if (format === 'image') images += 1;
+    } catch {
+      skipped.push(name);
+    }
+  }
+  if (names.length > MAX_ARCHIVE_ITEMS) skipped.push(...names.slice(MAX_ARCHIVE_ITEMS));
+  if (!items.length) throw new DocumentError('This zip has no readable document, data or image files.', 'document-format-unsupported');
+  const summary = [
+    `Archive: ${profile.archiveKind}; ${items.length} readable items.`,
+    'Contents:',
+    ...items.map(item => `${item.path} [${item.format}]${item.text ? ` — ${item.text.slice(0, 240)}` : ''}`)
+  ].join('\n');
+  return {
+    kind: 'bundle',
+    format: 'bundle',
+    archiveKind: profile.archiveKind,
+    profile,
+    items,
+    skipped: skipped.slice(0, 80),
+    text: summary
+  };
+}
+
+export async function readArchive(buffer) {
+  const { names } = archiveEntries(buffer);
+  const profile = archiveProfile(names);
+  if (profile.archiveKind === 'code-project') return { ...readProject(buffer), archiveKind: 'code-project', profile };
+  return readArchiveBundle(buffer, profile);
+}
+
 const IMAGE_MEDIA = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' };
 
 /** Read one file. Returns { kind, format, text?, tables?, image?, truncated }. */
@@ -328,7 +439,7 @@ export async function readDocument(buffer, meta = {}) {
   else if (format === 'docx') result = readDocx(buffer);
   else if (format === 'xlsx') result = readXlsx(buffer);
   else if (format === 'pptx') result = readPptx(buffer);
-  else if (format === 'project') result = readProject(buffer);
+  else if (format === 'project') result = await readArchive(buffer);
   else if (format === 'workspace-project') result = readWorkspaceSnapshot(buffer);
   else if (format === 'csv') {
     const textValue = buffer.toString('utf8').replace(/^\uFEFF/, '');
