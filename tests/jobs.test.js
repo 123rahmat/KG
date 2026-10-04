@@ -141,3 +141,18 @@ test('a stale worker cannot finish a job reclaimed by another worker', () =>
     assert.equal(row.outcome.code, 'fresh');
     assert.equal(row.worker_id, null);
   }, { env: ANTHROPIC, fetchImpl: async () => answer('x') }));
+
+
+test('a successful background step queues a safe server-side continuation', () =>
+  withServer(async ({ call, seed, worker }) => {
+    const { token, workspace } = await seed();
+    const { body: run } = await directRun(call, token, workspace);
+    const queued = await call('POST', `/api/runs/${run.id}/execute`, {
+      token, workspace, body: { background: true }
+    });
+    assert.equal(queued.status, 202);
+    assert.equal(await worker.runOnce(), 2);
+    const { body: after } = await call('GET', `/api/runs/${run.id}`, { token, workspace });
+    assert.ok(after.tasks.some(task => task.id === 'verify'));
+    assert.equal(after.tasks.find(task => task.id === 'respond')?.status, 'complete');
+  }, { env: ANTHROPIC, fetchImpl: async () => answer('A function that calls itself.') }));
