@@ -15,6 +15,7 @@ import { buildHarnessContext } from './agent-harness.js';
 import { mergeBlackboard } from './blackboard.js';
 import { adaptConcurrency, adaptiveParallelLimit, agentWorkspaceLane, buildWorkspaceParallelPlan } from './parallel-orchestrator.js';
 import { buildSubsystemPlan, compactSubsystemPlan, createSubsystemMessage, mergeSubsystemMessages, subsystemAssignment, subsystemCommunicationContext } from './subsystem-orchestrator.js';
+import { realWorldMaturity } from './adaptive-efficiency.js';
 
 export const MULTI_AGENT_MODES = Object.freeze(['auto', 'always', 'off']);
 export const DEFAULT_MULTI_AGENT_MAX_AGENTS = 11;
@@ -321,18 +322,34 @@ function targetAgentCount(pressure, maxAgents) {
 
 export function multiAgentDecision(run, task, { mode = 'auto', progress = {} } = {}) {
   const normalizedMode = MULTI_AGENT_MODES.includes(mode) ? mode : 'auto';
-  const pressure = decisionPressure(run, task, progress);
-  if (normalizedMode === 'off') return { enabled: false, reason: 'disabled', pressure };
+  const basePressure = decisionPressure(run, task, progress);
+  const maturity = run?.adaptation?.effortProfile?.maturity ?? realWorldMaturity({
+    riskScore: run?.situation?.risk === 'critical' ? 1 : run?.situation?.risk === 'high' ? 0.75 : run?.situation?.risk === 'medium' ? 0.45 : 0.15,
+    uncertainty: Number(run?.situation?.uncertainty ?? 0),
+    verificationGap: Number(run?.situation?.verificationGap ?? 0),
+    failureCount: Math.max(0, Number(run?.attempt ?? 1) - 1),
+    physical: run?.situation?.physical === true || run?.situation?.flags?.physical === true,
+    regulated: run?.situation?.regulated === true || run?.situation?.flags?.regulated === true,
+    peopleDecision: run?.situation?.peopleDecision === true || run?.situation?.flags?.highImpact === true,
+    externalSideEffect: run?.situation?.externalSideEffect === true,
+    irreversible: run?.situation?.irreversible === true
+  });
+  const maturityPressure = Number(maturity?.pressure ?? 0);
+  const pressure = Math.max(basePressure, maturityPressure);
+  if (normalizedMode === 'off') return { enabled: false, reason: 'disabled', pressure, maturity };
   if (run?.situation?.risk === 'crisis' || run?.adaptation?.safetyAdaptive === true) {
-    return { enabled: false, reason: 'crisis-or-safety-adaptive', pressure };
+    return { enabled: false, reason: 'crisis-or-safety-adaptive', pressure, maturity };
   }
   if (task?.metadata?.declined === true || task?.metadata?.conversational === true) {
-    return { enabled: false, reason: 'declined-or-conversational', pressure };
+    return { enabled: false, reason: 'declined-or-conversational', pressure, maturity };
   }
-  if (task?.type === 'verify') return { enabled: false, reason: 'dedicated-verification-review', pressure };
-  if (normalizedMode === 'always') return { enabled: true, reason: 'always', pressure };
-  if (pressure >= AUTO_PANEL_THRESHOLD) return { enabled: true, reason: 'adaptive-value-justified', pressure };
-  return { enabled: false, reason: 'single-agent-sufficient', pressure };
+  if (task?.type === 'verify') return { enabled: false, reason: 'dedicated-verification-review', pressure, maturity };
+  if (normalizedMode === 'always') return { enabled: true, reason: 'always', pressure, maturity };
+  if (maturity?.independentVerificationRequired && maturityPressure >= 0.65 && task?.type !== 'deliver') {
+    return { enabled: true, reason: 'real-world-maturity-justified', pressure, maturity };
+  }
+  if (pressure >= AUTO_PANEL_THRESHOLD) return { enabled: true, reason: 'adaptive-value-justified', pressure, maturity };
+  return { enabled: false, reason: 'single-agent-sufficient', pressure, maturity };
 }
 
 function roleUtility(role, run, task, progress = {}, precomputed = null) {
