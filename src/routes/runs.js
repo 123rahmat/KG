@@ -179,7 +179,11 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
       taskType: classification.source === 'model' ? (classification.hints?.actions ?? []).includes('investigate') ? 'investigate' : classification.hints?.actions?.includes('answer') ? 'respond' : 'plan' : 'plan',
       intent: classification.hints?.intent?.kind ?? '',
       coding: req.body?.activeSurface === 'code' || /\b(?:code|coding|debug|repository|repo|software|program)\b/i.test(String(req.body?.goal ?? '')),
-      projectWork: Boolean(req.body?.project || (req.body?.files ?? req.body?.artifacts ?? []).length),
+      projectWork: Boolean(
+        req.body?.project
+        || (req.body?.files ?? req.body?.artifacts ?? []).length
+        || attachments.some(item => item.format === 'project' || item.sourceKind === 'github')
+      ),
       language: req.body?.language ?? ''
     });
     const learnedSkills = await skillLearning.profiles(req.scope, { limit: 48, contextSignature: planSkillContext });
