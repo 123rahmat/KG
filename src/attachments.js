@@ -106,6 +106,32 @@ export async function attachmentContext(objects, scope, attachments, { maxChars 
       budget -= Math.min(view.text.length, budget);
       continue;
     }
+    if (read.format === 'bundle' && Array.isArray(read.items)) {
+      const view = archiveView(read.items, focus, budget);
+      const bundleImages = view.shown
+        .filter(item => item?.kind === 'image' && item?.image && images.length < maxImages)
+        .map(item => item.image);
+      images.push(...bundleImages.slice(0, Math.max(0, maxImages - images.length)));
+      const imagePaths = new Set(view.shown.filter(item => item?.kind === 'image').map(item => item?.path));
+      const imageText = view.shown
+        .filter(item => item?.kind !== 'image' || !imagePaths.has(item?.path))
+        .map(item => `=== ${item.path} [${item.format}] ===${item.text ? '\\n' + item.text : ''}`)
+        .join('\\n');
+      files.push({
+        name: file.name,
+        readable: true,
+        kind: 'bundle',
+        format: 'bundle',
+        archiveKind: read.archiveKind,
+        truncated: view.notShown.length > 0,
+        text: imageText || `Archive contains ${read.items.length} readable items.`,
+        ...(view.notShown.length ? { notShown: view.notShown.length } : {}),
+        ...(read.skipped?.length ? { skipped: read.skipped.slice(0, 50) } : {})
+      });
+      budget -= Math.min(imageText.length, budget);
+      continue;
+    }
+
     // A single code file a follow-up changed is shown as it is now, the
     // version the sandbox runs.
     const single = ['text', 'csv'].includes(read.format) && CODE_FILE.test(String(file.name)) && !read.truncated;
@@ -140,6 +166,34 @@ export async function attachmentContext(objects, scope, attachments, { maxChars 
 }
 
 // Attached single files that are code a project can run with.
+function archiveView(items, focus = '', budget = 60_000) {
+  const list = Array.isArray(items) ? items : [];
+  const focusWords = new Set(String(focus ?? '').toLowerCase().split(/[^a-z0-9]+/).filter(word => word.length >= 3));
+  const score = item => {
+    const name = String(item?.path ?? item?.name ?? '').toLowerCase();
+    let value = 0;
+    for (const word of focusWords) if (name.includes(word)) value += 5;
+    if (item?.format === 'pdf' || item?.format === 'docx' || item?.format === 'pptx' || item?.format === 'xlsx') value += 2;
+    return value;
+  };
+  const ranked = [...list].sort((a, b) => score(b) - score(a) || String(a?.path ?? '').localeCompare(String(b?.path ?? '')));
+  const shown = [];
+  let left = Math.max(0, Number(budget) || 0);
+  for (const item of ranked) {
+    const body = String(item?.text ?? '');
+    const line = `=== ${item?.path ?? item?.name ?? 'item'} [${item?.format ?? 'unknown'}] ===${body ? '\\n' + body : ''}`;
+    if (line.length + 1 > left) continue;
+    shown.push(item);
+    left -= line.length + 1;
+  }
+  return {
+    text: shown.length ? shown.map(item => `=== ${item?.path ?? item?.name ?? 'item'} [${item?.format ?? 'unknown'}] ===${item?.text ? '\\n' + item.text : ''}`).join('\\n')
+      : 'No archive item content fits the current context budget; inspect a specific item as needed.',
+    shown,
+    notShown: ranked.filter(item => !shown.includes(item))
+  };
+}
+
 const CODE_FILE = /\.(py|pyi|js|mjs|cjs|jsx|ts|tsx|json|toml|cfg|ini|ya?ml|txt|md|csv|tsv|sql|xml|html|css|go|mod|sum|rs|lock|java|kts?|gradle|c|cc|cxx|cpp|h|hh|hpp)$/i;
 
 /**
