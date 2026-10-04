@@ -1371,6 +1371,7 @@ $('adaptiveCreateStrip')?.addEventListener('click', event => {
 });
 
 $('attachBtn').addEventListener('click', () => $('attachInput').click());
+$('attachCodeInput')?.addEventListener('click', () => $('attachInput')?.click());
 $('voiceBtn').addEventListener('click', toggleVoiceInput);
 $('attachInput').addEventListener('change', event => {
   addAttachments(event.target.files ?? []);
