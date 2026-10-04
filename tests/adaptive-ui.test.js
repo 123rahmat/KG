@@ -135,4 +135,12 @@ test('adaptive workspace exposes distinct Normal Chat, Code and Research surface
   assert.match(js, /Research Workspace/);
   assert.match(js, /kindgleam:open-code-workspace/);
   assert.match(js, /kindgleam:select-surface/);
+  const attachments = await read('public/app-attachments.js');
+  const app = await read('public/app.js');
+  const actions = await read('public/app-actions.js');
+  assert.match(attachments, /activeSurface: state\\.activeSurface/);
+  assert.match(attachments, /activeSurface: item\\.activeSurface/);
+  assert.match(app, /state\\.activeSurface = 'research'/);
+  assert.match(app, /state\\.activeSurface = 'code'/);
+  assert.match(actions, /Research Workspace/);
 });
