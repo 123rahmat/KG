@@ -2867,6 +2867,8 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
   opacity: .72;
 }
 .workspace-source-primary { font-weight: 650; }
+.workspace-source-input { font-weight: 600; background: var(--soft); border-color: var(--line); }
+.workspace-source-input:hover:not(:disabled) { background: var(--panel); border-color: var(--line-strong); }
 
 @media (max-width: 760px) {
   .project-sources { width: calc(100vw - 18px); }
