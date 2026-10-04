@@ -148,7 +148,7 @@ Research depth is adaptive. A simple factual question does not require a large s
 
 ## Adaptive surface selection
 
-The server classifies the situation before choosing a workspace boundary.
+The server classifies the situation before choosing a workspace boundary. Attachment routing uses an aggregate profile rather than treating file extensions as the answer: ZIPs are inspected from their contents, multiple files are evaluated together, and ambiguous/mixed sets stay in Normal Chat.
 
 ```
 Normal Chat
@@ -163,14 +163,15 @@ The boundary is based on what the work actually needs, not merely on a file exte
 Examples:
 
 - a single Python edit → Normal Chat
-- a multi-file repository change → Code Workspace
+- multiple source files forming a project → Code Workspace
 - a current comparison requiring sources → Research Workspace
-- a ZIP containing source code → Code Workspace
-- a ZIP containing papers/documents → Research Workspace
-- a normal document ZIP → Normal Chat
-- a mixed or ambiguous ZIP → keep it in Normal Chat unless the task clearly requires a dedicated workspace
+- a ZIP whose contents form a real code project → Code Workspace
+- a ZIP with research-oriented documents/evidence → Research Workspace
+- ordinary documents, spreadsheets, images or unrelated files → Normal Chat
+- mixed code + research material → Normal Chat unless the task clearly requires one dedicated workspace
+- ambiguous or weak signals → Normal Chat
 
-A ZIP archive is therefore profiled by its contents instead of automatically being treated as a code project.
+The archive profiler looks at project markers, source-file structure, research/document signals and a small bounded content sample. It does not declare README/LICENSE files alone to be a software project, and it does not treat every PDF/DOCX as research. A ZIP archive is therefore profiled by its contents instead of automatically being treated as a code project.
 
 ## Files and archives
 
