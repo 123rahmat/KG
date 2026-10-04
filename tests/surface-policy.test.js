@@ -8,7 +8,7 @@ import {
 } from '../src/surface-policy.js';
 import { resolveAdaptiveContext } from '../src/adaptive.js';
 
-test('normal chat stays adaptive but medium-depth', () => {
+test('normal chat stays on the shared adaptive intelligence', () => {
   const decision = classifySurfaceBoundary('Explain this diagram step by step.', {
     attachments: [{ name: 'diagram.png' }],
     flags: { file: true },
@@ -56,7 +56,7 @@ test('medium analysis remains normal chat', () => {
     actions: ['answer']
   });
   assert.equal(decision.surface, 'normal-chat');
-  assert.equal(decision.complexity, 'medium');
+  assert.equal(decision.complexity, 'adaptive');
 });
 
 
@@ -148,7 +148,11 @@ test('Normal Chat remains the general adaptive mode for non-deep workspace work'
   const contract = SURFACE_WORKSPACE_CONTRACTS['normal-chat'];
   assert.match(contract.objective, /general adaptive operating mode/i);
   assert.match(contract.creationPolicy, /planning|analysis|file understanding/i);
-  assert.match(contract.escalationPolicy, /otherwise continue adapting inside Normal Chat/i);
+  assert.match(contract.escalationPolicy, /otherwise continue adapting/i);
+  assert.equal(contract.sharedIntelligence, true);
+  assert.equal(contract.adaptiveAgents, true);
+  assert.equal(contract.adaptiveTools, true);
+  assert.equal(contract.adaptiveVerification, true);
 
   const decision = classifySurfaceBoundary('Help me plan a business launch and organize the work.', {
     activeSurface: 'normal-chat',
