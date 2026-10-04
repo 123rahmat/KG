@@ -390,8 +390,8 @@ export function discoverCapabilityRequirements(goal, analysis = inspectGoal(goal
 
 export const SURFACE_CATALOG = Object.freeze({
   chat: { type: 'conversation', label: 'Normal Chat', purpose: 'Adaptive simple-to-medium conversation, explanation and rich multimodal understanding.' },
-  research: { type: 'investigation', label: 'Research', purpose: 'Evidence gathering and investigation when justified.' },
-  code: { type: 'workspace', label: 'Code', purpose: 'Software creation, debugging and authorized execution.' },
+  research: { type: 'investigation', label: 'Research Workspace', purpose: 'Evidence gathering, source tracking, analysis and verification when justified.' },
+  code: { type: 'workspace', label: 'Code Workspace', purpose: 'Repository-aware software creation, debugging, testing and authorized execution.' },
   creation: { type: 'conversation', label: 'Normal Chat', purpose: 'Creation is handled as adaptive normal-chat work unless it crosses into Coding or Research.' },
   workspace: { type: 'conversation', label: 'Normal Chat', purpose: 'Files and artifacts can be understood in Normal Chat without opening a deep workspace workflow.' },
   adaptive: { type: 'adaptive', label: 'Adaptive', purpose: 'A server-selected work surface for a capability not represented by a fixed domain surface.' }
