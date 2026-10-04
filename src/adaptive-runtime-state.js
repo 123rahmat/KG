@@ -111,16 +111,18 @@ export function decideRecovery({
     humanControlRequired: false
   });
 
-  const compatibilityAction = canonical.action === 'retry'
-    ? 'retry'
-    : canonical.action === 'stop'
-      ? 'stop'
-      : 'replan';
+  // Compatibility projection only: the unified authority still decides
+  // the recovery class. A verified, bounded code-repair opportunity is exposed
+  // as "repair" for older callers without introducing a second recovery loop.
+  const compatibilityAction = repairAvailable && failureClass === 'tests'
+    ? 'repair'
+    : canonical.action === 'retry'
+      ? 'retry'
+      : canonical.action === 'stop'
+        ? 'stop'
+        : 'replan';
 
-  // The old repair flag no longer creates a second decision path. Code repair
-  // is now selected by the unified workflow after reassessment.
   void taskType;
-  void repairAvailable;
 
   return {
     action: compatibilityAction,
