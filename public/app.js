@@ -921,34 +921,51 @@ export async function autoDrive(run) {
   if (state.drivingRuns.has(run.id)) return run;
   state.drivingRuns.add(run.id);
   let current = run;
+  const refresh = async () => {
+    const fresh = await api('GET', '/api/runs/' + run.id);
+    if (fresh?.id === run.id) { current = fresh; renderRun(fresh); }
+    return current;
+  };
+  const waitForServerRun = async () => {
+    const deadline = Date.now() + 30 * 60_000;
+    while (Date.now() < deadline && isAutomatic(current)) {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      await refresh();
+    }
+    return current;
+  };
   try {
-    for (let steps = 0; steps < 30 && isAutomatic(current); steps += 1) {
-      const before = String(current.next) + ':' + String(current.attempt);
-      const rerun = repairRerun(current);
-      if (state.chat?.id === current.conversationId || !state.chat?.id) {
-        state.run = current;
-        state.driving = current.id;
-        state.drivingLabel = rerun ? 'Running the revised code' : taskLabel(nextTaskOf(current));
-        renderThread();
+    const task = nextTaskOf(current);
+    const localRequested = task?.metadata?.executionTarget === 'local';
+    if (localRequested) {
+      for (let steps = 0; steps < 30 && isAutomatic(current); steps += 1) {
+        const before = String(current.next) + ':' + String(current.attempt);
+        const rerun = repairRerun(current);
+        if (state.chat?.id === current.conversationId || !state.chat?.id) {
+          state.run = current; state.driving = current.id;
+          state.drivingLabel = rerun ? 'Running the revised code' : taskLabel(nextTaskOf(current));
+          renderThread();
+        }
+        const updated = await runStep(null, rerun ?? {}, current);
+        if (updated) current = updated;
+        if (String(current.next) + ':' + String(current.attempt) === before) break;
       }
-      const updated = await runStep(null, rerun ?? {}, current);
-      if (updated) current = updated;
-      if (String(current.next) + ':' + String(current.attempt) === before) break;
+    } else if (isAutomatic(current)) {
+      if (state.chat?.id === current.conversationId || !state.chat?.id) {
+        state.run = current; state.driving = current.id; state.drivingLabel = taskLabel(task); renderThread();
+      }
+      current = await runStep(null, {}, current) || current;
+      if (isAutomatic(current)) current = await waitForServerRun();
     }
   } finally {
     state.drivingRuns.delete(run.id);
     if (state.driving === run.id) state.driving = null;
     state.drivingLabel = '';
-    if (state.run?.id === run.id) {
-      state.run = current;
-      renderThread();
-    } else {
-      loadRuns().catch(() => {});
-    }
+    if (state.run?.id === run.id) { state.run = current; renderThread(); }
+    else loadRuns().catch(() => {});
   }
   return current;
 }
-
 // Only real outcomes are shown as the answer; planning and checking notes
 // stay behind "Show steps".
 const RESULT_TASKS = ['deliver', 'respond', 'prototype'];
