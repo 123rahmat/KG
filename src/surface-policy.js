@@ -52,7 +52,8 @@ export const SURFACE_POLICY = Object.freeze({
 
 export function classifySurfaceBoundary(goal, { activeSurface = '', attachments = [], flags = {}, actions = [] } = {}) {
   const value = text(goal);
-  const explicitCode = CODE.test(value) || flags.code === true;
+  const codeAction = Array.isArray(actions) && actions.some(action => ['create', 'transform', 'execute'].includes(String(action).toLowerCase()));
+  const explicitCode = (CODE.test(value) && codeAction) || /\b(?:debug|fix|refactor|implement|build|develop|modify|edit|run|test|compile|deploy|commit|push|pull request|repository|repo)\b/i.test(value) || flags.code === true && codeAction;
   const explicitResearch = RESEARCH_DEEP.test(value)
     || CURRENT_FACTS.test(value)
     || flags.research === true && /\b(?:source|evidence|latest|current|paper|literature|research|investigat)\w*\b/i.test(value);
