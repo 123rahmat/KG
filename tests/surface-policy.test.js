@@ -38,6 +38,14 @@ test('deep research is routed out of normal chat', () => {
   assert.equal(decision.redirect, true);
 });
 
+test('code explanation remains normal chat while code work routes out', () => {
+  const decision = classifySurfaceBoundary('Explain this code step by step.', {
+    activeSurface: 'normal-chat', flags: { code: true }, actions: ['answer']
+  });
+  assert.equal(decision.surface, 'normal-chat');
+  assert.equal(decision.redirect, false);
+});
+
 test('medium analysis remains normal chat', () => {
   const decision = classifySurfaceBoundary('Compare these two explanations and tell me which is easier for a beginner.', {
     activeSurface: 'normal-chat',
