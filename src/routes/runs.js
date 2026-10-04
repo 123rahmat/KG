@@ -6,6 +6,7 @@ import { chooseExecutionTarget, executionTarget } from '../execution.js';
 import { planningInput, publicClassification } from '../http/context.js';
 import { RunError } from '../runs.js';
 import { formatOf } from '../documents.js';
+import { readDocumentIsolated } from '../document-runner.js';
 import { assertUsageAllowed, createUsageGate, UsageLimitError, recordUsage } from '../usage.js';
 import { screenRequest, combineDecisions, recordRefusal, inCooldown, careNote, blockedTopicsFrom, ethicsOf, FIXED_REPLY_CATEGORIES } from '../safety.js';
 import { assertTermsAccepted } from '../terms.js';
@@ -18,7 +19,7 @@ import { SkillLearningStore, skillContextSignature } from '../skills.js';
 // Files the AI reads for itself: text and code, CSV, PDF, Word, Excel and
 // PowerPoint become text; images are shown to the model. Anything else stays
 // a file that needs a tool (or the person) to inspect.
-const READABLE_FORMATS = new Set(['text', 'csv', 'pdf', 'docx', 'xlsx', 'pptx', 'image', 'project']);
+const READABLE_FORMATS = new Set(['text', 'csv', 'pdf', 'docx', 'xlsx', 'pptx', 'image', 'project', 'bundle']);
 const MAX_READABLE_BYTES = 20 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_ATTACHMENTS = 10;
@@ -56,14 +57,35 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
       if (!object) {
         throw new RunError('An attached file was not found', { status: 400, code: 'attachment-not-found' });
       }
+      const detectedFormat = formatOf({ name: object.name, contentType: object.contentType });
+      const readable = READABLE_FORMATS.has(detectedFormat)
+        && object.size <= (detectedFormat === 'image' ? MAX_IMAGE_BYTES : MAX_READABLE_BYTES);
+      let attachmentFormat = detectedFormat;
+      let archiveKind = null;
+      let archiveItemCount = null;
+      if (detectedFormat === 'project' && /\\.zip$/i.test(String(object.name ?? '')) && readable) {
+        try {
+          const stored = await objects.read(req.scope, object.id);
+          const inspected = await readDocumentIsolated(Buffer.from(stored.content), {
+            name: object.name,
+            contentType: object.contentType
+          });
+          attachmentFormat = inspected.format;
+          archiveKind = inspected.archiveKind ?? null;
+          archiveItemCount = Array.isArray(inspected.items) ? inspected.items.length : null;
+        } catch {
+          // The normal attachment reader reports the exact parse failure later.
+          // Do not let profile inspection turn a readable upload into a planning failure.
+        }
+      }
       attachments.push({
         id: object.id,
         name: object.name ?? object.id,
         contentType: object.contentType,
         size: object.size,
-        format: formatOf({ name: object.name, contentType: object.contentType }),
-        readable: READABLE_FORMATS.has(formatOf({ name: object.name, contentType: object.contentType }))
-          && object.size <= (formatOf({ name: object.name, contentType: object.contentType }) === 'image' ? MAX_IMAGE_BYTES : MAX_READABLE_BYTES)
+        format: attachmentFormat,
+        readable: readable,
+        ...(archiveKind ? { archiveKind, ...(archiveItemCount != null ? { archiveItemCount } : {}) } : {})
       });
     }
     if (sourceId) {
@@ -150,6 +172,7 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
       principalId: req.principal.id,
       taskPolicy: req.body?.taskPolicy
     });
+    const attachments = await resolveAttachments(req);
     const classification = await classifyFor(req, policies);
     const modelSelection = await resolveModelSelection(pool, config, {
       workspaceId: req.scope.workspaceId,
@@ -170,7 +193,8 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
       blockedTopics: blockedTopicsFrom(config),
       classifierHints: classification.hints,
       modelSelection: modelSelection.selectedModelId || null,
-      learnedSkills
+      learnedSkills,
+      attachments
     });
     if (plan.adaptation) plan.adaptation.classification = { ...plan.adaptation.classification, ...publicClassification(classification) };
     res.json(plan);
