@@ -37,6 +37,7 @@ import {
 } from './adaptive-control.js';
 import { selectAdaptiveWorkflow } from './adaptive-workflow.js';
 import { adaptiveEffortProfile } from './adaptive-efficiency.js';
+import { classifySurfaceBoundary, surfaceRuntimePolicy } from './surface-policy.js';
 
 const text = value => String(value ?? '').trim();
 
@@ -388,11 +389,11 @@ export function discoverCapabilityRequirements(goal, analysis = inspectGoal(goal
 }
 
 export const SURFACE_CATALOG = Object.freeze({
-  chat: { type: 'conversation', label: 'Chat', purpose: 'Reasoning, conversation and explanation.' },
+  chat: { type: 'conversation', label: 'Normal Chat', purpose: 'Adaptive simple-to-medium conversation, explanation and rich multimodal understanding.' },
   research: { type: 'investigation', label: 'Research', purpose: 'Evidence gathering and investigation when justified.' },
   code: { type: 'workspace', label: 'Code', purpose: 'Software creation, debugging and authorized execution.' },
-  creation: { type: 'creation', label: 'Create', purpose: 'Design, invention, drafting and artifact creation.' },
-  workspace: { type: 'artifacts', label: 'Workspace', purpose: 'Files, datasets and artifacts used by the current goal.' },
+  creation: { type: 'conversation', label: 'Normal Chat', purpose: 'Creation is handled as adaptive normal-chat work unless it crosses into Coding or Research.' },
+  workspace: { type: 'conversation', label: 'Normal Chat', purpose: 'Files and artifacts can be understood in Normal Chat without opening a deep workspace workflow.' },
   adaptive: { type: 'adaptive', label: 'Adaptive', purpose: 'A server-selected work surface for a capability not represented by a fixed domain surface.' }
 });
 
@@ -470,24 +471,27 @@ export function resolveAdaptiveContext(goal, {
   });
   const f = analysis.flags ?? {};
   const model = analysis.goalModel ?? compileGoalModel(goal);
+  const boundary = classifySurfaceBoundary(goal, {
+    activeSurface,
+    attachments,
+    flags: f,
+    actions: model.actions
+  });
   const surfaces = new Set(['chat']);
-  if (analysis.investigationNeeded) surfaces.add('research');
-  if (f.code || capabilityRequirements.some(item => item.id === 'code-generation')) surfaces.add('code');
-  if (f.creation || f.invention || model.actions.includes('create') || model.actions.includes('invent')) surfaces.add('creation');
-  if (f.file) surfaces.add('workspace');
+  if (boundary.surface === 'research') surfaces.add('research');
+  if (boundary.surface === 'code') surfaces.add('code');
+  if (boundary.surface === 'normal-chat') surfaces.add('chat');
   if (analysis.unknownSituation || capabilityRequirements.some(item => item.dynamic)) surfaces.add('adaptive');
 
-  const ordered = ['chat', 'research', 'code', 'creation', 'workspace', 'adaptive'].filter(surface => surfaces.has(surface));
+  const ordered = ['chat', 'research', 'code', 'adaptive'].filter(surface => surfaces.has(surface));
   const allowed = ['auto', 'local', 'hosted', 'hybrid'];
   const requested = allowed.includes(text(runtimeMode)) ? text(runtimeMode) : 'auto';
   const mode = requested === 'auto' ? 'hosted' : requested;
   const preferred = text(activeSurface);
-  const primarySurface = ordered.includes(preferred) ? preferred
-    : analysis.unknownSituation ? 'adaptive'
-      : ordered.includes('code') ? 'code'
-        : ordered.includes('research') ? 'research'
-          : ordered.includes('creation') ? 'creation'
-            : 'chat';
+  const primarySurface = boundary.surface === 'code' ? 'code'
+    : boundary.surface === 'research' ? 'research'
+      : analysis.unknownSituation && !['chat', 'normal-chat'].includes(preferred) ? 'adaptive'
+        : 'chat';
   const provisionalControl = normalizeAdaptiveControl(adaptiveControl, {
     inferredDepth: analysis.situation?.need?.depth || 'standard'
   });
@@ -540,7 +544,10 @@ export function resolveAdaptiveContext(goal, {
     resourcePlan
   });
   const selectedSurfaces = resourcePlan.selected.surfaces ?? ['chat'];
-  const selectedPrimarySurface = resourcePlan.selected.primarySurface ?? 'chat';
+  const selectedPrimarySurface = boundary.surface === 'code' ? 'code'
+    : boundary.surface === 'research' ? 'research' : 'chat';
+  resourcePlan.selected.surfaces = [...new Set(selectedSurfaces.filter(surface => ['chat','code','research'].includes(surface)).concat(selectedPrimarySurface))];
+  resourcePlan.selected.primarySurface = selectedPrimarySurface;
   const selectedSourceIds = new Set(resourcePlan.selected.dataSources);
   const dataClasses = [...new Set([
     'user-content',
@@ -621,8 +628,10 @@ export function resolveAdaptiveContext(goal, {
       localPreflightRequired: selectedSurfaces.includes('code')
     },
     surfaces: selectedSurfaces,
-    surfaceDescriptors: surfaceDescriptors(selectedSurfaces),
+    surfaceDescriptors: surfaceDescriptors(resourcePlan.selected.surfaces),
     primarySurface: selectedPrimarySurface,
+    surfacePolicy: surfaceRuntimePolicy(selectedPrimarySurface),
+    surfaceBoundary: boundary,
     compound: model.compound || selectedSurfaces.length > 2,
     investigation: {
       needed: analysis.investigationNeeded,
