@@ -40,7 +40,8 @@ export function buildAcceptanceContract({
   authorizationRequired = false,
   authorizationSatisfied = true,
   verificationRequired = false,
-  verificationSatisfied = false
+  verificationSatisfied = false,
+  finalizationRequired = false
 } = {}) {
   const normalizedCriteria = uniq(criteria);
   const requiredEvidence = uniq(evidenceRequired);
@@ -61,6 +62,7 @@ export function buildAcceptanceContract({
     authorizationSatisfied: authorizationSatisfied !== false,
     verificationRequired: verificationRequired === true,
     verificationSatisfied: verificationSatisfied === true,
+    finalizationRequired: finalizationRequired === true,
     gaps,
     satisfied: gaps.length === 0
   };
