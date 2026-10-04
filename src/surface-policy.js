@@ -44,7 +44,7 @@ export const SURFACE_WORKSPACE_CONTRACTS = Object.freeze({
     agentPolicy: 'Use the same server-owned adaptive agent policy as the other workspaces: one executor by default, with advisory or specialized roles added only when their independent value exceeds coordination cost.',
     verificationPolicy: 'Verify claims or produced content when stakes, uncertainty or user intent justify a check; do not add a redundant verification pass to pure conversation.',
     creationPolicy: 'Writing, translation, explanation, planning, analysis, file and image understanding, design, visuals, canvas concepts and presentations stay here unless the situation genuinely crosses a Code or Research workspace boundary.',
-    escalationPolicy: 'Escalate to Code for software-project work and to Research for source-heavy/current evidence work; otherwise continue adapting, reasoning, using tools, coordinating agents and iterating inside Normal Chat.'
+    escalationPolicy: 'Escalate to Code for software-project work and to Research for source-heavy/current evidence work; otherwise continue adapting, reasoning, using tools, coordinating agents and iterating inside Normal Chat.',
     uiPolicy: 'Keep the composer central; reveal only the controls and adaptive surfaces relevant to the current situation.',
     selectionPolicy: 'Default general mode. Remain here for the rest of the system’s work and adapt depth, tools, files, reasoning and iteration to the situation; switch modes only when deep Code or deep Research is actually justified.'
   }),
@@ -87,13 +87,17 @@ export const SURFACE_POLICY = Object.freeze({
       heavyAutonomy: 'adaptive',
       deepCode: false,
       deepResearch: false,
+      sharedIntelligence: true,
+      adaptiveAgents: true,
+      adaptiveTools: true,
+      adaptiveVerification: true,
       richMultimodal: true,
       lightweightCreation: true,
       design: true,
       visualCanvas: true,
       presentationCreation: true,
       contract: SURFACE_WORKSPACE_CONTRACTS['normal-chat'],
-      principle: 'The general adaptive mode for everything that does not require the dedicated Code or Research operating envelope; depth and resources still adapt to the situation.'
+      principle: 'General workspace over the same adaptive intelligence: depth, agents, tools, context, verification and iteration all expand or contract with the situation.'
     },
     code: {
       id: 'code',
@@ -159,8 +163,7 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
   }
 
   // Deep workspaces are sticky across ordinary follow-ups. This preserves
-  // repository/source-set continuity without requiring the user to restate
-  // the mode on every turn. Explicit signals above can still switch modes.
+  // project/evidence continuity without changing the underlying intelligence.
   if (active === 'code') {
     return {
       requested,
@@ -190,8 +193,8 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
     surface: 'normal-chat',
     redirect: false,
     transition: active === 'normal-chat' ? 'stay' : 'switch',
-    reason: visualOrFile ? 'rich-normal-chat-understanding' : MEDIUM_ANALYSIS.test(value) ? 'adaptive-medium-chat' : 'direct-chat',
-    complexity: MEDIUM_ANALYSIS.test(value) ? 'medium' : 'simple',
+    reason: visualOrFile ? 'adaptive-file-or-image-context' : MEDIUM_ANALYSIS.test(value) ? 'adaptive-analysis' : 'adaptive-general-chat',
+    complexity: 'adaptive',
     workspace: SURFACE_WORKSPACE_CONTRACTS['normal-chat']
   };
 }
