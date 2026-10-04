@@ -263,6 +263,19 @@ function archiveFormat(name) {
   return formatOf({ name, contentType: '' });
 }
 
+const CODE_ARCHIVE_EXT = new Set([
+  'py','pyi','js','mjs','cjs','jsx','ts','tsx','go','mod','rs','java','kt','kts',
+  'c','cc','cxx','cpp','h','hh','hpp','cs','rb','php','swift','sql','sh','html',
+  'css','scss','proto','cmake','gradle'
+]);
+
+function isCodeArchivePath(name) {
+  const base = String(name ?? '').split('/').pop() ?? '';
+  if (SOURCE_NAMES.has(base)) return true;
+  const dot = base.lastIndexOf('.');
+  return dot > 0 && CODE_ARCHIVE_EXT.has(base.slice(dot + 1).toLowerCase());
+}
+
 function archiveProfile(names) {
   let code = 0;
   let documents = 0;
@@ -271,7 +284,7 @@ function archiveProfile(names) {
   let researchHints = 0;
   for (const name of names) {
     const format = archiveFormat(name);
-    if (format === 'project' && !/\.zip$/i.test(name)) code += 1;
+    if (isCodeArchivePath(name)) code += 1;
     else if (['pdf', 'docx', 'xlsx', 'pptx', 'text'].includes(format)) documents += 1;
     else if (format === 'image') images += 1;
     else if (format === 'csv') data += 1;
