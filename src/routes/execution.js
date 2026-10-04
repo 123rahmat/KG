@@ -22,6 +22,7 @@ import { currentDbScope } from '../db.js';
 import { modelForStep, resolveModelSelection } from '../model-routing.js';
 import { compileExecutionCapabilityPlan } from '../capability-compiler.js';
 import { effortForAdaptiveDepth, adaptiveExecutionBudgetStatus, toolsForTask, adaptiveStepScope } from '../adaptive-control.js';
+import { adaptiveBehaviorContract, adaptiveEffortProfile } from '../adaptive-efficiency.js';
 import { executionSafetyGate } from '../adaptive-safety.js';
 import { situationGovernanceExecutionGate } from '../situation-governance.js';
 import { systemPromptFor, situationBrief, previousAttempts, normalizeVerdict, GENERIC_CRITERION } from '../reasoning-context.js';
@@ -1496,6 +1497,14 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         contextSignature: taskSkillContext
       },
       skillPlan,
+      adaptiveBehavior: adaptiveBehaviorContract(run.adaptation?.effortProfile ?? adaptiveEffortProfile({
+        complexity: Number(run.situation?.complexity ?? 0), uncertainty: Number(run.situation?.uncertainty ?? 0),
+        risk: run.situation?.risk ?? 'medium', verificationGap: Number(run.situation?.verificationGap ?? 0),
+        failureCount: Math.max(0, Number(run.attempt ?? 1) - 1),
+        irreversible: run.situation?.irreversible === true, externalSideEffect: run.situation?.externalSideEffect === true,
+        physical: run.situation?.physical === true, regulated: run.situation?.regulated === true,
+        peopleDecision: run.situation?.peopleDecision === true
+      })),
       adaptiveContext: {
         memory: {
           recalledItems: remembered.length,
@@ -1682,7 +1691,10 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
           config, fetchImpl, modelId: effectiveModelId, allowBackup, effort,
           usageGate,
           usageSource: 'chat',
-          maxRounds: Math.max(0, Number(run.adaptation?.resourcePlan?.budget?.maxDiscoveryRounds ?? run.adaptation?.resourcePlan?.budget?.maxToolCalls ?? 6))
+          maxRounds: Math.min(
+            Math.max(1, Number(run.adaptation?.effortProfile?.maturity?.level ? ({ light: 2, standard: 4, high: 6, maximum: 8 }[run.adaptation.effortProfile.maturity.level] ?? 4) : 4)),
+            Math.max(1, Number(run.adaptation?.resourcePlan?.budget?.maxDiscoveryRounds ?? run.adaptation?.resourcePlan?.budget?.maxToolCalls ?? 6))
+          )
         })
       : await callModel(messages, {
           config,
