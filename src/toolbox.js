@@ -249,6 +249,7 @@ const TOOL_PROTOCOL = [
   'Use tools when they make the answer more correct: read attached files rather than guessing, analyse tables, calculate numbers, read public pages for facts that change.',
   'A tool that is not ready lists what it needs; tell the person exactly that instead of pretending.',
   'A tool marked sideEffect is only proposed: the person approves it. Say what you proposed; never claim it happened.'
+  ,'ADAPTIVE BEHAVIOR: follow ctx.adaptiveBehavior when supplied. Match tool use to the current maturity and exact need; use the minimum necessary tools/context/rounds. Escalate only for a stated uncertainty, verification gap, failure, consequence, or other contract trigger. For consequential application-level work, preserve provenance, verify before claiming success, recover according to the contract, and never promote model judgment into authority.'
 ].join('\n');
 
 /**
@@ -258,7 +259,8 @@ const TOOL_PROTOCOL = [
  */
 export function toolPrompt(ctx) {
   const catalog = toolCatalog(ctx);
-  return `${TOOL_PROTOCOL}\nAvailable tools:\n${JSON.stringify(catalog.map(tool => ({
+  const adaptive = ctx?.adaptiveBehavior ? `\nAdaptive behavior contract:\n${JSON.stringify(ctx.adaptiveBehavior)}` : '';
+  return `${TOOL_PROTOCOL}${adaptive}\nAvailable tools:\n${JSON.stringify(catalog.map(tool => ({
     name: tool.name, does: tool.description,
     ...(tool.ready ? { input: tool.input } : { notReady: tool.reason, needs: tool.needs }),
     ...(tool.sideEffect ? { sideEffect: true } : {})
