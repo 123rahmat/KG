@@ -137,6 +137,7 @@ export function adaptiveBehaviorContract(profile = adaptiveEffortProfile({}), { 
   });
   return {
     version: 3,
+    authority: 'server-owned',
     principle: 'Adapt every behavior to the current situation; do not maximize intelligence, tools, agents, context, verification, or parallelism unless justified by need and evidence.',
     maturity: level,
     pressure: p.pressure ?? 0,
