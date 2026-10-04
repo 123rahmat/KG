@@ -119,7 +119,8 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
       surface: 'code',
       redirect: activeSurface === 'chat' || activeSurface === 'normal-chat',
       reason: 'coding-work-requires-code-surface',
-      complexity: 'deep-eligible'
+      complexity: 'deep-eligible',
+      workspace: SURFACE_WORKSPACE_CONTRACTS.code
     };
   }
 
@@ -129,7 +130,8 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
       surface: 'research',
       redirect: activeSurface === 'chat' || activeSurface === 'normal-chat',
       reason: 'deep-research-work-requires-research-surface',
-      complexity: 'deep-eligible'
+      complexity: 'deep-eligible',
+      workspace: SURFACE_WORKSPACE_CONTRACTS.research
     };
   }
 
@@ -138,7 +140,8 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
     surface: 'normal-chat',
     redirect: false,
     reason: visualOrFile ? 'rich-normal-chat-understanding' : MEDIUM_ANALYSIS.test(value) ? 'adaptive-medium-chat' : 'direct-chat',
-    complexity: MEDIUM_ANALYSIS.test(value) ? 'medium' : 'simple'
+    complexity: MEDIUM_ANALYSIS.test(value) ? 'medium' : 'simple',
+    workspace: SURFACE_WORKSPACE_CONTRACTS['normal-chat']
   };
 }
 
