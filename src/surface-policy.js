@@ -37,15 +37,15 @@ export const SURFACE_WORKSPACE_CONTRACTS = Object.freeze({
     id: 'normal-chat',
     label: 'Normal Chat',
     mode: 'conversation-first',
-    objective: 'Resolve the user need with the smallest reliable amount of reasoning, context and tooling.',
+    objective: 'Act as the general adaptive operating mode for non-Code and non-deep-Research work, using the smallest reliable amount of reasoning, context, tooling and iteration.'
     contextPolicy: 'Use the active conversation and only the files, memory and external context that materially improve this request.',
     toolPolicy: 'Just-in-time tools only. Never open deep research or code execution merely because they are available.',
     agentPolicy: 'Single executor by default; add advisory roles only when uncertainty or complexity justifies them.',
     verificationPolicy: 'Verify claims or produced content when stakes, uncertainty or user intent justify a check; do not add a redundant verification pass to pure conversation.',
-    creationPolicy: 'Lightweight writing, visual ideas, diagrams, canvas concepts and presentation structures stay in the conversation.',
-    escalationPolicy: 'Escalate to Code for repository/software changes and to Research for source-heavy, current or evidence-gathering work.',
+    creationPolicy: 'Writing, translation, explanation, planning, analysis, file understanding, lightweight design, visuals, canvas concepts and presentations stay here unless the situation genuinely crosses a deep Code or Research boundary.'
+    escalationPolicy: 'Escalate to Code only for repository/software engineering work and to Research only for source-heavy/current evidence work; otherwise continue adapting inside Normal Chat.'
     uiPolicy: 'Keep the composer central; reveal only the controls and adaptive surfaces relevant to the current situation.',
-    selectionPolicy: 'Default mode. Stay here for ordinary conversation, files and lightweight design/creation; escalate only when deeper Code or Research work is justified.'
+    selectionPolicy: 'Default general mode. Remain here for the rest of the system’s work and adapt depth, tools, files, reasoning and iteration to the situation; switch modes only when deep Code or deep Research is actually justified.'
   }),
   code: Object.freeze({
     id: 'code',
@@ -92,7 +92,7 @@ export const SURFACE_POLICY = Object.freeze({
       visualCanvas: true,
       presentationCreation: true,
       contract: SURFACE_WORKSPACE_CONTRACTS['normal-chat'],
-      principle: 'Same adaptive intelligence, bounded to simple and medium user-facing work, including lightweight design and Canva-style creation.'
+      principle: 'The general adaptive mode for everything that does not require the dedicated Code or Research operating envelope; depth and resources still adapt to the situation.'
     },
     code: {
       id: 'code',
