@@ -3480,3 +3480,110 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
     transform: none !important;
   }
 }
+
+
+/* ------------------------------------------------ adaptive normal-chat creation */
+
+/* The composer mirrors the operating envelope: chat stays primary while lightweight
+   creation capabilities are always reachable without turning the surface into a
+   heavyweight design suite. */
+.adaptive-create-strip {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  min-height:36px;
+  padding:4px 2px 7px;
+  overflow-x:auto;
+  scrollbar-width:none;
+}
+.adaptive-create-strip::-webkit-scrollbar { display:none; }
+.adaptive-create-label {
+  flex:none;
+  margin-right:3px;
+  color:var(--muted);
+  font:700 .61rem/1 var(--mono);
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.create-chip {
+  flex:none;
+  min-height:29px;
+  padding:5px 9px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:var(--softer);
+  color:var(--ink-2);
+  font-size:.75rem;
+  font-weight:620;
+  box-shadow:none;
+}
+.create-chip:hover:not(:disabled) { background:var(--soft); border-color:var(--line-strong); }
+.create-chip.active {
+  color:var(--accent);
+  background:var(--accent-soft);
+  border-color:color-mix(in srgb,var(--accent) 28%,var(--line));
+}
+.create-chip .i { width:14px; height:14px; }
+.adaptive-create-hint {
+  min-width:0;
+  margin-left:auto;
+  padding-left:8px;
+  color:var(--muted);
+  font-size:.67rem;
+  white-space:nowrap;
+}
+.composer:focus-within .adaptive-create-strip { border-color:color-mix(in srgb,var(--accent) 20%,var(--line)); }
+
+/* Adaptive workspace status: hierarchy is current situation → current step →
+   optional surfaces, rather than a permanent multi-agent dashboard. */
+.adaptive-workspace-bar {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:12px;
+  min-height:48px;
+  margin:0 auto 8px;
+  padding:7px 10px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:color-mix(in srgb,var(--softer) 92%,transparent);
+}
+.adaptive-workspace-main { display:flex; align-items:center; gap:9px; min-width:0; }
+.adaptive-workspace-dot {
+  width:7px; height:7px; flex:none; border-radius:50%;
+  background:var(--accent); box-shadow:0 0 0 4px var(--accent-soft);
+}
+.adaptive-workspace-copy { display:grid; min-width:0; gap:1px; }
+.adaptive-workspace-kicker { color:var(--muted); font:700 .57rem/1 var(--mono); letter-spacing:.08em; text-transform:uppercase; }
+.adaptive-workspace-surfaces { display:flex; align-items:center; justify-content:flex-end; gap:5px; flex-wrap:wrap; }
+.adaptive-workspace-surfaces .adaptive-active { border-color:color-mix(in srgb,var(--accent) 30%,var(--line)); background:var(--accent-soft); color:var(--accent); }
+
+/* Design/visual work should feel like a lightweight studio, not a second app. */
+.design-result,
+.visual-result,
+.canvas-result {
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:var(--panel);
+  overflow:hidden;
+  box-shadow:var(--shadow-sm);
+}
+.design-result-head,
+.canvas-result-head {
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:10px 13px; border-bottom:1px solid var(--line); background:var(--softer);
+}
+.design-result-head strong,.canvas-result-head strong { font-size:.78rem; }
+.design-result-body,.canvas-result-body { padding:14px; }
+.design-result-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; }
+.design-result-grid > * { min-width:0; }
+
+@media (max-width:760px) {
+  .adaptive-create-strip { padding-bottom:5px; }
+  .adaptive-create-hint { display:none; }
+  .adaptive-workspace-bar { grid-template-columns:1fr; gap:7px; padding:8px 10px; }
+  .adaptive-workspace-surfaces { justify-content:flex-start; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .create-chip,.adaptive-workspace-bar { transition:none; }
+}
