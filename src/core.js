@@ -518,10 +518,10 @@ export function planGoal(goal, {
   // Normal Chat keeps the same adaptive intelligence but never opens deep
   // research or code execution. Explicit code/research requests are routed to
   // their dedicated surfaces instead of becoming heavyweight chat runs.
+  let capabilityRequirements = discovered;
   if (surfaceBoundary.surface === 'normal-chat') {
     capabilityRequirements = capabilityRequirements.filter(item => !['evidence-retrieval', 'external-data-routing', 'adaptive-execution', 'code-generation', 'code-execution'].includes(item.id));
   }
-  let capabilityRequirements = discovered;
   if (executionAvailable?.code === false && capabilityRequirements.some(item => item.id === 'code-execution')) {
     capabilityRequirements = capabilityRequirements.filter(item => item.id !== 'code-execution');
     notAvailableHere.push('code-execution');
