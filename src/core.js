@@ -597,7 +597,8 @@ export function planGoal(goal, {
     && !surfaceBoundary.redirect
     && analysis.flags?.highImpact !== true
     && analysis.situation?.clarificationRequired !== true
-    && analysis.situation?.externalData?.hasExternalDataNeed !== true;
+    && analysis.situation?.externalData?.hasExternalDataNeed !== true
+    && (analysis.flags?.physical !== true || noPhysicalAction);
   // Normal Chat is the universal surface, not a bypass around the adaptive
   // workflow. Creation, investigation, execution, modeling, invention,
   // attachments and project context are still real work and enter the same
@@ -609,19 +610,10 @@ export function planGoal(goal, {
     || files.length > 0
     || project != null;
   const directConversation = normalChatBounded && !hasRealWork;
-  const direct = crisis || declined || (smallTalk || reminder) && !attachments.length || directConversation || (intent.kind === 'chat' || writing || physicalQuestion)
-    && blocked.length === 0
-    && dedupedApprovalReasons.length === 0
-    && (writing || capabilityRequirements.every(item => BASE_CAPABILITIES.includes(item.id)))
-    && !analysis.unknownSituation
-    && analysis.situation?.clarificationRequired !== true
-    && (analysis.flags?.physical !== true || noPhysicalAction)
-    && analysis.flags?.highImpact !== true
-    // A question in an ongoing chat ("Why?") is answered directly with the
-    // earlier turns, and so is a piece of writing or a translation; only
-    // follow-ups on work (code, files) continue it.
-    && (situation.phase === 'discovery' || (situation.phase === 'continuation' && (intent.kind === 'chat' || (writing && !CODE_FOLLOW_UP.test(value)))))
-    && situation.externalData?.hasExternalDataNeed !== true;
+  const direct = crisis
+    || declined
+    || ((smallTalk || reminder) && !attachments.length)
+    || directConversation;
   const scale = direct ? 'single' : workScale({
     capabilities: granted,
     unknownSituation: analysis.unknownSituation === true,
