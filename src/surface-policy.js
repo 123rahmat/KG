@@ -29,7 +29,11 @@ export const SURFACE_POLICY = Object.freeze({
       deepCode: false,
       deepResearch: false,
       richMultimodal: true,
-      principle: 'Same adaptive intelligence, bounded to simple and medium user-facing work.'
+      lightweightCreation: true,
+      design: true,
+      visualCanvas: true,
+      presentationCreation: true,
+      principle: 'Same adaptive intelligence, bounded to simple and medium user-facing work, including lightweight design and Canva-style creation.'
     },
     code: {
       id: 'code',
@@ -109,6 +113,10 @@ export function normalChatAllowsTask({ goal = '', taskType = '', flags = {}, att
     taskType: text(taskType) || 'respond',
     richMultimodal: true,
     maxDepth: 'medium',
+    lightweightCreation: true,
+    design: true,
+    visualCanvas: true,
+    presentationCreation: true,
     agents: 'minimal-and-justified'
   };
 }
