@@ -1176,6 +1176,25 @@ export class RunStore {
           [run.id, JSON.stringify(nextSituation)]
         );
       }
+      // Every material result re-evaluates the same unified contract before the
+      // next task is selected. This is how tools, files, tests, failures,
+      // discoveries and user corrections change behavior without restarting the workflow.
+      if (adaptiveUpdate) {
+        const priorUnified = run.adaptation?.unifiedAdaptiveWorkflow ?? {};
+        const priorEvidence = Array.isArray(priorUnified?.evidence?.items) ? priorUnified.evidence.items : [];
+        const eventEvidence = evidence === null || evidence === undefined ? [] : [evidence];
+        adaptiveUpdate.unifiedAdaptiveWorkflow = reassessUnifiedWorkflow(priorUnified, {
+          event: { type: target.type, material: true, situationPatch: nextSituation },
+          situation: nextSituation,
+          acceptance: {
+            ...(priorUnified.acceptance ?? {}),
+            evidence: [...priorEvidence, ...eventEvidence]
+          },
+          evidence: [...priorEvidence, ...eventEvidence],
+          failedAttempts: decision.status === 'failed' ? Number(run.attempt ?? 0) + 1 : Number(run.attempt ?? 0),
+          candidates: []
+        });
+      }
       await client.query(
         'INSERT INTO situation_events (run_id, workspace_id, principal_id, event_type, event) VALUES ($1, $2, $3, $4, $5::jsonb)',
         [run.id, scope.workspaceId, principal.id, target.type, JSON.stringify({
@@ -1408,16 +1427,26 @@ export class RunStore {
     }
 
     if (decision.status === 'failed') {
+      const recoveryReason = text(result?.summary) || text(result?.reason) || 'workflow-step-failed';
       const recovery = decideRecovery({
         taskType: target.type,
-        reason: text(result?.summary) || text(result?.reason) || 'workflow-step-failed',
+        reason: recoveryReason,
         attempt: run.attempt,
         maxAttempts: run.max_attempts,
         governanceStatus: run.adaptation?.governance?.status ?? 'ready',
         humanReviewRequired: run.adaptation?.verification?.humanReviewRequired === true,
         repairAvailable: target.type === 'code'
       });
-      const recoveryRecord = recoveryLesson(recovery, {
+      const unifiedRecovery = unifiedRecoveryDecision({
+        reason: recoveryReason,
+        attempts: run.attempt,
+        maxAttempts: run.max_attempts,
+        consequence: run.adaptation?.unifiedAdaptiveWorkflow?.authority?.consequence ?? 0,
+        humanControlRequired: run.adaptation?.unifiedAdaptiveWorkflow?.authority?.controls?.humanControlRequired === true,
+        governanceStatus: run.adaptation?.governance?.status ?? 'ready'
+      });
+      const effectiveRecovery = unifiedRecovery.action === 'stop' ? { ...recovery, action: 'stop', reason: unifiedRecovery.reason } : recovery;
+      const recoveryRecord = recoveryLesson(effectiveRecovery, {
         taskId: target.id,
         summary: result?.summary
       });
@@ -1431,7 +1460,7 @@ export class RunStore {
         "SELECT id FROM run_tasks WHERE run_id = $1 AND id = 'iterate'",
         [run.id]
       );
-      if (recovery.action !== 'stop' && !existingIterate.length) {
+      if (effectiveRecovery.action !== 'stop' && !existingIterate.length) {
         const { rows: currentRows } = await client.query(
           'SELECT position FROM run_tasks WHERE run_id = $1 ORDER BY position',
           [run.id]
