@@ -16,7 +16,7 @@ import { mergeBlackboard } from './blackboard.js';
 import { adaptConcurrency, adaptiveParallelLimit, agentWorkspaceLane, buildWorkspaceParallelPlan } from './parallel-orchestrator.js';
 import { buildSubsystemPlan, compactSubsystemPlan, createSubsystemMessage, mergeSubsystemMessages, subsystemAssignment, subsystemCommunicationContext } from './subsystem-orchestrator.js';
 import { realWorldMaturity } from './adaptive-efficiency.js';
-import { adaptiveDecisionAuthority, buildAcceptanceContract, recoveryDecision } from './adaptive-decision-authority.js';
+import { adaptiveDecisionAuthority, buildAcceptanceContract } from './adaptive-decision-authority.js';
 
 export const MULTI_AGENT_MODES = Object.freeze(['auto', 'always', 'off']);
 export const DEFAULT_MULTI_AGENT_MAX_AGENTS = 11;
