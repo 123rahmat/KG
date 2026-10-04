@@ -331,7 +331,7 @@ export function nextTask(tasks) {
 }
 
 // Words that make a follow-up in a chat about work on code, not new writing.
-const ATTACHED_CODE = /\.(?:py|js|mjs|cjs|jsx|ts|tsx|go|rs|java|kt|c|cc|cpp|h|hpp|cs|rb|php|swift|sql|sh|zip)$/i;
+const ATTACHED_CODE = /\.(?:py|js|mjs|cjs|jsx|ts|tsx|go|rs|java|kt|c|cc|cpp|h|hpp|cs|rb|php|swift|sql|sh)$/i;
 export const CODE_FOLLOW_UP = /\b(?:bugs?|functions?|methods?|class(?:es)?|variables?|errors?|exceptions?|stack ?traces?|compil\w*|refactor\w*|tests?|scripts?|code|program)\b/i;
 
 export function planGoal(goal, {
