@@ -35,7 +35,7 @@ export function adaptiveEffortProfile({
   const verificationScore = clamp01(verificationGap);
   const failures = clamp01(Number(failureCount) / 3);
   const irreversibleScore = irreversible ? 1 : 0;
-  const criteriaScore = acceptanceCriteriaMissing ? 0.35 : 0;
+  const criteriaScore = acceptanceCriteriaMissing ? 0.35 : 0;\n  const maturity = realWorldMaturity({ riskScore, irreversible, externalSideEffect, physical, regulated, peopleDecision, uncertainty: uncertaintyScore, verificationGap: verificationScore, failureCount });
 
   const pressure = Math.max(
     complexityScore,
@@ -54,7 +54,7 @@ export function adaptiveEffortProfile({
 
   // Extra effort is justified by uncertainty/risk/verification need, not by
   // task size alone. This keeps large but deterministic work inexpensive.
-  const verificationDepth = riskScore >= 0.75 || verificationScore >= 0.5 || failures > 0
+  const verificationDepth = maturity.independentVerificationRequired || riskScore >= 0.75 || verificationScore >= 0.5 || failures > 0
     ? 'deep'
     : pressure >= 0.35 ? 'standard' : 'light';
 
@@ -64,7 +64,7 @@ export function adaptiveEffortProfile({
       ? 'targeted'
       : 'minimal';
 
-  const expansionAllowed = pressure >= 0.65 || acceptanceCriteriaMissing;
+  const expansionAllowed = pressure >= 0.65 || acceptanceCriteriaMissing || maturity.escalationTriggers.length > 0;
   const stopRule = pressure < 0.35 && verificationScore <= 0
     ? 'pass-then-stop'
     : 'continue-until-acceptance-evidence';
@@ -98,13 +98,13 @@ export function adaptiveResourceDecision({
   const p = profile ?? adaptiveEffortProfile({});
   const cost = Math.max(0, Number(estimatedCost) || 0);
   const benefit = Math.max(0, Number(expectedBenefit) || 0);
-  const confidenceGap = clamp01(requiredConfidence - currentConfidence);
+  const confidenceGap = clamp01(requiredConfidence - currentConfidence);\n  const consequenceScore = clamp01(consequence);\n  if (p.maturity?.independentVerificationRequired && confidenceGap > 0) return { decision: 'continue', reason: 'Independent verification is required before confidence can satisfy this real-world maturity level.', confidenceGap };
 
-  if (confidenceGap <= 0 && benefit <= cost) {
+  if (confidenceGap <= 0 && benefit <= cost && consequenceScore < 0.75) {
     return { decision: 'stop', reason: 'Acceptance confidence is met and additional work has no positive expected value.' };
   }
 
-  if (cost > 0 && benefit / cost < 1 && confidenceGap < 0.15 && p.level !== 'critical') {
+  if (cost > 0 && benefit / cost < 1 && confidenceGap < 0.15 && p.level !== 'critical' && consequenceScore < 0.75) {
     return { decision: 'defer', reason: 'Additional resource use has low expected value at the current confidence gap.' };
   }
 
