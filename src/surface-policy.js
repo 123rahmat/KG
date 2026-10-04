@@ -24,14 +24,25 @@ function attachmentNames(attachments) {
     .filter(Boolean);
 }
 
+function attachmentKinds(attachments) {
+  return (Array.isArray(attachments) ? attachments : [])
+    .map(item => typeof item === 'object' ? text(item?.archiveKind) : '')
+    .filter(Boolean);
+}
+
 function hasProjectCodeContext(value, attachments) {
   const names = attachmentNames(attachments);
+  const kinds = attachmentKinds(attachments);
   const sourceCount = names.filter(name =>
     /\.(?:py|js|mjs|cjs|jsx|ts|tsx|go|rs|java|kt|c|cc|cpp|h|hpp|cs|rb|php|swift|sql|sh|html|css|json)$/i.test(name)
   ).length;
   return CODE_PROJECT_SCOPE.test(value)
-    || names.some(name => /\.zip$/i.test(name))
+    || kinds.includes('code-project')
     || sourceCount > 1;
+}
+
+function hasResearchArchiveContext(attachments) {
+  return attachmentKinds(attachments).includes('research-bundle');
 }
 
 function shouldUseCodeWorkspace(value, attachments, { actions = [], explicitCodeSwitch = false } = {}) {
@@ -158,7 +169,8 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
     actions,
     explicitCodeSwitch
   }) || flags.code === true && codeAction && hasProjectCodeContext(value, attachments);
-  const explicitResearch = EXPLICIT_MODE_SWITCH.research.test(value)
+  const explicitResearch = hasResearchArchiveContext(attachments)
+    || EXPLICIT_MODE_SWITCH.research.test(value)
     || DEEP_RESEARCH_ACTION.test(value)
     || (CURRENT_FACTS.test(value) && /\b(?:search|find|check|verify|compare|source|price|rate|news|weather|score|latest|current)\b/i.test(value))
     || (RESEARCH_DEEP.test(value) && /\b(?:research|investigat|paper|source|evidence|citation|literature|latest|current|browse|search)\w*\b/i.test(value))
