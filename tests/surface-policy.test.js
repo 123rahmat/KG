@@ -16,7 +16,8 @@ test('normal chat stays adaptive but medium-depth', () => {
   });
   assert.equal(decision.surface, 'normal-chat');
   assert.equal(decision.redirect, false);
-  assert.equal(surfaceRuntimePolicy('normal-chat').maxDepth, 'medium');
+  assert.equal(surfaceRuntimePolicy('normal-chat').maxDepth, 'adaptive');
+  assert.equal(surfaceRuntimePolicy('normal-chat').heavyAutonomy, 'adaptive');
 });
 
 test('explicit coding work is routed out of normal chat', () => {
@@ -156,4 +157,15 @@ test('Normal Chat remains the general adaptive mode for non-deep workspace work'
   });
   assert.equal(decision.surface, 'normal-chat');
   assert.equal(decision.redirect, false);
+});
+
+
+test('Normal Chat retains adaptive depth and shared agent policy', () => {
+  const runtime = surfaceRuntimePolicy('normal-chat');
+  assert.equal(runtime.maxDepth, 'adaptive');
+  assert.equal(runtime.heavyAutonomy, 'adaptive');
+  const task = normalChatAllowsTask({ goal: 'Design a better workflow and adapt it as new constraints appear.' });
+  assert.equal(task.allowed, true);
+  assert.equal(task.maxDepth, 'adaptive');
+  assert.equal(task.agents, 'shared-adaptive-and-justified');
 });
