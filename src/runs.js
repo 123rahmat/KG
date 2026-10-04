@@ -983,6 +983,45 @@ export class RunStore {
             }
           : result.evidence ?? null;
 
+      // Completion is decided from the unified workflow contract, never from a model/status claim alone.
+      if (status === 'complete') {
+        const priorUnified = run.adaptation?.unifiedAdaptiveWorkflow ?? {};
+        const priorEvidence = Array.isArray(priorUnified?.evidence?.items) ? priorUnified.evidence.items : [];
+        const currentEvidence = result.evidence === null || result.evidence === undefined ? [] : [result.evidence];
+        const allEvidence = [...priorEvidence, ...currentEvidence];
+        const completionWorkflow = reassessUnifiedWorkflow(priorUnified, {
+          event: { type: target.type, material: true },
+          situation: run.situation ?? {},
+          acceptance: { ...(priorUnified.acceptance ?? {}), evidence: allEvidence },
+          evidence: allEvidence,
+          failedAttempts: Number(run.attempt ?? 0),
+          candidates: [target.id]
+        });
+        const gate = completionGate({
+          workflow: completionWorkflow,
+          status,
+          taskType: target.type,
+          evidence: allEvidence,
+          verification: result.evidence?.verdict ?? result.evidence?.verification ?? null,
+          authorizationSatisfied: run.situation?.authorizationSatisfied !== false
+        });
+        if (!gate.allowed) {
+          await this.audit?.record({
+            principalId: principal.id,
+            workspaceId: scope.workspaceId,
+            action: 'run.completion-gate',
+            target: run.id + ':' + target.id,
+            outcome: 'denied',
+            detail: { reason: gate.reason, gaps: gate.gaps, taskType: target.type },
+            requestId
+          });
+          throw new RunError(
+            'The workflow cannot mark this step complete until its acceptance evidence and required controls are satisfied.',
+            { status: 409, code: 'completion-gate', detail: gate }
+          );
+        }
+      }
+
       let approvedPlanUpdate = null;
       if (status === 'complete' && target.type === 'approval') {
         const conditions = text(result.conditions ?? result.evidence?.conditions).slice(0, 4000);
