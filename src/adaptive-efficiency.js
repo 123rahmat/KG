@@ -128,7 +128,11 @@ export function adaptiveBehaviorContract(profile = adaptiveEffortProfile({})) {
       recovery: maturity.recoveryMode,
       humanControl: maturity.humanControlRequired ? 'required' : 'situational',
       provenance: maturity.provenanceRequired ? 'required' : 'normal',
-      stopping: p.stopRule
+      stopping: p.stopRule,
+      applicationHandling: maturity.level === 'light' ? 'answer-or-act-with-minimum-necessary-scope' : maturity.level === 'standard' ? 'act-in-scoped-steps-with-checkpoints' : 'act-with-explicit-evidence-and-recovery',
+      agenticBehavior: p.expansionAllowed ? 'recruit-specialists-only-for-identified-gaps' : 'keep-agentic-work-minimal',
+      authority: 'server-owned',
+      uncertaintyHandling: maturity.escalationTriggers.includes('uncertainty') ? 'investigate-before-commitment' : 'proceed-and-observe'
     },
     toolRoundsCeiling: rounds,
     independentVerificationRequired: maturity.independentVerificationRequired,
