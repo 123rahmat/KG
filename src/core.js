@@ -23,6 +23,7 @@ import { buildUnifiedAdaptiveIntelligence } from './unified-adaptive-intelligenc
 import { buildUnifiedWorkContext } from './unified-work-context.js';
 import { selectSkillDescriptors, summarizeSkillLearning, skillContextSignature, skillPlanForSelectedSkills } from './skills.js';
 import { parallelDecision } from './parallel-orchestrator.js';
+import { classifySurfaceBoundary, surfaceRuntimePolicy } from './surface-policy.js';
 
 export const CONTRACT = 'kindgleam-open-world-situation-adaptive-v9';
 export { CAPABILITIES, SURFACES };
@@ -508,11 +509,18 @@ export function planGoal(goal, {
   }
 
   const intent = smallTalk ? { kind: 'chat', confidence: 1, signals: ['answer'] } : classifyIntent(value, situationContext);
+  const surfaceBoundary = classifySurfaceBoundary(value, { activeSurface, attachments, flags: analysis.flags, actions: analysis.goalModel?.actions ?? [] });
   const discovered = discoverCapabilityRequirements(value, analysis);
   // Adapt to what this deployment can really run. A run that needs a missing
   // runner would stop at a step that can never finish; instead the work is
   // done as code and instructions, and the limitation is stated.
   const notAvailableHere = [];
+  // Normal Chat keeps the same adaptive intelligence but never opens deep
+  // research or code execution. Explicit code/research requests are routed to
+  // their dedicated surfaces instead of becoming heavyweight chat runs.
+  if (surfaceBoundary.surface === 'normal-chat') {
+    capabilityRequirements = capabilityRequirements.filter(item => !['evidence-retrieval', 'external-data-routing', 'adaptive-execution', 'code-generation', 'code-execution'].includes(item.id));
+  }
   let capabilityRequirements = discovered;
   if (executionAvailable?.code === false && capabilityRequirements.some(item => item.id === 'code-execution')) {
     capabilityRequirements = capabilityRequirements.filter(item => item.id !== 'code-execution');
@@ -585,7 +593,13 @@ export function planGoal(goal, {
   const reminder = SCHEDULING.test(value) && !attachments.length && !files.length
     && !['coding', 'invention'].includes(intent.kind) && analysis.flags?.highImpact !== true;
   // A person in crisis gets an immediate answer, whatever else applies.
-  const direct = crisis || declined || (smallTalk || reminder) && !attachments.length || (intent.kind === 'chat' || writing || physicalQuestion)
+  const normalChatBounded = surfaceBoundary.surface === 'normal-chat'
+    && analysis.flags?.code !== true
+    && !surfaceBoundary.redirect
+    && analysis.flags?.highImpact !== true
+    && analysis.situation?.clarificationRequired !== true
+    && analysis.situation?.externalData?.hasExternalDataNeed !== true;
+  const direct = crisis || declined || (smallTalk || reminder) && !attachments.length || normalChatBounded || (intent.kind === 'chat' || writing || physicalQuestion)
     && blocked.length === 0
     && dedupedApprovalReasons.length === 0
     && (writing || capabilityRequirements.every(item => BASE_CAPABILITIES.includes(item.id)))
@@ -714,6 +728,8 @@ export function planGoal(goal, {
       ? 'creation'
       : analysis.unknownSituation ? 'adaptive-open-world' : 'adaptive',
     surface: adaptive.primarySurface,
+    surfacePolicy: surfaceRuntimePolicy(adaptive.primarySurface),
+    surfaceBoundary,
     capabilities: {
       required: scopedRequirements.map(item => item.id),
       granted,
