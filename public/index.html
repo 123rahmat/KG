@@ -36,6 +36,7 @@
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
   <symbol id="i-retry" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/></symbol>
   <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z"/><path d="M19 17v4M17 19h4"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m5 17 4.5-4 3 3 2.5-2 4 3"/></symbol>
   <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></symbol>
   <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></symbol>
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
@@ -650,6 +651,23 @@
               <span id="draftStatus" class="draft-status" hidden>Saved locally while you type</span>
               <span id="voiceStatus" class="voice-status" hidden></span>
             </div>
+          </div>
+          <label class="sr-only" for="goal">Message</label>
+          <div class="adaptive-create-strip" id="adaptiveCreateStrip" role="toolbar" aria-label="Create in Normal Chat">
+            <span class="adaptive-create-label">Create</span>
+            <button type="button" class="create-chip active" data-create-mode="design" aria-pressed="true">
+              <svg class="i" aria-hidden="true"><use href="#i-sparkle"/></svg><span>Design</span>
+            </button>
+            <button type="button" class="create-chip" data-create-mode="canvas" aria-pressed="false">
+              <svg class="i" aria-hidden="true"><use href="#i-explore"/></svg><span>Canvas</span>
+            </button>
+            <button type="button" class="create-chip" data-create-mode="visual" aria-pressed="false">
+              <svg class="i" aria-hidden="true"><use href="#i-image"/></svg><span>Visual</span>
+            </button>
+            <button type="button" class="create-chip" data-create-mode="slides" aria-pressed="false">
+              <svg class="i" aria-hidden="true"><use href="#i-files"/></svg><span>Slides</span>
+            </button>
+            <span class="adaptive-create-hint" id="adaptiveCreateHint">Lightweight creation stays in Normal Chat</span>
           </div>
           <label class="sr-only" for="goal">Message</label>
           <textarea id="goal" rows="1" placeholder="Ask anything…"></textarea>
