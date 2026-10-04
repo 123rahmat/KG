@@ -183,7 +183,42 @@ export function registerWorkspaceSourcesRoutes(app, {
     }
     const read = await githubReadRepository({ fetchImpl, token, owner: source.repo_owner, repo: source.repo_name, ref: source.repo_ref, repoPath: text(source.metadata?.repoPath) || null });
     const manifest = sourceManifest(read.files);
-    if (source.metadata?.contentHash === manifest.contentHash) return res.json({ source: sourcePublic(source), unchanged: true, manifest });
+    if (source.metadata?.contentHash === manifest.contentHash) {
+      const { rows: [updated] } = await pool.query(
+        `UPDATE workspace_sources
+            SET repo_ref = $4,
+                metadata = metadata || $5::jsonb,
+                updated_at = now()
+          WHERE id = $1 AND workspace_id = $2 AND principal_id = $3
+          RETURNING *`,
+        [
+          source.id, req.scope.workspaceId, req.principal.id, read.source.ref,
+          JSON.stringify({
+            url: read.source.url,
+            private: read.source.private,
+            commitSha: read.source.commitSha,
+            treeSha: read.source.treeSha,
+            repoPath: read.source.repoPath,
+            contentHash: manifest.contentHash,
+            fileCount: manifest.fileCount,
+            manifest: manifest.files,
+            ingestion: read.ingestion,
+            syncedAt: new Date().toISOString()
+          })
+        ]
+      );
+          await pool.query(
+      `UPDATE code_workspace_sessions
+          SET state = 'stale', updated_at = now()
+        WHERE source_id = $1
+          AND workspace_id = $2
+          AND principal_id = $3
+          AND state = 'active'
+          AND (base_revision IS NULL OR base_revision <> $4)`,
+      [source.id, req.scope.workspaceId, req.principal.id, read.source.commitSha]
+    );
+      return res.json({ source: sourcePublic(updated), unchanged: true, revision: read.source.commitSha, manifest });
+    }
     const object = await snapshotObject(objects, req.scope, req.principal, read.files, `${source.name}.workspace`, {
       kind: 'github', sourceId: source.id, owner: source.repo_owner, repo: source.repo_name,
       ref: read.source.ref, contentHash: manifest.contentHash, fileCount: manifest.fileCount
@@ -418,6 +453,15 @@ export function registerWorkspaceSourcesRoutes(app, {
       [text(req.params.id), req.scope.workspaceId, req.principal.id]
     );
     if (!row) return res.status(404).json({ error: 'Workspace source not found', code: 'no-source' });
+    await pool.query(
+      `UPDATE code_workspace_sessions
+          SET state = 'stale', updated_at = now()
+        WHERE source_id = $1
+          AND workspace_id = $2
+          AND principal_id = $3
+          AND state = 'active'`,
+      [row.id, req.scope.workspaceId, req.principal.id]
+    );
     await audit?.record({
       principalId: req.principal.id, workspaceId: req.scope.workspaceId,
       action: 'workspace.source.revoke', target: row.id, outcome: 'allowed', requestId: req.requestId
