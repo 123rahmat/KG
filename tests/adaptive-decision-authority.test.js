@@ -86,8 +86,6 @@ test('adaptive behavior exposes the unified authority decision', () => {
 });
 
 
-import { adaptiveBehaviorContract } from '../src/adaptive-efficiency.js';
-
 test('adaptive behavior contract is structurally complete', () => {
   const contract = adaptiveBehaviorContract(undefined, {
     situation: { goal: 'simple answer', uncertainty: 0.05, riskScore: 0.1 },
