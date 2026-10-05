@@ -2000,6 +2000,7 @@ dialog.settings {
 .capabilities .yes .cap-mark { color: var(--ok); }
 
 @media (max-width: 760px) {
+  .deep-workspace-section-grid { grid-template-columns: 1fr; }
   .thread { width: calc(100% - 20px); gap: 22px; padding-top: 20px; }
   .composer {
     width: calc(100% - 14px);
@@ -4075,6 +4076,36 @@ body[data-adaptive-workspace="research"] .deep-workspace-shell {
   padding: 7px 8px;
   font-size: .82rem;
 }
+.deep-workspace-section-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.deep-workspace-section-grid .detail-card { min-width: 0; }
+.workspace-detail-list {
+  display: grid;
+  gap: 5px;
+  max-height: 210px;
+  overflow: auto;
+}
+.workspace-detail-row {
+  display: grid;
+  gap: 3px;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  font-size: .78rem;
+  line-height: 1.35;
+}
+a.workspace-detail-row {
+  color: inherit;
+  text-decoration: none;
+}
+a.workspace-detail-row:hover { border-color: var(--line-strong); }
+.workspace-detail-row code,
+.workspace-detail-row strong { min-width: 0; overflow-wrap: anywhere; }
 .deep-workspace-actions.design {
   align-items: center;
 }
