@@ -3092,6 +3092,17 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
   gap:8px;
   padding:6px 0;
 }
+.work-status-summary{display:flex;align-items:center;gap:9px;min-width:0}
+.work-status-copy{display:grid;gap:2px;min-width:0}
+.work-status-copy strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.76rem}
+.work-status-copy span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.work-status-dot{width:7px;height:7px;flex:none;border-radius:50%;background:var(--muted);box-shadow:0 0 0 3px var(--line)}
+.work-status-dot.active{background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.work-status-state{padding:4px 7px;border:1px solid var(--line);border-radius:999px;background:var(--softer)}
+.work-progress-meter.is-complete i{background:var(--ok)}
+.work-timeline-details{margin-top:8px;border-top:1px solid var(--line);padding-top:7px}
+.work-timeline-details>summary{cursor:pointer;color:var(--muted);list-style:none}
+.work-timeline-details>summary::-webkit-details-marker{display:none}
 .work-timeline-dot{
   width:7px;height:7px;border-radius:50%;background:var(--muted);
   box-shadow:0 0 0 3px var(--line);
