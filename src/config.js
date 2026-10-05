@@ -97,7 +97,7 @@ function databaseUsername(connectionString) {
  * priceIds). Limits of 0 or missing mean no limit on that plan. The free plan
  * is everyone without a subscription (BILLING_FREE_* and USAGE_LIMIT_*).
  */
-function parseAiProviders(raw, errors, { vertexConfigured = false } = {}) {
+function parseAiProviders(raw, errors) {
   if (!text(raw)) return [];
   let parsed;
   try { parsed = JSON.parse(raw); } catch { errors.push('AI_PROVIDERS_JSON must be a JSON object or array'); return []; }
@@ -106,20 +106,15 @@ function parseAiProviders(raw, errors, { vertexConfigured = false } = {}) {
   for (const [index, item] of items.entries()) {
     const provider = text(item?.provider).toLowerCase();
     const apiKey = text(item?.apiKey || item?.key);
-    if (!PROVIDERS.includes(provider) || (!apiKey && !(provider === 'xai' && vertexConfigured))) {
-      errors.push(`AI_PROVIDERS_JSON[${index}] needs the supported xai provider and either an API key or Vertex AI credentials`);
+    const model = text(item?.model) || DEFAULT_MODEL;
+    if (provider !== 'xai' || !apiKey || !isGrokModel(model)) {
+      errors.push('AI_PROVIDERS_JSON[' + index + '] must configure xai with XAI_API_KEY and model grok-4.7');
       continue;
     }
-    const model = text(item?.model) || text(item?.modelId).replace(/^xai:/, '') || DEFAULT_MODEL;
-    if (!isGrokModel(model)) {
-      errors.push(`AI_PROVIDERS_JSON[${index}].model must be a Grok model id such as ${DEFAULT_MODEL} (got "${model}")`);
-      continue;
-    }
-    out.push({ provider, apiKey, model, modelId: `xai:${model}` });
+    out.push({ provider: 'xai', apiKey, model: DEFAULT_MODEL, modelId: 'xai:grok-4.7' });
   }
-  return [...new Map(out.map(item => [item.provider, item])).values()];
+  return out.slice(0, 1);
 }
-
 function parseJsonObject(raw, name, errors, fallback = {}) {
   if (!text(raw)) return fallback;
   try {
