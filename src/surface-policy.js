@@ -233,7 +233,8 @@ export const SURFACE_POLICY = Object.freeze({
       intelligenceProfile: SURFACE_INTELLIGENCE_PROFILES.design,
       principle: 'Adaptive visual design with an editable canvas, governed asset operations, preview and export verification.'
     },
-    'normal-chat': {\n      id: 'normal-chat',
+    'normal-chat': {
+      id: 'normal-chat',
       maxDepth: 'adaptive',
       heavyAutonomy: 'adaptive',
       deepCode: false,
