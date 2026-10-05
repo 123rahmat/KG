@@ -229,9 +229,6 @@ export function renderWorkStatus(run) {
     ])
   ].filter(Boolean));
 }
-function capabilityItems(data) {
-  const run = data.run;
-  const source = state.workspaceSource;
 function designWorkspaceState() {
   state.designWorkspace ??= {
     selected: null,
@@ -388,6 +385,11 @@ function fieldInput(key, value, onChange) {
     input
   ]);
 }
+
+function capabilityItems(data) {
+  const run = data.run;
+  const source = state.workspaceSource;
+
 
   if (data.workspace === 'design') {
     const run = data.run;
