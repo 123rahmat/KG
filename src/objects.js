@@ -224,6 +224,71 @@ export class ObjectStore {
     return rows[0] ? present(rows[0]) : null;
   }
 
+  async replace(scope, principal, id, input = {}, { requestId } = {}) {
+    const content = this.#toBuffer(input.content, input.encoding);
+    const name = text(input.name);
+    const contentType = text(input.contentType);
+    if (!content.length) {
+      const error = new Error('Replacement content cannot be empty');
+      error.status = 400; error.expose = true; error.code = 'empty-replacement';
+      throw error;
+    }
+    if (content.byteLength > this.maxObjectBytes) throw new QuotaError(`Replacement exceeds the ${this.maxObjectBytes} byte per-object limit`, { size: content.byteLength, limit: this.maxObjectBytes });
+    if (name.length > this.maxFieldChars || contentType.length > this.maxFieldChars) {
+      const error = new Error('Replacement metadata is too long');
+      error.status = 413; error.expose = true; error.code = 'field-too-large';
+      throw error;
+    }
+    const digest = this.encryptionKey
+      ? objectDigest(this.encryptionKey, scope.workspaceId, content)
+      : crypto.createHash('sha256').update(scope.workspaceId, 'utf8').update(':', 'utf8').update(content).digest('hex');
+    const stored = this.encryptionKey
+      ? encryptObject(this.encryptionKey, scope.workspaceId, content)
+      : { version: 0, bytes: content };
+
+    return transaction(this.pool, async client => {
+      const { rows: [object] } = await client.query(
+        `SELECT * FROM objects
+          WHERE id = $1 AND workspace_id = $2
+            AND (visibility = 'workspace' OR owner_id = $3)
+          FOR UPDATE`,
+        [text(id), scope.workspaceId, scope.principalId]
+      );
+      if (!object) return null;
+      const { rows: [existingBlob] } = await client.query('SELECT ref_count FROM blobs WHERE digest = $1 FOR UPDATE', [object.digest]);
+      if (existingBlob) {
+        await client.query('UPDATE blobs SET ref_count = ref_count + 1 WHERE digest = $1', [digest]);
+      } else {
+        await client.query(
+          `INSERT INTO blobs (digest, workspace_id, bytes, size, ref_count, encryption_version)
+           VALUES ($1, $2, $3, $4, 1, $5)
+           ON CONFLICT (digest) DO UPDATE SET ref_count = blobs.ref_count + 1`,
+          [digest, scope.workspaceId, stored.bytes, content.byteLength, stored.version]
+        );
+      }
+      await client.query('UPDATE blobs SET ref_count = ref_count - 1 WHERE digest = $1', [object.digest]);
+      await client.query('DELETE FROM blobs WHERE digest = $1 AND ref_count = 0', [object.digest]);
+      const { rows: [updated] } = await client.query(
+        `UPDATE objects
+            SET name = COALESCE(NULLIF($2, ''), name),
+                content_type = COALESCE(NULLIF($3, ''), content_type),
+                size = $4, digest = $5, updated_at = now()
+          WHERE id = $1 RETURNING *`,
+        [text(id), name, contentType, content.byteLength, digest]
+      );
+      await this.audit?.record({
+        principalId: principal.id,
+        workspaceId: scope.workspaceId,
+        action: 'object.replace',
+        target: id,
+        outcome: 'allowed',
+        detail: { size: updated.size, digest },
+        requestId
+      }, client);
+      return present(updated);
+    });
+  }
+
   /** Metadata plus the bytes. */
   async read(scope, id) {
     const { rows } = await this.pool.query(
