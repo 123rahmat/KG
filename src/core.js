@@ -25,6 +25,7 @@ import { buildUnifiedWorkContext } from './unified-work-context.js';
 import { selectSkillDescriptors, summarizeSkillLearning, skillContextSignature, skillPlanForSelectedSkills } from './skills.js';
 import { parallelDecision } from './parallel-orchestrator.js';
 import { classifySurfaceBoundary, surfaceRuntimePolicy, surfaceIntelligenceProfile } from './surface-policy.js';
+import { buildUniversalContextContract } from './universal-context.js';
 
 export const CONTRACT = 'kindgleam-open-world-situation-adaptive-v9';
 export { CAPABILITIES, SURFACES };
@@ -418,6 +419,26 @@ export function planGoal(goal, {
     };
   }
 
+  const universalContext = buildUniversalContextContract({
+    goal: value,
+    conversationId: conversation?.id ?? conversationId ?? null,
+    projectId: project?.id ?? project?.projectId ?? null,
+    workspaceId: workspace?.id ?? workspace?.workspaceId ?? null,
+    principalId: user?.id ?? user?.principalId ?? null,
+    organizationId: workspace?.organizationId ?? workspace?.organization_id ?? null,
+    crossChatMemory: user?.crossChatMemory === true || user?.settings?.crossChatMemory === true,
+    requestedSkills: Array.isArray(preferences?.skills) ? preferences.skills : [],
+    candidateSkills: [],
+    allowedSkills: Array.isArray(adaptiveControl?.includeSkills) ? adaptiveControl.includeSkills : [],
+    deniedSkills: Array.isArray(adaptiveControl?.excludeSkills) ? adaptiveControl.excludeSkills : [],
+    maxSkills: 6,
+    maxSkillCost: Number(adaptiveControl?.budget?.maxSkillCost ?? 12),
+    risk: analysis?.flags?.highImpact ? 'high' : analysis?.flags?.physical ? 'medium' : 'ordinary',
+    verificationRequired: false,
+    complexity: Number(project ? 0.45 : 0),
+    uncertainty: Number(analysis?.unknownSituation ? 0.7 : 0)
+  });
+
   const situationContext = {
     user, workspace, project, files, priorWork, constraints, resources,
     requirements, successCriteria, outputs, environment, language,
@@ -429,6 +450,7 @@ export function planGoal(goal, {
     // (in files) need a file tool.
     attachedArtifacts: attachments.map(item => (typeof item === 'string' ? item : item?.name)).filter(Boolean),
     // A classified code project or source file attached makes this code work.
+    universalContext,
     attachedCode: attachments.some(item => item && typeof item === 'object'
       && (item.format === 'project' || ATTACHED_CODE.test(String(item.name ?? ''))))
   };
@@ -670,6 +692,11 @@ export function planGoal(goal, {
     preferences,
     situation
   });
+  universalContext.skills = {
+    ...universalContext.skills,
+    candidateSkills: selectedSkills.map(skill => skill.name),
+    selectionMode: 'adaptive'
+  };
 
   const skillPlan = skillPlanForSelectedSkills(selectedSkills, { taskType: skillTaskType, maxSkills: 8, maxCost: Number(adaptiveControl?.budget?.maxSkillCost ?? 12) });
   const skillLearning = summarizeSkillLearning(selectedSkills);
@@ -751,6 +778,7 @@ export function planGoal(goal, {
     surface: adaptive.primarySurface,
     surfacePolicy: surfaceRuntimePolicy(adaptive.primarySurface),
     workspaceContract: surfaceBoundary.workspace ?? surfaceRuntimePolicy(adaptive.primarySurface).contract ?? null,
+    universalContext,
     surfaceBoundary,
     capabilities: {
       required: scopedRequirements.map(item => item.id),
