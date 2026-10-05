@@ -31,122 +31,36 @@ export function recordingLogger() {
  * hand back a client bound to an ephemeral port.
  */
 /**
- * Kindgleam speaks only to Gemini 3.8 Flash. Many tests describe the model's
+ * Kindgleam speaks only to Grok 4.7. Many tests describe the model's
  * replies in an older, neutral stand-in format ({ output_text, usage, output }),
  * with requests read as { input: [system, user, …], tools }. This translator
  * lets those stand-ins answer the Gemini API: Gemini requests are translated
  * to the stand-in shape, and their replies are returned as Gemini responses.
  */
 const LEGACY_PROVIDERS = new Set(['anthropic', 'openai']);
-const GEMINI_URL = 'https://aiplatform.googleapis.com/';
+const XAI_URL = 'https://api.x.ai/v1/responses';
 
-function legacyContent(content) {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return content;
-  if (content.every(block => block.type === 'text')) return content.map(block => block.text).join('');
-  return [...content].sort((a, b) => (a.type === 'text' ? 0 : 1) - (b.type === 'text' ? 0 : 1)).map(block => block.type === 'text'
-    ? { type: 'input_text', text: block.text }
-    : { type: 'input_image', image_url: `data:${block.source?.media_type};base64,${block.source?.data}` });
-}
-
-export function geminiFromStandIn(standIn) {
+export function grokFromStandIn(standIn) {
   return async (url, options = {}) => {
-    if (!String(url).startsWith(GEMINI_URL)) return standIn(url, options);
+    if (!String(url).startsWith(XAI_URL)) return standIn(url, options);
     const body = JSON.parse(options.body);
-    const system = body.systemInstruction?.parts?.map(part => part.text).join('') ?? '';
-    // Each message as Claude-style content: images (inline data) before text.
-    const blocksOf = message => {
-      // Gemini accepts inline data in either casing; the app sends snake_case.
-      const images = (message.parts ?? []).map(part => part.inlineData ?? part.inline_data).filter(Boolean).map(image => ({
-        type: 'image', source: { type: 'base64', media_type: image.mimeType ?? image.mime_type, data: image.data }
-      }));
-      const textValue = (message.parts ?? []).filter(part => typeof part.text === 'string').map(part => part.text).join('');
-      return images.length ? [...images, { type: 'text', text: textValue }] : textValue;
-    };
     const legacy = {
-      model: body.contents ? (body.model ?? 'gemini-3.8-flash') : 'gemini-3.8-flash',
-      max_output_tokens: body.generationConfig?.maxOutputTokens ?? null,
-      // Both request shapes a stand-in may read: the neutral `input` list and
-      // Claude-style `system` + `messages`.
-      input: [
-        { role: 'system', content: system },
-        ...(body.contents ?? []).map(message => ({
-          role: message.role === 'model' ? 'assistant' : 'user',
-          content: legacyContent(blocksOf(message))
-        }))
-      ],
-      system,
-      messages: (body.contents ?? []).map(message => ({
-        role: message.role === 'model' ? 'assistant' : 'user',
-        content: blocksOf(message)
-      })),
-      ...(body.tools?.length ? { tools: [{ type: 'web_search' }] } : {})
+      model: body.model ?? 'grok-4.7',
+      input: Array.isArray(body.input) ? body.input : [],
+      ...(Array.isArray(body.tools) ? { tools: body.tools } : {}),
+      ...(body.max_output_tokens ? { max_output_tokens: body.max_output_tokens } : {})
     };
-
-    const response = await standIn('https://api.openai.com/v1/responses', {
-      ...options,
-      body: JSON.stringify(legacy)
-    });
-    if (!response?.ok) return response;
-
-    const data = await response.json();
-
-    // Legacy stand-ins may already return a Gemini response.
-    if (Array.isArray(data?.candidates)) return jsonResponse(data);
-
-    // Support Anthropic-shaped fixtures retained by some integration tests.
-    if (Array.isArray(data?.content)) {
-      const parts = data.content
-        .filter(part => part.type === 'text')
-        .map(part => ({ text: part.text ?? '' }));
-      const sources = data.content.flatMap(part => part.citations ?? []).filter(item => item?.url);
-      const finishReason = data.stop_reason === 'max_tokens' ? 'MAX_TOKENS'
-        : data.stop_reason === 'refusal' ? 'SAFETY'
-        : 'STOP';
-      return jsonResponse({
-        candidates: [{
-          content: { role: 'model', parts },
-          finishReason,
-          ...(sources.length ? { groundingMetadata: { groundingChunks: sources.map(item => ({ web: { uri: item.url, title: item.title ?? '' } })) } } : {})
-        }],
-        ...(data.usage ? {
-          usageMetadata: {
-            promptTokenCount: data.usage.input_tokens ?? 0,
-            candidatesTokenCount: data.usage.output_tokens ?? 0,
-            totalTokenCount: (data.usage.input_tokens ?? 0) + (data.usage.output_tokens ?? 0)
-          }
-        } : {})
-      });
-    }
-
-    const output = data.output ?? [];
-    const parts = output.flatMap(item => item.content ?? []);
-    const text = data.output_text ?? parts.filter(part => part.type === 'output_text').map(part => part.text).join('');
-    const refused = parts.some(part => part.type === 'refusal');
-    const sources = parts.flatMap(part => part.annotations ?? []).filter(item => item.type === 'url_citation' && item.url);
-    return jsonResponse({
-      candidates: [{
-        content: { role: 'model', parts: refused ? [] : [{ text }] },
-        finishReason: refused ? 'SAFETY' : data.status === 'incomplete' ? 'MAX_TOKENS' : 'STOP',
-        ...(sources.length ? { groundingMetadata: { groundingChunks: sources.map(item => ({ web: { uri: item.url, title: item.title ?? '' } })) } } : {})
-      }],
-      ...(data.usage ? {
-        usageMetadata: {
-          promptTokenCount: data.usage.input_tokens ?? 0,
-          candidatesTokenCount: data.usage.output_tokens ?? 0,
-          totalTokenCount: (data.usage.input_tokens ?? 0) + (data.usage.output_tokens ?? 0)
-        }
-      } : {})
-    });
+    return standIn('https://api.openai.com/v1/responses', { ...options, body: JSON.stringify(legacy) });
   };
 }
+
 
 export async function withServer(run, { env = {}, fetchImpl } = {}) {
   // A test written with a stand-in for another provider can still run against Gemini.
   if (LEGACY_PROVIDERS.has(String(env.AI_PROVIDER ?? '').toLowerCase())) {
     // The stand-in's model name belongs to the old provider; run it as Gemini.
-    env = { ...env, AI_PROVIDER: 'google', ...(env.AI_MODEL ? { AI_MODEL: 'gemini-3.8-flash' } : {}) };
-    if (fetchImpl) fetchImpl = geminiFromStandIn(fetchImpl);
+    env = { ...env, AI_PROVIDER: 'xai', AI_MODEL: 'grok-4.7' };
+    if (fetchImpl) fetchImpl = grokFromStandIn(fetchImpl);
   }
 
   const name = `pro_test_${crypto.randomBytes(6).toString('hex')}`;
