@@ -1,10 +1,11 @@
 /**
  * Product surface policy.
  *
- * One adaptive intelligence core, three user-facing workspaces:
+ * One adaptive intelligence core, four user-facing workspaces:
  *   normal-chat -> general adaptive work
  *   code        -> software engineering context
  *   research    -> evidence/research context
+ *   design      -> editable visual design context
  *
  * Workspaces change context, tools and continuity; they do not create
  * separate intelligence levels or separate agentic brains.
@@ -294,8 +295,8 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
   const visualOrFile = Array.isArray(attachments) && attachments.length > 0;
   const requested = activeSurface || 'normal-chat';
   const activeIsDesign = active === 'design';
-  const visualDesign = EXPLICIT_MODE_SWITCH.design.test(value)
-    || /\b(?:image design|visual design|graphic design|poster|logo|branding|brand board|illustration|layout|composition|art direction|canvas|mood ?board|wireframe|mockup|visual identity)\b/i.test(value)
+  const explicitDesignSwitch = EXPLICIT_MODE_SWITCH.design.test(value);
+  const visualDesign = /\b(?:image design|visual design|graphic design|poster|logo|branding|brand board|illustration|layout|composition|art direction|canvas|mood ?board|wireframe|mockup|visual identity)\b/i.test(value)
     || (Array.isArray(attachments) && attachments.some(item => /^image\//i.test(String(item?.contentType ?? item?.type ?? '')))
        && /\b(?:edit|transform|compose|arrange|design|layout|make|create|generate|visual)\b/i.test(value));
 
@@ -312,7 +313,7 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
     };
   }
 
-  if (visualDesign && active !== 'code' && active !== 'research') {
+  if ((explicitDesignSwitch || visualDesign) && active !== 'code' && active !== 'research') {
     return {
       requested,
       surface: 'design',
