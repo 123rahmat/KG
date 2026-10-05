@@ -1596,6 +1596,7 @@ async function runCodeWorkspaceAgentPanels({
       });
 
       const results = [];
+      const parallelTelemetry = [];
       for (const schedulerWave of lanePlan.waves) {
         const waveJobs = schedulerWave.lanes
           .map(lane => jobs.find(job => job.lane.agentId === lane.agentId))
@@ -1675,6 +1676,38 @@ async function runCodeWorkspaceAgentPanels({
           elapsedMs: Date.now() - startedAt
         };
         }));
+        // Use observed wave health to adapt the next scheduling decision.
+        // This keeps parallelism a means to improve the critical path rather
+        // than a fixed cost multiplier: healthy independent work can widen;
+        // failures, latency pressure or a shrinking budget can narrow it.
+        const waveElapsedMs = waveResults.length
+          ? Math.max(...waveResults.map(item => Number(item.elapsedMs) || 0))
+          : 0;
+        const waveErrors = waveResults.filter(item => !item.result || item.result.incomplete).length;
+        const waveAverageLatencyMs = waveResults.length
+          ? Math.round(waveResults.reduce((sum, item) => sum + (Number(item.elapsedMs) || 0), 0) / waveResults.length)
+          : 0;
+        const waveHealth = adaptConcurrency({
+          current: effectiveMaxParallel,
+          min: 1,
+          max: Math.min(maxAgents, providerParallelCap, budgetParallelLimit()),
+          averageLatencyMs: waveAverageLatencyMs,
+          errorRate: waveResults.length ? waveErrors / waveResults.length : 0,
+          remainingBudgetRatio: remainingBudgetRatio(),
+          risk: run?.situation?.risk ?? 'ordinary',
+          benefit: batch.length > 1 ? 0.8 : 0.2
+        });
+        effectiveMaxParallel = waveHealth.next;
+        parallelTelemetry.push({
+          wave: schedulerWave.index,
+          jobs: waveResults.length,
+          elapsedMs: waveElapsedMs,
+          averageLatencyMs: waveAverageLatencyMs,
+          errorRate: Number((waveResults.length ? waveErrors / waveResults.length : 0).toFixed(3)),
+          nextMaxParallel: effectiveMaxParallel,
+          reason: waveHealth.reason
+        });
+
         results.push(...waveResults);
       }
 
