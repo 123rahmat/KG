@@ -2,10 +2,10 @@
  * Live provider contract check.
  *
  * The test suite mocks every model response, so it cannot notice a provider
- * changing its API. This check calls the configured Google Gemini provider through the
+ * changing its API. This check calls the configured xAI Grok provider through the
  * application's own adapters and verifies the contract the rest of the
  * system relies on: a complete, non-empty answer, reported token usage, and
- * a classifier reply that validates. Missing Gemini credentials are reported as skipped,
+ * a classifier reply that validates. Missing Grok credentials are reported as skipped,
  * never counted as passing.
  */
 
@@ -14,7 +14,7 @@ import { classifyGoal } from './classifier.js';
 
 const LIMITS = { responseBytes: 4 * 1024 * 1024 };
 
-/** Vertex credentials: project + short-lived token, service account JSON, or express-mode API key. */
+/** xAI API credentials use XAI_API_KEY. */
 export function configuredProviders(env = process.env) {
   const providers = [];
   for (const provider of SUPPORTED_PROVIDERS) {
@@ -22,15 +22,15 @@ export function configuredProviders(env = process.env) {
       || (String(env.AI_PROVIDER ?? '').trim().toLowerCase() === provider ? String(env.AI_API_KEY ?? '').trim() : '');
     const model = String(env[`SMOKE_${provider.toUpperCase()}_MODEL`] ?? '').trim()
       || (String(env.AI_PROVIDER ?? '').trim().toLowerCase() === provider ? String(env.AI_MODEL ?? '').trim() : '');
-    const project = String(env[`SMOKE_${provider.toUpperCase()}_PROJECT`] ?? env.GOOGLE_CLOUD_PROJECT ?? '').trim();
-    const accessToken = String(env[`SMOKE_${provider.toUpperCase()}_VERTEX_ACCESS_TOKEN`] ?? env.GOOGLE_VERTEX_ACCESS_TOKEN ?? '').trim();
-    providers.push({ provider, apiKey: key, model: model || null, project, accessToken });
+    const project = '';
+    const accessToken = '';
+    providers.push({ provider, apiKey: key, model: model || 'grok-4.7', project, accessToken });
   }
   return providers;
 }
 
 async function checkProvider({ provider, apiKey, model, project, accessToken }, { fetchImpl }) {
-  const config = { ai: { provider, apiKey, model, vertexProject: project || null, vertexAccessToken: accessToken || null, vertexLocation: 'global' }, limits: LIMITS };
+  const config = { ai: { provider, apiKey, model,  }, limits: LIMITS };
   const checks = [];
   const started = Date.now();
 
