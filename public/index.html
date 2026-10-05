@@ -1110,6 +1110,24 @@
   </div>
 </dialog>
 
+<dialog class="artifact-preview-dialog" id="artifactPreviewDialog" aria-labelledby="artifactPreviewTitle">
+  <div class="artifact-preview-shell">
+    <header class="artifact-preview-head">
+      <div class="artifact-preview-title-wrap">
+        <h2 id="artifactPreviewTitle">Artifact preview</h2>
+        <p id="artifactPreviewMeta" class="small muted"></p>
+      </div>
+      <button type="button" class="icon-btn" id="artifactPreviewClose" aria-label="Close preview" title="Close preview">
+        <svg class="i"><use href="#i-close"/></svg>
+      </button>
+    </header>
+    <div id="artifactPreviewBody" class="artifact-preview-body"></div>
+    <footer class="artifact-preview-foot">
+      <span class="small muted">Preview is read-only. The original artifact stays in Files.</span>
+    </footer>
+  </div>
+</dialog>
+
 <script type="module" src="/app.js"></script>
 </body>
 </html>
