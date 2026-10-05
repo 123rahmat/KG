@@ -2,7 +2,6 @@
 export const DEFAULT_MODEL = 'grok-4.7';
 const GROK_MODEL = /^grok-4\\.7$/;
 export const isGrokModel = value => GROK_MODEL.test(String(value ?? '').trim().toLowerCase());
-export const isGeminiModel = () => false;
 const KNOWN = Object.freeze({
   'grok-4.7': { name: 'Grok 4.7', contextWindow: 500_000, tier: 'frontier', strengths: ['reasoning','coding','research','agents','vision'] }
 });
