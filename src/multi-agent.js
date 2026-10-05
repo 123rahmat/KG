@@ -460,8 +460,28 @@ export function rolesFor(run, task, {
   const candidates = roleCandidates(run, task, progress, precomputedSignals);
   const roles = [];
   const utilities = {};
+
+  // Strong, observable task signals reserve the one specialist that directly
+  // covers the material risk. This is not a larger panel: it prevents a
+  // generic high-utility role from crowding out the specialist that the task
+  // actually needs.
+  const requiredRoles = [];
+  if (signals.securityFocus) requiredRoles.push('security-reviewer');
+  if (signals.performanceFocus) requiredRoles.push('performance-reviewer');
+  if (signals.executable && signals.successCriteria > 0) requiredRoles.push('test-engineer');
+  if (signals.retrying && signals.executable) requiredRoles.push('debugger');
+
+  for (const role of [...new Set(requiredRoles)]) {
+    if (roles.length >= targetCount || roles.includes(role)) break;
+    const candidate = candidates.find(item => item.role === role);
+    if (!candidate) continue;
+    roles.push(role);
+    utilities[role] = Number(candidate.utility.toFixed(3));
+  }
+
   for (const candidate of candidates) {
     if (roles.length >= targetCount) break;
+    if (roles.includes(candidate.role)) continue;
     const marginal = candidate.utility - roles.length * ROLE_REDUNDANCY_PENALTY;
     utilities[candidate.role] = Number(marginal.toFixed(3));
     const forcedPanel = normalizedMode === 'always' && roles.length < targetCount;
