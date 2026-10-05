@@ -110,7 +110,7 @@ export function renderThread() {
   const children = [];
   if (!runs.length && !state.chat.pending) children.push(welcome());
   for (const run of runs) {
-    children.push(userMessage(run.goal, (run.adaptation?.attachments ?? []).map(file => file.name)));
+    children.push(userMessage(run.goal, run.adaptation?.attachments ?? []));
     children.push(assistantMessage(run, run.id === state.run?.id));
   }
   if (state.chat.pending) {
