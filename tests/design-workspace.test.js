@@ -34,6 +34,8 @@ test('Design Workspace state is durable across saves and conversation follow-ups
     const saved = await call('PUT', `/api/runs/${created.body.id}/design-state`, { ...auth, body: { state } });
     assert.equal(saved.status, 200, JSON.stringify(saved.body));
     assert.equal(saved.body.state.canvas.width, 1600);
+    assert.equal(saved.body.state.guides.grid, 8);
+    assert.equal(saved.body.state.guides.snap, true);
     assert.equal(saved.body.state.objects[0].text, 'Launch');
 
     const fetched = await call('GET', `/api/runs/${created.body.id}/design-state`, auth);
