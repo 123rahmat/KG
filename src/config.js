@@ -229,11 +229,6 @@ export function loadConfig(env = process.env) {
     errors.push('xAI must be configured in production with XAI_API_KEY or AI_API_KEY');
   }
 
-  // The Grok models administrators may choose from in Settings; the
-  // default model is always one of them, listed first.
-  const offeredModels = [DEFAULT_MODEL];
-  const fallbackModels = [];
-
   // How deeply Grok reasons. Unset keeps the model's own default.
   const aiEffort = text(env.AI_EFFORT).toLowerCase();
   if (aiEffort && !AI_EFFORT_LEVELS.includes(aiEffort)) {
