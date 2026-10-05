@@ -2860,4 +2860,81 @@ export const MIGRATIONS = [
     `
   }
 
+
+  ,{
+    version: 71,
+    name: 'human-project-hub',
+    sql: `
+      CREATE TABLE IF NOT EXISTS projects (
+        id                TEXT PRIMARY KEY,
+        workspace_id      TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        principal_id      TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+        name              TEXT NOT NULL,
+        description       TEXT NOT NULL DEFAULT '',
+        state             TEXT NOT NULL DEFAULT 'active'
+                           CHECK (state IN ('active','archived')),
+        visibility        TEXT NOT NULL DEFAULT 'private'
+                           CHECK (visibility IN ('private','workspace')),
+        default_surface   TEXT NOT NULL DEFAULT 'normal-chat'
+                           CHECK (default_surface IN ('normal-chat','code','research','design')),
+        source_id         TEXT REFERENCES workspace_sources(id) ON DELETE SET NULL,
+        current_revision  TEXT,
+        settings          JSONB NOT NULL DEFAULT '{}'::jsonb
+                           CHECK (jsonb_typeof(settings) = 'object'),
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE (workspace_id, id)
+      );
+
+      CREATE INDEX IF NOT EXISTS projects_scope_idx
+        ON projects(workspace_id, state, updated_at DESC, id);
+
+      CREATE INDEX IF NOT EXISTS projects_owner_idx
+        ON projects(workspace_id, principal_id, updated_at DESC, id);
+
+      ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE projects FORCE ROW LEVEL SECURITY;
+
+      DROP POLICY IF EXISTS project_scope_policy ON projects;
+
+      CREATE POLICY project_scope_policy ON projects
+        FOR ALL
+        USING (
+          projects.workspace_id = current_setting('app.workspace_id', true)
+          AND (
+            projects.principal_id = current_setting('app.principal_id', true)
+            OR (
+              projects.visibility = 'workspace'
+              AND current_setting('app.role', true) IN ('editor','admin','job-worker','service')
+            )
+          )
+        )
+        WITH CHECK (
+          projects.workspace_id = current_setting('app.workspace_id', true)
+          AND projects.principal_id = current_setting('app.principal_id', true)
+        );
+
+      ALTER TABLE runs
+        ADD COLUMN IF NOT EXISTS project_id TEXT;
+
+      DO $project_fk$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+           WHERE conname = 'runs_project_workspace_fk'
+        ) THEN
+          ALTER TABLE runs
+            ADD CONSTRAINT runs_project_workspace_fk
+            FOREIGN KEY (workspace_id, project_id)
+            REFERENCES projects(workspace_id, id)
+            ON DELETE SET NULL;
+        END IF;
+      END
+      $project_fk$;
+
+      CREATE INDEX IF NOT EXISTS runs_project_idx
+        ON runs(workspace_id, project_id, updated_at DESC, id DESC);
+    `
+  }
+
 ];
