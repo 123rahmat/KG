@@ -581,7 +581,7 @@ export function resolveAdaptiveContext(goal, {
     publicModes: ['normal-chat', 'code', 'research', 'design'],
     activeMode: text(activeSurface) === 'chat' || text(activeSurface) === 'normal-chat'
       ? 'normal-chat'
-      : ['code', 'research'].includes(text(activeSurface))
+      : ['code', 'research', 'design'].includes(text(activeSurface))
         ? text(activeSurface)
         : null,
     primary: selectedPrimarySurface === 'chat' ? 'normal-chat' : selectedPrimarySurface,
