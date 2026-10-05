@@ -108,11 +108,89 @@ export function adaptiveEffortProfile({
 }
 
 
+/**
+ * Latency-aware execution strategy.
+ *
+ * Speed is treated as a first-class optimization, but never by weakening
+ * verification. The controller prefers direct execution for cheap work,
+ * parallelizes only independent work, reuses verified state, and escalates
+ * model/tool effort only when the expected information gain justifies it.
+ */
+export function adaptiveExecutionStrategy({
+  pressure = 0,
+  uncertainty = 0,
+  complexity = 0,
+  risk = 'medium',
+  verificationRequired = false,
+  verificationSatisfied = false,
+  independentWork = 0,
+  cacheHit = false,
+  previousFailure = false,
+  remainingBudgetRatio = 1
+} = {}) {
+  const p = clamp01(pressure);
+  const u = clamp01(uncertainty);
+  const c = clamp01(complexity);
+  const independent = clamp01(independentWork);
+  const budget = clamp01(remainingBudgetRatio);
+  const highRisk = ['high', 'critical'].includes(String(risk).toLowerCase());
+
+  // Verified state is more valuable than recomputation. A cache hit may skip
+  // discovery/context work, but never skips a required final verification gate.
+  const reuseVerifiedState = cacheHit === true;
+  const parallelize = independent >= 0.45
+    && !previousFailure
+    && budget >= 0.30
+    && (!highRisk || independent >= 0.75);
+
+  const deepReasoning = p >= 0.65 || u >= 0.65 || c >= 0.75 || previousFailure;
+  const targetedReasoning = !deepReasoning && (p >= 0.30 || u >= 0.30 || c >= 0.35);
+  const reasoning = deepReasoning ? 'high' : targetedReasoning ? 'medium' : 'low';
+
+  const verification = verificationSatisfied
+    ? 'reuse-verified-result'
+    : verificationRequired
+      ? 'required-before-completion'
+      : highRisk
+        ? 'targeted'
+        : 'light';
+
+  const stop = verificationSatisfied
+    || (!verificationRequired && !deepReasoning && !previousFailure && p < 0.30);
+
+  return {
+    strategy: deepReasoning ? 'adaptive-deep' : targetedReasoning ? 'adaptive-targeted' : 'fast-path',
+    reasoning,
+    context: deepReasoning ? 'targeted-plus-missing-evidence' : targetedReasoning ? 'minimum-relevant' : 'minimum',
+    toolPolicy: deepReasoning ? 'just-in-time' : 'avoid-unless-material',
+    parallelizeIndependentWork: parallelize,
+    reuseVerifiedState,
+    avoidRedundantDiscovery: reuseVerifiedState || !deepReasoning,
+    verification,
+    stopWhenSatisfied: stop,
+    budgetPressure: budget < 0.25 ? 'conserve' : 'normal',
+    principle: 'Optimize critical-path time without trading away required evidence or verification.'
+  };
+}
+
+
 export function adaptiveBehaviorContract(profile = adaptiveEffortProfile({}), {
   situation = {}, acceptance = {}, candidates = [], authorityDecision = null
 } = {}) {
   const p = profile ?? adaptiveEffortProfile({});
   const maturity = p.maturity ?? realWorldMaturity({});
+  const executionStrategy = adaptiveExecutionStrategy({
+    pressure: p.pressure,
+    uncertainty: p.scores?.uncertainty,
+    complexity: p.scores?.complexity,
+    risk: p.maturity?.level === 'maximum' ? 'critical' : p.scores?.risk >= 0.75 ? 'high' : 'medium',
+    verificationRequired: p.maturity?.independentVerificationRequired,
+    verificationSatisfied: acceptance?.verificationSatisfied === true,
+    independentWork: Number(situation?.independentWork ?? situation?.parallelOpportunity ?? 0),
+    cacheHit: situation?.verifiedStateReusable === true,
+    previousFailure: Number(situation?.failedAttempts ?? 0) > 0,
+    remainingBudgetRatio: Number(situation?.remainingBudgetRatio ?? 1)
+  });
   const level = String(p.level ?? 'standard');
   const rounds = level === 'minimal' ? 2 : level === 'standard' ? 4 : level === 'deep' ? 6 : 8;
   const contract = buildAcceptanceContract({
@@ -143,6 +221,7 @@ export function adaptiveBehaviorContract(profile = adaptiveEffortProfile({}), {
     principle: 'Adapt every behavior to the current situation; do not maximize intelligence, tools, agents, context, verification, or parallelism unless justified by need and evidence.',
     maturity: level,
     pressure: p.pressure ?? 0,
+    executionStrategy,
     behavior: {
       understand: p.contextDepth,
       plan: p.contextDepth === 'broad' ? 'deep' : p.contextDepth === 'targeted' ? 'targeted' : 'minimal',
