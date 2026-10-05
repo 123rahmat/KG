@@ -307,9 +307,11 @@ export function reassessUnifiedWorkflow(previous = {}, {
   failedAttempts = 0,
   candidates = [],
   availableCapabilities = [],
-  authorizedCapabilities = []
+  authorizedCapabilities = [],
+  surface = null
 } = {}) {
   const prior = previous && typeof previous === 'object' ? previous : {};
+
   const eventType = text(event.type || event.eventType) || 'unknown';
   const material = event.material !== false && [
     'user-message','user-correction','tool-result','file-change','code-change',
@@ -336,7 +338,8 @@ export function reassessUnifiedWorkflow(previous = {}, {
     candidates,
     availableCapabilities,
     authorizedCapabilities,
-    previousAction: prior.authority?.action ?? null
+    previousAction: prior.authority?.action ?? null,
+    surface: text(surface) || text(prior.surface) || text(mergedSituation.surface) || 'normal-chat'
   });
   return {
     ...next,
