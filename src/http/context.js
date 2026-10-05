@@ -91,6 +91,7 @@ export function planningInput(req, policies, config) {
     user: trustedUserContext(req),
     workspace: trustedWorkspaceContext(req),
     project: req.body?.project ?? null,
+    projectId: text(req.body?.projectId),
     files: req.body?.files ?? req.body?.artifacts ?? [],
     priorWork: req.body?.priorWork ?? req.body?.history ?? [],
     constraints: req.body?.constraints ?? [],
