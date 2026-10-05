@@ -79,6 +79,9 @@ export function grokFromStandIn(standIn) {
   };
 }
 
+// Backwards-compatible test-fixture alias while older test names are migrated.
+export const geminiFromStandIn = grokFromStandIn;
+
 export async function withServer(run, { env = {}, fetchImpl } = {}) {
   // A test written with a stand-in for another provider can still run against Gemini.
   const provider = String(env.AI_PROVIDER ?? '').toLowerCase();
