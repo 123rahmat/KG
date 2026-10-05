@@ -133,14 +133,14 @@ test('explicit cross-mode intent switches the operating workspace', () => {
   assert.equal(code.redirect, true);
 });
 
-test('adaptive context exposes exactly three public operating modes', () => {
+test('adaptive context exposes all four public operating modes', () => {
   const context = resolveAdaptiveContext('Research the current dependency release and then update the repository.', {
     activeSurface: 'code',
     attachedCode: true,
     files: [{ name: 'package.json' }],
     attachments: [{ name: 'package.json' }]
   });
-  assert.deepEqual(context.adaptiveSnapshot.modeRouting.publicModes, ['normal-chat', 'code', 'research']);
+  assert.deepEqual(context.adaptiveSnapshot.modeRouting.publicModes, ['design', 'normal-chat', 'code', 'research']);
   assert.equal(context.adaptiveSnapshot.modeRouting.primary, 'code');
   assert.ok(context.adaptiveSnapshot.modeRouting.supporting.includes('research'));
 });
