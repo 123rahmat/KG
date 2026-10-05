@@ -390,6 +390,9 @@ export function planGoal(goal, {
   dueAt = null,
   startAt = null,
   userBehavior = {},
+  capacity = null,
+  availability = null,
+  competingCommitments = [],
   now = null,
   blockedTopics = [],
   // Validated model classification (src/classifier.js), or null for keywords.
