@@ -4096,3 +4096,15 @@ body[data-adaptive-workspace="research"] .deep-workspace-shell {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Design preview: focus on the composition without removing the exit control. */
+.deep-workspace-shell[data-workspace="design"][data-previewing="true"] .design-studio-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+.deep-workspace-shell[data-workspace="design"][data-previewing="true"] .design-assets-panel,
+.deep-workspace-shell[data-workspace="design"][data-previewing="true"] .design-inspector {
+  display: none;
+}
+.deep-workspace-shell[data-workspace="design"][data-previewing="true"] .design-canvas {
+  min-height: min(72vh, 760px);
+}
