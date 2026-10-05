@@ -27,14 +27,23 @@ export async function loadObjects() {
     const body = element('tbody');
     for (const object of objects) {
       const editable = canEdit();
-      body.append(element('tr', {}, [
-        element('td', { class: 'truncate', text: object.name ?? object.id }),
-        element('td', { class: 'small muted', text: object.type }),
-        element('td', { class: 'small muted', text: bytes(object.size) }),
-        element('td', {}, element('span', {
+      body.append(element('tr', { class: 'object-row' }, [
+        element('td', { class: 'object-name-cell', 'data-label': 'Name' }, [
+          object.contentType?.startsWith('image/') ? element('img', {
+            class: 'object-thumb',
+            src: downloadUrl(`/api/objects/${object.id}/content?preview=1`),
+            alt: '',
+            loading: 'lazy',
+            decoding: 'async'
+          }) : null,
+          element('span', { class: 'object-name', text: object.name ?? object.id })
+        ].filter(Boolean)),
+        element('td', { class: 'small muted', 'data-label': 'Type', text: object.type }),
+        element('td', { class: 'small muted', 'data-label': 'Size', text: bytes(object.size) }),
+        element('td', { 'data-label': 'State' }, element('span', {
           class: `pill ${object.lifecycle === 'archived' ? 'warn' : 'idle'}`, text: object.lifecycle
         })),
-        element('td', { class: 'actions' }, [
+        element('td', { class: 'actions', 'data-label': 'Actions' }, [
           previewKind(object) ? previewButton(object) : null,
           element('a', { class: 'btn small', href: downloadUrl(`/api/objects/${object.id}/content`), download: '', text: 'Download' }),
           editable ? button(object.lifecycle === 'archived' ? 'Restore' : 'Archive',
