@@ -140,7 +140,7 @@ test('adaptive context exposes all four public operating modes', () => {
     files: [{ name: 'package.json' }],
     attachments: [{ name: 'package.json' }]
   });
-  assert.deepEqual(context.adaptiveSnapshot.modeRouting.publicModes, ['normal-chat', 'code', 'research', 'design']);
+  assert.deepEqual(context.adaptiveSnapshot.modeRouting.publicModes, ['design', 'normal-chat', 'code', 'research']);
   assert.equal(context.adaptiveSnapshot.modeRouting.primary, 'code');
   assert.ok(context.adaptiveSnapshot.modeRouting.supporting.includes('research'));
 });
