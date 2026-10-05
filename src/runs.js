@@ -188,6 +188,11 @@ function normalizeDesignWorkspaceState(input = {}) {
       height: clampDesign(canvas.height, 240, 4096, 720),
       background: text(canvas.background) || '#ffffff'
     },
+    guides: {
+      grid: clampDesign(input?.guides?.grid, 4, 128, 24),
+      snap: input?.guides?.snap !== false,
+      showGrid: input?.guides?.showGrid !== false
+    },
     selected: text(source.selected).slice(0, 80),
     previewing: source.previewing === true,
     objects: objects.map((item, index) => ({
