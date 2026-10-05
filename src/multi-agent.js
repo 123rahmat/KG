@@ -19,7 +19,7 @@ import { realWorldMaturity } from './adaptive-efficiency.js';
 import { adaptiveDecisionAuthority, buildAcceptanceContract } from './adaptive-decision-authority.js';
 
 export const MULTI_AGENT_MODES = Object.freeze(['auto', 'always', 'off']);
-export const DEFAULT_MULTI_AGENT_MAX_AGENTS = 11;
+export const DEFAULT_MULTI_AGENT_MAX_AGENTS = 6;
 export const MAX_MULTI_AGENT_SPECIALISTS = 11;
 export const AGENT_MAX_OUTPUT_TOKENS = 1200;
 export const ARBITER_MAX_OUTPUT_TOKENS = 1000;
@@ -2113,7 +2113,7 @@ export async function runAdaptiveAgentPanel({
     ? maxAgents
     : Math.max(1, Math.min(maxAgents, Math.floor(Math.max(1, Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent) / (AGENT_MAX_OUTPUT_TOKENS * 2))));
   const parallelMode = config?.agents?.parallel ?? config?.parallel?.mode ?? 'auto';
-  const genericParallelCeiling = run?.maxTokens == null ? 1 : maxAgents;
+  // Absence of a run token ceiling must not silently disable safe parallelism.\n  // Provider concurrency, adaptive budget pressure, and lane-conflict rules\n  // remain the hard limits; the token ceiling is only an additional budget cap.\n  const genericParallelCeiling = providerParallelCap;
   const initialParallel = adaptiveParallelLimit({
     mode: parallelMode,
     current: Math.min(
