@@ -1081,7 +1081,8 @@ export class RunStore {
           acceptance: { ...(priorUnified.acceptance ?? {}), evidence: allEvidence },
           evidence: allEvidence,
           failedAttempts: Number(run.attempt ?? 0),
-          candidates: [target.id]
+          candidates: [target.id],
+          surface: run.surface || run.adaptation?.unifiedAdaptiveWorkflow?.surface || 'normal-chat'
         });
         const gate = completionGate({
           workflow: completionWorkflow,
