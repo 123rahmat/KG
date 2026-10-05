@@ -246,7 +246,7 @@ test('production requires a reasoning provider', () => {
       BACKUP_DATABASE_URL: 'postgres://backup:secret@db.example/professor',
       RESTORE_DATABASE_URL: 'postgres://restore:secret@db.example/professor'
     })),
-    /At least one AI provider must be configured in production/
+    /Grok 4\.7 must be configured in production/
   );
 });
 
@@ -328,9 +328,9 @@ test('no simulation runner is configured: its old variables are ignored', () => 
   assert.equal('simulation' in config, false);
 });
 
-test('backup Gemini models are read in order and must be Gemini models', () => {
+test('Grok fallback models are read in order and stay within the configured Grok family', () => {
   const env = { DATABASE_URL: 'postgres://u:p@localhost:5432/kindgleam', AI_PROVIDER: 'xai', AI_API_KEY: 'k' };
-  assert.deepEqual(loadConfig({ ...env, AI_FALLBACK_MODELS: 'gemini-3.5-flash, gemini-3.1-flash-lite' }).ai.fallbackModels, ['gemini-3.5-flash', 'gemini-3.1-flash-lite']);
+  assert.deepEqual(loadConfig({ ...env, AI_FALLBACK_MODELS: 'grok-4.7, grok-4.7-mini' }).ai.fallbackModels, ['grok-4.7', 'grok-4.7-mini']);
   assert.deepEqual(loadConfig(env).ai.fallbackModels, []);
   assert.throws(() => loadConfig({ ...env, AI_FALLBACK_MODELS: 'gpt-5' }), /AI_FALLBACK_MODELS lists "gpt-5"/);
 });
