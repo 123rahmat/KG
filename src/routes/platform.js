@@ -10,7 +10,7 @@ import { modelsView, resolveModelSelection, adminModelSettings, validateModelCha
 import { callModel } from '../runtime.js';
 
 /**
- * One tiny Gemini call with a model before it becomes a workspace default,
+ * One tiny Grok call with a model before it becomes a workspace default,
  * so a retired, misspelled or not-yet-available model is refused at the
  * switch instead of breaking every chat afterwards.
  */
@@ -131,7 +131,7 @@ export function registerPlatformRoutes(app, { config, identity, capabilities, me
           detail: { defaultModelId: normalized.defaultModel, reason: probe.reason }, requestId: req.requestId
         });
         return res.status(400).json({
-          error: `Gemini did not accept ${normalized.defaultModel.replace(/^google:/, '')} (${probe.reason}). Check the model name and that this API key can use it; nothing was changed.`,
+          error: `Grok did not accept ${normalized.defaultModel.replace(/^google:/, '')} (${probe.reason}). Check the model name and that this API key can use it; nothing was changed.`,
           code: 'model-unavailable'
         });
       }
