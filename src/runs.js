@@ -282,7 +282,6 @@ export class RunStore {
     const explicitSurface = text(activeSurface);
     let projectOverlay = null;
     let projectContextSwitched = false;
-    let inheritedProject = false;
     const mayInheritWorkspaceState = !previousSurface || !explicitSurface || previousSurface === explicitSurface;
     if (mayInheritWorkspaceState && !attachments.length && previousState && (CODE_FOLLOW_UP.test(goalText) || FOLLOW_UP_ON_WORK.test(goalText))) {
       const hasFiles = state => Array.isArray(state?.adaptation?.attachments) && state.adaptation.attachments.length > 0;
@@ -292,7 +291,6 @@ export class RunStore {
       if (compatible && hasFiles(withFiles)) {
         attachments = withFiles.adaptation.attachments;
         projectOverlay = continuedProject(withFiles);
-        inheritedProject = true;
       } else if (requestedProjectKey && previousProjectKey && requestedProjectKey !== previousProjectKey) {
         projectContextSwitched = true;
       }
@@ -326,10 +324,9 @@ export class RunStore {
     if (surfaceContextSwitched) {
       // Conversation history remains continuous, but workspace-specific
       // state never crosses a workspace boundary implicitly.
-      if (inheritedProject) {
+      if (projectOverlay !== null) {
         attachments = [];
         projectOverlay = null;
-        inheritedProject = false;
       }
       projectContextSwitched = true;
     }
