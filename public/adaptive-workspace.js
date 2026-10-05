@@ -49,7 +49,6 @@ function currentStatus(run) {
 }
 
 function runFocus(run) {
-function runFocus(run) {
   const situation = run?.situation ?? {};
   const classification = run?.adaptation?.classification ?? {};
   return text(situation.title || classification.title || run?.goal) || 'Current situation';
