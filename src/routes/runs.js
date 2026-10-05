@@ -293,7 +293,12 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
 
   // A chat is a sequence of runs sharing a conversation id.
   app.get('/api/conversations', scoped('viewer'), route(async (req, res) =>
-    res.json({ conversations: await runs.conversations(req.scope, { limit: req.query.limit }) })));
+    res.json({
+      conversations: await runs.conversations(req.scope, {
+        limit: req.query.limit,
+        projectId: req.query.projectId
+      })
+    })));
 
   app.get('/api/conversations/:id', scoped('viewer'), route(async (req, res) => {
     const list = await runs.conversationRuns(req.scope, req.params.id);
