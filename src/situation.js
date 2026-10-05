@@ -71,6 +71,7 @@ function collectContext(context = {}) {
     dueAt: c.dueAt ?? c.deadline ?? null,
     startAt: c.startAt ?? null,
     userBehavior: c.userBehavior ?? c.behavior ?? c.user?.behavior ?? {},
+    creationMode: text(c.creationMode),
     capacity: c.capacity ?? c.user?.capacity ?? null,
     availability: c.availability ?? c.user?.availability ?? null,
     competingCommitments: c.competingCommitments ?? c.busyWith ?? [],
@@ -328,6 +329,7 @@ export function buildSituationModel(goal, context = {}) {
     evidence: c.evidence,
     timeline: c.timeline,
     realWorld,
+    creationMode: c.creationMode || null,
     adaptation: {
       user: {
         skillLevel: c.skillLevel || null,
@@ -350,6 +352,7 @@ export function buildSituationModel(goal, context = {}) {
         successCriteria
       },
       realWorld: realWorld,
+      creationMode: c.creationMode || null,
       operational: {
         realWorld,
         nextAction: realWorld.nextAction,
