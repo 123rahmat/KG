@@ -1,464 +1,149 @@
 # Kindgleam
 
-**One shared adaptive and agentic intelligence for normal work, code, and research.**
+**One shared adaptive and agentic intelligence for normal work, code, research and design.**
 
-Kindgleam is designed around one idea: the system should adapt to the situation instead of forcing every request through the same fixed process or maintaining separate “brains” for separate products.
+Kindgleam adapts the amount of reasoning, context, tools, evidence, agents and execution to the user's actual situation instead of forcing every request through a fixed pipeline.
 
-## Core architecture
-
-There is **one intelligence, one adaptive decision loop, and three workspaces**:
+## Architecture
 
 ```
-ONE SHARED ADAPTIVE + AGENTIC INTELLIGENCE
-                 |
-        +--------+--------+
-        |        |        |
-   Normal Chat  Code    Research
-                Workspace Workspace
+ONE SHARED ADAPTIVE INTELLIGENCE
+              |
+      +-------+--------+---------+
+      |       |        |         |
+ Normal    Code     Research   Design
+  Chat   Workspace  Workspace  Workspace
 ```
 
-The workspaces are **context and persistence boundaries, not separate intelligence systems**.
+The four surfaces are **context and persistence boundaries, not separate AI brains**.
 
-- **Normal Chat** is the general adaptive workspace. It handles everyday conversation, writing, planning, analysis, files, images, design, visual/canvas work, presentations, and bounded micro/single-file coding.
-- **Code Workspace** is for durable repository and multi-file engineering work, with project continuity, exact revisions, execution, tests, verification, and controlled write-back.
-- **Research Workspace** is for durable evidence-heavy work, with source continuity, provenance, conflicting-evidence handling, and citation-backed synthesis.
+- **Normal Chat** — universal default for conversation, writing, planning, analysis, files, images, lightweight design and bounded code.
+- **Code Workspace** — durable repository engineering with exact revisions, controlled edits, execution and verification.
+- **Research Workspace** — evidence-first investigation with sources, provenance, conflicts and adaptive depth.
+- **Design Workspace** — editable visual/canvas work with assets, layout, preview and export.
 
-The same agent runtime serves all three.
+Current reasoning provider: **xAI Grok 4.7**.
 
-## The adaptive loop
+## Canonical adaptive workflow
 
-The server does not require every possible stage in advance. It keeps the authoritative run state and activates only the work that the current situation justifies.
+The server progressively chooses work one step at a time:
 
 ```
 observe
-  → assess
-  → choose the minimum sufficient work
-  → act
-  → verify when justified
-  → reassess
-  → continue / expand / reduce / stop
+  -> assess
+  -> choose minimum sufficient work
+  -> act
+  -> verify when justified
+  -> reassess
+  -> continue / expand / contract / recover / stop
 ```
 
-This applies to reasoning, agents, tools, context, evidence, execution, and verification.
+A simple request stays lightweight. Complex or uncertain work deepens only when evidence justifies it.
 
-A simple request can stay lightweight. A complex request can deepen automatically. When new evidence changes the situation, the system can expand or re-plan instead of blindly following an old fixed graph.
+The server owns workflow state and completion. The model can propose work, but cannot grant itself permission, claim external execution or declare authoritative completion.
 
-## One agent behavior across all workspaces
+## Projects and chats
 
-The multi-agent layer is shared rather than duplicated.
-
-By default, the system uses the smallest useful agent set. Additional specialists are added only when their independent value is worth the coordination cost. An arbiter is used only when disagreement becomes decision-relevant.
-
-Typical roles include:
-
-- strategist
-- researcher
-- analyst
-- architect
-- implementer
-- critic
-- communicator
-- diagnostician
-- debugger
-- test engineer
-- security reviewer
-- performance reviewer
-
-These are **adaptive roles**, not permanent background agents. The runtime chooses whether to use one role, several roles, or no specialist panel at all.
-
-For Code Workspace, parallel work is bounded by the repository revision and write-set rules. For Research Workspace, independent source work is used only when it materially improves coverage or resolves disagreement.
-
-Background execution is durable: safe next steps can be re-queued by the server worker after a completed step, so closing the browser does not normally strand an adaptive run. Human approval, clarification, local-machine execution, waiting states, attempt limits and workflow budgets remain hard stops.
-
-There is no separate legacy Normal Chat control plane.
-
-## Agentic escalation ladder
-
-Agentic behavior is **situational**, not permanently on.
+Projects are the human organization layer; conversations are the interaction layer.
 
 ```
-direct response
-  ↓
-one focused specialist
-  ↓
-two complementary specialists
-  ↓
-broader independent panel
-  ↓
-arbitration only when disagreement matters
+Project A
+  +-- Chat 1
+  +-- Chat 2
+  +-- Research thread
+  +-- Code state
+
+Project B
+  +-- Chat 1
+  +-- Design state
 ```
 
-The controller considers task complexity, uncertainty, evidence gaps, decomposition, risk, retries/failures, affected project scope, and the likely value of another independent view. It can also contract again when evidence converges or the remaining budget becomes tight.
+Multiple projects and conversations can remain active concurrently. Conversation continuity, project continuity, memory, workspace state and artifacts stay isolated by authorization and compatible identity.
 
-For software work, roles such as architect, implementer, researcher, tester, debugger, security reviewer and performance reviewer are recruited only when their contribution is relevant. For general work, the same shared runtime can recruit strategist, researcher, analyst, critic, communicator or diagnostician when those roles add decision value.
+Parallelism is bounded and adaptive so model, database and execution resources do not become the bottleneck.
 
-Agents are advisory and isolated from tool authority. The server remains the authority for permissions, execution, mutation, evidence and completion.
+## Agentic behavior
 
-## Adaptive economy
-
-Kindgleam separates **available resources** from **resources actually selected for the current situation**.
-
-The controller aims for a minimum-necessary working set across:
-
-- context
-- agents
-- tools
-- external sources
-- artifacts
-- execution stages
-- evidence
-- verification
-
-Work expands only when the current result, uncertainty, risk, or evidence gap shows that more work is justified.
-
-This is the main complexity reduction: the product has **one shared intelligence and one adaptive workflow**, rather than multiple independent workflow engines.
-
-The implementation is still modular internally for testing, security, and maintainability; modular code should not be confused with multiple independent “brains.”
-
-## Workspace boundary
-
-### Normal Chat
-
-Normal Chat is the default general workspace.
-
-It can handle:
-
-- conversation, explanations, planning and analysis
-- writing, rewriting and translation
-- images and visual understanding
-- multiple images with bounded visual context
-- design, canvas concepts and presentations
-- documents, spreadsheets and other attachments
-- one or a few files when the work is bounded
-- micro/single-file coding and tests
-- general adaptive tool use
-- lightweight evidence gathering when justified
-
-Normal Chat can escalate to Code or Research when the work becomes durable project engineering or durable evidence-heavy research.
-
-### Code Workspace
-
-Code Workspace is the durable engineering environment.
-
-It provides:
-
-- GitHub repository continuity
-- exact revision awareness
-- affected-file and dependency inspection
-- adaptive specialist roles
-- bounded parallel work
-- terminal/sandbox execution where authorized
-- tests and regression verification
-- stale-revision detection
-- controlled GitHub write-back with explicit confirmation
-
-The selected repository revision is authoritative. Local folders are not silently imported into Code Workspace. An optional paired local agent is an execution target, not a project source.
-
-### Research Workspace
-
-Research Workspace is the durable evidence environment.
-
-It provides:
-
-- a persistent research question
-- bounded source sets
-- evidence and citation continuity
-- provenance tracking
-- unresolved-question tracking
-- conflict tracking
-- adaptive source expansion
-- source-backed synthesis
-
-Research depth is adaptive. A simple factual question does not require a large source set; an uncertain, current, or high-stakes question can trigger deeper evidence collection and cross-checking.
-The research workflow can add another evidence step when gaps or conflicts remain and converge toward verification when the evidence becomes sufficient.
-
-## Adaptive surface selection
-
-The server classifies the situation before choosing a workspace boundary. Attachment routing uses an aggregate profile rather than treating file extensions as the answer: ZIPs are inspected from their contents, multiple files are evaluated together, and ambiguous/mixed sets stay in Normal Chat.
+Agents are adaptive specialists over the same runtime:
 
 ```
-Normal Chat
-  ↕
-Code Workspace
-  ↕
-Research Workspace
+direct
+  -> one specialist
+  -> complementary specialists
+  -> bounded panel
+  -> arbitration only when disagreement matters
 ```
 
-The boundary is based on what the work actually needs, not merely on a file extension or a keyword.
+Roles may include strategist, researcher, analyst, architect, implementer, diagnostician, debugger, tester, critic, communicator, security reviewer, performance reviewer and visual specialists.
 
-Examples:
+Agents are advisory. The server remains authoritative for state, permissions, execution, evidence and completion.
 
-- a single Python edit → Normal Chat
-- multiple source files forming a project → Code Workspace
-- a current comparison requiring sources → Research Workspace
-- a ZIP whose contents form a real code project → Code Workspace
-- a ZIP with research-oriented documents/evidence → Research Workspace
-- ordinary documents, spreadsheets, images or unrelated files → Normal Chat
-- mixed code + research material → Normal Chat unless the task clearly requires one dedicated workspace
-- ambiguous or weak signals → Normal Chat
+## Context and efficiency
 
-The archive profiler looks at project markers, source-file structure, research/document signals and a small bounded content sample. It does not declare README/LICENSE files alone to be a software project, and it does not treat every PDF/DOCX as research. A ZIP archive is therefore profiled by its contents instead of automatically being treated as a code project.
-
-## Files and archives
-
-Files remain part of the shared adaptive workflow.
-
-Supported archive classification includes:
-
-- `code-project`
-- `research-bundle`
-- `document-bundle`
-- `mixed-bundle`
-- `unknown-bundle`
-
-Code projects retain the stricter project/file limits. Non-code bundles are summarized and ranked for the current task instead of blindly dumping every item into model context.
-
-There is **no separate built-in simulation engine or simulation workspace**. Simulation-related files (for example MATLAB/Simulink scripts, FreeCAD macros, engineering data or similar artifacts) are treated as ordinary files/code and handled in the workspace that the current situation requires.
-
-## Server-owned workflow state
-
-The browser does not own completion state.
-
-A run is stored by the server, and each advance re-reads authoritative state under a transaction/row lock. The client can name the current task and provide evidence, but it cannot simply declare a task complete.
-
-This protects the core invariant:
-
-> **Nothing is claimed unless it actually happened.**
-
-For example:
-
-- an unconfigured model remains unexecuted
-- an unavailable runner does not become a fake success
-- verification cannot complete before its required evidence exists
-- policy denial remains denial
-- approval cannot approve itself
-- repeated recovery is bounded
-
-## Evidence and verification
-
-Evidence uses the same adaptive loop as the rest of the system.
+The system compiles the smallest useful context:
 
 ```
-low uncertainty
-  → little or no external evidence
-
-meaningful uncertainty
-  → targeted evidence
-
-conflicting evidence
-  → compare / expand
-
-high-stakes or current claim
-  → deeper verification
-
-sufficient evidence
-  → stop
+authorized data
+  -> sensitivity filter
+  -> task relevance
+  -> dependency / impact expansion
+  -> budgeted context
+  -> Grok
 ```
 
-The system distinguishes:
+The same adaptive economy governs model effort, agent count, tool calls, sources, artifacts, execution stages, verification and parallelism.
 
-1. what was observed,
-2. what was inferred,
-3. what was executed,
-4. what was verified.
+## Files and external work
 
-A model statement is not treated as proof that an external action happened.
+Files are part of the shared adaptive workflow. Archives are profiled from their contents instead of trusted by extension alone.
 
-## Open-world capability model
+There is no built-in simulation engine. MATLAB/Simulink, CAD, engineering data and similar material are handled as files/code/artifacts through the workspace the current situation requires.
 
-Kindgleam is open-world: the built-in capability registry is a bootstrap set, not a complete list of everything the platform can ever do.
+## Security
 
-```
-known need
-  → existing capability
+Kindgleam uses the **PA-ONE-X** defense-in-depth security boundary:
 
-compound need
-  → compose capabilities
-
-unknown need
-  → investigate / discover requirements
-
-missing capability
-  → create a governed capability specification
-
-authorized implementation
-  → execute through an approved boundary
-
-new evidence
-  → reassess / re-plan if required
-```
-
-A discovered capability is a candidate, not an executable fact. Missing infrastructure is never turned into fabricated success.
-
-## Governance and safety
-
-Governance is part of the situation model.
-
-The server combines safety, risk, data sensitivity, jurisdiction, human-decision requirements, side effects, approval requirements, and verification requirements into a persisted governance contract.
-
-The important rule is that adaptation can **tighten** governance when the situation becomes riskier, but it must not silently loosen an existing restriction.
-
-Governance can require:
-
-- human approval
-- additional verification
-- restricted data handling
-- restricted capabilities/tools
-- jurisdiction-specific caution
-- human certification for high-impact outcomes
-
-The model follows the server-provided governance state; it does not become the authority that grants itself permission.
-
-## Execution trust
-
-Execution is separated from reasoning.
-
-Supported boundaries include:
-
-- **Kindgleam sandbox** for authorized code execution
-- **Generic tool runner** for bounded tools
-- **Optional paired local agent** for local execution
-
-Execution receipts are bound to the run/task and output evidence. An execution claim without an authenticated receipt is not treated as completed external execution.
-
-The system never silently moves an execution to the cloud.
-
-## Security model
-
-The repository includes application-level controls for:
-
-- API-key/session authentication
-- workspace membership and tenant isolation
+- zero-trust request handling and least privilege
+- authenticated principal + workspace authorization
 - PostgreSQL Row-Level Security
-- CSRF protection
-- strict Content Security Policy
-- safe upload/download headers
-- log redaction
-- append-only audit records
-- idempotent write operations
-- encrypted high-sensitivity application fields
-- separate billing, personal-data and object-storage keys
-- dedicated database roles for runtime, migration, backup and restore
+- strict CSP, CSRF and browser request protections
+- encrypted object, personal-data and billing-private domains with separate keys
+- immutable audit records
+- idempotent state-changing operations
+- isolated tool and execution boundaries
+- authenticated execution receipts
+- fail-closed governance and completion gates
 
-Production credentials belong in a secret manager. Production deployments should use TLS, isolated execution services, encrypted backups, monitoring, malware/content scanning for arbitrary uploads, and a documented recovery procedure.
+Production deployments should add private networking, TLS, a secret manager, isolated execution services, encrypted backups and restore testing.
 
-## External services
+## Backend and operations
 
-The AI provider is **Google Gemini**, with Gemini 3.8 Flash as the current model family in the application.
+The backend is a server-owned control plane around:
 
-The runtime supports Google/Vertex AI credentials and a direct API-key path. A deployment should use the credential path appropriate for its environment; production managed deployments can use Vertex AI.
+- PostgreSQL and RLS
+- adaptive run/task state
+- durable jobs, scheduling and project/fleet dispatch
+- multi-agent orchestration
+- context compilation and memory
+- artifacts and research evidence
+- usage / billing
+- structured logs, metrics and tracing
+- sandbox / tool execution boundaries
 
-Optional external integrations include:
+The browser is a renderer and interaction surface. It does not own authoritative workflow state.
 
-- GitHub for Code Workspace repositories and controlled write-back
-- Stripe for payments
+## Release standard
 
-The application does not treat a connector catalogue entry as proof that a user's private account is connected.
+A production build should have required static, runtime and intelligence gates passing: source checks, lint, dependency/security scanning, CodeQL, migrations, production boot, integration/security tests, execution tests and live model evaluation.
 
-## Memory
+A red required CI or verification gate means the release is **not** production-ready.
 
-Memory is scoped to the individual workspace and is separate from hidden model reasoning.
+## Source of truth
 
-Users can view, delete, or disable saved memory from Personalization. Secrets are not stored as memory.
+The full end-to-end product architecture, workflow, security model, project/chat model, app design, operations and release gates are defined in:
 
-Conversation continuity is kept within the appropriate workspace context so follow-up turns do not need to restart the entire job.
+**[docs/END_TO_END_SYSTEM_DESIGN.md](docs/END_TO_END_SYSTEM_DESIGN.md)**
 
-## Repository structure
+## Principle
 
-```
-server.js
-bin/                    operational CLIs and runners
-src/core.js             core goal planning and workflow decisions
-src/runs.js             server-owned run state and adaptive progression
-src/multi-agent.js      shared adaptive agent orchestration
-src/adaptive*.js        adaptive control, runtime state and efficiency
-src/unified-*.js        shared adaptive workflow/context layers
-src/code-workspace.js   durable Code Workspace behavior
-src/research-workspace.js research continuity and evidence ledger
-src/documents.js        document/archive inspection
-src/attachments.js      attachment context and ranking
-public/                 web interface
-tests/                  unit, API, security and workflow tests
-docs/                   architecture, policies and operational notes
-```
-
-The important architectural boundary is simple:
-
-```
-shared intelligence
-    +
-one canonical adaptive workflow kernel
-    +
-one canonical decision/recovery authority
-    +
-workspace-specific context
-    +
-authorized tools / execution
-```
-
-Internal modules are intentionally narrow:
-- workflow selection and reassessment live in the unified workflow kernel;
-- decision, acceptance and recovery semantics live in the adaptive decision authority;
-- runtime-state stores bounded projections/history rather than making independent decisions;
-- agent orchestration schedules specialists without creating another workflow.
-
-This keeps implementation modular while reducing duplicated decision authority.
-
-## Quick start
-
-```bash
-docker compose up -d db
-cp .env.example .env
-npm install
-npm run bootstrap -- --workspace acme --name "Your Name"
-npm start
-```
-
-Then open:
-
-```
-http://localhost:3000
-```
-
-Useful checks:
-
-```bash
-npm test
-npm run lint
-npm run doctor
-npm run verify
-```
-
-The service can start without a configured model or runner; in that state it plans honestly and does not pretend that external reasoning or execution occurred.
-
-## Verification before release
-
-A production release should have successful:
-
-- source/invariant checks
-- system doctor
-- skill evaluation
-- lint
-- test suite
-- CodeQL
-- secret scanning
-- deployment smoke tests
-
-For live AI validation:
-
-```bash
-npm run eval:live
-```
-
-See:
-
-- `docs/ARCHITECTURE.md`
-- `docs/USAGE_POLICY.md`
-- `docs/PRIVACY_NOTES.md`
-- `docs/LIVE_EVALUATION.md`
-
-## Design principle
-
-**One intelligence. Adaptive depth. Minimum sufficient work. Real evidence. Controlled execution.**
-
-Kindgleam should become more capable when the situation requires more capability, not more complicated merely because more features exist.
+**One intelligence. One adaptive control loop. Minimum sufficient work. Strong isolation. Real evidence. Controlled execution. Durable continuity.**
