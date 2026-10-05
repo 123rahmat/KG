@@ -151,7 +151,7 @@ export function surfaceIntelligenceProfile(surface = 'normal-chat') {
   return SURFACE_INTELLIGENCE_PROFILES[id] ?? SURFACE_INTELLIGENCE_PROFILES['normal-chat'];
 }
 
-export const SURFACE_POLICY_VERSION = '3';
+export const SURFACE_POLICY_VERSION = '4';
 
 export const SURFACE_WORKSPACE_CONTRACTS = Object.freeze({
   design: Object.freeze({
@@ -180,7 +180,7 @@ export const SURFACE_WORKSPACE_CONTRACTS = Object.freeze({
     creationPolicy: 'Writing, translation, explanation, planning, analysis, file and image understanding, design, visuals, canvas concepts and presentations stay here; micro code work and single-file edits/tests stay here too unless a project/multi-file Code boundary is genuinely present.',
     escalationPolicy: 'Escalate to Code for repository, project, multi-file or full software-engineering work and to Research for source-heavy/current evidence work; keep bounded single-file/micro work in Normal Chat.',
     uiPolicy: 'Keep the composer central; reveal only the controls and adaptive surfaces relevant to the current situation.',
-    selectionPolicy: 'Default general workspace. Keep bounded single-file, micro-artifact and design-oriented work here; switch to Code for durable project/multi-file engineering and to Research for durable source/evidence work.'
+    selectionPolicy: 'Default general workspace. Keep bounded single-file, micro-artifact and lightweight visual work here; switch to Design for durable visual composition, Code for durable software engineering, and Research for durable source/evidence work.'
   }),
   code: Object.freeze({
     id: 'code',
@@ -232,8 +232,7 @@ export const SURFACE_POLICY = Object.freeze({
       intelligenceProfile: SURFACE_INTELLIGENCE_PROFILES.design,
       principle: 'Adaptive visual design with an editable canvas, governed asset operations, preview and export verification.'
     },
-    'normal-chat':
-      id: 'normal-chat',
+    'normal-chat': {\n      id: 'normal-chat',
       maxDepth: 'adaptive',
       heavyAutonomy: 'adaptive',
       deepCode: false,
