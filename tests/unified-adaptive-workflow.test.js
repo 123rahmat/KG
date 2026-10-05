@@ -6,7 +6,9 @@ import {
   completionGate,
   unifiedRecoveryDecision,
   subsystemCanAct,
-  SUBSYSTEMS
+  SUBSYSTEMS,
+  adaptiveCoverage,
+  nextAdaptiveStage
 } from '../src/unified-adaptive-workflow.js';
 
 test('one workflow contract governs all subsystems', () => {
@@ -20,6 +22,27 @@ test('one workflow contract governs all subsystems', () => {
   assert.equal(workflow.subsystems.length, SUBSYSTEMS.length);
   assert.ok(workflow.subsystems.every(item => item.lifecycle === 'shared-workflow'));
   assert.ok(workflow.subsystems.every(item => item.mayGrantAuthority === false));
+});
+
+test('one universal controller adapts coverage instead of switching domain workflows', () => {
+  const coverage = adaptiveCoverage({
+    situation: {
+      uncertainty: 0.8,
+      evidenceGap: true,
+      conflicts: ['source-a', 'source-b']
+    },
+    needsInvestigation: true
+  });
+  assert.equal(coverage.evidenceGap, true);
+  assert.equal(nextAdaptiveStage('model-situation', { coverage }), 'investigate');
+  assert.equal(nextAdaptiveStage('investigate', { coverage }), 'investigate');
+
+  const codingCoverage = adaptiveCoverage({
+    situation: { uncertainty: 0.2 },
+    executionRequired: true
+  });
+  assert.equal(nextAdaptiveStage('reason', { coverage: codingCoverage }), 'decide');
+  assert.equal(nextAdaptiveStage('plan', { coverage: codingCoverage }), 'execute');
 });
 
 test('material evidence causes reassessment instead of workflow restart', () => {
