@@ -222,6 +222,8 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       // Memory tools check the chat's owner and scope themselves (memory.js).
       memories,
       attachments,
+      adaptiveBehavior: run.adaptation?.adaptiveBehavior ?? null,
+      modeController: run.adaptation?.unifiedAdaptiveWorkflow?.modeController ?? run.adaptation?.modeController ?? null,
       capabilityInvestment: text(run.adaptation?.resourcePlan?.implementation?.investment?.decision) === 'prepare-build-candidate'
         ? 'build-candidate'
         : text(run.adaptation?.resourcePlan?.control?.capabilityInvestment) || 'ask',
@@ -1581,8 +1583,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       allows: id => modelPolicyAllows(run, id, 'medium')
     });
     // Backups obey the same rules: governance, and a model an admin turned off.
-    const allowBackup = name => modelPolicyAllows(run, `google:${name}`, 'medium')
-      && (!selection.configuredModelIds.includes(`google:${name}`) || selection.enabledModelIds.includes(`google:${name}`));
+    const allowBackup = () => false;
 
     const multiAgent = await runAdaptiveAgentPanel({
       run,
