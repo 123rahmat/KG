@@ -110,3 +110,49 @@ test('a later follow-up can inherit completed work without importing unrelated w
     assert.match(followUp.adaptation.conversation.at(-1).user, /Create and verify a small Python API/i);
     assert.match(followUp.adaptation.conversation.at(-1).assistant, /API structure/i);
   }));
+
+
+test('workspace switching preserves chat history but isolates workspace-specific state', () =>
+  withServer(async ({ call, seed }) => {
+    const { token, workspace } = await seed({ role: 'admin' });
+    const auth = { token, workspace };
+    const conversationId = 'chat-workspace-switch-01';
+
+    const design = (await call('POST', '/api/runs', {
+      ...auth,
+      body: {
+        conversationId,
+        activeSurface: 'design',
+        goal: 'Create a product launch visual with a simple layout.'
+      }
+    })).body;
+
+    await call('PUT', `/api/runs/${design.id}/design-state`, {
+      ...auth,
+      body: {
+        state: {
+          canvas: { width: 1000, height: 700, background: '#fff' },
+          guides: { grid: 20, snap: true, showGrid: true },
+          selected: 'hero',
+          previewing: false,
+          objects: [
+            { id: 'hero', kind: 'rect', x: 10, y: 10, width: 200, height: 100, fill: '#eee', visible: true, locked: false }
+          ]
+        }
+      }
+    });
+
+    const code = await call('POST', '/api/runs', {
+      ...auth,
+      body: {
+        conversationId,
+        activeSurface: 'code',
+        goal: 'Start a new software project from scratch with a small API.'
+      }
+    });
+    assert.equal(code.status, 201);
+    assert.equal(code.body.adaptation?.continuation?.mode, 'workspace-switch');
+    assert.equal(code.body.adaptation?.designWorkspace, null);
+    assert.equal(code.body.adaptation?.projectOverlay, undefined);
+    assert.ok(Array.isArray(code.body.adaptation?.conversation));
+  }));
