@@ -246,7 +246,7 @@ export class RunStore {
       user, workspace, project, files, priorWork: previousState?.completed?.length ? [...priorWork, ...previousState.completed] : priorWork, constraints, resources, requirements,
       successCriteria, outputs, environment, language, skillLevel, preferences, currentState: currentState ?? previousState,
       completedSteps, failedSteps, evidence, questions, dataSources, connections, connectedServices,
-      commitments, dependencies, dueAt, startAt, userBehavior, now,
+      commitments, dependencies, dueAt, startAt, userBehavior, capacity, availability, competingCommitments, now,
       privacyConsent, need, adaptiveControl, verifiedConnections, workspaceType, runtimeMode,
       activeSurface, jurisdiction, classifierHints, modelSelection, learnedSkills
     };
