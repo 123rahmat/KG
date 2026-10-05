@@ -128,6 +128,18 @@ export class ProjectStore {
     const current = await this.get(scope, id);
     if (!current) return null;
     const normalized = normalizeProject({ ...current, ...(patch || {}) });
+    if (normalized.sourceId) {
+      const { rows: [source] } = await this.pool.query(
+        'SELECT id FROM workspace_sources WHERE id = $1 AND workspace_id = $2 AND principal_id = $3 AND revoked_at IS NULL LIMIT 1',
+        [normalized.sourceId, scope.workspaceId, scope.principalId]
+      );
+      if (!source) {
+        throw new ProjectError('The selected project source is unavailable.', {
+          status: 404,
+          code: 'project-source-not-found'
+        });
+      }
+    }
     const { rows: [row] } = await this.pool.query(
       'UPDATE projects SET name=$3, description=$4, visibility=$5, default_surface=$6, source_id=$7, current_revision=$8, settings=$9::jsonb, updated_at=now() WHERE id=$1 AND workspace_id=$2 RETURNING *',
       [id, scope.workspaceId, normalized.name, normalized.description, normalized.visibility, normalized.defaultSurface, normalized.sourceId, normalized.currentRevision, JSON.stringify(normalized.settings)]
