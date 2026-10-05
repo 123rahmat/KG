@@ -2132,11 +2132,24 @@ export async function runAdaptiveAgentPanel({
     remainingBudgetRatio: remainingBudgetRatio(),
     explicit: mode === 'always' || parallelMode === 'always'
   });
+  // Auto mode starts with a small fan-out to protect latency, token spend and
+  // coordination quality. It may expand only when the situation shows strong
+  // decomposition value and enough decision pressure to justify extra context
+  // windows. Explicit/always mode keeps the configured provider ceiling.
+  const autoParallelCap = parallelMode === 'auto'
+    ? (
+        Number(initialParallel.opportunity ?? 0) >= 0.7
+        && Number(initialParallel.pressure ?? 0) >= 0.45
+          ? providerParallelCap
+          : Math.min(2, providerParallelCap)
+      )
+    : providerParallelCap;
   let effectiveMaxParallel = Math.max(
     1,
     Math.min(
       genericParallelCeiling,
       providerParallelCap,
+      autoParallelCap,
       initialParallel.maxParallel,
       budgetParallelLimit()
     )
