@@ -691,14 +691,14 @@ export function planGoal(goal, {
     preferences,
     situation
   });
+  const skillPlan = skillPlanForSelectedSkills(selectedSkills, { taskType: skillTaskType, maxSkills: 8, maxCost: Number(adaptiveControl?.budget?.maxSkillCost ?? 12) });
+  const skillLearning = summarizeSkillLearning(selectedSkills);
   universalContext.skills = {
     ...universalContext.skills,
+    selectedCost: Number(skillPlan?.totalCost ?? 0),
     candidateSkills: selectedSkills.map(skill => skill.name),
     selectionMode: 'adaptive'
   };
-
-  const skillPlan = skillPlanForSelectedSkills(selectedSkills, { taskType: skillTaskType, maxSkills: 8, maxCost: Number(adaptiveControl?.budget?.maxSkillCost ?? 12) });
-  const skillLearning = summarizeSkillLearning(selectedSkills);
   const skillPatternContext = skillContextSignature({
     goal: value,
     taskType: skillTaskType,
@@ -739,6 +739,14 @@ export function planGoal(goal, {
   };
 
 
+  universalContext.skills = {
+    ...universalContext.skills,
+    selectedCost: Number(skillPlan?.totalCost ?? 0),
+    candidateSkills: selectedSkills.map(skill => skill.name),
+    selectionMode: 'adaptive'
+  };
+  // Persist the same universal context contract so run continuation and project sessions do not lose scope decisions.
+  const universalContextSnapshot = JSON.parse(JSON.stringify(universalContext));
   const tasks = buildTasks(
     intent,
     granted,
@@ -761,7 +769,8 @@ export function planGoal(goal, {
       resourcePlan: adaptive.resourcePlan ?? null,
       verification,
       unifiedIntelligence,
-      intelligenceDepth: unifiedIntelligence.reasoning.depth
+      intelligenceDepth: unifiedIntelligence.reasoning.depth,
+      universalContext: universalContextSnapshot
     }
   );
 
