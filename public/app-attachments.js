@@ -232,6 +232,13 @@ function dateGroup(value) {
   return 'Older';
 }
 
+const CHAT_SURFACE_LABELS = Object.freeze({
+  'normal-chat': 'Chat',
+  code: 'Code',
+  research: 'Research',
+  design: 'Design'
+});
+
 export function renderChatList() {
   const list = $('runList');
   const query = $('chatSearch').value.trim().toLowerCase();
@@ -258,7 +265,8 @@ export function renderChatList() {
         tone === 'warn'
           ? element('span', { class: 'run-item-status' }, [element('span', { class: 'dot warn' }), element('span', { text: statusText })])
           : element('span', { text: timeAgo(chat.updatedAt) }),
-        Number(chat.messages) > 1 ? element('span', { text: `${chat.messages} messages` }) : null,
+        Number(chat.messages) > 1 ? element('span', { text: String(chat.messages) + ' messages' }) : null,
+        CHAT_SURFACE_LABELS[chat.surface] ? element('span', { class: 'run-item-surface', text: CHAT_SURFACE_LABELS[chat.surface] }) : null,
         chat.shared ? element('span', { class: 'run-item-shared', title: 'Shared with workspace' }, svgIcon('users')) : null
       ])
     ]), element('button', {
