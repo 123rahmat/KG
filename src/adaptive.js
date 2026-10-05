@@ -337,7 +337,23 @@ export function discoverCapabilityRequirements(goal, analysis = inspectGoal(goal
   if (f.file) {
     add({ id: 'file-analysis', category: 'workspace', source: 'discoverable', dynamic: true, risk: 'medium', reason: 'Inspect user-provided artifacts in formats available at runtime.' });
   }
+  const artifacts = Array.isArray(situation.artifacts) ? situation.artifacts : [];
+  const hasImageArtifact = artifacts.some(name => /\.(?:png|jpe?g|webp|gif)$/i.test(String(name)));
+  const visualRequest = text(situation.creationMode).toLowerCase() === 'visual'
+    || /\b(?:image|images|visual|diagram|figure|illustration|poster|thumbnail|photo|render)\b/i.test(text(goal));
+  if (hasImageArtifact || visualRequest) {
+    add({ id: 'image-understanding', category: 'multimodal', source: 'native', dynamic: false, risk: 'medium', reason: 'Understand visual inputs when the current task depends on an image or other non-human visual artifact.' });
+  }
+  if (visualRequest && (actions.has('create') || actions.has('transform') || text(situation.creationMode).toLowerCase() === 'visual')) {
+    add({ id: 'image-generation', category: 'creation', source: 'native', dynamic: true, risk: 'medium', reason: 'Generate or edit a visual through the governed Grok image-generation boundary and save the resulting artifact.' });
+  }
   const selfRun = SELF_RUN.test(text(goal));
+  if (actions.has('create') && !f.code && !visualRequest) {
+    add({ id: 'artifact-creation', category: 'creation', source: 'native', dynamic: true, risk: 'medium', reason: 'Create the requested non-code file artifact and keep the original separate when one already exists.' });
+  }
+  if (actions.has('transform') && f.file && !f.code && !visualRequest) {
+    add({ id: 'artifact-transformation', category: 'workspace', source: 'native', dynamic: true, risk: 'medium', reason: 'Transform the contents of a supported stored artifact without silently widening the requested scope.' });
+  }
   // Software being the topic is not a request to write or run it: a question
   // about code (explain it, review it, what does this keyword do) is answered.
   const codeWork = actions.has('create') || actions.has('transform') || actions.has('execute')
