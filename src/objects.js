@@ -255,18 +255,22 @@ export class ObjectStore {
         [text(id), scope.workspaceId, scope.principalId]
       );
       if (!object) return null;
-      const { rows: [existingBlob] } = await client.query('SELECT ref_count FROM blobs WHERE digest = $1 FOR UPDATE', [object.digest]);
-      if (existingBlob) {
-        await client.query('UPDATE blobs SET ref_count = ref_count + 1 WHERE digest = $1', [digest]);
+      if (digest === object.digest) {
+        // Replacing with identical content needs no blob refcount change.
       } else {
-        await client.query(
-          `INSERT INTO blobs (digest, workspace_id, bytes, size, ref_count, encryption_version)
-           VALUES ($1, $2, $3, $4, 1, $5)
-           ON CONFLICT (digest) DO UPDATE SET ref_count = blobs.ref_count + 1`,
-          [digest, scope.workspaceId, stored.bytes, content.byteLength, stored.version]
-        );
+        const { rows: [newBlob] } = await client.query('SELECT ref_count FROM blobs WHERE digest = $1 FOR UPDATE', [digest]);
+        if (newBlob) {
+          await client.query('UPDATE blobs SET ref_count = ref_count + 1 WHERE digest = $1', [digest]);
+        } else {
+          await client.query(
+            `INSERT INTO blobs (digest, workspace_id, bytes, size, ref_count, encryption_version)
+             VALUES ($1, $2, $3, $4, 1, $5)`,
+            [digest, scope.workspaceId, stored.bytes, content.byteLength, stored.version]
+          );
+        }
+        await client.query('UPDATE blobs SET ref_count = ref_count - 1 WHERE digest = $1', [object.digest]);
+        await client.query('DELETE FROM blobs WHERE digest = $1 AND ref_count = 0', [object.digest]);
       }
-      await client.query('UPDATE blobs SET ref_count = ref_count - 1 WHERE digest = $1', [object.digest]);
       await client.query('DELETE FROM blobs WHERE digest = $1 AND ref_count = 0', [object.digest]);
       const { rows: [updated] } = await client.query(
         `UPDATE objects
