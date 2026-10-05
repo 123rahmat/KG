@@ -131,7 +131,7 @@ export function registerPlatformRoutes(app, { config, identity, capabilities, me
           detail: { defaultModelId: normalized.defaultModel, reason: probe.reason }, requestId: req.requestId
         });
         return res.status(400).json({
-          error: `Grok did not accept ${normalized.defaultModel.replace(/^google:/, '')} (${probe.reason}). Check the model name and that this API key can use it; nothing was changed.`,
+          error: `Grok did not accept ${normalized.defaultModel.replace(/^xai:/, '')} (${probe.reason}). Check the model name and that this API key can use it; nothing was changed.`,
           code: 'model-unavailable'
         });
       }
