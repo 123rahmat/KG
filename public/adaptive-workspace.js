@@ -231,6 +231,7 @@ function designDefaults() {
   return {
     version: 1,
     canvas: { width: 1200, height: 720, background: '#ffffff' },
+    guides: { grid: 24, snap: true, showGrid: true },
     selected: null,
     previewing: false,
     objects: [
@@ -256,6 +257,11 @@ function normalizeDesignState(input = {}) {
       width: clampDesignNumber(canvas.width, 320, 4096, base.canvas.width),
       height: clampDesignNumber(canvas.height, 240, 4096, base.canvas.height),
       background: String(canvas.background || base.canvas.background).slice(0, 32)
+    },
+    guides: {
+      grid: clampDesignNumber(source.guides?.grid, 4, 128, base.guides.grid),
+      snap: source.guides?.snap !== false,
+      showGrid: source.guides?.showGrid !== false
     },
     selected: String(source.selected || ''),
     previewing: source.previewing === true,
@@ -370,9 +376,14 @@ function designCanvasNode(item, selectedId, rerender, canvas) {
   });
   node.addEventListener('pointermove', event => {
     if (!drag || event.pointerId !== drag.pointerId) return;
-    item.x = clampDesignNumber(drag.x + (event.clientX - drag.clientX) / Math.max(drag.sx, 0.01), -4096, 4096, item.x);
-    item.y = clampDesignNumber(drag.y + (event.clientY - drag.clientY) / Math.max(drag.sy, 0.01), -4096, 4096, item.y);
-    rerender(false);
+    const rawX = drag.x + (event.clientX - drag.clientX) / Math.max(drag.sx, 0.01);
+    const rawY = drag.y + (event.clientY - drag.clientY) / Math.max(drag.sy, 0.01);
+    const current = designWorkspaceState();
+    const grid = current.guides.snap ? current.guides.grid : 1;
+    item.x = clampDesignNumber(Math.round(rawX / grid) * grid, -4096, 4096, item.x);
+    item.y = clampDesignNumber(Math.round(rawY / grid) * grid, -4096, 4096, item.y);
+    node.style.left = item.x + 'px';
+    node.style.top = item.y + 'px';
   });
   node.addEventListener('pointerup', event => {
     if (!drag || event.pointerId !== drag.pointerId) return;
@@ -415,10 +426,10 @@ async function exportDesignSvg(design) {
   ];
   for (const item of [...design.objects].sort((a,b) => a.z - b.z)) {
     if (!item.visible || item.opacity <= 0) continue;
-    const transform = 'translate(' + item.x + ' ' + item.y + ') rotate(' + item.rotation + ' ' + item.width / 2 + ' ' + item.height / 2 + ')';
+    const transform = 'rotate(' + item.rotation + ' ' + (item.x + item.width / 2) + ' ' + (item.y + item.height / 2) + ')';
     const opacity = ' opacity="' + item.opacity + '"';
     if (item.kind === 'text') {
-      parts.push('<text x="' + item.x + '" y="' + (item.y + item.fontSize) + '" font-size="' + item.fontSize + '" fill="' + escapeSvg(item.fill) + '"' + opacity + '>' + escapeSvg(item.text || 'Text') + '</text>');
+      parts.push('<text x="' + item.x + '" y="' + (item.y + item.fontSize) + '" font-size="' + item.fontSize + '" fill="' + escapeSvg(item.fill) + '"' + opacity + ' transform="' + transform + '">' + escapeSvg(item.text || 'Text') + '</text>');
     } else if (item.kind === 'circle') {
       parts.push('<circle cx="' + (item.x + item.width / 2) + '" cy="' + (item.y + item.height / 2) + '" r="' + Math.min(item.width, item.height) / 2 + '" fill="' + escapeSvg(item.fill) + '"' + opacity + ' transform="' + transform + '"/>');
     } else if (item.kind === 'image' && imageData.has(item.assetId)) {
@@ -463,6 +474,8 @@ function designWorkspaceProject(data) {
   canvas.style.width = design.canvas.width + 'px';
   canvas.style.height = design.canvas.height + 'px';
   canvas.style.background = design.canvas.background;
+  canvas.dataset.grid = design.guides.showGrid ? 'on' : 'off';
+  canvas.style.setProperty('--design-grid-size', design.guides.grid + 'px');
   canvas.addEventListener('click', () => {
     design.selected = null;
     redraw(true);
@@ -550,6 +563,16 @@ function designWorkspaceProject(data) {
       button('Bring forward', () => moveLayer(1), 'small'),
       button('Send backward', () => moveLayer(-1), 'small'),
       button('Add assets', () => $('attachBtn')?.click(), 'small'),
+      button(design.guides.snap ? 'Snap on' : 'Snap off', () => {
+        design.guides.snap = !design.guides.snap;
+        persistDesignState(data.run?.id);
+        renderDeepWorkspaceShell();
+      }, 'small'),
+      button(design.guides.showGrid ? 'Grid on' : 'Grid off', () => {
+        design.guides.showGrid = !design.guides.showGrid;
+        persistDesignState(data.run?.id);
+        renderDeepWorkspaceShell();
+      }, 'small'),
       !design.previewing ? button('Preview', () => { design.previewing = true; persistDesignState(data.run?.id); redraw(false); }, 'small') : button('Exit preview', () => { design.previewing = false; persistDesignState(data.run?.id); redraw(false); }, 'primary small'),
       !design.previewing ? button('Export SVG', () => exportDesignSvg(design), 'small') : null
     ].filter(Boolean)),
@@ -570,7 +593,26 @@ function designWorkspaceProject(data) {
                 element('span', { class: 'small truncate', text: asset.name || 'Image' })
               ])
             ))
-          : element('div', { class: 'design-panel-empty', text: 'Attach images or files to place them on the canvas.' })
+          : element('div', { class: 'design-panel-empty', text: 'Attach images or files to place them on the canvas.' }),
+        element('div', { class: 'design-layer-section' }, [
+          element('div', { class: 'design-panel-head' }, [
+            element('strong', { text: 'Layers' }),
+            element('span', { class: 'small muted', text: design.objects.length + ' objects' })
+          ]),
+          element('div', { class: 'design-layer-list' }, [...design.objects].sort((a,b) => b.z - a.z).map(layer => {
+            const active = layer.id === design.selected;
+            return element('button', {
+              class: 'design-layer-row' + (active ? ' selected' : ''),
+              type: 'button',
+              title: layer.locked ? 'Locked layer' : 'Select layer',
+              onclick: () => { design.selected = layer.id; renderDeepWorkspaceShell(); }
+            }, [
+              element('span', { class: 'design-layer-kind', text: layer.kind }),
+              element('span', { class: 'design-layer-name', text: layer.assetName || layer.text || layer.kind }),
+              element('span', { class: 'design-layer-state', text: (layer.locked ? 'locked ' : '') + (layer.visible ? '' : 'hidden') })
+            ]);
+          }))
+        ])
       ]),
       element('section', { class: 'design-canvas-panel' }, [
         element('div', { class: 'design-canvas-head' }, [
