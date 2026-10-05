@@ -15,7 +15,7 @@ import { callModel } from './runtime.js';
 import { parseJsonObject } from './structured.js';
 import { webFetch, webDownload } from './tools/web.js';
 import { mathEvaluate } from './tools/math.js';
-import { readAttachment, withOverlay } from './attachments.js';
+import { readAttachment, attachmentContext, withOverlay } from './attachments.js';
 import { describeTable } from './documents.js';
 import { readDocumentIsolated } from './document-runner.js';
 import { screenToolInput, recordRefusal, blockedTopicsFrom } from './safety.js';
@@ -47,7 +47,121 @@ function findAttachment(ctx, name) {
     ?? (files.length === 1 && !wanted ? files[0] : null);
 }
 
+const MEDIA_IMAGE = /^image\/(?:png|jpe?g|webp|gif)$/i;
+
+const ARTIFACT_CONTENT_TYPES = Object.freeze({
+  txt: 'text/plain', text: 'text/plain', md: 'text/markdown', markdown: 'text/markdown',
+  json: 'application/json', csv: 'text/csv', html: 'text/html', css: 'text/css',
+  js: 'application/javascript', mjs: 'application/javascript', ts: 'application/typescript',
+  py: 'text/x-python', svg: 'image/svg+xml'
+});
+
+function safeArtifactName(name, fallback = 'generated-artifact.txt') {
+  const value = text(name).replaceAll('\\', '/').split('/').pop();
+  if (!value || value === '.' || value === '..' || value.length > 180) return fallback;
+  return value;
+}
+
 const BUILT_IN = [
+  {
+    name: 'artifact.create',
+    title: 'Create a file artifact',
+    description: 'Save generated text, Markdown, JSON, CSV, HTML, CSS, JavaScript, Python or SVG content as a workspace file. It creates a new artifact and never overwrites an existing file.',
+    input: { name: 'filename with extension', content: 'complete file content', visibility: 'private or workspace (default private)' },
+    sideEffect: true,
+    ready: ctx => ctx.objects && ctx.scope ? { ready: true } : { ready: false, needs: 'workspace', reason: 'Workspace file storage is not available in this step.' },
+    validate: async input => {
+      if (!safeArtifactName(input?.name, '')) return { error: 'Use a simple filename.' };
+      if (!String(input?.content ?? '').trim()) return { error: 'Generated file content cannot be empty.' };
+      if (String(input?.content ?? '').length > 2_000_000) return { error: 'Generated file content is too large for one artifact.' };
+      return null;
+    },
+    async run(input, ctx) {
+      const name = safeArtifactName(input?.name);
+      const ext = name.toLowerCase().split('.').pop();
+      const object = await ctx.objects.create(ctx.scope, ctx.principal, {
+        name,
+        type: 'generated-artifact',
+        contentType: ARTIFACT_CONTENT_TYPES[ext] || 'text/plain',
+        content: String(input.content),
+        provenance: { source: 'adaptive-artifact-generation', model: 'grok-4.7', task: 'artifact.create' },
+        visibility: ['private', 'workspace'].includes(text(input?.visibility)) ? text(input.visibility) : 'private'
+      }, { requestId: ctx.requestId });
+      return { artifact: object, note: 'Created the requested file artifact and saved it to Files.' };
+    }
+  },
+  {
+    name: 'file.edit',
+    title: 'Edit a stored file',
+    description: 'Apply a requested content transformation to an attached text, CSV, JSON, Markdown, HTML, CSS or source file, preserving the same artifact identity.',
+    input: { file: 'stored file name', instruction: 'what to change', content: 'complete replacement content' },
+    sideEffect: true,
+    ready: ctx => ctx.objects && ctx.scope ? { ready: true } : { ready: false, needs: 'workspace', reason: 'Workspace file storage is not available in this step.' },
+    validate: async input => !text(input?.file) ? { error: 'Choose which stored file to edit.' } : !String(input?.content ?? '').trim() ? { error: 'The edited content must be supplied.' } : null,
+    async run(input, ctx) {
+      const wanted = text(input.file).toLowerCase();
+      const file = (ctx.attachments ?? []).find(item => text(item?.name).toLowerCase() === wanted)
+        ?? (ctx.attachments ?? []).find(item => text(item?.name).toLowerCase().includes(wanted));
+      if (!file) return { error: 'The requested file is not attached to this step.' };
+      const originalObject = await ctx.objects.get(ctx.scope, file.id);
+      if (!originalObject) return { error: 'The stored file is no longer available.' };
+      const mediaType = text(originalObject.contentType).split(';')[0].toLowerCase();
+      const extension = safeArtifactName(originalObject.name, 'file.txt').toLowerCase().split('.').pop();
+      const editable = mediaType.startsWith('text/')
+        || ['json','csv','md','markdown','html','css','js','mjs','ts','py','sql','xml','yaml','yml','txt'].includes(extension);
+      if (!editable) return { error: 'This edit primitive rewrites text/data artifacts. Binary documents and images require their appropriate transformation workflow.' };
+      const updated = await ctx.objects.replace(ctx.scope, ctx.principal, originalObject.id, {
+        name: originalObject.name,
+        contentType: originalObject.contentType,
+        content: String(input.content)
+      }, { requestId: ctx.requestId });
+      if (!updated) return { error: 'The stored file disappeared before it could be updated.' };
+      return { artifact: updated, note: 'Updated the stored file while preserving its object identity.' };
+    }
+  },
+  {
+    name: 'image.generate',
+    title: 'Generate or edit an image',
+    description: 'Generate a new visual or edit attached images with Grok Imagine through Grok 4.7. Up to five attached source images may be used for one edit.',
+    input: { prompt: 'what the image should show or how it should change', action: 'generate, edit or auto (default auto)', images: 'optional attached image filenames to use as edit inputs', visibility: 'private or workspace (default private)' },
+    sideEffect: true,
+    network: true,
+    ready: ctx => ctx.objects && ctx.scope && ctx.config?.ai ? { ready: true } : { ready: false, needs: 'ai', reason: 'Grok image generation is not configured for this workspace.' },
+    validate: async input => !text(input?.prompt) ? { error: 'Describe the visual to generate or edit.' } : null,
+    async run(input, ctx) {
+      const prompt = text(input.prompt);
+      let names = Array.isArray(input.images) ? input.images : [];
+      if (!names.length && text(input.action).toLowerCase() === 'edit') names = (ctx.attachments ?? []).map(file => file.name).filter(Boolean);
+      const candidates = names.length
+        ? names.map(name => (ctx.attachments ?? []).find(file => text(file?.name).toLowerCase() === text(name).toLowerCase())).filter(Boolean)
+        : (ctx.attachments ?? []).filter(file => MEDIA_IMAGE.test(text(file?.contentType))).slice(0, 5);
+      let inputImages = [];
+      if (candidates.length) {
+        const selectedContext = await attachmentContext(ctx.objects, ctx.scope, candidates.slice(0, 5), { maxChars: 1000, maxImages: 5, focus: prompt });
+        inputImages = selectedContext.images;
+      }
+      const action = ['generate', 'edit', 'auto'].includes(text(input?.action).toLowerCase()) ? text(input.action).toLowerCase() : 'auto';
+      if (action === 'edit' && !inputImages.length) return { error: 'Image editing needs at least one attached source image.' };
+      const result = await callModel([{ role: 'user', content: prompt, ...(inputImages.length ? { images: inputImages } : {}) }], {
+        config: ctx.config, fetchImpl: ctx.fetchImpl, retries: 1, timeoutMs: 120_000,
+        effort: ctx.adaptiveBehavior?.executionStrategy?.reasoning || 'high',
+        imageGeneration: true, imageAction: action, usageGate: ctx.usageGate, usageSource: 'image-generation'
+      });
+      if (!result?.images?.length) return { error: 'Grok did not return a generated image.' };
+      const generated = result.images[0];
+      const object = await ctx.objects.create(ctx.scope, ctx.principal, {
+        name: 'generated-image-' + new Date().toISOString().replace(/[:.]/g, '-') + '.jpg',
+        type: 'generated-image',
+        contentType: generated.mediaType || 'image/jpeg',
+        content: generated.data,
+        encoding: 'base64',
+        provenance: { source: 'grok-image-generation', model: 'grok-4.7', action, prompt: generated.prompt || prompt },
+        visibility: ['private', 'workspace'].includes(text(input?.visibility)) ? text(input.visibility) : 'private'
+      }, { requestId: ctx.requestId });
+      return { artifact: object, showImage: generated, note: 'Generated image saved to Files. Preview it from this message or Files.' };
+    }
+  },
+
   {
     name: 'file.read',
     title: 'Read an attached file',
