@@ -25,6 +25,8 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run lint
+      - run: npm run doctor
+      - run: npm run eval:skills
       # Audit the complete dependency graph, including build/test tooling. A
       # compromised development dependency can still execute in CI and poison
       # artifacts or source before production packaging.
@@ -128,7 +130,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgres://kindgleam_migration:migration@127.0.0.1:5432/kindgleam_backup_source
+      DATABASE_URL: postgres://kindgleam_migrate:migration@127.0.0.1:5432/kindgleam_backup_source
       BACKUP_DATABASE_URL: postgres://kindgleam_backup:backup@127.0.0.1:5432/kindgleam_backup_source
       RESTORE_DATABASE_URL: postgres://kindgleam_restore:restore@127.0.0.1:5432/kindgleam_backup_target
       OBJECT_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
@@ -145,15 +147,25 @@ jobs:
           PGPASSWORD: postgres
         run: |
           psql "postgres://postgres:postgres@127.0.0.1:5432/postgres" -v ON_ERROR_STOP=1 <<'SQL'
-          CREATE ROLE kindgleam_migration LOGIN PASSWORD 'migration';
+          CREATE ROLE kindgleam_migrate LOGIN BYPASSRLS PASSWORD 'migration';
           CREATE ROLE kindgleam_backup LOGIN BYPASSRLS PASSWORD 'backup';
           CREATE ROLE kindgleam_restore LOGIN BYPASSRLS PASSWORD 'restore';
-          CREATE DATABASE kindgleam_backup_source OWNER kindgleam_migration;
-          CREATE DATABASE kindgleam_backup_target OWNER kindgleam_migration;
-          GRANT kindgleam_migration TO kindgleam_restore;
+          CREATE DATABASE kindgleam_backup_source OWNER kindgleam_migrate;
+          CREATE DATABASE kindgleam_backup_target OWNER kindgleam_migrate;
+          GRANT kindgleam_migrate TO kindgleam_restore WITH INHERIT FALSE, SET TRUE;
           SQL
       - name: Apply schema to source database
         run: npm run migrate
+      - name: Grant backup read access after migrations
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql "postgres://postgres:postgres@127.0.0.1:5432/kindgleam_backup_source" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT CONNECT ON DATABASE kindgleam_backup_source TO kindgleam_backup;
+          GRANT USAGE ON SCHEMA public TO kindgleam_backup;
+          GRANT SELECT ON ALL TABLES IN SCHEMA public TO kindgleam_backup;
+          GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO kindgleam_backup;
+          SQL
       - name: Create encrypted backup
         run: |
           rm -rf ci-backups
@@ -175,7 +187,7 @@ jobs:
   container:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    needs: [test, migrations]
+    needs: [test, migrations, backup-restore]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build production image
@@ -208,6 +220,7 @@ jobs:
 
   production-boot:
     name: production-boot
+    needs: [container, backup-restore]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:
@@ -225,7 +238,7 @@ jobs:
     env:
       ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/kindgleam
       DATABASE_URL: postgres://kindgleam_runtime:runtime@127.0.0.1:5432/kindgleam
-      DATABASE_MIGRATION_URL: postgres://kindgleam_migration:migration@127.0.0.1:5432/kindgleam
+      DATABASE_MIGRATION_URL: postgres://kindgleam_migrate:migration@127.0.0.1:5432/kindgleam
       BACKUP_DATABASE_URL: postgres://kindgleam_backup:backup@127.0.0.1:5432/kindgleam
       RESTORE_DATABASE_URL: postgres://kindgleam_restore:restore@127.0.0.1:5432/kindgleam
       NODE_ENV: production
@@ -256,10 +269,12 @@ jobs:
           PGPASSWORD: postgres
         run: |
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          CREATE ROLE kindgleam_migration LOGIN SUPERUSER PASSWORD 'migration';
-          CREATE ROLE kindgleam_runtime LOGIN PASSWORD 'runtime';
-          CREATE ROLE kindgleam_backup LOGIN PASSWORD 'backup';
-          CREATE ROLE kindgleam_restore LOGIN PASSWORD 'restore';
+          CREATE ROLE kindgleam_migrate LOGIN BYPASSRLS PASSWORD 'migration';
+          CREATE ROLE kindgleam_runtime LOGIN NOBYPASSRLS PASSWORD 'runtime';
+          CREATE ROLE kindgleam_backup LOGIN BYPASSRLS PASSWORD 'backup';
+          CREATE ROLE kindgleam_restore LOGIN BYPASSRLS PASSWORD 'restore';
+          GRANT kindgleam_migrate TO kindgleam_restore WITH INHERIT FALSE, SET TRUE;
+          ALTER DATABASE kindgleam SET OWNER TO kindgleam_migrate;
           SQL
       - name: Boot the production application against real PostgreSQL
         run: |
