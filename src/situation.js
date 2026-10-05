@@ -505,6 +505,12 @@ export function mergeSituationEvidence(situation, evidence = {}) {
     dueAt: e.dueAt ?? e.deadline ?? base.realWorld?.temporal?.dueAt ?? null,
     startAt: e.startAt ?? base.realWorld?.temporal?.startAt ?? null,
     userBehavior: e.userBehavior ?? base.realWorld?.userBehavior ?? {},
+    capacity: e.capacity ?? base.realWorld?.capacity ?? null,
+    availability: e.availability ?? base.realWorld?.availability ?? null,
+    competingCommitments: [
+      ...(Array.isArray(base.realWorld?.competingCommitments) ? base.realWorld.competingCommitments : []),
+      ...asList(e.competingCommitments ?? e.busyWith)
+    ],
     now: e.now ?? null
   });
   // The ethical reading is made once, when the request arrives, and stays.
