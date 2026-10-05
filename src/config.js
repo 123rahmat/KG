@@ -215,12 +215,15 @@ export function loadConfig(env = process.env) {
   const legacyProvider = text(env.AI_PROVIDER).toLowerCase();
   if (legacyProvider && legacyProvider !== 'xai') errors.push('AI_PROVIDER must be xai when set');
   if (legacyProvider && !xaiApiKey) errors.push('XAI_API_KEY (or AI_API_KEY) is required when AI_PROVIDER is set');
-  const providerEntries = xaiApiKey && isGrokModel(xaiModel)
-    ? [{ provider: 'xai', apiKey: xaiApiKey, model: xaiModel, modelId: 'xai:' + xaiModel }]
-    : [];
+  const jsonProviders = parseAiProviders(env.AI_PROVIDERS_JSON, errors);
+  const providerEntries = jsonProviders.length
+    ? jsonProviders
+    : (xaiApiKey && isGrokModel(xaiModel)
+      ? [{ provider: 'xai', apiKey: xaiApiKey, model: DEFAULT_MODEL, modelId: 'xai:grok-4.7' }]
+      : []);
   const primary = providerEntries[0] || null;
   if (production && !primary) {
-    errors.push('At least one AI provider must be configured in production (AI_PROVIDERS_JSON or legacy AI_PROVIDER/AI_API_KEY)');
+    errors.push('Grok 4.7 must be configured in production with XAI_API_KEY or AI_PROVIDERS_JSON');
   }
   if (production && !providerEntries.some(item => item.provider === 'xai')) {
     errors.push('xAI must be configured in production with XAI_API_KEY or AI_API_KEY');
