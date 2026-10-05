@@ -572,12 +572,13 @@ export function planGoal(goal, {
   // Writing, rewriting and translating need only the model: they get the
   // short path too, unless files, code or real-world stakes are involved.
   // (Composing the answer is the system's own work, not a tool.)
-  const writing = (intent.kind === 'creation' || /\btranslat/i.test(value))
+  const writing = WRITING.test(value)
     && !attachments.length && !files.length
     && analysis.flags?.code !== true
-    && capabilityRequirements.every(item => BUILT_IN.includes(item.id) || (item.id === 'design' && WRITING.test(value)));
+    && analysis.flags?.highImpact !== true
+    && capabilityRequirements.every(item => BUILT_IN.includes(item.id) || item.id === 'design');
   // A letter or post about physical work is still only writing.
-  const writingDocument = writing && WRITING.test(value);
+  const writingDocument = writing;
   // A question about physical things ("how many amps does a kettle draw")
   // is answered and checked with physical care, but it takes no action in
   // the world, so there is nothing to approve.
