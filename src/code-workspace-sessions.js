@@ -21,7 +21,15 @@ export class CodeWorkspaceSessionStore {
   constructor(pool) { this.pool = pool; }
   async create(scope, body = {}) {
     const input = normalizeWorkspaceSessionInput(body);
-    if (!input.sourceId) throw new Error('GitHub sourceId is required for a Code Workspace session');
+    const scratch = !input.sourceId && text(input.metadata?.kind || input.metadata?.sourceKind).toLowerCase() === 'scratch';
+    if (!input.sourceId && !scratch) {
+      const error = new Error('A Code Workspace session needs a GitHub source or an explicit scratch project.');
+      error.status = 400; error.code = 'workspace-source-required'; throw error;
+    }
+    if (scratch && !input.projectId) {
+      const error = new Error('A scratch Code Workspace session needs a projectId.');
+      error.status = 400; error.code = 'scratch-project-required'; throw error;
+    }
     if (input.sourceId) {
       const { rows: [source] } = await this.pool.query(
         `SELECT id, kind, repo_ref, metadata
@@ -47,9 +55,10 @@ export class CodeWorkspaceSessionStore {
       [id, scope.workspaceId, scope.principalId, input.projectId, input.sourceId, input.conversationId, input.branch, input.baseRevision, JSON.stringify({
         ...input.metadata,
         consistency: {
-          mode: 'immutable-github-revision',
+          mode: scratch ? 'from-scratch-project' : 'immutable-github-revision',
           baseRevision: input.baseRevision,
-          sourceBound: true
+          sourceBound: !scratch,
+          scratch: scratch
         }
       })]
     );
