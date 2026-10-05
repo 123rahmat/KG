@@ -13,7 +13,7 @@ function env(overrides = {}) {
 
 const ALL_AI = {
   AI_PROVIDERS_JSON: JSON.stringify({
-    google: { apiKey: 'test-google', model: 'gemini-3.8-flash' }
+    xai: { apiKey: 'test-xai', model: 'grok-4.7' }
   })
 };
 
@@ -254,9 +254,9 @@ test('production local execution requires a declared isolation boundary', () => 
   assert.throws(
     () => loadConfig(env({
       NODE_ENV: 'production',
-      AI_PROVIDER: 'google',
+      AI_PROVIDER: 'xai',
       AI_API_KEY: 'test-key',
-      AI_MODEL: 'gemini-3.8-flash',
+      AI_MODEL: 'grok-4.7',
       COOKIE_SECURE: 'true',
       PGSSLMODE: 'verify',
       PGSSLROOTCERT: '/tmp/ca.pem',
@@ -274,7 +274,7 @@ test('production local execution requires a declared isolation boundary', () => 
 
 
 test('adaptive multi-agent configuration accepts bounded modes and agent counts', () => {
-  const base = { DATABASE_URL: 'postgres://u:p@localhost:5432/kindgleam', AI_PROVIDER: 'google', AI_API_KEY: 'k' };
+  const base = { DATABASE_URL: 'postgres://u:p@localhost:5432/kindgleam', AI_PROVIDER: 'xai', AI_API_KEY: 'k' };
   assert.equal(loadConfig(base).agents.multiAgent, 'auto');
   assert.equal(loadConfig({ ...base, MULTI_AGENT_MODE: 'always', MULTI_AGENT_MAX_AGENTS: '2' }).agents.multiAgent, 'always');
   assert.equal(loadConfig({ ...base, MULTI_AGENT_MAX_AGENTS: '1' }).agents.maxAgents, 1);
@@ -285,15 +285,15 @@ test('adaptive multi-agent configuration accepts bounded modes and agent counts'
 });
 
 test('unified adaptive parallel scheduling is configurable and bounded', () => {
-  const base = { DATABASE_URL: 'postgres://u:p@localhost:5432/kindgleam', AI_PROVIDER: 'google', AI_API_KEY: 'k' };
+  const base = { DATABASE_URL: 'postgres://u:p@localhost:5432/kindgleam', AI_PROVIDER: 'xai', AI_API_KEY: 'k' };
   assert.equal(loadConfig(base).agents.parallel, 'auto');
   assert.equal(loadConfig({ ...base, AGENTS_PARALLEL_MODE: 'always' }).agents.parallel, 'always');
   assert.equal(loadConfig({ ...base, AGENTS_PARALLEL_MODE: 'off' }).agents.parallel, 'off');
   assert.throws(() => loadConfig({ ...base, AGENTS_PARALLEL_MODE: 'sometimes' }), /AGENTS_PARALLEL_MODE must be/);
 });
 
-test('AI_EFFORT chooses how deeply Gemini reasons, and only real levels are accepted', () => {
-  const env = { DATABASE_URL: 'postgres://u:p@h:5432/d', AI_PROVIDER: 'google', AI_API_KEY: 'k' };
+test('AI_EFFORT chooses how deeply Grok reasons, and only real levels are accepted', () => {
+  const env = { DATABASE_URL: 'postgres://u:p@h:5432/d', AI_PROVIDER: 'xai', AI_API_KEY: 'k' };
   assert.equal(loadConfig(env).ai.effort, null, 'unset keeps the model default');
   assert.equal(loadConfig({ ...env, AI_EFFORT: 'HIGH' }).ai.effort, 'high');
   assert.throws(() => loadConfig({ ...env, AI_EFFORT: 'extreme' }), /AI_EFFORT must be one of/);
@@ -329,7 +329,7 @@ test('no simulation runner is configured: its old variables are ignored', () => 
 });
 
 test('backup Gemini models are read in order and must be Gemini models', () => {
-  const env = { DATABASE_URL: 'postgres://u:p@localhost:5432/kindgleam', AI_PROVIDER: 'google', AI_API_KEY: 'k' };
+  const env = { DATABASE_URL: 'postgres://u:p@localhost:5432/kindgleam', AI_PROVIDER: 'xai', AI_API_KEY: 'k' };
   assert.deepEqual(loadConfig({ ...env, AI_FALLBACK_MODELS: 'gemini-3.5-flash, gemini-3.1-flash-lite' }).ai.fallbackModels, ['gemini-3.5-flash', 'gemini-3.1-flash-lite']);
   assert.deepEqual(loadConfig(env).ai.fallbackModels, []);
   assert.throws(() => loadConfig({ ...env, AI_FALLBACK_MODELS: 'gpt-5' }), /AI_FALLBACK_MODELS lists "gpt-5"/);
