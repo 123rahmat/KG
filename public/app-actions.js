@@ -10,6 +10,7 @@ import { TERMINAL_STATES, autoDrive, copyText, governanceCard, isAutomatic, rend
 import { selectTab } from './app-account.js';
 import { applyLocalWorkspaceChanges } from './workspace-sources.js';
 import { renderWorkStatus } from './adaptive-workspace.js';
+import { artifactChip } from './artifact-preview.js';
 
 const actionsLoading = new Set();
 
