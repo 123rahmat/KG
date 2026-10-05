@@ -245,7 +245,7 @@ export class RunStore {
   async create(scope, principal, {
     goal, policies, activeSurface, timeZone, runtimeMode = 'auto',
     workspaceType = 'personal', jurisdiction = '',
-    user = null, workspace = null, project = null, files = [], priorWork = [],
+    user = null, workspace = null, project = null, projectId = null, files = [], priorWork = [],
     constraints = [], resources = [], requirements = [], successCriteria = [], outputs = [],
     environment = null, language = '', skillLevel = '', preferences = [], currentState = null,
     completedSteps = [], failedSteps = [], evidence = [], questions = [],
@@ -269,10 +269,31 @@ export class RunStore {
     if (Buffer.byteLength(goalText, 'utf8') > this.maxGoalChars) {
       throw new RunError('Goal is too large for one workflow run', { status: 413, code: 'goal-too-large' });
     }
+
+    const linkedProjectId = text(projectId);
+    if (linkedProjectId) {
+      const { rows: [linkedProject] } = await this.pool.query(
+        `SELECT id
+           FROM projects
+          WHERE id = $1
+            AND workspace_id = $2
+            AND (visibility = 'workspace' OR principal_id = $3)
+            AND state = 'active'
+          LIMIT 1`,
+        [linkedProjectId, scope.workspaceId, scope.principalId]
+      );
+      if (!linkedProject) {
+        throw new RunError('Project not found or not accessible in this workspace.', {
+          status: 404,
+          code: 'project-not-found'
+        });
+      }
+    }
     // A follow-up continues the previous project only when the project
     // identity is the same. This prevents two local projects in one chat from
     // silently inheriting each other's files/state.
-    const requestedProjectKey = projectContextKey(project, attachments);
+    const requestedProjectKey = projectContextKey(project, attachments)
+      || (linkedProjectId ? 'project:' + linkedProjectId : null);
     const previousSurface = text(
       previousState?.adaptation?.modeController?.surface
       || previousState?.adaptation?.unifiedAdaptiveWorkflow?.surface
@@ -460,12 +481,13 @@ export class RunStore {
     return transaction(this.pool, async client => {
       await client.query(
         `INSERT INTO runs (id, workspace_id, principal_id, goal, surface, state,
-                           intent, capabilities, governance, adaptation, situation, requirements, visibility, attempt, max_attempts, max_tokens,
+                           intent, capabilities, governance, adaptation, situation, requirements, project_id, visibility, attempt, max_attempts, max_tokens,
                            conversation_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 1, $14, $15, $16)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 1, $15, $16, $17)`,
         [id, scope.workspaceId, principal.id, plan.goal, plan.surface, plan.state,
          JSON.stringify(plan.intent), JSON.stringify(plan.capabilities),
          JSON.stringify(plan.governance), JSON.stringify(plan.adaptation), JSON.stringify(situation), JSON.stringify(requirementModel),
+         linkedProjectId || null,
          ['private', 'workspace'].includes(text(visibility)) ? text(visibility) : 'private',
          this.maxAttempts, maxTokens, conversation || null]
       );
