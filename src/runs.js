@@ -273,9 +273,18 @@ export class RunStore {
     // identity is the same. This prevents two local projects in one chat from
     // silently inheriting each other's files/state.
     const requestedProjectKey = projectContextKey(project, attachments);
+    const previousSurface = text(
+      previousState?.adaptation?.modeController?.surface
+      || previousState?.adaptation?.unifiedAdaptiveWorkflow?.surface
+      || previousState?.adaptation?.primarySurface
+      || ''
+    );
+    const explicitSurface = text(activeSurface);
     let projectOverlay = null;
     let projectContextSwitched = false;
-    if (!attachments.length && previousState && (CODE_FOLLOW_UP.test(goalText) || FOLLOW_UP_ON_WORK.test(goalText))) {
+    let inheritedProject = false;
+    const mayInheritWorkspaceState = !previousSurface || !explicitSurface || previousSurface === explicitSurface;
+    if (mayInheritWorkspaceState && !attachments.length && previousState && (CODE_FOLLOW_UP.test(goalText) || FOLLOW_UP_ON_WORK.test(goalText))) {
       const hasFiles = state => Array.isArray(state?.adaptation?.attachments) && state.adaptation.attachments.length > 0;
       const withFiles = hasFiles(previousState) ? previousState : await this.conversationState(scope, conversation, { withFiles: true });
       const previousProjectKey = text(withFiles?.adaptation?.projectContext?.key) || null;
@@ -283,6 +292,7 @@ export class RunStore {
       if (compatible && hasFiles(withFiles)) {
         attachments = withFiles.adaptation.attachments;
         projectOverlay = continuedProject(withFiles);
+        inheritedProject = true;
       } else if (requestedProjectKey && previousProjectKey && requestedProjectKey !== previousProjectKey) {
         projectContextSwitched = true;
       }
@@ -309,6 +319,19 @@ export class RunStore {
       throw new RunError('More detail is needed before this can be planned', {
         status: 400, code: 'needs-input', detail: { questions: plan.questions }
       });
+    }
+
+    const plannedSurface = text(plan.surface === 'chat' ? 'normal-chat' : plan.surface) || 'normal-chat';
+    const surfaceContextSwitched = Boolean(previousState && previousSurface && previousSurface !== plannedSurface);
+    if (surfaceContextSwitched) {
+      // Conversation history remains continuous, but workspace-specific
+      // state never crosses a workspace boundary implicitly.
+      if (inheritedProject) {
+        attachments = [];
+        projectOverlay = null;
+        inheritedProject = false;
+      }
+      projectContextSwitched = true;
     }
 
     const requirementModel = plan.workflow === 'direct'
@@ -403,7 +426,7 @@ export class RunStore {
     });
     if (previousState) {
       plan.adaptation.continuation = {
-        mode: projectContextSwitched ? 'context-switch' : 'incremental',
+        mode: surfaceContextSwitched ? 'workspace-switch' : projectContextSwitched ? 'context-switch' : 'incremental',
         previousRunId: previousState.runId,
         previousState: previousState.state,
         currentResultAvailable: true,
@@ -419,13 +442,15 @@ export class RunStore {
     const usesDesignWorkspace = plan.surface === 'design'
       || (Array.isArray(plan.adaptation?.surfaces) && plan.adaptation.surfaces.includes('design'));
     if (usesDesignWorkspace) {
-      plan.adaptation.designWorkspace = previousState?.adaptation?.designWorkspace ?? null;
+      plan.adaptation.designWorkspace = !surfaceContextSwitched
+        ? previousState?.adaptation?.designWorkspace ?? null
+        : null;
     }
     if (usesResearchWorkspace) {
       plan.adaptation.researchWorkspace = createResearchWorkspaceState({
         goal: goalText,
         question: goalText,
-        prior: previousState?.adaptation?.researchWorkspace ?? null,
+        prior: !surfaceContextSwitched ? previousState?.adaptation?.researchWorkspace ?? null : null,
         conversationId: conversation || null
       });
     }
