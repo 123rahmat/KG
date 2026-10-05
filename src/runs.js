@@ -361,7 +361,12 @@ export class RunStore {
       failedAttempts: Array.isArray(failedSteps) ? failedSteps.length : 0,
       profile: plan.adaptation.effortProfile
     });
-    plan.adaptation.adaptiveBehavior = plan.adaptation.unifiedAdaptiveWorkflow.behavior;
+    plan.adaptation.adaptiveBehavior = {
+      ...plan.adaptation.unifiedAdaptiveWorkflow.behavior,
+      modeController: plan.adaptation.unifiedAdaptiveWorkflow.modeController,
+      executionStrategy: plan.adaptation.unifiedAdaptiveWorkflow.execution
+    };
+    plan.adaptation.modeController = plan.adaptation.unifiedAdaptiveWorkflow.modeController;
     plan.adaptation.adaptiveDecision = plan.adaptation.unifiedAdaptiveWorkflow.authority;
 
     // Later steps (schedules, dates) work in the person's own time zone.
