@@ -11,7 +11,7 @@ import { DEFAULT_MODEL, isGrokModel, normalizeModelId } from './model-catalog.js
 
 const PROVIDERS = ['xai'];
 const LOG_LEVELS = ['debug', 'info', 'warn', 'error'];
-const AI_EFFORT_LEVELS = ['low', 'medium', 'high'];
+const AI_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh'];
 
 const text = value => String(value ?? '').trim();
 
@@ -223,7 +223,6 @@ export function loadConfig(env = process.env) {
   const providerEntries = xaiApiKey && isGrokModel(xaiModel)
     ? [{ provider: 'xai', apiKey: xaiApiKey, model: xaiModel, modelId: 'xai:' + xaiModel }]
     : [];
-  const providerEntries = [...aiProviders.values()];
   const primary = providerEntries[0] || null;
   if (production && !primary) {
     errors.push('At least one AI provider must be configured in production (AI_PROVIDERS_JSON or legacy AI_PROVIDER/AI_API_KEY)');
@@ -234,17 +233,8 @@ export function loadConfig(env = process.env) {
 
   // The Grok models administrators may choose from in Settings; the
   // default model is always one of them, listed first.
-  const offeredModels = text(env.XAI_MODELS).toLowerCase().split(',').map(item => item.trim()).filter(Boolean);
-  for (const model of offeredModels) {
-    if (!isGrokModel(model)) errors.push(`XAI_MODELS lists "${model}", which is not a Grok model id such as ${DEFAULT_MODEL}`);
-  }
-
-  // Backup Grok models, tried in order when the chosen one is out of quota,
-  // overloaded or retired (each Grok model has its own quota).
-  const fallbackModels = text(env.XAI_FALLBACK_MODELS).toLowerCase().split(',').map(item => item.trim()).filter(Boolean);
-  for (const model of fallbackModels) {
-    if (!isGrokModel(model)) errors.push(`XAI_FALLBACK_MODELS lists "${model}", which is not a Grok model id such as ${DEFAULT_MODEL}`);
-  }
+  const offeredModels = [DEFAULT_MODEL];
+  const fallbackModels = [];
 
   // How deeply Grok reasons. Unset keeps the model's own default.
   const aiEffort = text(env.AI_EFFORT).toLowerCase();
@@ -372,11 +362,6 @@ export function loadConfig(env = process.env) {
           provider: primary.provider,
           apiKey: primary.apiKey || null,
           model: primary.model || null,
-          xaiProject,
-          xaiLocation,
-          xaiAccessToken,
-          xaiServiceAccountJson,
-          xaiCredentialsPath,
           modelId: primary.modelId,
           models: [DEFAULT_MODEL],
           fallbackModels: [],
