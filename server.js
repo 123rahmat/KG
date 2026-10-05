@@ -24,6 +24,7 @@ import { Scheduler } from './src/scheduling.js';
 import { createApp, VERSION } from './src/app.js';
 import { attachTerminalServer } from './src/terminal.js';
 import { FleetStore, createFleetWorker } from './src/fleet-control.js';
+import { ProjectStore } from './src/projects.js';
 
 /** Wire the object graph. Exported so tests build the same one. */
 export function build({ config, logger, metrics, fetchImpl }) {
@@ -51,9 +52,10 @@ export function build({ config, logger, metrics, fetchImpl }) {
   });
   const jobs = new JobStore(pool);
   const fleet = new FleetStore(pool);
+  const projects = new ProjectStore(pool);
   // Reminders and scheduled questions (src/scheduling.js).
   const scheduler = new Scheduler({ pool, runs, identity, logger, metrics });
-  const app = createApp({ config, pool, identity, governance, capabilities, objects, runs, jobs, scheduler, fleet, audit, logger, metrics, fetchImpl });
+  const app = createApp({ config, pool, identity, governance, capabilities, objects, runs, jobs, scheduler, fleet, projects, audit, logger, metrics, fetchImpl });
   app.locals.objects = objects;
   const worker = createJobWorker({ jobs, identity, runs, logger, metrics, executeNext: app.locals.executeNext });
   const fleetWorker = createFleetWorker({
