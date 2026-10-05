@@ -70,6 +70,56 @@ function normalizeSurfaceId(value = '') {
 }
 const MEDIUM_ANALYSIS = /\b(?:explain|compare|analy[sz]e|solve|calculate|derive|show|teach|why|how|which|evaluate|recommend|suggest|summari[sz]e|interpret)\b/i;
 
+export const SURFACE_INTELLIGENCE_PROFILES = Object.freeze({
+  'normal-chat': Object.freeze({
+    id: 'normal-chat-intelligence',
+    maturity: 'adaptive-general',
+    priority: 'speed-first, then depth',
+    contextStrategy: 'minimum-sufficient-context',
+    planningStrategy: 'single-next-step',
+    agentStrategy: 'direct-first; one focused specialist when it materially improves the result; broader panels only for genuine uncertainty or stakes',
+    parallelStrategy: 'parallelize independent read-only work only when latency benefit exceeds coordination cost',
+    verificationStrategy: 'verify when claims, transformations, tools, files, or stakes justify it; skip redundant checks for pure conversation',
+    continuityStrategy: 'preserve conversation and artifact context without forcing workspace escalation',
+    costStrategy: 'prefer one strong model call and bounded context; spend additional calls only when they can change the outcome',
+    qualityStrategy: 'clarity, usefulness, correct context selection, and honest uncertainty',
+    preferredRoles: Object.freeze(['communicator', 'analyst', 'researcher', 'critic'])
+  }),
+  code: Object.freeze({
+    id: 'code-intelligence',
+    maturity: 'deep-engineering',
+    priority: 'correctness and safe change, with critical-path speed',
+    contextStrategy: 'revision-first; inspect affected files, dependencies, tests and runtime evidence before widening scope',
+    planningStrategy: 'adaptive dependency-aware next step; never prebuild unnecessary work',
+    agentStrategy: 'specialize by engineering risk: architect, implementer, diagnostician, debugger, test-engineer, security/performance reviewers as justified',
+    parallelStrategy: 'parallelize independent analysis and disjoint immutable-revision lanes; serialize shared mutations and stale revisions',
+    verificationStrategy: 'diff + targeted tests/build/runtime evidence; expand regression coverage when changed surface or risk demands it',
+    continuityStrategy: 'sticky project/revision continuity with explicit scope and write isolation',
+    costStrategy: 'keep small fixes single-agent/single-wave; add specialists or parallel waves only when marginal evidence or critical-path reduction is material',
+    qualityStrategy: 'working software, scoped changes, reproducibility, regression safety, and verified repository state',
+    preferredRoles: Object.freeze(['architect', 'implementer', 'test-engineer', 'diagnostician', 'debugger', 'security-reviewer', 'performance-reviewer'])
+  }),
+  research: Object.freeze({
+    id: 'research-intelligence',
+    maturity: 'deep-evidence',
+    priority: 'evidence quality and uncertainty reduction, with bounded search cost',
+    contextStrategy: 'question-first; collect the smallest useful source set, then expand only for evidence gaps, conflicts, freshness, or scope',
+    planningStrategy: 'adaptive evidence-gap-driven next step',
+    agentStrategy: 'researcher for discovery, analyst for synthesis, critic for challenge; independent panels only when disagreement or source diversity materially matters',
+    parallelStrategy: 'parallelize independent source discovery and independent analyses; avoid duplicate searches and redundant evidence',
+    verificationStrategy: 'provenance + claim-to-source checks; challenge conflicts and re-investigate unresolved high-impact claims',
+    continuityStrategy: 'sticky question, source ledger, evidence ledger, conflicts, and unresolved questions',
+    costStrategy: 'stop when the answer is sufficiently supported; spend more calls only when new evidence can change a material conclusion',
+    qualityStrategy: 'traceable claims, source diversity, calibrated uncertainty, conflict visibility, and current evidence when required',
+    preferredRoles: Object.freeze(['researcher', 'analyst', 'critic', 'communicator'])
+  })
+});
+
+export function surfaceIntelligenceProfile(surface = 'normal-chat') {
+  const id = normalizeSurfaceId(surface);
+  return SURFACE_INTELLIGENCE_PROFILES[id] ?? SURFACE_INTELLIGENCE_PROFILES['normal-chat'];
+}
+
 export const SURFACE_POLICY_VERSION = '3';
 
 export const SURFACE_WORKSPACE_CONTRACTS = Object.freeze({
@@ -136,6 +186,7 @@ export const SURFACE_POLICY = Object.freeze({
       visualCanvas: true,
       presentationCreation: true,
       contract: SURFACE_WORKSPACE_CONTRACTS['normal-chat'],
+      intelligenceProfile: SURFACE_INTELLIGENCE_PROFILES['normal-chat'],
       principle: 'General workspace over the same adaptive intelligence: depth, agents, tools, context, verification and iteration all expand or contract with the situation.'
     },
     code: {
@@ -146,6 +197,7 @@ export const SURFACE_POLICY = Object.freeze({
       deepResearch: false,
       richMultimodal: true,
       contract: SURFACE_WORKSPACE_CONTRACTS.code,
+      intelligenceProfile: SURFACE_INTELLIGENCE_PROFILES.code,
       principle: 'Adaptive software engineering with repository-aware execution and verification.'
     },
     research: {
@@ -156,6 +208,7 @@ export const SURFACE_POLICY = Object.freeze({
       deepResearch: true,
       richMultimodal: true,
       contract: SURFACE_WORKSPACE_CONTRACTS.research,
+      intelligenceProfile: SURFACE_INTELLIGENCE_PROFILES.research,
       principle: 'Adaptive evidence gathering, analysis, cross-checking and synthesis.'
     }
   })
