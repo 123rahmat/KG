@@ -23,6 +23,101 @@ const text = value => String(value ?? '').trim();
 const clamp01 = value => Math.min(1, Math.max(0, Number.isFinite(Number(value)) ? Number(value) : 0));
 const list = value => [...new Set((Array.isArray(value) ? value : []).map(text).filter(Boolean))];
 
+/**
+ * Universal work coverage model.
+ *
+ * Domains do not choose a private lifecycle. The situation determines which
+ * kinds of work are justified: understand, obtain missing context/evidence,
+ * reason, challenge, decide, act, observe, verify, or deliver. Coding,
+ * research, files, design and ordinary tasks differ in required capabilities,
+ * not in the control loop.
+ */
+export function adaptiveCoverage({
+  situation = {},
+  acceptance = {},
+  executionRequired = false,
+  needsInvestigation = false,
+  observationAvailable = false,
+  verificationEvidenceAvailable = false,
+  failed = false
+} = {}) {
+  const uncertainty = clamp01(situation.uncertainty);
+  const evidenceGap = situation.evidenceGap === true
+    || needsInvestigation
+    || (Array.isArray(situation.unresolvedQuestions) && situation.unresolvedQuestions.length > 0)
+    || (Array.isArray(situation.conflicts) && situation.conflicts.length > 0);
+  const challengeNeeded = uncertainty >= 0.45
+    || situation.materialChange === true
+    || situation.assumptionRisk === true
+    || (Array.isArray(situation.conflicts) && situation.conflicts.length > 0);
+  const verifyNeeded = situation.verificationRequired === true
+    || situation.evidenceRequired === true
+    || Array.isArray(acceptance.criteria) && acceptance.criteria.length > 0
+    || Array.isArray(acceptance.evidenceRequired) && acceptance.evidenceRequired.length > 0
+    || executionRequired
+    || observationAvailable
+    || verificationEvidenceAvailable;
+  return Object.freeze({
+    evidenceGap,
+    challengeNeeded,
+    executionRequired: executionRequired === true,
+    observationNeeded: executionRequired === true || observationAvailable === true,
+    verificationNeeded: verifyNeeded,
+    failed: failed === true
+  });
+}
+
+/**
+ * Select the next justified stage from the same universal loop for every
+ * surface. Surface/domain code supplies capabilities; this function supplies
+ * lifecycle semantics.
+ */
+export function nextAdaptiveStage(current, options = {}) {
+  const {
+    coverage = adaptiveCoverage(options),
+    depth = 'full',
+    verified = false,
+    blocked = false,
+    verificationFailed = false,
+    materialChange = false
+  } = options;
+  if (blocked) return null;
+  if (verificationFailed || materialChange || coverage.failed) return 'replan';
+  if (verified) return 'deliver';
+
+  if (current === 'understand') return 'model-situation';
+  if (current === 'model-situation') {
+    if (coverage.evidenceGap) return 'investigate';
+    return 'reason';
+  }
+  if (current === 'investigate') {
+    return coverage.evidenceGap ? 'investigate' : 'reason';
+  }
+  if (current === 'reason') {
+    if (coverage.challengeNeeded && depth !== 'focused') return 'challenge';
+    if (coverage.executionRequired) return 'decide';
+    return coverage.verificationNeeded ? 'verify' : 'deliver';
+  }
+  if (current === 'challenge') {
+    if (coverage.evidenceGap) return 'investigate';
+    if (coverage.executionRequired) return 'decide';
+    return coverage.verificationNeeded ? 'verify' : 'deliver';
+  }
+  if (current === 'decide') return 'plan';
+  if (current === 'plan') return coverage.executionRequired ? 'execute' : (coverage.verificationNeeded ? 'verify' : 'deliver');
+  if (current === 'execute') return 'observe';
+  if (current === 'observe') return 'verify';
+  if (current === 'verify') {
+    if (coverage.evidenceGap) return 'investigate';
+    return 'deliver';
+  }
+  if (current === 'replan') {
+    return coverage.evidenceGap ? 'investigate' : 'reason';
+  }
+  if (current === 'deliver') return null;
+  return 'understand';
+}
+
 const SUBSYSTEMS = Object.freeze([
   'situation-interpreter',
   'step-manager',
