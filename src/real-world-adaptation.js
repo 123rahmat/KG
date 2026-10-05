@@ -100,6 +100,41 @@ function completionState(context = {}) {
   return 'not-started';
 }
 
+function observedTaskBehavior(context = {}) {
+  const completed = Array.isArray(context.completedSteps) ? context.completedSteps.length : 0;
+  const failed = Array.isArray(context.failedSteps) ? context.failedSteps.length : 0;
+  const total = completed + failed;
+  const completionRatio = total ? completed / total : null;
+  const current = text(typeof context.currentState === 'string'
+    ? context.currentState
+    : context.currentState?.status ?? context.currentState?.state).toLowerCase();
+  return {
+    completedCount: completed,
+    failedCount: failed,
+    completionRatio: completionRatio === null ? null : Number(completionRatio.toFixed(3)),
+    stalled: ['blocked', 'waiting', 'paused'].includes(current),
+    recoveryNeeded: failed > 0,
+    source: 'workflow-outcomes',
+    notPersonalityInference: true
+  };
+}
+
+function capacityModel(context = {}) {
+  const raw = context.capacity ?? context.user?.capacity ?? {};
+  const availability = text(context.availability ?? context.user?.availability).toLowerCase();
+  const numeric = Number(raw?.attention ?? raw?.energy ?? raw?.load);
+  const load = Number.isFinite(numeric) ? clamp01(numeric)
+    : /overloaded|busy|limited|low capacity/i.test(availability) ? 0.8
+      : /available|focused|free/i.test(availability) ? 0.2
+        : 0.5;
+  return {
+    attentionLoad: Number(load.toFixed(3)),
+    available: Number((1 - load).toFixed(3)),
+    source: Number.isFinite(numeric) || availability ? 'explicit' : 'unspecified',
+    competingCommitments: list(context.competingCommitments ?? context.busyWith ?? [])
+  };
+}
+
 function behaviorPreferences(context = {}) {
   const source = context.userBehavior ?? context.behavior ?? context.user?.behavior ?? {};
   const preferences = Array.isArray(context.preferences) ? context.preferences.join(' ') : text(context.preferences);
@@ -156,6 +191,8 @@ export function buildRealWorldTaskModel(goal, context = {}) {
   const risk = normalizedRisk(c.situation ?? c);
   const temporal = temporalState({ ...c, goal: value });
   const completion = completionState(c);
+  const observedBehavior = observedTaskBehavior(c);
+  const capacity = capacityModel(c);
   const dependencies = dependencyModel(c);
   const externalAction = EXTERNAL_ACTION_WORDS.test(value)
     || c.externalSideEffect === true
@@ -180,6 +217,7 @@ export function buildRealWorldTaskModel(goal, context = {}) {
   else if (intent === 'coordination') next = 'prepare-commitments-and-coordination';
   else if (intent === 'decision') next = 'present-options-and-consequences';
   else if (intent === 'routine') next = 'convert-to-repeatable-routine';
+  else if (capacity.attentionLoad >= 0.8 && actionability >= 0.65 && temporal.urgency < 0.8) next = 'reduce-to-smallest-next-action';
   else if (actionability >= 0.8) next = 'prepare-concrete-next-action';
   else if (completion === 'in-progress') next = 'resume-from-current-state';
 
@@ -198,6 +236,9 @@ export function buildRealWorldTaskModel(goal, context = {}) {
     blockedDependencies,
     commitments,
     resources,
+    capacity,
+    observedBehavior,
+    competingCommitments: capacity.competingCommitments,
     signals: {
       externalAction,
       physical,
@@ -207,6 +248,8 @@ export function buildRealWorldTaskModel(goal, context = {}) {
       actionability
     },
     userBehavior: behaviorPreferences(c),
+    observedBehavior,
+    capacity,
     nextAction: next,
     controls,
     observability: {
@@ -244,6 +287,8 @@ export function realWorldExecutionPolicy(model = {}) {
     autonomy: text(behavior.autonomy) || 'collaborate',
     pace: text(behavior.pace) || 'balanced',
     interruption: text(behavior.interruption) || 'situational',
+    attentionLoad: Number(m.capacity?.attentionLoad) || 0,
+    observedCompletionRatio: m.observedBehavior?.completionRatio ?? null,
     reminderPolicy: text(behavior.reminders) || 'important-only',
     externalAction: controls.includes('external-action-boundary') ? 'approval-or-existing-authority' : 'none',
     coordination: controls.includes('actor-and-commitment-tracking') ? 'track-actors-and-commitments' : 'none',
