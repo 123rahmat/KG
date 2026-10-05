@@ -385,6 +385,12 @@ export function planGoal(goal, {
   privacyConsent = {},
   need = null,
   adaptiveControl = {},
+  commitments = [],
+  dependencies = [],
+  dueAt = null,
+  startAt = null,
+  userBehavior = {},
+  now = null,
   blockedTopics = [],
   // Validated model classification (src/classifier.js), or null for keywords.
   classifierHints = null,
@@ -412,7 +418,7 @@ export function planGoal(goal, {
     user, workspace, project, files, priorWork, constraints, resources,
     requirements, successCriteria, outputs, environment, language,
     skillLevel, preferences, currentState, completedSteps, failedSteps,
-    learnedSkills,
+    learnedSkills, commitments, dependencies, dueAt, startAt, userBehavior, now, commitments, dependencies, dueAt, startAt, userBehavior, now,
     evidence, questions, dataSources, connections, connectedServices, verifiedConnections, privacyConsent, need, adaptiveControl,
     workspaceType, runtimeMode, activeSurface, jurisdiction, blockedTopics, classifierHints, modelSelection,
     // Every attached file is part of the working set; only unreadable ones
