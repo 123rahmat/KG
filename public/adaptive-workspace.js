@@ -235,12 +235,14 @@ function capabilityItems(data) {
 function designWorkspaceState() {
   state.designWorkspace ??= {
     selected: null,
+    previewing: false,
     objects: [
       { id: 'design-title', kind: 'text', x: 80, y: 70, width: 420, height: 64, text: 'Your design', fontSize: 34 },
       { id: 'design-card', kind: 'rect', x: 80, y: 170, width: 520, height: 260, text: '' }
     ]
   };
   state.designWorkspace.objects ??= [];
+  state.designWorkspace.previewing ??= false;
   return state.designWorkspace;
 }
 
@@ -324,12 +326,15 @@ function designWorkspaceProject(data) {
       button('Rectangle', () => addObject('rect'), 'small'),
       button('Circle', () => addObject('circle'), 'small'),
       button('Add assets', () => $('attachBtn')?.click(), 'small'),
-      button('Generate / edit', () => {
+      design.previewing
+        ? button('Exit preview', () => { design.previewing = false; redraw(); }, 'primary small')
+        : null,
+      !design.previewing ? button('Generate / edit', () => {
         $('goal')?.focus({ preventScroll: false });
         if (!$('goal').value.trim()) $('goal').value = 'Generate or edit the visual for this design.';
-      }, 'small'),
-      button('Preview', () => document.dispatchEvent(new CustomEvent('kindgleam:preview-design')), 'small')
-    ]),
+      }, 'small') : null,
+      !design.previewing ? button('Preview', () => { design.previewing = true; redraw(); }, 'small') : null
+    ].filter(Boolean)),
     element('div', { class: 'design-studio-layout' }, [
       element('aside', { class: 'design-assets-panel' }, [
         element('div', { class: 'design-panel-head' }, [element('strong', { text: 'Assets' }), element('span', { class: 'small muted', text: attachedImages.length + ' image' + (attachedImages.length === 1 ? '' : 's') })]),
@@ -657,6 +662,7 @@ function renderDeepWorkspaceShell() {
     return;
   }
   host.dataset.workspace = data.workspace;
+  host.dataset.previewing = data.workspace === 'design' ? String(Boolean(designWorkspaceState().previewing)) : 'false';
   host.replaceChildren(...(data.workspace === 'code' ? codeWorkspaceProject(data) : data.workspace === 'research' ? researchWorkspaceProject(data) : designWorkspaceProject(data)));
 }
 function renderCapabilityDock() {
