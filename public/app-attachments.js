@@ -263,6 +263,7 @@ export function renderChatList() {
     }
     // Each chat shows a short detail line; one waiting for the person says so.
     const [statusText, tone] = runStatus({ state: chat.state });
+    const projectName = state.projects.find(project => project.id === chat.projectId)?.name ?? '';
     list.append(element('div', { class: 'run-row' }, [element('button', {
       class: 'run-item', type: 'button', 'data-run': chat.id, title: `${chat.title} · ${timeAgo(chat.updatedAt)}`, onclick: () => openChat(chat.id)
     }, [
@@ -273,6 +274,7 @@ export function renderChatList() {
           : element('span', { text: timeAgo(chat.updatedAt) }),
         Number(chat.messages) > 1 ? element('span', { text: String(chat.messages) + ' messages' }) : null,
         CHAT_SURFACE_LABELS[chat.surface] ? element('span', { class: 'run-item-surface', text: CHAT_SURFACE_LABELS[chat.surface] }) : null,
+        projectName && !state.activeProjectId ? element('span', { class: 'run-item-project', text: projectName }) : null,
         chat.shared ? element('span', { class: 'run-item-shared', title: 'Shared with workspace' }, svgIcon('users')) : null
       ])
     ]), element('button', {
