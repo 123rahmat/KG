@@ -1,0 +1,174 @@
+/**
+ * Four surface-specific adaptive controllers over one shared intelligence kernel.
+ *
+ * Controllers specialize policy, context, tool and verification emphasis. They
+ * do not own model state, permissions, lifecycle, memory or completion.
+ */
+const text = value => String(value ?? '').trim();
+const uniq = value => [...new Set((Array.isArray(value) ? value : []).map(text).filter(Boolean))];
+const clamp01 = value => Math.min(1, Math.max(0, Number.isFinite(Number(value)) ? Number(value) : 0));
+
+const CONTROLLERS = Object.freeze({
+  'normal-chat': Object.freeze({
+    id: 'normal-chat-controller',
+    mode: 'normal-chat',
+    objective: 'Solve the immediate user need with the minimum reliable work and keep the interaction conversational.',
+    context: Object.freeze({
+      strategy: 'minimum-sufficient',
+      prioritize: Object.freeze(['current-request', 'active-conversation', 'directly-relevant-artifacts']),
+      expandWhen: Object.freeze(['missing-critical-evidence', 'material-uncertainty', 'user-requests-depth', 'tool-result-changes-situation'])
+    }),
+    tools: Object.freeze({
+      default: 'just-in-time',
+      autonomy: 'bounded-adaptive',
+      specialistRule: 'Use no specialist for simple work; add one focused role only when it can materially improve the result.'
+    }),
+    verification: Object.freeze({
+      default: 'lightweight',
+      strengthenWhen: Object.freeze(['claims-matter', 'artifact-created', 'file-transformed', 'tool-used', 'high-stakes'])
+    }),
+    success: 'The stated need is satisfied without unnecessary workspace escalation or work.',
+    roles: Object.freeze(['communicator', 'analyst', 'critic'])
+  }),
+
+  code: Object.freeze({
+    id: 'code-controller',
+    mode: 'code',
+    objective: 'Make the smallest safe software change against an exact revision and prove the resulting state.',
+    context: Object.freeze({
+      strategy: 'revision-first',
+      prioritize: Object.freeze(['affected-files', 'dependencies', 'tests', 'runtime-evidence', 'current-revision']),
+      expandWhen: Object.freeze(['dependency-uncertainty', 'shared-state-impact', 'test-failure', 'stale-revision', 'scope-change'])
+    }),
+    tools: Object.freeze({
+      default: 'targeted',
+      autonomy: 'deep-but-scoped',
+      specialistRule: 'Use architect/implementer/debugger/test/security/performance roles only when their independent value exceeds coordination cost.'
+    }),
+    verification: Object.freeze({
+      default: 'diff-plus-targeted-tests',
+      strengthenWhen: Object.freeze(['broad-change-surface', 'regression-risk', 'security-impact', 'performance-impact', 'runtime-change'])
+    }),
+    success: 'The approved software change is correct, scoped, reproducible and verified against the relevant project state.',
+    roles: Object.freeze(['architect', 'implementer', 'diagnostician', 'debugger', 'test-engineer', 'security-reviewer', 'performance-reviewer'])
+  }),
+
+  research: Object.freeze({
+    id: 'research-controller',
+    mode: 'research',
+    objective: 'Reduce the highest-impact unknowns and produce traceable conclusions from sufficient evidence.',
+    context: Object.freeze({
+      strategy: 'question-first',
+      prioritize: Object.freeze(['active-question', 'claim-gaps', 'source-quality', 'freshness', 'conflicts']),
+      expandWhen: Object.freeze(['unsupported-claim', 'source-conflict', 'freshness-required', 'scope-expands', 'high-impact-claim'])
+    }),
+    tools: Object.freeze({
+      default: 'bounded-search',
+      autonomy: 'deep-but-evidence-bounded',
+      specialistRule: 'Use independent researchers/analysts only when source diversity or disagreement materially changes confidence.'
+    }),
+    verification: Object.freeze({
+      default: 'provenance-and-claim-check',
+      strengthenWhen: Object.freeze(['conflicting-sources', 'high-impact-claim', 'current-information', 'weak-primary-source'])
+    }),
+    success: 'Material claims are sufficiently supported, traceable and honestly qualified, with unresolved conflicts visible.',
+    roles: Object.freeze(['researcher', 'analyst', 'critic', 'communicator'])
+  }),
+
+  design: Object.freeze({
+    id: 'design-controller',
+    mode: 'design',
+    objective: 'Turn a visual goal into an editable, coherent artifact while keeping layout, assets and output quality under control.',
+    context: Object.freeze({
+      strategy: 'canvas-first',
+      prioritize: Object.freeze(['design-goal', 'canvas-state', 'assets', 'dimensions', 'constraints', 'visual-references']),
+      expandWhen: Object.freeze(['composition-unclear', 'asset-mismatch', 'layout-overflow', 'brand-constraint', 'export-requirement'])
+    }),
+    tools: Object.freeze({
+      default: 'design-tools-on-demand',
+      autonomy: 'deep-but-editable',
+      specialistRule: 'Add visual roles for composition, image generation/editing, typography or review only when they materially improve the design.'
+    }),
+    verification: Object.freeze({
+      default: 'visual-layout-check',
+      strengthenWhen: Object.freeze(['print/export', 'brand-critical', 'dense-layout', 'accessibility-requirement', 'multi-asset-composition'])
+    }),
+    success: 'The visual artifact matches the requested intent and constraints, remains editable, previews correctly and exports in the requested format.',
+    roles: Object.freeze(['art-director', 'visual-designer', 'image-editor', 'layout-designer', 'visual-reviewer'])
+  })
+});
+
+export const MODE_CONTROLLER_VERSION = '1';
+
+export function controllerForSurface(surface = 'normal-chat') {
+  const key = text(surface).toLowerCase();
+  return CONTROLLERS[key] ?? CONTROLLERS['normal-chat'];
+}
+
+export function modeControllerCatalog() {
+  return Object.values(CONTROLLERS).map(controller => ({
+    id: controller.id,
+    mode: controller.mode,
+    objective: controller.objective,
+    roles: [...controller.roles]
+  }));
+}
+
+export function buildModeControllerContract({
+  surface = 'normal-chat',
+  situation = {},
+  acceptance = {},
+  pressure = 0,
+  uncertainty = 0,
+  complexity = 0,
+  risk = 'medium',
+  previousFailure = false,
+  remainingBudgetRatio = 1
+} = {}) {
+  const controller = controllerForSurface(surface);
+  const normalizedRisk = text(risk) || 'medium';
+  const highPressure = clamp01(pressure / 4) >= 0.75;
+  const highUncertainty = clamp01(uncertainty) >= 0.55;
+  const complex = clamp01(complexity) >= 0.55;
+  const limitedBudget = clamp01(remainingBudgetRatio) < 0.25;
+  const escalate = previousFailure || highUncertainty || complex || normalizedRisk === 'high' || normalizedRisk === 'critical';
+  const verified = acceptance?.verificationSatisfied === true;
+  const criteria = uniq(acceptance?.criteria ?? situation?.successCriteria);
+  return Object.freeze({
+    version: MODE_CONTROLLER_VERSION,
+    controller: controller.id,
+    mode: controller.mode,
+    objective: controller.objective,
+    decision: {
+      defaultAction: controller.mode === 'normal-chat' ? 'direct' : 'specialized-next-step',
+      broadenContext: escalate,
+      recruitSpecialist: controller.mode !== 'normal-chat' && (escalate || highPressure),
+      parallelIndependentWork: controller.mode === 'research'
+        ? !limitedBudget && !previousFailure
+        : controller.mode === 'code'
+          ? !limitedBudget && !previousFailure
+          : controller.mode === 'design'
+            ? !limitedBudget && !previousFailure
+            : false,
+      reduceEffort: limitedBudget && !highUncertainty && !previousFailure,
+      reuseVerifiedState: verified,
+      stopWhenSatisfied: true
+    },
+    context: controller.context,
+    tools: controller.tools,
+    verification: controller.verification,
+    success: {
+      statement: controller.success,
+      criteriaCount: criteria.length,
+      acceptanceAware: criteria.length > 0
+    },
+    roles: [...controller.roles],
+    situation: {
+      phase: text(situation?.phase) || 'unknown',
+      risk: normalizedRisk,
+      uncertainty: clamp01(uncertainty),
+      complexity: clamp01(complexity)
+    },
+    principle: 'Specialize the control policy, not the intelligence kernel: one shared state, one authority model, one verification contract, one model family.'
+  });
+}
