@@ -24,5 +24,5 @@ jobs:
       - run: npm ci
       - run: npm run smoke:providers
         env:
-          SMOKE_GOOGLE_API_KEY: ${{ secrets.SMOKE_GOOGLE_API_KEY }}
-          SMOKE_GOOGLE_MODEL: gemini-3.8-flash
+          SMOKE_XAI_API_KEY: ${{ secrets.SMOKE_XAI_API_KEY }}
+          SMOKE_XAI_MODEL: grok-4.7
