@@ -531,6 +531,7 @@ export async function sendMessage(text) {
       attachments,
       ...(chatSourceId ? { workspaceSourceId: chatSourceId } : {}),
       activeSurface: state.activeSurface ?? 'normal-chat',
+      creationMode: $('adaptiveCreateStrip')?.dataset.mode ?? null,
       visibility,
       privacyConsent: { modelProvider: state.chat.consent }
     }, { idempotencyKey });
