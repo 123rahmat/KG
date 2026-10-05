@@ -1417,6 +1417,9 @@ async function runCodeWorkspaceAgentPanels({
     : Math.max(1, Math.min(providerParallelCap, Math.floor(Math.max(1, Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent) / (AGENT_MAX_OUTPUT_TOKENS * 2))));
 
   let topologyRevision = 0;
+  // Keep a compact run-level telemetry record as well as per-wave telemetry so
+  // observability remains stable for callers while the scheduler adapts.
+  const parallelTelemetry = [];
   while (true) {
       const ready = subsystemPlan.subsystems
         .filter(item => subsystemState.get(item.id)?.status === 'pending')
@@ -2063,6 +2066,7 @@ async function runCodeWorkspaceAgentPanels({
     decision: finalDecision,
     allocation: finalAllocation,
     waves,
+    parallelTelemetry,
     agents: agentStates,
     findings: allFindings,
     arbiter,
