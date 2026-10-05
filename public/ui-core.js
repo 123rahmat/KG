@@ -34,6 +34,9 @@ export const state = {
   attachments: [],
   attachmentScope: null,
   conversations: [],
+  // Projects organize many chats without merging their private context.
+  projects: [],
+  activeProjectId: null,
   settings: null,
   models: null,
   voice: { recognition: null, listening: false, baseText: '' },
