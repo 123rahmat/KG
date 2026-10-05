@@ -19,7 +19,7 @@ const modelReply = (textValue, usage = { inputTokens: 10, outputTokens: 5 }, gro
     }
   });
 
-const GOOGLE = { AI_PROVIDER: 'google', AI_API_KEY: 'test-key', AI_MODEL: 'gemini-3.8-flash' };
+const GROK = { AI_PROVIDER: 'xai', AI_API_KEY: 'test-key', AI_MODEL: 'grok-4.7' };
 const requestFrom = body => {
   const system = body.systemInstruction?.parts?.filter(part => typeof part?.text === 'string').map(part => part.text).join('\n') ?? '';
   const contents = Array.isArray(body.contents) ? body.contents : [];
@@ -235,7 +235,7 @@ test('execution drives the model and records what it returned', () =>
     assert.equal(run.adaptation.classification.source, 'model');
     assert.equal(executed.body.run.tokensUsed, 4 + 15);
   }, {
-    env: GOOGLE,
+    env: GROK,
     fetchImpl: async (_url, options) => isClassification(options)
       ? modelReply(JSON.stringify(CHAT_CLASSIFICATION), { input_tokens: 3, output_tokens: 1 })
       : modelReply('a real answer')
@@ -253,7 +253,7 @@ test('a configured model does not receive run content without consent', () =>
     assert.equal(executed.body.execution.status, 'consent-required');
     assert.equal(executed.body.run.tasks.find(task => task.id === 'respond').status, 'pending');
   }, {
-    env: GOOGLE,
+    env: GROK,
     fetchImpl: async () => { throw new Error('the provider must not be called without consent'); }
   }));
 
@@ -396,7 +396,7 @@ test('research searches the web with the AI provider, reads what it found, and k
     // Only the search itself used the provider's web search tool.
     assert.deepEqual(calls.map(body => Boolean(body.tools)), [false, false, true, false]);
   }, {
-    env: GOOGLE,
+    env: GROK,
     fetchImpl: async (_url, options) => {
       const body = JSON.parse(options.body);
       calls.push(body);
@@ -472,7 +472,7 @@ test('verifying researched work checks its facts on the web, and an unsupported 
     assert.equal(verdict.grounding.checkedAgainstWeb, true);
     assert.deepEqual(verdict.grounding.sources.map(item => item.url), ['https://example.com/source', 'https://journal.example/study']);
   }, {
-    env: GOOGLE,
+    env: GROK,
     fetchImpl: async (_url, options) => {
       const body = JSON.parse(options.body);
       const { contents, request } = requestFrom(body);
@@ -1026,9 +1026,9 @@ test('understand can discover hidden novelty and expand the server-owned graph',
     assert.equal(afterApproval.body.tasks.find(task => task.id === afterApproval.body.next).type, 'investigate');
   }, {
     env: {
-      AI_PROVIDER: 'google',
+      AI_PROVIDER: 'xai',
       AI_API_KEY: 'test-key',
-      AI_MODEL: 'gemini-3.8-flash'
+      AI_MODEL: 'grok-4.7'
     },
     fetchImpl: async () => modelReply(JSON.stringify({
       needsInvestigation: true,
@@ -1213,7 +1213,7 @@ test('a declared data-class allow-list still fails closed for model reasoning', 
     assert.equal(executed.body.code, 'situation-governance-blocked');
     assert.match(executed.body.error, /does not allow a required data class/);
   }, {
-    env: GOOGLE,
+    env: GROK,
     fetchImpl: async () => { throw new Error('the provider must not be called when policy denies the data'); }
   }));
 
@@ -1231,7 +1231,7 @@ test('a declined model answer leaves the task pending and records nothing', () =
     assert.equal(answered.status, 'pending');
     assert.equal(answered.evidence, null);
   }, {
-    env: { AI_PROVIDER: 'google', AI_API_KEY: 'test-key' },
+    env: { AI_PROVIDER: 'xai', AI_API_KEY: 'test-key' },
     fetchImpl: async () => jsonResponse({
       promptFeedback: { blockReason: 'SAFETY' },
       candidates: [],
@@ -1260,7 +1260,7 @@ test('with consent, the model classification replaces misleading keywords', () =
     assert.ok(!modelPlan.body.capabilities.required.includes('capability-discovery'));
     assert.deepEqual(modelPlan.body.adaptation.surfaces, ['chat']);
   }, {
-    env: GOOGLE,
+    env: GROK,
     fetchImpl: async (_url, options) => {
       assert.ok(isClassification(options), 'only the classifier may be called while planning');
       return modelReply(JSON.stringify(CHAT_CLASSIFICATION));
@@ -1278,7 +1278,7 @@ test('the model cannot lower a risk the keyword rules detected', () =>
     assert.equal(plan.body.adaptation.highImpactContext, true);
     assert.equal(plan.body.execution.approvalRequired, true);
   }, {
-    env: GOOGLE,
+    env: GROK,
     fetchImpl: async () => modelReply(JSON.stringify(CHAT_CLASSIFICATION))
   }));
 
@@ -1292,7 +1292,7 @@ test('malformed or partial classifier output falls back to keywords', () =>
     assert.equal(plan.body.adaptation.classification.reason, 'model-output-invalid');
     assert.equal(plan.body.intent.kind, 'chat');
   }, {
-    env: GOOGLE,
+    env: GROK,
     // Unknown action and a missing signal: rejected as a whole, not trusted in part.
     fetchImpl: async () => modelReply(JSON.stringify({ ...CHAT_CLASSIFICATION, actions: ['answer', 'launch-missiles'] }))
   }));
@@ -1308,7 +1308,7 @@ test('governance that denies the model keeps classification on keywords', () =>
     assert.equal(plan.body.adaptation.classification.source, 'keywords');
     assert.equal(plan.body.adaptation.classification.reason, 'model-processing-not-permitted');
   }, {
-    env: GOOGLE,
+    env: GROK,
     fetchImpl: async () => { throw new Error('a denied model must not be called'); }
   }));
 
@@ -1326,7 +1326,7 @@ test('a direct question is answered and verified in two steps, then completes', 
     assert.equal(verified.body.run.state, 'complete');
     assert.equal(verified.body.run.tasks.find(task => task.id === 'respond').evidence.text, 'A function that calls itself.');
   }, {
-    env: GOOGLE,
+    env: GROK,
     fetchImpl: async (_url, options) => {
       if (isClassification(options)) return modelReply(JSON.stringify(CHAT_CLASSIFICATION));
       const request = requestFrom(JSON.parse(options.body)).request;
