@@ -183,14 +183,21 @@ export class MemoryStore {
              ORDER BY updated_at DESC LIMIT $4`,
           [scope.workspaceId, scope.principalId, project || null, MAX_MEMORIES]
         )).rows
-      : id
+      : project
         ? (await this.pool.query(
             `SELECT * FROM memories
-               WHERE workspace_id = $1 AND principal_id = $2 AND project_id = $3 AND conversation_id = $4
-               ORDER BY updated_at DESC LIMIT $5`,
-            [scope.workspaceId, scope.principalId, project || null, id, MAX_MEMORIES]
+               WHERE workspace_id = $1 AND principal_id = $2 AND project_id = $3
+               ORDER BY updated_at DESC LIMIT $4`,
+            [scope.workspaceId, scope.principalId, project, MAX_MEMORIES]
           )).rows
-        : [];
+        : id
+          ? (await this.pool.query(
+              `SELECT * FROM memories
+                 WHERE workspace_id = $1 AND principal_id = $2 AND conversation_id = $3
+                 ORDER BY updated_at DESC LIMIT $4`,
+              [scope.workspaceId, scope.principalId, id, MAX_MEMORIES]
+            )).rows
+          : [];
     const matches = rows.map(row => shape(row, this.encryptionKey)).filter(memory => {
       const have = terms(memory.content);
       return [...wanted].every(word => have.has(word));
