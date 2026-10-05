@@ -394,6 +394,7 @@ export function planGoal(goal, {
   availability = null,
   competingCommitments = [],
   now = null,
+  creationMode = '',
   blockedTopics = [],
   // Validated model classification (src/classifier.js), or null for keywords.
   classifierHints = null,
@@ -421,7 +422,7 @@ export function planGoal(goal, {
     user, workspace, project, files, priorWork, constraints, resources,
     requirements, successCriteria, outputs, environment, language,
     skillLevel, preferences, currentState, completedSteps, failedSteps,
-    learnedSkills, commitments, dependencies, dueAt, startAt, userBehavior, capacity, availability, competingCommitments, now,
+    learnedSkills, commitments, dependencies, dueAt, startAt, userBehavior, capacity, availability, competingCommitments, now, creationMode,
     evidence, questions, dataSources, connections, connectedServices, verifiedConnections, privacyConsent, need, adaptiveControl,
     workspaceType, runtimeMode, activeSurface, jurisdiction, blockedTopics, classifierHints, modelSelection,
     // Every attached file is part of the working set; only unreadable ones
