@@ -167,9 +167,13 @@ export class RunActions {
     }
     let done;
     try {
+      const storedResult = result && typeof result === 'object' ? { ...result } : result;
+      // Generated/attached images are binary payloads for the immediate caller;
+      // the durable artifact reference is enough for the action history/UI.
+      if (storedResult && typeof storedResult === 'object') delete storedResult.showImage;
       const { rows } = await this.pool.query(
         'UPDATE run_actions SET status = $2, result = $3::jsonb, lease_until = NULL WHERE id = $1 AND status = \'running\' AND decided_by = $4 AND lease_until > now() RETURNING *',
-        [actionId, status, JSON.stringify(result ?? {}), principal.id]
+        [actionId, status, JSON.stringify(storedResult ?? {}), principal.id]
       );
       done = rows[0] ?? null;
     } finally {
