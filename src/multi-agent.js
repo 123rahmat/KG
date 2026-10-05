@@ -1417,9 +1417,6 @@ async function runCodeWorkspaceAgentPanels({
     : Math.max(1, Math.min(providerParallelCap, Math.floor(Math.max(1, Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent) / (AGENT_MAX_OUTPUT_TOKENS * 2))));
 
   let topologyRevision = 0;
-  // Persisted across adaptive scheduler waves so telemetry reflects the full
-  // panel run and remains available to the final server-owned run result.
-  const parallelTelemetry = [];
   while (true) {
       const ready = subsystemPlan.subsystems
         .filter(item => subsystemState.get(item.id)?.status === 'pending')
@@ -2000,6 +1997,15 @@ async function runCodeWorkspaceAgentPanels({
     panelMode: singlePanel ? 'normal-chat-zip-single-panel' : 'subsystem-panel-orchestration',
     panelScope: singlePanel ? 'entire-attached-zip-project' : null,
     panelEngine: 'unified-adaptive-code-panel-v1',
+    parallelTelemetry: waves.map(wave => ({
+      wave: wave.index,
+      jobs: Array.isArray(wave.roles) ? wave.roles.length : 0,
+      parallel: wave.parallel === true,
+      nextMaxParallel: wave.concurrency?.next ?? wave.concurrency?.current ?? null,
+      averageLatencyMs: Math.round(Number(wave.concurrency?.averageLatencyMs) || 0),
+      errorRate: Number(wave.concurrency?.errorRate ?? 0),
+      reason: wave.concurrency?.reason ?? 'observed-wave'
+    })),
     taskPressureMonitor: {
       agent: pressureMonitor.agent,
       mode: pressureMonitor.mode,
@@ -2543,7 +2549,6 @@ export async function runAdaptiveAgentPanel({
     decision: finalDecision,
     allocation: finalAllocation,
     waves,
-    parallelTelemetry,
     agents: agentStates,
     findings,
     arbiter,
