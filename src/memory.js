@@ -59,6 +59,7 @@ const shape = (row, encryptionKey) => {
   id: decoded.id, content: decoded.content, kind: decoded.kind,
   sourceRunId: row.source_run_id ?? null,
   conversationId: row.conversation_id ?? null,
+  projectId: row.project_id ?? null,
   createdAt: decoded.created_at, updatedAt: decoded.updated_at, lastUsedAt: decoded.last_used_at ?? null
   };
 };
@@ -169,10 +170,11 @@ export class MemoryStore {
   }
 
   /** Forget the memories that mention every meaningful word of `about`. */
-  async forgetMatching(scope, about, { conversationId = null, crossChat = false } = {}) {
+  async forgetMatching(scope, about, { conversationId = null, projectId = null, crossChat = false } = {}) {
     const wanted = terms(about);
     if (!wanted.size) return [];
     const id = text(conversationId);
+    const project = text(projectId);
     const rows = crossChat
       ? (await this.pool.query(
           `SELECT * FROM memories
@@ -184,7 +186,7 @@ export class MemoryStore {
         ? (await this.pool.query(
             `SELECT * FROM memories
                WHERE workspace_id = $1 AND principal_id = $2 AND project_id = $3 AND conversation_id = $4
-               ORDER BY updated_at DESC LIMIT $4`,
+               ORDER BY updated_at DESC LIMIT $5`,
             [scope.workspaceId, scope.principalId, project || null, id, MAX_MEMORIES]
           )).rows
         : [];
@@ -210,12 +212,12 @@ export class MemoryStore {
     return rowCount;
   }
 
-  async clearConversation(scope, conversationId) {
+  async clearConversation(scope, conversationId, projectId = null) {
     const id = text(conversationId);
     if (!id) return 0;
     const { rowCount } = await this.pool.query(
-      'DELETE FROM memories WHERE workspace_id = $1 AND principal_id = $2 AND conversation_id = $3',
-      [scope.workspaceId, scope.principalId, id]
+      'DELETE FROM memories WHERE workspace_id = $1 AND principal_id = $2 AND conversation_id = $3 AND ($4::text IS NULL OR project_id = $4)',
+      [scope.workspaceId, scope.principalId, id, text(projectId) || null]
     );
     return rowCount;
   }
@@ -231,9 +233,11 @@ export class MemoryStore {
     const local = id
       ? (await this.pool.query(
           `SELECT * FROM memories
-             WHERE workspace_id = $1 AND principal_id = $2 AND conversation_id = $3
-             ORDER BY updated_at DESC LIMIT $4`,
-          [scope.workspaceId, scope.principalId, id, MAX_MEMORIES]
+             WHERE workspace_id = $1 AND principal_id = $2
+               AND conversation_id = $3
+               AND ($4::text IS NULL OR project_id = $4)
+             ORDER BY updated_at DESC LIMIT $5`,
+          [scope.workspaceId, scope.principalId, id, project || null, MAX_MEMORIES]
         )).rows.map(row => shape(row, this.encryptionKey))
       : [];
     // This chat's own memories always come first; other chats add to them
