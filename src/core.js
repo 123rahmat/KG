@@ -419,26 +419,6 @@ export function planGoal(goal, {
     };
   }
 
-  const universalContext = buildUniversalContextContract({
-    goal: value,
-    conversationId: conversation?.id ?? conversationId ?? null,
-    projectId: project?.id ?? project?.projectId ?? null,
-    workspaceId: workspace?.id ?? workspace?.workspaceId ?? null,
-    principalId: user?.id ?? user?.principalId ?? null,
-    organizationId: workspace?.organizationId ?? workspace?.organization_id ?? null,
-    crossChatMemory: user?.crossChatMemory === true || user?.settings?.crossChatMemory === true,
-    requestedSkills: Array.isArray(preferences?.skills) ? preferences.skills : [],
-    candidateSkills: [],
-    allowedSkills: Array.isArray(adaptiveControl?.includeSkills) ? adaptiveControl.includeSkills : [],
-    deniedSkills: Array.isArray(adaptiveControl?.excludeSkills) ? adaptiveControl.excludeSkills : [],
-    maxSkills: 6,
-    maxSkillCost: Number(adaptiveControl?.budget?.maxSkillCost ?? 12),
-    risk: analysis?.flags?.highImpact ? 'high' : analysis?.flags?.physical ? 'medium' : 'ordinary',
-    verificationRequired: false,
-    complexity: Number(project ? 0.45 : 0),
-    uncertainty: Number(analysis?.unknownSituation ? 0.7 : 0)
-  });
-
   const situationContext = {
     user, workspace, project, files, priorWork, constraints, resources,
     requirements, successCriteria, outputs, environment, language,
@@ -456,6 +436,26 @@ export function planGoal(goal, {
   };
   const policyDecision = evaluatePolicy(policies);
   const analysis = inspectGoal(value, situationContext);
+
+  const universalContext = buildUniversalContextContract({
+    goal: value,
+    conversationId: conversation?.id ?? null,
+    projectId: project?.id ?? project?.projectId ?? null,
+    workspaceId: workspace?.id ?? workspace?.workspaceId ?? null,
+    principalId: user?.id ?? user?.principalId ?? null,
+    organizationId: workspace?.organizationId ?? workspace?.organization_id ?? null,
+    crossChatMemory: user?.crossChatMemory === true || user?.settings?.crossChatMemory === true,
+    requestedSkills: Array.isArray(preferences?.skills) ? preferences.skills : [],
+    candidateSkills: [],
+    allowedSkills: Array.isArray(adaptiveControl?.includeSkills) ? adaptiveControl.includeSkills : [],
+    deniedSkills: Array.isArray(adaptiveControl?.excludeSkills) ? adaptiveControl.excludeSkills : [],
+    maxSkills: 6,
+    maxSkillCost: Number(adaptiveControl?.budget?.maxSkillCost ?? 12),
+    risk: analysis?.flags?.highImpact ? 'high' : analysis?.flags?.physical ? 'medium' : 'ordinary',
+    verificationRequired: false,
+    complexity: Number(project ? 0.45 : 0),
+    uncertainty: Number(analysis?.unknownSituation ? 0.7 : 0)
+  });
   const unifiedWorkContext = buildUnifiedWorkContext({
     goal: value,
     project,
