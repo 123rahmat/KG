@@ -690,8 +690,45 @@ export class RunStore {
   }
 
   /** One entry per conversation, newest first, for the chat list. */
-  async conversations(scope, { limit } = {}) {
+  async conversations(scope, { limit, projectId = null } = {}) {
     const size = Math.min(Math.max(Number(limit) || 30, 1), MAX_PAGE);
+    const filterProjectId = text(projectId) || null;
+    if (filterProjectId) {
+      const { rows } = await this.pool.query(
+        `SELECT conversation_id, conversation_id IS NULL AS single,
+                first_value(goal) OVER (
+                  PARTITION BY COALESCE(conversation_id, id::text)
+                  ORDER BY created_at ASC, id ASC
+                ) AS title,
+                count(*) OVER (
+                  PARTITION BY COALESCE(conversation_id, id::text)
+                )::int AS messages,
+                visibility, state, surface, project_id, updated_at, id
+           FROM runs
+          WHERE workspace_id = $1
+            AND (visibility = 'workspace' OR principal_id = $2)
+            AND project_id = $3
+          ORDER BY updated_at DESC, id DESC
+          LIMIT $4`,
+        [scope.workspaceId, scope.principalId, filterProjectId, size]
+      );
+      const latest = new Map();
+      for (const row of rows) {
+        const id = row.conversation_id ?? row.id;
+        if (!latest.has(id)) latest.set(id, row);
+      }
+      return [...latest.values()].map(row => ({
+        id: row.conversation_id ?? row.id,
+        single: row.single,
+        title: row.title,
+        messages: row.messages,
+        shared: row.visibility === 'workspace',
+        state: row.state,
+        surface: row.surface || 'normal-chat',
+        projectId: row.project_id ?? null,
+        updatedAt: row.updated_at
+      }));
+    }
     const params = [scope.workspaceId, scope.principalId, size];
     // Bounded path: read the most recently updated visible runs through
     // runs_recent_idx, keep the newest `size` conversations among them, then
