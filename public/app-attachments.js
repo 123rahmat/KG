@@ -201,7 +201,7 @@ export function growComposer() {
 
 export function newChat() {
   if ($('tab-runs').hidden) selectTab('runs');
-  state.chat = { id: null, runs: [], pending: null, consent: state.settings.consent, workspaceSourceId: null };
+  state.chat = { id: null, runs: [], pending: null, consent: state.settings.consent, workspaceSourceId: null, projectId: state.activeProjectId ?? null };
   state.workspaceSourceId = null;
   state.workspaceSource = null;
   if (state.usage) state.usage.context = null;
@@ -242,7 +242,10 @@ const CHAT_SURFACE_LABELS = Object.freeze({
 export function renderChatList() {
   const list = $('runList');
   const query = $('chatSearch').value.trim().toLowerCase();
-  const chats = state.conversations.filter(chat => !query || String(chat.title).toLowerCase().includes(query));
+  const chats = state.conversations.filter(chat =>
+    (!state.activeProjectId || chat.projectId === state.activeProjectId)
+    && (!query || String(chat.title).toLowerCase().includes(query))
+  );
   list.replaceChildren();
   if (!chats.length) {
     list.append(element('div', { class: 'empty small', text: query ? 'No chats match your search.' : 'No chats yet.' }));
@@ -293,11 +296,14 @@ export async function openChat(id) {
     const { runs } = await api('GET', `/api/conversations/${encodeURIComponent(id)}`);
     const latestSource = runs.at(-1)?.adaptation?.attachments?.find(item => item?.sourceId)
       ?? runs.at(-1)?.adaptation?.attachments?.find(item => item?.sourceKind);
+    const chatProjectId = runs.at(-1)?.projectId ?? null;
+    state.activeProjectId = chatProjectId;
     state.chat = {
       id,
       runs,
       pending: null,
       workspaceSourceId: runs.at(-1)?.adaptation?.workspaceSourceId ?? latestSource?.sourceId ?? null,
+      projectId: chatProjectId,
       consent: runs.some(run => run.adaptation?.privacy?.consent?.modelProvider === true)
     };
     if (state.chat.workspaceSourceId) {
@@ -394,6 +400,7 @@ async function createRunFromQueuedItem(item) {
   return api('POST', '/api/runs', {
     goal: item.goal,
     conversationId: item.conversationId,
+    projectId: item.projectId ?? state.activeProjectId ?? null,
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     ...personalContext(),
     adaptiveControl: item.adaptiveControl ?? personalContext().adaptiveControl,
@@ -414,6 +421,7 @@ async function queueOfflineMessage(goal, files, visibility, idempotencyKey = cry
     goal,
     conversationId: state.chat.id,
     workspaceId: state.workspaceId,
+    projectId: state.activeProjectId ?? null,
     visibility,
     workspaceSourceId: state.chat.workspaceSourceId ?? state.workspaceSourceId ?? null,
     activeSurface: state.activeSurface ?? 'normal-chat',
@@ -534,6 +542,7 @@ export async function sendMessage(text) {
     const run = await api('POST', '/api/runs', {
       goal,
       conversationId: state.chat.id,
+      projectId: state.activeProjectId ?? state.chat.projectId ?? null,
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       ...personalContext(),
       attachments,
@@ -543,7 +552,7 @@ export async function sendMessage(text) {
       visibility,
       privacyConsent: { modelProvider: state.chat.consent }
     }, { idempotencyKey });
-    state.chat.pending = null;
+    state.chat.projectId = run.projectId ?? state.activeProjectId ?? null;
     state.attachments = [];
     state.attachmentScope = null;
     releaseAllPreviews();
