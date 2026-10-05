@@ -50,10 +50,34 @@ export function grokFromStandIn(standIn) {
       ...(Array.isArray(body.tools) ? { tools: body.tools } : {}),
       ...(body.max_output_tokens ? { max_output_tokens: body.max_output_tokens } : {})
     };
-    return standIn('https://api.openai.com/v1/responses', { ...options, body: JSON.stringify(legacy) });
+    const response = await standIn('https://api.openai.com/v1/responses', {
+      ...options,
+      body: JSON.stringify(legacy)
+    });
+    if (!response?.ok) return response;
+    const data = await response.json();
+
+    // Existing fixtures may return the older provider-shaped candidate object.
+    // Convert that fixture at the boundary into the xAI Responses contract.
+    if (Array.isArray(data?.candidates)) {
+      const parts = data.candidates.flatMap(candidate => candidate?.content?.parts ?? []);
+      const answer = parts.filter(part => typeof part?.text === 'string').map(part => part.text).join('');
+      const grounding = data.candidates.flatMap(candidate => candidate?.groundingMetadata?.groundingChunks ?? [])
+        .map(chunk => chunk?.web).filter(item => item?.uri);
+      const usage = data.usageMetadata ?? {};
+      return new Response(JSON.stringify({
+        status: 'completed',
+        output: [{ type: 'message', content: answer ? [{ type: 'output_text', text: answer }] : [] }],
+        ...(grounding.length ? { output_sources: grounding.map(item => ({ url: item.uri, title: item.title })) } : {}),
+        usage: {
+          input_tokens: Number(usage.promptTokenCount ?? 0),
+          output_tokens: Number(usage.candidatesTokenCount ?? 0)
+        }
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    return new Response(JSON.stringify(data), { status: 200, headers: { 'content-type': 'application/json' } });
   };
 }
-
 
 export async function withServer(run, { env = {}, fetchImpl } = {}) {
   // A test written with a stand-in for another provider can still run against Gemini.
