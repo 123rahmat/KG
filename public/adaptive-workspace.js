@@ -848,6 +848,16 @@ function codeWorkspaceProject(data) {
   const overlay = Array.isArray(run?.adaptation?.projectOverlay) ? run.adaptation.projectOverlay.length : 0;
   const task = currentTask(run);
   const tests = (run?.tasks ?? []).filter(item => item.type === 'code' || /test|verif/i.test(text(item?.id) + ' ' + text(item?.metadata?.title)));
+  const lastChange = run?.adaptation?.unifiedWorkContext?.lastChange ?? {};
+  const changedFiles = [
+    ...(Array.isArray(lastChange?.files) ? lastChange.files : []),
+    ...(Array.isArray(lastChange?.deleted) ? lastChange.deleted : [])
+  ].filter(Boolean).slice(0, 12);
+  const verificationRows = tests.slice(-6).map(item => ({
+    title: taskLabel(item),
+    status: item.status || 'pending',
+    summary: text(item.summary || item.evidence?.text || '').slice(0, 180)
+  }));
   return [
     element('div', { class: 'deep-workspace-head code' }, [
       element('div', { class: 'deep-workspace-identity' }, [
@@ -891,6 +901,31 @@ function codeWorkspaceProject(data) {
           badge('Write-back', source?.permissions?.write === true ? 'approval' : 'read-only'),
           badge('Agents', 'adaptive')
         ])
+      ])
+    ]),
+    element('div', { class: 'deep-workspace-section-grid' }, [
+      element('section', { class: 'deep-workspace-card detail-card' }, [
+        element('div', { class: 'deep-workspace-card-head' }, [
+          element('span', { class: 'mono', text: 'CHANGE SURFACE' }),
+          element('span', { class: 'small muted', text: changedFiles.length ? changedFiles.length + ' paths' : 'no recorded change yet' })
+        ]),
+        changedFiles.length
+          ? element('div', { class: 'workspace-detail-list' }, changedFiles.map(path => element('code', { class: 'workspace-detail-row', text: path })))
+          : element('p', { class: 'small muted', text: 'The workspace will show affected paths after a code change is recorded.' })
+      ]),
+      element('section', { class: 'deep-workspace-card detail-card' }, [
+        element('div', { class: 'deep-workspace-card-head' }, [
+          element('span', { class: 'mono', text: 'VERIFICATION' }),
+          element('span', { class: 'small muted', text: verificationRows.length + ' checks' })
+        ]),
+        verificationRows.length
+          ? element('div', { class: 'workspace-detail-list' }, verificationRows.map(item =>
+              element('div', { class: 'workspace-detail-row' }, [
+                element('strong', { text: item.title }),
+                element('span', { class: 'muted small', text: item.status + (item.summary ? ' · ' + item.summary : '') })
+              ])
+            ))
+          : element('p', { class: 'small muted', text: 'Testing expands when the code controller determines the change surface needs it.' })
       ])
     ]),
     element('div', { class: 'deep-workspace-actions' }, [
