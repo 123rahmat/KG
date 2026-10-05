@@ -2937,4 +2937,70 @@ export const MIGRATIONS = [
     `
   }
 
+
+  ,{
+    version: 72,
+    name: 'project-visibility-and-write-rls',
+    sql: `
+      DROP POLICY IF EXISTS project_scope_policy ON projects;
+      DROP POLICY IF EXISTS project_select_policy ON projects;
+      DROP POLICY IF EXISTS project_insert_policy ON projects;
+      DROP POLICY IF EXISTS project_update_policy ON projects;
+      DROP POLICY IF EXISTS project_delete_policy ON projects;
+
+      CREATE POLICY project_select_policy ON projects
+        FOR SELECT
+        USING (
+          projects.workspace_id = current_setting('app.workspace_id', true)
+          AND (
+            projects.visibility = 'workspace'
+            OR projects.principal_id = current_setting('app.principal_id', true)
+          )
+        );
+
+      CREATE POLICY project_insert_policy ON projects
+        FOR INSERT
+        WITH CHECK (
+          projects.workspace_id = current_setting('app.workspace_id', true)
+          AND projects.principal_id = current_setting('app.principal_id', true)
+        );
+
+      CREATE POLICY project_update_policy ON projects
+        FOR UPDATE
+        USING (
+          projects.workspace_id = current_setting('app.workspace_id', true)
+          AND (
+            projects.principal_id = current_setting('app.principal_id', true)
+            OR (
+              projects.visibility = 'workspace'
+              AND current_setting('app.role', true) IN ('editor','admin','job-worker','service')
+            )
+          )
+        )
+        WITH CHECK (
+          projects.workspace_id = current_setting('app.workspace_id', true)
+          AND (
+            projects.principal_id = current_setting('app.principal_id', true)
+            OR (
+              projects.visibility = 'workspace'
+              AND current_setting('app.role', true) IN ('editor','admin','job-worker','service')
+            )
+          )
+        );
+
+      CREATE POLICY project_delete_policy ON projects
+        FOR DELETE
+        USING (
+          projects.workspace_id = current_setting('app.workspace_id', true)
+          AND (
+            projects.principal_id = current_setting('app.principal_id', true)
+            OR (
+              projects.visibility = 'workspace'
+              AND current_setting('app.role', true) IN ('editor','admin','job-worker','service')
+            )
+          )
+        );
+    `
+  }
+
 ];
