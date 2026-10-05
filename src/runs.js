@@ -156,13 +156,13 @@ const MAX_PAGE = 100;
 const RECENT_WINDOW_FACTOR = 20;
 // The complete answer, used when the recent window cannot prove the page.
 const FULL_CONVERSATIONS_SQL = `
-  SELECT conversation_id, single, title, messages, visibility, state, updated_at
+  SELECT conversation_id, single, title, messages, visibility, state, surface, updated_at
     FROM (
       SELECT COALESCE(conversation_id, id::text) AS conversation_id,
              conversation_id IS NULL AS single,
              first_value(goal) OVER (PARTITION BY COALESCE(conversation_id, id::text) ORDER BY created_at ASC, id ASC) AS title,
              count(*) OVER (PARTITION BY COALESCE(conversation_id, id::text))::int AS messages,
-             visibility, state, updated_at, id,
+             visibility, state, surface, updated_at, id,
              row_number() OVER (PARTITION BY COALESCE(conversation_id, id::text) ORDER BY updated_at DESC, id DESC) AS latest
         FROM runs
        WHERE workspace_id = $1
@@ -690,6 +690,7 @@ export class RunStore {
       messages: row.messages,
       shared: row.visibility === 'workspace',
       state: row.state,
+      surface: row.surface || 'normal-chat',
       updatedAt: row.updated_at
     }));
   }
@@ -711,12 +712,12 @@ export class RunStore {
           LIMIT $3
        )
        SELECT page.conversation_id, latest.single, first.goal AS title, size.messages,
-              latest.visibility, latest.state, latest.updated_at,
+              latest.visibility, latest.state, latest.surface, latest.updated_at,
               counted.scanned, counted.distinct_conversations
          FROM page
         CROSS JOIN counted
         CROSS JOIN LATERAL (
-          SELECT r.conversation_id IS NULL AS single, r.visibility, r.state, r.updated_at, r.id
+          SELECT r.conversation_id IS NULL AS single, r.visibility, r.state, r.surface, r.updated_at, r.id
             FROM runs r
            WHERE r.workspace_id = $1 AND (r.visibility = 'workspace' OR r.principal_id = $2)
              AND (r.conversation_id = page.conversation_id OR (r.conversation_id IS NULL AND r.id::text = page.conversation_id))
