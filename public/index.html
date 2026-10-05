@@ -583,6 +583,18 @@
       </div>
       <div class="workspace-capability-list" id="workspaceCapabilityList"></div>
     </section>
+
+    <section class="project-hub" id="projectHub" aria-label="Project Hub">
+      <div class="project-hub-head">
+        <div class="project-hub-title"><strong>Projects</strong><span class="small muted" id="projectSummary">Loading projects…</span></div>
+        <div class="project-hub-actions">
+          <button type="button" class="icon-btn" id="newProject" aria-label="New project" title="New project">+</button>
+          <button type="button" class="icon-btn" id="projectManage" aria-label="Manage projects" title="Manage projects">⚙</button>
+        </div>
+      </div>
+      <select id="projectSelect" aria-label="Current project"><option value="">All projects</option></select>
+    </section>
+
     <button class="rail-mini-only rail-chats" id="railChats" title="Chats" aria-label="Show chats"><svg class="i" aria-hidden="true"><use href="#i-chat"/></svg></button>
     <div class="rail-section">
       <div class="rail-heading">
@@ -1099,6 +1111,52 @@
       </div>
     </form>
   </div>
+</dialog>
+
+<dialog class="project-dialog" id="projectDialog" aria-labelledby="projectDialogTitle">
+  <form class="project-dialog-shell" id="projectForm" novalidate>
+    <header class="project-dialog-head">
+      <div>
+        <div class="settings-eyebrow">Project Hub</div>
+        <h2 id="projectDialogTitle">Create and manage projects</h2>
+        <p class="muted small">Group related chats and workspaces without merging their private context.</p>
+      </div>
+      <button class="icon-btn" id="projectDialogClose" type="button" aria-label="Close" title="Close">×</button>
+    </header>
+    <section class="project-create-card">
+      <div class="project-section-head"><h3>New project</h3><span class="small muted">A project is an organization boundary, not another AI brain.</span></div>
+      <label>Name
+        <input id="projectName" type="text" maxlength="120" autocomplete="off" placeholder="e.g. Product website">
+      </label>
+      <label>Description
+        <textarea id="projectDescription" rows="2" maxlength="500" placeholder="What are you working toward?"></textarea>
+      </label>
+      <div class="project-create-grid">
+        <label>Default workspace
+          <select id="projectSurface">
+            <option value="normal-chat">Normal Chat</option>
+            <option value="code">Code Workspace</option>
+            <option value="research">Research Workspace</option>
+            <option value="design">Design Workspace</option>
+          </select>
+        </label>
+        <label class="checkbox project-share-check">
+          <input id="projectShared" type="checkbox">
+          <span>Share project with this workspace</span>
+        </label>
+      </div>
+      <div class="row project-create-actions">
+        <button type="submit" class="primary" id="projectCreate">Create project</button>
+        <span id="projectNotice" class="small" aria-live="polite"></span>
+      </div>
+    </section>
+    <section class="project-manage-card">
+      <div class="project-section-head">
+        <div><h3>Your projects</h3><p class="muted small">Archive keeps existing chats and artifacts.</p></div>
+      </div>
+      <div id="projectManageList" class="project-manage-list"></div>
+    </section>
+  </form>
 </dialog>
 
 <dialog class="artifact-preview-dialog" id="artifactPreviewDialog" aria-labelledby="artifactPreviewTitle">
