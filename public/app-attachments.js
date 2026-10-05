@@ -552,6 +552,7 @@ export async function sendMessage(text) {
       visibility,
       privacyConsent: { modelProvider: state.chat.consent }
     }, { idempotencyKey });
+    state.chat.pending = null;
     state.chat.projectId = run.projectId ?? state.activeProjectId ?? null;
     state.attachments = [];
     state.attachmentScope = null;
