@@ -407,7 +407,7 @@ function escapeSvg(value) {
   return String(value ?? '').replace(/[&<>"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]);
 }
 
-async function exportDesignSvg(design) {
+async function buildDesignSvg(design) {
   const imageData = new Map();
   for (const item of design.objects.filter(candidate => candidate.kind === 'image' && candidate.assetId)) {
     const url = '/api/objects/' + encodeURIComponent(item.assetId) + '/content?preview=1';
@@ -440,13 +440,42 @@ async function exportDesignSvg(design) {
     }
   }
   parts.push('</svg>');
-  const blob = new Blob([parts.join('')], { type: 'image/svg+xml' });
-  const url = URL.createObjectURL(blob);
+  return parts.join('');
+}
+
+async function exportDesignSvg(design) {
+  const svg = await buildDesignSvg(design);
+  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
   const link = document.createElement('a');
   link.href = url;
   link.download = 'kindgleam-design.svg';
+  document.body.append(link);
   link.click();
-  URL.revokeObjectURL(url);
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function saveDesignSvg(design, runId) {
+  if (!runId) return;
+  const svg = await buildDesignSvg(design);
+  let binary = '';
+  const bytes = new TextEncoder().encode(svg);
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  const saved = await api('POST', '/api/objects', {
+    name: 'design-export-' + new Date().toISOString().replace(/[:.]/g, '-') + '.svg',
+    type: 'design-export',
+    contentType: 'image/svg+xml',
+    content: btoa(binary),
+    encoding: 'base64',
+    visibility: 'private',
+    provenance: {
+      source: 'design-workspace-export',
+      runId,
+      canvas: { width: design.canvas.width, height: design.canvas.height },
+      objectCount: design.objects.length
+    }
+  }, { timeoutMs: 30_000, idempotencyKey: 'design-export-' + crypto.randomUUID() });
+  document.dispatchEvent(new CustomEvent('kindgleam:object-created', { detail: { object: saved, runId } }));
 }
 
 function duplicateDesignObject(design, selected) {
@@ -574,6 +603,7 @@ function designWorkspaceProject(data) {
         persistDesignState(data.run?.id);
         renderDeepWorkspaceShell();
       }, 'small'),
+      !design.previewing ? button('Save SVG to Files', () => saveDesignSvg(design, data.run?.id).catch(() => {}), 'small') : null,
       !design.previewing ? button('Preview', () => { design.previewing = true; persistDesignState(data.run?.id); redraw(false); }, 'small') : button('Exit preview', () => { design.previewing = false; persistDesignState(data.run?.id); redraw(false); }, 'primary small'),
       !design.previewing ? button('Export SVG', () => exportDesignSvg(design), 'small') : null
     ].filter(Boolean)),
