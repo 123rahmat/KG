@@ -16,3 +16,15 @@ test('Code Workspace normalization is bounded and leaves source authorization to
     'github-source-1'
   );
 });
+
+
+test('scratch Code Workspace sessions are explicitly scoped without a GitHub source', () => {
+  const input = normalizeWorkspaceSessionInput({
+    projectId: 'scratch-project-1',
+    conversationId: 'scratch-chat-1',
+    metadata: { kind: 'scratch' }
+  });
+  assert.equal(input.sourceId, null);
+  assert.equal(input.projectId, 'scratch-project-1');
+  assert.equal(input.metadata.kind, 'scratch');
+});
