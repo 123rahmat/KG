@@ -179,8 +179,9 @@ export class MemoryStore {
       ? (await this.pool.query(
           `SELECT * FROM memories
              WHERE workspace_id = $1 AND principal_id = $2
-             ORDER BY updated_at DESC LIMIT $3`,
-          [scope.workspaceId, scope.principalId, MAX_MEMORIES]
+               AND ($3::text IS NULL OR project_id = $3)
+             ORDER BY updated_at DESC LIMIT $4`,
+          [scope.workspaceId, scope.principalId, project || null, MAX_MEMORIES]
         )).rows
       : id
         ? (await this.pool.query(
@@ -248,7 +249,7 @@ export class MemoryStore {
              WHERE workspace_id = $1 AND principal_id = $2
                AND ($3::text IS NULL OR conversation_id IS DISTINCT FROM $3)
                AND ($4::text IS NULL OR project_id = $4)
-             ORDER BY updated_at DESC LIMIT $4`,
+             ORDER BY updated_at DESC LIMIT $5`,
           [scope.workspaceId, scope.principalId, id || null, project || null, MAX_MEMORIES]
         )).rows.map(row => shape(row, this.encryptionKey))]
       : local;
