@@ -38,6 +38,7 @@ import {
 import { selectAdaptiveWorkflow } from './unified-adaptive-workflow.js';
 import { adaptiveEffortProfile } from './adaptive-efficiency.js';
 import { classifySurfaceBoundary, surfaceRuntimePolicy } from './surface-policy.js';
+import { buildModeControllerContract } from './mode-controllers.js';
 
 const text = value => String(value ?? '').trim();
 
@@ -146,7 +147,7 @@ export const NATIVE_CAPABILITY_DEFINITIONS = Object.freeze([
 export const CAPABILITY_DEFINITIONS = NATIVE_CAPABILITY_DEFINITIONS;
 export const CAPABILITIES = Object.freeze(CAPABILITY_DEFINITIONS.map(item => item.name));
 export const SURFACES = Object.freeze([
-  'chat', 'research', 'code', 'creation', 'workspace'
+  'chat', 'research', 'code', 'design', 'creation', 'workspace'
 ]);
 
 
@@ -496,6 +497,7 @@ export function resolveAdaptiveContext(goal, {
   const surfaces = new Set(['chat']);
   if (boundary.surface === 'research') surfaces.add('research');
   if (boundary.surface === 'code') surfaces.add('code');
+  if (boundary.surface === 'design') surfaces.add('design');
   if (boundary.surface === 'normal-chat') surfaces.add('chat');
   // Compound situations can legitimately require a second workspace surface.
   // The primary surface stays stable, while supporting research/code is exposed
@@ -514,8 +516,9 @@ export function resolveAdaptiveContext(goal, {
   const preferred = text(activeSurface);
   const primarySurface = boundary.surface === 'code' ? 'code'
     : boundary.surface === 'research' ? 'research'
-      : analysis.unknownSituation && !['chat', 'normal-chat'].includes(preferred) ? 'adaptive'
-        : 'chat';
+      : boundary.surface === 'design' ? 'design'
+        : analysis.unknownSituation && !['chat', 'normal-chat'].includes(preferred) ? 'adaptive'
+          : 'chat';
   const provisionalControl = normalizeAdaptiveControl(adaptiveControl, {
     inferredDepth: analysis.situation?.need?.depth || 'standard'
   });
@@ -569,12 +572,13 @@ export function resolveAdaptiveContext(goal, {
   });
   const selectedSurfaces = resourcePlan.selected.surfaces ?? ['chat'];
   const selectedPrimarySurface = boundary.surface === 'code' ? 'code'
-    : boundary.surface === 'research' ? 'research' : 'chat';
-  resourcePlan.selected.surfaces = [...new Set(selectedSurfaces.filter(surface => ['chat','code','research'].includes(surface)).concat(selectedPrimarySurface))];
+    : boundary.surface === 'research' ? 'research'
+      : boundary.surface === 'design' ? 'design' : 'chat';
+  resourcePlan.selected.surfaces = [...new Set(selectedSurfaces.filter(surface => ['chat','code','research','design'].includes(surface)).concat(selectedPrimarySurface))];
   resourcePlan.selected.primarySurface = selectedPrimarySurface;
   const modeRouting = {
     version: 1,
-    publicModes: ['normal-chat', 'code', 'research'],
+    publicModes: ['normal-chat', 'code', 'research', 'design'],
     activeMode: text(activeSurface) === 'chat' || text(activeSurface) === 'normal-chat'
       ? 'normal-chat'
       : ['code', 'research'].includes(text(activeSurface))
@@ -582,7 +586,7 @@ export function resolveAdaptiveContext(goal, {
         : null,
     primary: selectedPrimarySurface === 'chat' ? 'normal-chat' : selectedPrimarySurface,
     supporting: [...new Set((resourcePlan.selected.surfaces ?? [])
-      .filter(surface => ['chat', 'code', 'research'].includes(surface))
+      .filter(surface => ['chat', 'code', 'research', 'design'].includes(surface))
       .map(surface => surface === 'chat' ? 'normal-chat' : surface))]
       .filter(surface => surface !== (selectedPrimarySurface === 'chat' ? 'normal-chat' : selectedPrimarySurface)),
     transition: boundary.transition ?? 'stay',
@@ -591,6 +595,21 @@ export function resolveAdaptiveContext(goal, {
     stabilityRule: 'Keep a selected deep workspace across ordinary follow-ups; switch only on explicit or strongly evidenced cross-mode intent.',
     compositionRule: 'Supporting modes may contribute capabilities without replacing the primary mode unless the next situation explicitly requires a different operating envelope.'
   };
+
+  const modeController = buildModeControllerContract({
+    surface: selectedPrimarySurface === 'chat' ? 'normal-chat' : selectedPrimarySurface,
+    situation: analysis.situation,
+    acceptance: {
+      criteria: analysis.situation?.successCriteria,
+      verificationSatisfied: false
+    },
+    pressure: analysis.effort?.pressure ?? resourcePlan.control?.pressure ?? 0,
+    uncertainty: analysis.uncertainty,
+    complexity: analysis.complexity,
+    risk: f.highImpact || f.physical ? 'high' : 'medium',
+    previousFailure: failedSteps.length > 0,
+    remainingBudgetRatio: resourcePlan.remainingBudgetRatio ?? resourcePlan.control?.remainingBudgetRatio ?? 1
+  });
 
   const selectedSourceIds = new Set(resourcePlan.selected.dataSources);
   const dataClasses = [...new Set([
@@ -677,6 +696,7 @@ export function resolveAdaptiveContext(goal, {
     surfacePolicy: surfaceRuntimePolicy(selectedPrimarySurface),
     surfaceBoundary: boundary,
     modeRouting,
+    modeController,
     compound: model.compound || selectedSurfaces.length > 2,
     investigation: {
       needed: analysis.investigationNeeded,
