@@ -241,18 +241,30 @@ export class MemoryStore {
           [scope.workspaceId, scope.principalId, id, project || null, MAX_MEMORIES]
         )).rows.map(row => shape(row, this.encryptionKey))
       : [];
-    // This chat's own memories always come first; other chats add to them
-    // and can never push them out.
-    const all = crossChat
-      ? [...local, ...(await this.pool.query(
+    // The current chat always comes first. Project memory is shared across
+    // that project's conversations without requiring the broader cross-chat
+    // memory switch. User-wide memory remains opt-in.
+    const projectMemory = project
+      ? (await this.pool.query(
           `SELECT * FROM memories
              WHERE workspace_id = $1 AND principal_id = $2
-               AND ($3::text IS NULL OR conversation_id IS DISTINCT FROM $3)
-               AND ($4::text IS NULL OR project_id = $4)
+               AND project_id = $3
+               AND ($4::text IS NULL OR conversation_id IS DISTINCT FROM $4)
              ORDER BY updated_at DESC LIMIT $5`,
-          [scope.workspaceId, scope.principalId, id || null, project || null, MAX_MEMORIES]
-        )).rows.map(row => shape(row, this.encryptionKey))]
-      : local;
+          [scope.workspaceId, scope.principalId, project, id || null, MAX_MEMORIES]
+        )).rows.map(row => shape(row, this.encryptionKey))
+      : [];
+    const userMemory = crossChat
+      ? (await this.pool.query(
+          `SELECT * FROM memories
+             WHERE workspace_id = $1 AND principal_id = $2
+               AND project_id IS NULL
+               AND ($3::text IS NULL OR conversation_id IS DISTINCT FROM $3)
+             ORDER BY updated_at DESC LIMIT $4`,
+          [scope.workspaceId, scope.principalId, id || null, MAX_MEMORIES]
+        )).rows.map(row => shape(row, this.encryptionKey))
+      : [];
+    const all = [...local, ...projectMemory, ...userMemory];
     if (!all.length) return [];
     const wanted = terms(goal);
     const scored = all.map((memory, index) => {
