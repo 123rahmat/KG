@@ -13,6 +13,7 @@
  */
 import { adaptiveEffortProfile, adaptiveBehaviorContract, adaptiveExecutionStrategy } from './adaptive-efficiency.js';
 import { realWorldExecutionPolicy } from './real-world-adaptation.js';
+import { controllerForSurface, buildModeControllerContract } from './mode-controllers.js';
 import {
   adaptiveDecisionAuthority,
   buildAcceptanceContract,
@@ -178,7 +179,8 @@ export function buildUnifiedAdaptiveWorkflow({
   authorizedCapabilities = [],
   candidates = [],
   previousAction = null,
-  profile = null
+  profile = null,
+  surface = 'normal-chat'
 } = {}) {
   const s = { ...(situation && typeof situation === 'object' ? situation : {}), goal: text(situation.goal ?? goal) };
   const p = profile ?? adaptiveEffortProfile({
@@ -194,6 +196,12 @@ export function buildUnifiedAdaptiveWorkflow({
     peopleDecision: s.peopleDecision === true
   });
   const a = acceptanceFrom(s, acceptance, p);
+  const operatingSurface = ['code', 'research', 'design'].includes(text(surface))
+    ? text(surface)
+    : text(s.surface) === 'code' ? 'code'
+      : text(s.surface) === 'research' ? 'research'
+        : text(s.surface) === 'design' ? 'design'
+          : 'normal-chat';
   const realWorld = s.realWorld ?? {};
   const realWorldPolicy = realWorldExecutionPolicy(realWorld);
   const executionStrategy = adaptiveExecutionStrategy({
@@ -222,6 +230,17 @@ export function buildUnifiedAdaptiveWorkflow({
     failedAttempts,
     previousAction
   });
+  const modeController = buildModeControllerContract({
+    surface: operatingSurface,
+    situation: { ...s, surface: operatingSurface },
+    acceptance: a,
+    pressure: p.pressure,
+    uncertainty: p.scores?.uncertainty,
+    complexity: p.scores?.complexity,
+    risk: p.maturity?.level === 'maximum' ? 'critical' : p.scores?.risk >= 0.75 ? 'high' : 'medium',
+    previousFailure: failedAttempts > 0,
+    remainingBudgetRatio: Number(s.remainingBudgetRatio ?? 1)
+  });
   const behavior = adaptiveBehaviorContract(p, {
     situation: { ...s, consequence: consequenceOf(s) },
     acceptance: a,
@@ -240,6 +259,9 @@ export function buildUnifiedAdaptiveWorkflow({
     acceptance: a,
     authority,
     behavior,
+    surface: operatingSurface,
+    modeController,
+    execution: executionStrategy,
     controllerCatalog: modeControllerCatalogSafe(),
     subsystems: SUBSYSTEMS.map(name => ({
       name,
