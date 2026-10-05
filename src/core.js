@@ -24,7 +24,7 @@ import { nextAdaptiveStage } from './unified-adaptive-workflow.js';
 import { buildUnifiedWorkContext } from './unified-work-context.js';
 import { selectSkillDescriptors, summarizeSkillLearning, skillContextSignature, skillPlanForSelectedSkills } from './skills.js';
 import { parallelDecision } from './parallel-orchestrator.js';
-import { classifySurfaceBoundary, surfaceRuntimePolicy } from './surface-policy.js';
+import { classifySurfaceBoundary, surfaceRuntimePolicy, surfaceIntelligenceProfile } from './surface-policy.js';
 
 export const CONTRACT = 'kindgleam-open-world-situation-adaptive-v9';
 export { CAPABILITIES, SURFACES };
@@ -273,6 +273,10 @@ function directTasks(analysis) {
  * itself adaptive instead of merely adapting resources inside a static plan.
  */
 export function buildTasks(intent, capabilities, requiresApproval, analysis = {}) {
+  const surface = analysis?.surface?.surface
+    ?? analysis?.surface
+    ?? 'normal-chat';
+  const intelligenceProfile = surfaceIntelligenceProfile(surface);
   // Every request enters the same adaptive workflow. "Direct" is only a
   // depth/latency decision made by intelligence; it is never a separate brain
   // or execution path. At focused depth the graph starts at the answer: a
@@ -297,6 +301,8 @@ export function buildTasks(intent, capabilities, requiresApproval, analysis = {}
         verification: analysis.verification ?? verificationContract(),
         adaptiveDepth: analysis.direct ? 'focused' : 'full',
         intelligence: analysis.unifiedIntelligence ?? null,
+        intelligenceProfile,
+        surfaceMaturity: intelligenceProfile.maturity,
         metaReasoning: analysis.unifiedIntelligence?.metaReasoning ?? null,
         controlLoop: analysis.unifiedIntelligence?.controlLoop ?? null
       }
