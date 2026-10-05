@@ -21,6 +21,7 @@ import { renderMarkdown } from './markdown.js';
 import { initSettingsWindow } from './app-settings-window.js';
 import { initWorkspaceSources } from './workspace-sources.js';
 import { initTerminal } from './terminal.js';
+import { initArtifactPreview } from './artifact-preview.js';
 
 initSettings();
 initWorkspaceSources();
