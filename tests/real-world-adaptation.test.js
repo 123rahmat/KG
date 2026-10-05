@@ -17,6 +17,7 @@ test('models a deadline-driven external action without claiming completion', () 
   assert.equal(model.observability.mayClaimPresenceOrCompletionWithoutEvidence, false);
   assert.equal(model.userBehavior.autonomy, 'act-with-approval');
   assert.equal(model.userBehavior.interruption, 'avoid');
+  assert.equal(model.observedBehavior.notPersonalityInference, true);
 });
 
 test('tracks commitments, dependencies and coordination as operational state', () => {
@@ -58,16 +59,30 @@ test('situation model exposes the operational real-world layer', () => {
   assert.equal(situation.adaptation.operational.nextAction, 'prepare-then-request-approval');
 });
 
-test('execution policy keeps external real-world actions behind authority', () => {
+test('reduces an actionable workload when the user explicitly reports high attention load', () => {
+  const model = buildRealWorldTaskModel('Finish the work and send it to the team', {
+    capacity: { attention: 0.9 },
+    completedSteps: [],
+    failedSteps: []
+  });
+  assert.equal(model.capacity.attentionLoad, 0.9);
+  assert.equal(model.nextAction, 'reduce-to-smallest-next-action');
+});
+
+test('execution policy carries operational urgency and observed task behavior', () => {
   const policy = realWorldExecutionPolicy({
     realWorld: true,
     controls: ['external-action-boundary'],
     temporal: { urgency: 0.9, status: 'due-soon' },
     userBehavior: { autonomy: 'act-with-approval', interruption: 'avoid' },
-    nextAction: 'prepare-then-request-approval'
+    nextAction: 'prepare-then-request-approval',
+    capacity: { attentionLoad: 0.8 },
+    observedBehavior: { completionRatio: 0.75 }
   });
   assert.equal(policy.externalAction, 'approval-or-existing-authority');
   assert.equal(policy.urgency, 0.9);
   assert.equal(policy.autonomy, 'act-with-approval');
   assert.equal(policy.interruption, 'avoid');
+  assert.equal(policy.attentionLoad, 0.8);
+  assert.equal(policy.observedCompletionRatio, 0.75);
 });
