@@ -111,6 +111,67 @@ jobs:
       - run: npm run migrate
       - run: npm run migrate
 
+  backup-restore:
+    name: backup-restore
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://kindgleam_migration:migration@127.0.0.1:5432/kindgleam_backup_source
+      BACKUP_DATABASE_URL: postgres://kindgleam_backup:backup@127.0.0.1:5432/kindgleam_backup_source
+      RESTORE_DATABASE_URL: postgres://kindgleam_restore:restore@127.0.0.1:5432/kindgleam_backup_target
+      OBJECT_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci
+      - name: Create isolated backup and restore databases and roles
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql "postgres://postgres:postgres@127.0.0.1:5432/postgres" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE kindgleam_migration LOGIN PASSWORD 'migration';
+          CREATE ROLE kindgleam_backup LOGIN BYPASSRLS PASSWORD 'backup';
+          CREATE ROLE kindgleam_restore LOGIN BYPASSRLS PASSWORD 'restore';
+          CREATE DATABASE kindgleam_backup_source OWNER kindgleam_migration;
+          CREATE DATABASE kindgleam_backup_target OWNER kindgleam_migration;
+          GRANT kindgleam_migration TO kindgleam_restore;
+          SQL
+      - name: Apply schema to source database
+        run: npm run migrate
+      - name: Create encrypted backup
+        run: |
+          rm -rf ci-backups
+          mkdir -p ci-backups
+          BACKUP_DIR=ci-backups npm run backup
+      - name: Restore backup into a separate database
+        env:
+          RESTORE_CONFIRM: I_UNDERSTAND
+        run: |
+          backup=$(find ci-backups -name '*.dump.enc' -type f -print -quit)
+          test -n "$backup"
+          npm run restore -- "$backup"
+      - name: Verify restored schema
+        env:
+          PGPASSWORD: restore
+        run: |
+          psql "$RESTORE_DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT count(*) > 0 AS schema_restored FROM information_schema.tables WHERE table_schema = 'public';" | grep -q t
+
   container:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -134,7 +195,7 @@ jobs:
           ignore-unfixed: true
           format: sarif
           output: trivy-results.sarif
-          exit-code: '0'
+          exit-code: '1'
       - name: Upload Trivy SARIF
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
