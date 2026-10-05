@@ -22,6 +22,7 @@ import { initSettingsWindow } from './app-settings-window.js';
 import { initWorkspaceSources } from './workspace-sources.js';
 import { initTerminal } from './terminal.js';
 import { initArtifactPreview } from './artifact-preview.js';
+import { initProjectHub, loadProjects } from './app-projects.js';
 
 initSettings();
 initWorkspaceSources();
@@ -1168,6 +1169,7 @@ const TOOL_LABELS = {
 };
 export const toolLabel = name => TOOL_LABELS[name] ?? (String(name).startsWith('ws.') ? ['sparkle', `Used your tool ${String(name).slice(3)}`] : ['sparkle', name]);
 initActions();
+initProjectHub();
 initAccount();
 initSettingsWindow();
 
@@ -1462,11 +1464,13 @@ document.addEventListener('kindgleam:open-code-workspace', () => {
   state.activeSurface = 'code';
 });
 
-$('workspace').addEventListener('change', event => {
+$('workspace').addEventListener('change', async event => {
   state.workspaceId = event.target.value;
   state.role = state.workspaces.find(workspace => workspace.id === state.workspaceId)?.role ?? 'viewer';
+  state.activeProjectId = null;
   applyRole();
   newChat();
+  await loadProjects().catch(() => {});
 });
 
 // Enter sends, Shift+Enter starts a new line, as in any chat.
