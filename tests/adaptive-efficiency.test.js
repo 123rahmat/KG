@@ -1,48 +1,47 @@
-import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  adaptiveEffortProfile,
-  adaptiveResourceDecision,
-  normalizeAdaptiveRisk
-} from '../src/adaptive-efficiency.js';
+import assert from 'node:assert/strict';
+import { adaptiveExecutionStrategy, adaptiveEffortProfile, adaptiveBehaviorContract } from '../src/adaptive-efficiency.js';
 
-test('keeps simple deterministic work on the minimal path', () => {
-  const profile = adaptiveEffortProfile({ complexity: 0.1, uncertainty: 0.05, risk: 'low' });
-  assert.equal(profile.level, 'minimal');
-  assert.equal(profile.contextDepth, 'minimal');
-  assert.equal(profile.verificationDepth, 'light');
+test('simple work takes the fast path', () => {
+  const s = adaptiveExecutionStrategy({ pressure: 0.1, uncertainty: 0, complexity: 0.05 });
+  assert.equal(s.strategy, 'fast-path');
+  assert.equal(s.reasoning, 'low');
+  assert.equal(s.parallelizeIndependentWork, false);
 });
 
-test('raises effort for uncertainty and high-risk work', () => {
-  const profile = adaptiveEffortProfile({
-    complexity: 0.5,
-    uncertainty: 0.8,
-    risk: 'high',
-    verificationGap: 0.4
+test('independent healthy work can parallelize without bypassing verification', () => {
+  const s = adaptiveExecutionStrategy({
+    pressure: 0.45, complexity: 0.5, independentWork: 0.8,
+    verificationRequired: true, remainingBudgetRatio: 0.9
   });
-  assert.equal(profile.level, 'deep');
-  assert.equal(profile.contextDepth, 'broad');
-  assert.equal(profile.verificationDepth, 'deep');
-  assert.equal(profile.expansionAllowed, true);
+  assert.equal(s.parallelizeIndependentWork, true);
+  assert.equal(s.verification, 'required-before-completion');
 });
 
-test('failure increases effort instead of repeating the same path', () => {
-  const profile = adaptiveEffortProfile({ complexity: 0.3, uncertainty: 0.2, risk: 'medium', failureCount: 1 });
-  assert.equal(profile.verificationDepth, 'deep');
-});
-
-test('does not spend when confidence is already sufficient', () => {
-  const profile = adaptiveEffortProfile({ complexity: 0.2, uncertainty: 0.1, risk: 'low' });
-  const decision = adaptiveResourceDecision({
-    profile,
-    estimatedCost: 10,
-    expectedBenefit: 2,
-    requiredConfidence: 0.9,
-    currentConfidence: 0.95
+test('failure and uncertainty escalate reasoning', () => {
+  const s = adaptiveExecutionStrategy({
+    pressure: 0.7, uncertainty: 0.8, complexity: 0.8, previousFailure: true
   });
-  assert.equal(decision.decision, 'stop');
+  assert.equal(s.strategy, 'adaptive-deep');
+  assert.equal(s.reasoning, 'high');
+  assert.equal(s.avoidRedundantDiscovery, true);
 });
 
-test('normalizes unknown risk conservatively', () => {
-  assert.equal(normalizeAdaptiveRisk('unknown-risk'), 'medium');
+test('verified state can short-circuit redundant work but not required verification', () => {
+  const s = adaptiveExecutionStrategy({
+    pressure: 0.2, cacheHit: true, verificationRequired: true,
+    verificationSatisfied: false
+  });
+  assert.equal(s.reuseVerifiedState, true);
+  assert.equal(s.verification, 'required-before-completion');
+});
+
+test('behavior contract exposes the execution strategy', () => {
+  const profile = adaptiveEffortProfile({ complexity: 0.1, uncertainty: 0, risk: 'low' });
+  const contract = adaptiveBehaviorContract(profile, {
+    situation: { goal: 'answer', parallelOpportunity: 0 },
+    acceptance: {}
+  });
+  assert.ok(contract.executionStrategy);
+  assert.equal(contract.executionStrategy.strategy, 'fast-path');
 });
