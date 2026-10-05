@@ -140,7 +140,7 @@ test('adaptive context exposes all four public operating modes', () => {
     files: [{ name: 'package.json' }],
     attachments: [{ name: 'package.json' }]
   });
-  assert.deepEqual(context.adaptiveSnapshot.modeRouting.publicModes, ['design', 'normal-chat', 'code', 'research']);
+  assert.deepEqual(context.adaptiveSnapshot.modeRouting.publicModes, ['normal-chat', 'code', 'research', 'design']);
   assert.equal(context.adaptiveSnapshot.modeRouting.primary, 'code');
   assert.ok(context.adaptiveSnapshot.modeRouting.supporting.includes('research'));
 });
@@ -202,7 +202,7 @@ test('Normal Chat remains the general adaptive mode for non-deep workspace work'
   const contract = SURFACE_WORKSPACE_CONTRACTS['normal-chat'];
   assert.match(contract.objective, /general adaptive operating mode/i);
   assert.match(contract.creationPolicy, /planning|analysis|file understanding/i);
-  assert.match(contract.escalationPolicy, /otherwise continue adapting/i);
+  assert.match(contract.escalationPolicy, /Research|Code/);
   assert.equal(contract.sharedIntelligence, true);
   assert.equal(contract.adaptiveAgents, true);
   assert.equal(contract.adaptiveTools, true);
@@ -261,14 +261,17 @@ test('each surface has an explicit maturity profile without creating a second br
   const normal = surfaceIntelligenceProfile('normal-chat');
   const code = surfaceIntelligenceProfile('code');
   const research = surfaceIntelligenceProfile('research');
+  const design = surfaceIntelligenceProfile('design');
   assert.equal(normal.id, 'normal-chat-intelligence');
   assert.equal(code.id, 'code-intelligence');
   assert.equal(research.id, 'research-intelligence');
+  assert.equal(design.id, 'design-intelligence');
   assert.equal(normal.contextStrategy, 'minimum-sufficient-context');
   assert.match(code.contextStrategy, /revision-first/i);
   assert.match(research.contextStrategy, /question-first/i);
   assert.match(code.parallelStrategy, /disjoint immutable-revision/i);
   assert.match(research.verificationStrategy, /provenance/i);
+  assert.equal(design.maturity, 'deep-visual');
   assert.match(normal.costStrategy, /one strong model call/i);
-  assert.deepEqual(Object.keys(SURFACE_INTELLIGENCE_PROFILES), ['normal-chat', 'code', 'research']);
+  assert.deepEqual(Object.keys(SURFACE_INTELLIGENCE_PROFILES), ['design', 'normal-chat', 'code', 'research']);
 });
