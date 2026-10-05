@@ -2113,7 +2113,10 @@ export async function runAdaptiveAgentPanel({
     ? maxAgents
     : Math.max(1, Math.min(maxAgents, Math.floor(Math.max(1, Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent) / (AGENT_MAX_OUTPUT_TOKENS * 2))));
   const parallelMode = config?.agents?.parallel ?? config?.parallel?.mode ?? 'auto';
-  // Absence of a run token ceiling must not silently disable safe parallelism.\n  // Provider concurrency, adaptive budget pressure, and lane-conflict rules\n  // remain the hard limits; the token ceiling is only an additional budget cap.\n  const genericParallelCeiling = providerParallelCap;
+  // Absence of a run token ceiling must not silently disable safe parallelism.
+  // Provider concurrency, adaptive budget pressure, and lane-conflict rules
+  // remain the hard limits; the token ceiling is only an additional budget cap.
+  const genericParallelCeiling = providerParallelCap;
   const initialParallel = adaptiveParallelLimit({
     mode: parallelMode,
     current: Math.min(
