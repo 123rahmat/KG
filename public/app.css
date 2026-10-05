@@ -4158,3 +4158,140 @@ a.workspace-detail-row:hover { border-color: var(--line-strong); }
 .deep-workspace-shell[data-workspace="design"][data-previewing="true"] .design-canvas {
   min-height: min(72vh, 760px);
 }
+
+
+/* --------------------------------------------------------- project hub */
+
+.project-hub {
+  display: grid;
+  gap: 8px;
+  margin: 8px 10px 4px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--softer);
+}
+.project-hub-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.project-hub-title {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.project-hub-title strong {
+  font-size: .78rem;
+}
+.project-hub-title .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-hub-actions {
+  display: flex;
+  gap: 2px;
+}
+.project-hub-actions .icon-btn {
+  padding: 4px 6px;
+  font-size: .9rem;
+}
+.project-hub select {
+  min-height: 34px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+  font-size: .84rem;
+  background-color: var(--panel);
+}
+
+.project-dialog {
+  width: min(680px, calc(100vw - 28px));
+  max-height: min(820px, calc(100vh - 28px));
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: var(--shadow-lg);
+}
+.project-dialog::backdrop {
+  background: var(--scrim);
+}
+.project-dialog-shell {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  overflow: auto;
+}
+.project-dialog-head,
+.project-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.project-dialog-head h2 {
+  margin-top: 2px;
+  font-size: 1.18rem;
+}
+.project-dialog-head p {
+  margin-top: 5px;
+  max-width: 560px;
+}
+.project-create-card,
+.project-manage-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--softer);
+}
+.project-create-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.project-share-check {
+  align-self: end;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.project-create-actions {
+  min-height: 34px;
+}
+.project-manage-list {
+  display: grid;
+  gap: 7px;
+}
+.project-manage-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.project-manage-main {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.project-manage-main strong,
+.project-manage-main span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .project-create-grid { grid-template-columns: 1fr; }
+  .project-dialog-shell { padding: 16px; }
+}
