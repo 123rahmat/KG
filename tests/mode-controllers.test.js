@@ -86,3 +86,23 @@ test('design policy exposes deep visual controls and shared intelligence', () =>
   const catalog = modeControllerCatalog();
   assert.deepEqual(catalog.map(item => item.mode), ['normal-chat', 'code', 'research', 'design']);
 });
+
+test('server run planning persists the selected workspace controller', async () => {
+  const { withServer } = await import('./helpers.js');
+  await withServer(async ({ call, seed }) => {
+    const { token, workspace } = await seed({ role: 'admin' });
+    const auth = { token, workspace };
+    for (const surface of ['normal-chat', 'code', 'research', 'design']) {
+      const response = await call('POST', '/api/runs', {
+        ...auth,
+        body: {
+          goal: surface === 'design' ? 'Create a visual layout.' : surface === 'research' ? 'Research this topic with sources.' : surface === 'code' ? 'Fix the project.' : 'Explain this clearly.',
+          activeSurface: surface
+        }
+      });
+      assert.equal(response.status, 201, JSON.stringify(response.body));
+      assert.equal(response.body.adaptation.modeController.mode, surface);
+      assert.equal(response.body.adaptation.unifiedAdaptiveWorkflow.modeController.mode, surface);
+    }
+  });
+});
