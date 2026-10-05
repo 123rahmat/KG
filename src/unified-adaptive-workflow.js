@@ -11,7 +11,7 @@
  * The kernel is deliberately pure. It does not call models/tools or mutate
  * state. The RunStore is the enforcement boundary.
  */
-import { adaptiveEffortProfile, adaptiveBehaviorContract } from './adaptive-efficiency.js';
+import { adaptiveEffortProfile, adaptiveBehaviorContract, adaptiveExecutionStrategy } from './adaptive-efficiency.js';
 import {
   adaptiveDecisionAuthority,
   buildAcceptanceContract,
@@ -193,6 +193,18 @@ export function buildUnifiedAdaptiveWorkflow({
     peopleDecision: s.peopleDecision === true
   });
   const a = acceptanceFrom(s, acceptance, p);
+  const executionStrategy = adaptiveExecutionStrategy({
+    pressure: p.pressure,
+    uncertainty: p.scores?.uncertainty,
+    complexity: p.scores?.complexity,
+    risk: p.maturity?.level === 'maximum' ? 'critical' : p.scores?.risk >= 0.75 ? 'high' : 'medium',
+    verificationRequired: p.maturity?.independentVerificationRequired,
+    verificationSatisfied: a.verificationSatisfied === true,
+    independentWork: Number(s.independentWork ?? s.parallelOpportunity ?? 0),
+    cacheHit: s.verifiedStateReusable === true,
+    previousFailure: failedAttempts > 0,
+    remainingBudgetRatio: Number(s.remainingBudgetRatio ?? 1)
+  });
   const authority = adaptiveDecisionAuthority({
     situation: {
       ...s,
