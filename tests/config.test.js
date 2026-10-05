@@ -328,9 +328,10 @@ test('no simulation runner is configured: its old variables are ignored', () => 
   assert.equal('simulation' in config, false);
 });
 
-test('Grok fallback models are read in order and stay within the configured Grok family', () => {
-  const env = { DATABASE_URL: 'postgres://u:p@localhost:5432/kindgleam', AI_PROVIDER: 'xai', AI_API_KEY: 'k' };
-  assert.deepEqual(loadConfig({ ...env, AI_FALLBACK_MODELS: 'grok-4.7, grok-4.7-mini' }).ai.fallbackModels, ['grok-4.7', 'grok-4.7-mini']);
+test('Grok-only configuration exposes no alternate provider fallback chain', () => {
+  const env = { DATABASE_URL: 'postgres://u:p@localhost:5432/kindgleam', AI_PROVIDER: 'xai', AI_API_KEY: 'k', AI_MODEL: 'grok-4.7' };
   assert.deepEqual(loadConfig(env).ai.fallbackModels, []);
+  assert.deepEqual(loadConfig({ ...env, AI_FALLBACK_MODELS: 'grok-4.7' }).ai.fallbackModels, []);
   assert.throws(() => loadConfig({ ...env, AI_FALLBACK_MODELS: 'gpt-5' }), /AI_FALLBACK_MODELS lists "gpt-5"/);
+  assert.throws(() => loadConfig({ ...env, AI_FALLBACK_MODELS: 'grok-4.7,gpt-5' }), /AI_FALLBACK_MODELS lists "gpt-5"/);
 });
