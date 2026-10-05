@@ -3910,3 +3910,189 @@ body[data-adaptive-workspace="research"] .deep-workspace-shell {
   .file-chips { justify-content:stretch; }
   .artifact-chip { max-width:100%; }
 }
+
+/* ----------------------------------------------------- adaptive design studio */
+.deep-workspace-shell[data-workspace="design"] {
+  width: min(1500px, 100%);
+}
+.deep-workspace-head.design .deep-workspace-kicker { letter-spacing: .12em; }
+.design-studio-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 0;
+}
+.design-studio-layout {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr) 220px;
+  min-height: 560px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--softer);
+}
+.design-assets-panel,
+.design-inspector,
+.design-canvas-panel {
+  min-width: 0;
+}
+.design-assets-panel,
+.design-inspector {
+  padding: 12px;
+  background: var(--panel);
+}
+.design-assets-panel { border-right: 1px solid var(--line); }
+.design-inspector { border-left: 1px solid var(--line); }
+.design-panel-head,
+.design-canvas-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.design-panel-empty {
+  padding: 14px 10px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: .82rem;
+  text-align: center;
+}
+.design-asset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+.design-asset-tile {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.design-asset-tile img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+.design-canvas-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  background: var(--soft);
+}
+.design-canvas-head {
+  margin: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.design-canvas {
+  position: relative;
+  min-height: 520px;
+  overflow: auto;
+  isolation: isolate;
+  background: var(--panel);
+}
+.design-canvas-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, var(--line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--line) 1px, transparent 1px);
+  background-size: 24px 24px;
+  opacity: .42;
+  pointer-events: none;
+}
+.design-canvas-object {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+  text-align: center;
+  white-space: normal;
+}
+.design-canvas-object:hover,
+.design-canvas-object.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring), var(--shadow-sm);
+}
+.design-canvas-object.rect {
+  background: var(--soft);
+}
+.design-canvas-object.circle {
+  border-radius: 50%;
+  background: var(--accent-soft);
+}
+.design-canvas-object.text {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  font-weight: 700;
+  justify-content: flex-start;
+  text-align: left;
+}
+.design-inspector-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.design-inspector-field {
+  display: grid;
+  gap: 4px;
+}
+.design-inspector-field input {
+  padding: 7px 8px;
+  font-size: .82rem;
+}
+.deep-workspace-actions.design {
+  align-items: center;
+}
+@media (max-width: 1050px) {
+  .design-studio-layout {
+    grid-template-columns: 170px minmax(0, 1fr);
+  }
+  .design-inspector {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .design-inspector-fields {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .design-studio-layout {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .design-assets-panel,
+  .design-inspector {
+    border: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .design-assets-panel { order: 0; }
+  .design-canvas-panel { order: 1; }
+  .design-inspector { order: 2; }
+  .design-asset-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .design-canvas {
+    min-height: 440px;
+  }
+  .design-inspector-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
