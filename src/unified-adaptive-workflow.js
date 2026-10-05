@@ -240,7 +240,7 @@ export function buildUnifiedAdaptiveWorkflow({
     acceptance: a,
     authority,
     behavior,
-    subsystems: SUBSYSTEMS.map(name => ({
+    controllerCatalog: modeControllerCatalogSafe(),\n    subsystems: SUBSYSTEMS.map(name => ({
       name,
       authority: 'server-owned',
       role: name === 'main-executor' ? 'execute-user-facing-work' : 'advisory-or-specialized',
@@ -432,7 +432,7 @@ export function subsystemCanAct(workflow = {}, subsystem = '', {
   };
 }
 
-export { SUBSYSTEMS };
+function modeControllerCatalogSafe() {\n  return ['normal-chat', 'code', 'research', 'design'].map(mode => {\n    const c = controllerForSurface(mode);\n    return { id: c.id, mode: c.mode, objective: c.objective, roles: [...c.roles] };\n  });\n}\n\nexport { SUBSYSTEMS };
 
 
 // Legacy-compatible workflow selection facade. The public selector remains
