@@ -205,7 +205,7 @@ export class RunStore {
     environment = null, language = '', skillLevel = '', preferences = [], currentState = null,
     completedSteps = [], failedSteps = [], evidence = [], questions = [],
     dataSources = [], connections = [], connectedServices = [], verifiedConnections = [], privacyConsent = {}, need = null, adaptiveControl = {},
-    commitments = [], dependencies = [], dueAt = null, startAt = null, userBehavior = {}, capacity = null, availability = null, competingCommitments = [], now = null, visibility = 'private',
+    commitments = [], dependencies = [], dueAt = null, startAt = null, userBehavior = {}, capacity = null, availability = null, competingCommitments = [], now = null, creationMode = '', visibility = 'private',
     classifierHints = null, classification = null, conversationId = null, attachments = [],
     executionAvailable = null, modelSelection = null, learnedSkills = [],
     // The ethical side of the situation (safety.js ethicsOf): every step adapts to it.
@@ -246,7 +246,7 @@ export class RunStore {
       user, workspace, project, files, priorWork: previousState?.completed?.length ? [...priorWork, ...previousState.completed] : priorWork, constraints, resources, requirements,
       successCriteria, outputs, environment, language, skillLevel, preferences, currentState: currentState ?? previousState,
       completedSteps, failedSteps, evidence, questions, dataSources, connections, connectedServices,
-      commitments, dependencies, dueAt, startAt, userBehavior, capacity, availability, competingCommitments, now,
+      commitments, dependencies, dueAt, startAt, userBehavior, capacity, availability, competingCommitments, now, creationMode,
       privacyConsent, need, adaptiveControl, verifiedConnections, workspaceType, runtimeMode,
       activeSurface, jurisdiction, classifierHints, modelSelection, learnedSkills
     };
