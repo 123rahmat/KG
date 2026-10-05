@@ -947,6 +947,10 @@ function researchWorkspaceProject(data) {
   const task = currentTask(run);
   const sourceStatus = sourceCount ? sourceCount + ' tracked' : 'not started';
   const evidenceStatus = conflicts ? conflicts + ' conflicts' : evidenceCount ? evidenceCount + ' ledger items' : 'awaiting evidence';
+  const sources = Array.isArray(research.sourceSet) ? research.sourceSet.slice(0, 8) : [];
+  const evidenceLedger = Array.isArray(research.evidenceLedger) ? research.evidenceLedger.slice(0, 8) : [];
+  const gaps = Array.isArray(research.unresolvedQuestions) ? research.unresolvedQuestions.slice(0, 6) : [];
+
   return [
     element('div', { class: 'deep-workspace-head research' }, [
       element('div', { class: 'deep-workspace-identity' }, [
@@ -990,6 +994,48 @@ function researchWorkspaceProject(data) {
           badge('Open gaps', String(unresolved)),
           badge('Conflicts', String(conflicts))
         ])
+      ])
+    ]),
+    element('div', { class: 'deep-workspace-section-grid' }, [
+      element('section', { class: 'deep-workspace-card detail-card' }, [
+        element('div', { class: 'deep-workspace-card-head' }, [
+          element('span', { class: 'mono', text: 'SOURCE LEDGER' }),
+          element('span', { class: 'small muted', text: sources.length + ' visible' })
+        ]),
+        sources.length
+          ? element('div', { class: 'workspace-detail-list' }, sources.map(source =>
+              element('a', {
+                class: 'workspace-detail-row source-row',
+                href: source.url || '#',
+                target: source.url ? '_blank' : undefined,
+                rel: source.url ? 'noopener noreferrer' : undefined,
+                text: source.title || source.provider || source.url || 'Source'
+              })
+            ))
+          : element('p', { class: 'small muted', text: 'Sources appear here as research evidence is gathered.' })
+      ]),
+      element('section', { class: 'deep-workspace-card detail-card' }, [
+        element('div', { class: 'deep-workspace-card-head' }, [
+          element('span', { class: 'mono', text: 'EVIDENCE LEDGER' }),
+          element('span', { class: 'small muted', text: evidenceLedger.length + ' visible' })
+        ]),
+        evidenceLedger.length
+          ? element('div', { class: 'workspace-detail-list' }, evidenceLedger.map(item =>
+              element('div', { class: 'workspace-detail-row' }, [
+                element('strong', { text: text(item.summary).slice(0, 240) }),
+                element('span', { class: 'muted small', text: (item.sourceKeys?.length || 0) + ' linked source' + ((item.sourceKeys?.length || 0) === 1 ? '' : 's') })
+              ])
+            ))
+          : element('p', { class: 'small muted', text: 'Evidence is added only when the research step produces traceable findings.' })
+      ]),
+      element('section', { class: 'deep-workspace-card detail-card' }, [
+        element('div', { class: 'deep-workspace-card-head' }, [
+          element('span', { class: 'mono', text: 'OPEN GAPS' }),
+          element('span', { class: 'small muted', text: gaps.length ? 'needs attention' : 'none recorded' })
+        ]),
+        gaps.length
+          ? element('div', { class: 'workspace-detail-list' }, gaps.map(gap => element('div', { class: 'workspace-detail-row', text: gap })))
+          : element('p', { class: 'small muted', text: 'No unresolved research questions are currently recorded.' })
       ])
     ]),
     element('div', { class: 'deep-workspace-actions' }, [
