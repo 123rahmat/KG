@@ -603,7 +603,7 @@ export class RunStore {
     const state = normalizeDesignWorkspaceState(designState);
     return transaction(this.pool, async client => {
       const { rows: [run] } = await client.query(
-        `SELECT id, adaptation
+        `SELECT id, surface, adaptation
            FROM runs
           WHERE id = $1 AND workspace_id = $2
             AND (visibility = 'workspace' OR principal_id = $3)
@@ -611,6 +611,9 @@ export class RunStore {
         [text(runId), scope.workspaceId, scope.principalId]
       );
       if (!run) return null;
+      if (run.surface !== 'design') {
+        throw new RunError('Design state can only be changed from the Design Workspace.', { status: 409, code: 'not-design-workspace' });
+      }
       const adaptation = {
         ...(run.adaptation && typeof run.adaptation === 'object' ? run.adaptation : {}),
         designWorkspace: state
