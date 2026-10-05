@@ -5,7 +5,7 @@
  * remains authoritative; this only turns that state into the smallest
  * useful set of visible workspace surfaces and a clear current focus.
  */
-import { state, $, element, button } from './ui-core.js';
+import { state, $, element, button, api } from './ui-core.js';
 
 const SURFACE_META = {
   runs: { label: 'Normal Chat', icon: 'chat', kind: 'normal-chat' },
@@ -64,12 +64,10 @@ function activeWorkspace(run) {
 }
 
 function surfaceSet(run) {
-  const surfaces = new Set(['runs']);
-  const selected = ['code', 'research', 'design', 'normal-chat'].includes(state.activeSurface) ? state.activeSurface : null;
-  const workspace = selected ?? activeWorkspace(run);
-  if (workspace === 'code') surfaces.add('code');
-  if (workspace === 'research') surfaces.add('research');
-  if (workspace === 'design') surfaces.add('design');
+  // All four operating envelopes stay reachable. "Needed" is communicated by
+  // the active surface and adaptive status, not by hiding a workspace the
+  // person may intentionally choose for the next step.
+  const surfaces = new Set(['runs', 'design', 'code', 'research']);
   if (fileNeed(run)) surfaces.add('objects');
   return [...surfaces];
 }
@@ -229,88 +227,314 @@ export function renderWorkStatus(run) {
     ])
   ].filter(Boolean));
 }
-function designWorkspaceState() {
-  state.designWorkspace ??= {
+function designDefaults() {
+  return {
+    version: 1,
+    canvas: { width: 1200, height: 720, background: '#ffffff' },
     selected: null,
     previewing: false,
     objects: [
-      { id: 'design-title', kind: 'text', x: 80, y: 70, width: 420, height: 64, text: 'Your design', fontSize: 34 },
-      { id: 'design-card', kind: 'rect', x: 80, y: 170, width: 520, height: 260, text: '' }
+      { id: 'design-title', kind: 'text', x: 80, y: 70, width: 420, height: 64, text: 'Your design', fontSize: 34, z: 2, rotation: 0, opacity: 1, visible: true, locked: false, fill: '#15171c' },
+      { id: 'design-card', kind: 'rect', x: 80, y: 170, width: 520, height: 260, text: '', z: 1, rotation: 0, opacity: 1, visible: true, locked: false, fill: '#eef2ff' }
     ]
   };
-  state.designWorkspace.objects ??= [];
-  state.designWorkspace.previewing ??= false;
+}
+
+function clampDesignNumber(value, min, max, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+}
+
+function normalizeDesignState(input = {}) {
+  const base = designDefaults();
+  const source = input && typeof input === 'object' ? input : {};
+  const canvas = source.canvas && typeof source.canvas === 'object' ? source.canvas : {};
+  const objects = Array.isArray(source.objects) ? source.objects.slice(0, 256) : base.objects;
+  return {
+    version: 1,
+    canvas: {
+      width: clampDesignNumber(canvas.width, 320, 4096, base.canvas.width),
+      height: clampDesignNumber(canvas.height, 240, 4096, base.canvas.height),
+      background: String(canvas.background || base.canvas.background).slice(0, 32)
+    },
+    selected: String(source.selected || ''),
+    previewing: source.previewing === true,
+    objects: objects.map((item, index) => ({
+      id: String(item?.id || 'design-object-' + index).slice(0, 80),
+      kind: ['text', 'rect', 'circle', 'image'].includes(item?.kind) ? item.kind : 'rect',
+      x: clampDesignNumber(item?.x, -4096, 4096, 0),
+      y: clampDesignNumber(item?.y, -4096, 4096, 0),
+      width: clampDesignNumber(item?.width, 8, 4096, 160),
+      height: clampDesignNumber(item?.height, 8, 4096, 100),
+      text: String(item?.text || '').slice(0, 2000),
+      fontSize: clampDesignNumber(item?.fontSize, 6, 320, 24),
+      z: clampDesignNumber(item?.z, -10000, 10000, index),
+      rotation: clampDesignNumber(item?.rotation, -360, 360, 0),
+      opacity: clampDesignNumber(item?.opacity, 0, 1, 1),
+      visible: item?.visible !== false,
+      locked: item?.locked === true,
+      fill: String(item?.fill || '#eef2ff').slice(0, 32),
+      assetId: String(item?.assetId || '').slice(0, 80),
+      assetName: String(item?.assetName || '').slice(0, 200)
+    }))
+  };
+}
+
+let hydratedDesignRunId = null;
+let hydratingDesignRunId = null;
+let designSaveTimer = null;
+
+function designWorkspaceState() {
+  if (!state.designWorkspace) state.designWorkspace = designDefaults();
+  state.designWorkspace = normalizeDesignState(state.designWorkspace);
   return state.designWorkspace;
 }
 
-function designCanvasNode(item, selectedId, rerender) {
+function ensureDesignStateLoaded(runId) {
+  if (!runId || hydratedDesignRunId === runId || hydratingDesignRunId === runId) return;
+  hydratingDesignRunId = runId;
+  api('GET', '/api/runs/' + encodeURIComponent(runId) + '/design-state', undefined, { timeoutMs: 8_000 })
+    .then(payload => {
+      if (hydratingDesignRunId !== runId) return;
+      state.designWorkspace = normalizeDesignState(payload?.state ?? {});
+      hydratedDesignRunId = runId;
+      renderDeepWorkspaceShell();
+    })
+    .catch(() => {
+      // The design remains locally usable if the server is temporarily offline.
+      hydratedDesignRunId = runId;
+    })
+    .finally(() => {
+      if (hydratingDesignRunId === runId) hydratingDesignRunId = null;
+    });
+}
+
+function persistDesignState(runId) {
+  if (!runId) return;
+  const snapshot = JSON.parse(JSON.stringify(normalizeDesignState(designWorkspaceState())));
+  clearTimeout(designSaveTimer);
+  designSaveTimer = setTimeout(() => {
+    api('PUT', '/api/runs/' + encodeURIComponent(runId) + '/design-state', { state: snapshot }, {
+      timeoutMs: 10_000,
+      idempotencyKey: 'design-' + runId + '-' + crypto.randomUUID()
+    }).catch(() => {
+      // The next mutation will retry; offline work remains in this tab.
+    });
+  }, 300);
+}
+
+function designCanvasNode(item, selectedId, rerender, canvas) {
   const node = document.createElement('button');
   node.type = 'button';
   node.className = 'design-canvas-object ' + item.kind + (item.id === selectedId ? ' selected' : '');
+  node.disabled = item.locked;
   node.style.left = item.x + 'px';
   node.style.top = item.y + 'px';
   node.style.width = item.width + 'px';
   node.style.height = item.height + 'px';
+  node.style.zIndex = String(item.z + 10000);
+  node.style.opacity = String(item.visible ? item.opacity : 0);
+  node.style.transform = 'rotate(' + item.rotation + 'deg)';
+  node.style.background = item.kind === 'text' || item.kind === 'image' ? 'transparent' : item.fill;
   if (item.kind === 'text') {
     node.textContent = item.text || 'Text';
-    node.style.fontSize = (item.fontSize || 24) + 'px';
+    node.style.fontSize = item.fontSize + 'px';
+    node.style.color = item.fill;
   } else if (item.kind === 'circle') {
     node.textContent = '';
+  } else if (item.kind === 'image' && item.assetId) {
+    const image = element('img', {
+      src: '/api/objects/' + encodeURIComponent(item.assetId) + '/content?preview=1',
+      alt: item.assetName || 'Design asset',
+      draggable: 'false'
+    });
+    image.style.width = '100%';
+    image.style.height = '100%';
+    image.style.objectFit = 'cover';
+    image.style.pointerEvents = 'none';
+    node.append(image);
   } else {
     node.textContent = item.text || '';
   }
+
+  let drag = null;
+  node.addEventListener('pointerdown', event => {
+    if (item.locked || designWorkspaceState().previewing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = canvas.getBoundingClientRect();
+    const design = designWorkspaceState();
+    design.selected = item.id;
+    drag = { pointerId: event.pointerId, x: item.x, y: item.y, clientX: event.clientX, clientY: event.clientY, sx: rect.width / design.canvas.width, sy: rect.height / design.canvas.height };
+    node.setPointerCapture?.(event.pointerId);
+  });
+  node.addEventListener('pointermove', event => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    item.x = clampDesignNumber(drag.x + (event.clientX - drag.clientX) / Math.max(drag.sx, 0.01), -4096, 4096, item.x);
+    item.y = clampDesignNumber(drag.y + (event.clientY - drag.clientY) / Math.max(drag.sy, 0.01), -4096, 4096, item.y);
+    rerender(false);
+  });
+  node.addEventListener('pointerup', event => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    drag = null;
+    persistDesignState(lastRun()?.id);
+    rerender(true);
+  });
+  node.addEventListener('pointercancel', () => { drag = null; });
+
   node.addEventListener('click', event => {
     event.stopPropagation();
     const design = designWorkspaceState();
     design.selected = item.id;
-    rerender();
+    rerender(true);
   });
   return node;
 }
 
+function escapeSvg(value) {
+  return String(value ?? '').replace(/[&<>"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]);
+}
+
+async function exportDesignSvg(design) {
+  const imageData = new Map();
+  for (const item of design.objects.filter(candidate => candidate.kind === 'image' && candidate.assetId)) {
+    const url = '/api/objects/' + encodeURIComponent(item.assetId) + '/content?preview=1';
+    try {
+      const response = await fetch(url, { credentials: 'same-origin' });
+      if (!response.ok) continue;
+      const blob = await response.blob();
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+      imageData.set(item.assetId, 'data:' + (blob.type || 'image/png') + ';base64,' + btoa(binary));
+    } catch {}
+  }
+  const parts = [
+    '<svg xmlns="http://www.w3.org/2000/svg" width="' + design.canvas.width + '" height="' + design.canvas.height + '" viewBox="0 0 ' + design.canvas.width + ' ' + design.canvas.height + '">',
+    '<rect width="100%" height="100%" fill="' + escapeSvg(design.canvas.background) + '"/>'
+  ];
+  for (const item of [...design.objects].sort((a,b) => a.z - b.z)) {
+    if (!item.visible || item.opacity <= 0) continue;
+    const transform = 'translate(' + item.x + ' ' + item.y + ') rotate(' + item.rotation + ' ' + item.width / 2 + ' ' + item.height / 2 + ')';
+    const opacity = ' opacity="' + item.opacity + '"';
+    if (item.kind === 'text') {
+      parts.push('<text x="' + item.x + '" y="' + (item.y + item.fontSize) + '" font-size="' + item.fontSize + '" fill="' + escapeSvg(item.fill) + '"' + opacity + '>' + escapeSvg(item.text || 'Text') + '</text>');
+    } else if (item.kind === 'circle') {
+      parts.push('<circle cx="' + (item.x + item.width / 2) + '" cy="' + (item.y + item.height / 2) + '" r="' + Math.min(item.width, item.height) / 2 + '" fill="' + escapeSvg(item.fill) + '"' + opacity + ' transform="' + transform + '"/>');
+    } else if (item.kind === 'image' && imageData.has(item.assetId)) {
+      parts.push('<image x="' + item.x + '" y="' + item.y + '" width="' + item.width + '" height="' + item.height + '" href="' + imageData.get(item.assetId) + '" preserveAspectRatio="xMidYMid slice"' + opacity + ' transform="' + transform + '"/>');
+    } else {
+      parts.push('<rect x="' + item.x + '" y="' + item.y + '" width="' + item.width + '" height="' + item.height + '" rx="10" fill="' + escapeSvg(item.fill) + '"' + opacity + ' transform="' + transform + '"/>');
+    }
+  }
+  parts.push('</svg>');
+  const blob = new Blob([parts.join('')], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'kindgleam-design.svg';
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function duplicateDesignObject(design, selected) {
+  if (!selected) return;
+  const copy = { ...selected, id: 'design-object-' + crypto.randomUUID().slice(0, 8), x: selected.x + 24, y: selected.y + 24, z: Math.max(...design.objects.map(item => item.z), 0) + 1 };
+  design.objects.push(copy);
+  design.selected = copy.id;
+}
+
 function designWorkspaceProject(data) {
   const design = designWorkspaceState();
+  ensureDesignStateLoaded(data.run?.id);
   const selected = design.objects.find(item => item.id === design.selected) ?? null;
   const attachedImages = [
     ...(Array.isArray(data.run?.adaptation?.attachments) ? data.run.adaptation.attachments : []),
     ...(Array.isArray(state.attachments) ? state.attachments : [])
   ].filter(item => /^image\//i.test(String(item?.contentType ?? item?.type ?? '')));
-  const redraw = () => renderDeepWorkspaceShell();
+  const redraw = (save = false) => {
+    if (save) persistDesignState(data.run?.id || lastRun()?.id);
+    renderDeepWorkspaceShell();
+  };
 
   const canvas = element('div', { class: 'design-canvas', role: 'application', 'aria-label': 'Design canvas' }, [
     element('div', { class: 'design-canvas-grid', 'aria-hidden': 'true' })
   ]);
+  canvas.style.width = design.canvas.width + 'px';
+  canvas.style.height = design.canvas.height + 'px';
+  canvas.style.background = design.canvas.background;
   canvas.addEventListener('click', () => {
     design.selected = null;
-    redraw();
+    redraw(true);
   });
-  for (const item of design.objects) canvas.append(designCanvasNode(item, design.selected, redraw));
+  for (const item of [...design.objects].sort((a,b) => a.z - b.z)) {
+    canvas.append(designCanvasNode(item, design.selected, redraw, canvas));
+  }
 
   const addObject = kind => {
     const id = 'design-' + kind + '-' + crypto.randomUUID().slice(0, 8);
+    const topZ = Math.max(...design.objects.map(item => item.z), 0) + 1;
     const defaults = kind === 'text'
-      ? { x: 90, y: 470, width: 380, height: 60, text: 'New text', fontSize: 24 }
+      ? { x: 90, y: 470, width: 380, height: 60, text: 'New text', fontSize: 24, fill: '#15171c' }
       : kind === 'circle'
-        ? { x: 640, y: 180, width: 160, height: 160, text: '' }
-        : { x: 650, y: 380, width: 220, height: 140, text: '' };
-    design.objects.push({ id, kind, ...defaults });
+        ? { x: 640, y: 180, width: 160, height: 160, fill: '#6366f1', text: '' }
+        : { x: 650, y: 380, width: 220, height: 140, fill: '#eef2ff', text: '' };
+    design.objects.push({ id, kind, ...defaults, z: topZ, rotation: 0, opacity: 1, visible: true, locked: false });
     design.selected = id;
-    redraw();
+    redraw(true);
   };
-
+  const addImage = asset => {
+    if (!asset?.id) return;
+    const id = 'design-image-' + crypto.randomUUID().slice(0, 8);
+    design.objects.push({
+      id, kind: 'image', x: 120, y: 120, width: 360, height: 240,
+      text: '', fontSize: 24, z: Math.max(...design.objects.map(item => item.z), 0) + 1,
+      rotation: 0, opacity: 1, visible: true, locked: false,
+      fill: '#ffffff', assetId: asset.id, assetName: asset.name || 'Image'
+    });
+    design.selected = id;
+    redraw(true);
+  };
   const updateSelected = (key, value) => {
     if (!selected) return;
-    const number = Number(value);
-    selected[key] = Number.isFinite(number) ? number : value;
-    redraw();
+    if (['x','y','width','height','fontSize','z','rotation','opacity'].includes(key)) {
+      const bounds = key === 'opacity' ? [0,1] : key === 'fontSize' ? [6,320] : key === 'rotation' ? [-360,360] : [-4096,4096];
+      selected[key] = clampDesignNumber(value, bounds[0], bounds[1], selected[key]);
+    } else {
+      selected[key] = String(value ?? '').slice(0, key === 'text' ? 2000 : 200);
+    }
+    persistDesignState(data.run?.id || lastRun()?.id);
+    renderDeepWorkspaceShell();
   };
-
+  const moveLayer = direction => {
+    if (!selected) return;
+    const ordered = [...design.objects].sort((a,b) => a.z - b.z);
+    const index = ordered.findIndex(item => item.id === selected.id);
+    const target = ordered[index + direction];
+    if (!target) return;
+    const z = selected.z;
+    selected.z = target.z;
+    target.z = z;
+    persistDesignState(data.run?.id || lastRun()?.id);
+    renderDeepWorkspaceShell();
+  };
+  const align = how => {
+    if (!selected) return;
+    if (how === 'left') selected.x = 0;
+    if (how === 'center') selected.x = (design.canvas.width - selected.width) / 2;
+    if (how === 'right') selected.x = design.canvas.width - selected.width;
+    if (how === 'top') selected.y = 0;
+    if (how === 'middle') selected.y = (design.canvas.height - selected.height) / 2;
+    if (how === 'bottom') selected.y = design.canvas.height - selected.height;
+    persistDesignState(data.run?.id || lastRun()?.id);
+    renderDeepWorkspaceShell();
+  };
   return [
     element('div', { class: 'deep-workspace-head design' }, [
       element('div', { class: 'deep-workspace-identity' }, [
         element('span', { class: 'deep-workspace-kicker', text: 'DESIGN WORKSPACE' }),
         element('strong', { text: data.run?.goal || 'Visual design studio' }),
-        element('span', { class: 'muted small', text: 'Canvas · assets · composition · preview' })
+        element('span', { class: 'muted small', text: design.objects.length + ' objects · durable canvas state' })
       ]),
       element('div', { class: 'deep-workspace-state' }, [
         element('i', { 'aria-hidden': 'true' }),
@@ -318,49 +542,79 @@ function designWorkspaceProject(data) {
       ])
     ]),
     element('div', { class: 'design-studio-toolbar' }, [
-      button('Select', () => {}, 'primary small'),
+      button('Select', () => { design.selected = null; renderDeepWorkspaceShell(); }, 'small'),
       button('Text', () => addObject('text'), 'small'),
       button('Rectangle', () => addObject('rect'), 'small'),
       button('Circle', () => addObject('circle'), 'small'),
+      button('Duplicate', () => { duplicateDesignObject(design, selected); persistDesignState(data.run?.id); renderDeepWorkspaceShell(); }, 'small'),
+      button('Bring forward', () => moveLayer(1), 'small'),
+      button('Send backward', () => moveLayer(-1), 'small'),
       button('Add assets', () => $('attachBtn')?.click(), 'small'),
-      design.previewing
-        ? button('Exit preview', () => { design.previewing = false; redraw(); }, 'primary small')
-        : null,
-      !design.previewing ? button('Generate / edit', () => {
-        $('goal')?.focus({ preventScroll: false });
-        if (!$('goal').value.trim()) $('goal').value = 'Generate or edit the visual for this design.';
-      }, 'small') : null,
-      !design.previewing ? button('Preview', () => { design.previewing = true; redraw(); }, 'small') : null
+      !design.previewing ? button('Preview', () => { design.previewing = true; persistDesignState(data.run?.id); redraw(false); }, 'small') : button('Exit preview', () => { design.previewing = false; persistDesignState(data.run?.id); redraw(false); }, 'primary small'),
+      !design.previewing ? button('Export SVG', () => exportDesignSvg(design), 'small') : null
     ].filter(Boolean)),
     element('div', { class: 'design-studio-layout' }, [
       element('aside', { class: 'design-assets-panel' }, [
-        element('div', { class: 'design-panel-head' }, [element('strong', { text: 'Assets' }), element('span', { class: 'small muted', text: attachedImages.length + ' image' + (attachedImages.length === 1 ? '' : 's') })]),
+        element('div', { class: 'design-panel-head' }, [
+          element('strong', { text: 'Assets' }),
+          element('span', { class: 'small muted', text: attachedImages.length + ' image' + (attachedImages.length === 1 ? '' : 's') })
+        ]),
         attachedImages.length
-          ? element('div', { class: 'design-asset-grid' }, attachedImages.slice(0, 12).map(asset =>
-              element('div', { class: 'design-asset-tile' }, [
-                element('img', { src: '/api/objects/' + encodeURIComponent(asset.id) + '/content?preview=1', alt: asset.name || 'Design asset', loading: 'lazy' }),
+          ? element('div', { class: 'design-asset-grid' }, attachedImages.slice(0, 24).map(asset =>
+              element('button', { class: 'design-asset-tile', type: 'button', title: 'Place on canvas: ' + (asset.name || 'Image'), onclick: () => addImage(asset) }, [
+                element('img', {
+                  src: '/api/objects/' + encodeURIComponent(asset.id) + '/content?preview=1',
+                  alt: asset.name || 'Design asset',
+                  loading: 'lazy'
+                }),
                 element('span', { class: 'small truncate', text: asset.name || 'Image' })
               ])
             ))
-          : element('div', { class: 'design-panel-empty', text: 'Attach images or files to use them here.' })
+          : element('div', { class: 'design-panel-empty', text: 'Attach images or files to place them on the canvas.' })
       ]),
       element('section', { class: 'design-canvas-panel' }, [
         element('div', { class: 'design-canvas-head' }, [
           element('span', { class: 'mono', text: 'CANVAS' }),
-          element('span', { class: 'small muted', text: design.objects.length + ' objects · editable' })
+          element('span', { class: 'small muted', text: design.canvas.width + ' × ' + design.canvas.height })
         ]),
         canvas
       ]),
       element('aside', { class: 'design-inspector' }, [
-        element('div', { class: 'design-panel-head' }, [element('strong', { text: 'Inspector' }), element('span', { class: 'small muted', text: selected ? selected.kind : 'nothing selected' })]),
+        element('div', { class: 'design-panel-head' }, [
+          element('strong', { text: 'Inspector' }),
+          element('span', { class: 'small muted', text: selected ? selected.kind : 'canvas' })
+        ]),
         selected ? element('div', { class: 'design-inspector-fields' }, [
-          ['x', selected.x], ['y', selected.y], ['width', selected.width], ['height', selected.height],
-          ...(selected.kind === 'text' ? [['fontSize', selected.fontSize || 24]] : [])
-        ].map(([key, value]) => fieldInput(key, value, updateSelected))) : element('div', { class: 'design-panel-empty', text: 'Select an object to edit its geometry.' }),
+          ...[['x', selected.x], ['y', selected.y], ['width', selected.width], ['height', selected.height], ['rotation', selected.rotation], ['opacity', selected.opacity], ['z', selected.z]].map(([key, value]) => fieldInput(key, value, updateSelected)),
+          ...(selected.kind === 'text' ? [['fontSize', selected.fontSize]] : []).map(([key, value]) => fieldInput(key, value, updateSelected)),
+          element('label', { class: 'design-inspector-check' }, [
+            element('span', { text: 'Visible' }),
+            element('input', { type: 'checkbox', checked: selected.visible, onchange: () => { selected.visible = !selected.visible; persistDesignState(data.run?.id); renderDeepWorkspaceShell(); } })
+          ]),
+          element('label', { class: 'design-inspector-check' }, [
+            element('span', { text: 'Locked' }),
+            element('input', { type: 'checkbox', checked: selected.locked, onchange: () => { selected.locked = !selected.locked; persistDesignState(data.run?.id); renderDeepWorkspaceShell(); } })
+          ]),
+          element('label', {}, [
+            element('span', { text: 'Fill / text color' }),
+            element('input', { type: 'text', value: selected.fill, maxlength: '32', onchange: event => updateSelected('fill', event.target.value) })
+          ])
+        ]) : element('div', { class: 'design-panel-empty', text: 'Select an object, or edit the canvas below.' }),
+        element('div', { class: 'design-align-tools' }, ['left','center','right','top','middle','bottom'].map(how => button(how, () => align(how), 'small'))),
+        element('hr', { class: 'design-inspector-rule' }),
+        element('div', { class: 'design-inspector-fields' }, [
+          fieldInput('canvas.width', design.canvas.width, (_, value) => { design.canvas.width = clampDesignNumber(value, 320, 4096, design.canvas.width); persistDesignState(data.run?.id); renderDeepWorkspaceShell(); }),
+          fieldInput('canvas.height', design.canvas.height, (_, value) => { design.canvas.height = clampDesignNumber(value, 240, 4096, design.canvas.height); persistDesignState(data.run?.id); renderDeepWorkspaceShell(); }),
+          element('label', {}, [
+            element('span', { text: 'Canvas background' }),
+            element('input', { type: 'text', value: design.canvas.background, maxlength: '32', onchange: event => { design.canvas.background = event.target.value.slice(0,32); persistDesignState(data.run?.id); renderDeepWorkspaceShell(); } })
+          ])
+        ]),
         selected ? button('Delete object', () => {
           design.objects = design.objects.filter(item => item.id !== selected.id);
           design.selected = null;
-          redraw();
+          persistDesignState(data.run?.id);
+          renderDeepWorkspaceShell();
         }, 'danger small') : null
       ])
     ]),
@@ -376,7 +630,7 @@ function designWorkspaceProject(data) {
 function fieldInput(key, value, onChange) {
   const input = document.createElement('input');
   input.type = 'number';
-  input.step = '1';
+  input.step = key === 'opacity' ? '0.05' : '1';
   input.value = String(value ?? 0);
   input.setAttribute('aria-label', key);
   input.addEventListener('change', () => onChange(key, input.value));
