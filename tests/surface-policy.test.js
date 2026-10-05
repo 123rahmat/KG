@@ -4,7 +4,9 @@ import {
   classifySurfaceBoundary,
   normalChatAllowsTask,
   surfaceRuntimePolicy,
-  SURFACE_WORKSPACE_CONTRACTS
+  SURFACE_WORKSPACE_CONTRACTS,
+  SURFACE_INTELLIGENCE_PROFILES,
+  surfaceIntelligenceProfile
 } from '../src/surface-policy.js';
 import { resolveAdaptiveContext } from '../src/adaptive.js';
 
@@ -252,4 +254,21 @@ test('Normal Chat owns bounded micro and single-file work', () => {
     attachments: [{ name: 'main.py' }]
   });
   assert.equal(project.surface, 'code');
+});
+
+
+test('each surface has an explicit maturity profile without creating a second brain', () => {
+  const normal = surfaceIntelligenceProfile('normal-chat');
+  const code = surfaceIntelligenceProfile('code');
+  const research = surfaceIntelligenceProfile('research');
+  assert.equal(normal.id, 'normal-chat-intelligence');
+  assert.equal(code.id, 'code-intelligence');
+  assert.equal(research.id, 'research-intelligence');
+  assert.equal(normal.contextStrategy, 'minimum-sufficient-context');
+  assert.match(code.contextStrategy, /revision-first/i);
+  assert.match(research.contextStrategy, /question-first/i);
+  assert.match(code.parallelStrategy, /disjoint immutable-revision/i);
+  assert.match(research.verificationStrategy, /provenance/i);
+  assert.match(normal.costStrategy, /one strong model call/i);
+  assert.deepEqual(Object.keys(SURFACE_INTELLIGENCE_PROFILES), ['normal-chat', 'code', 'research']);
 });
