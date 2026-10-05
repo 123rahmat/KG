@@ -20,6 +20,7 @@ import {
 import { workScale, BUILT_IN } from './work-scale.js';
 import { approvalReasons, verificationContract } from './capabilities.js';
 import { buildUnifiedAdaptiveIntelligence } from './unified-adaptive-intelligence.js';
+import { nextAdaptiveStage } from './unified-adaptive-workflow.js';
 import { buildUnifiedWorkContext } from './unified-work-context.js';
 import { selectSkillDescriptors, summarizeSkillLearning, skillContextSignature, skillPlanForSelectedSkills } from './skills.js';
 import { parallelDecision } from './parallel-orchestrator.js';
@@ -819,67 +820,8 @@ const STAGE_REQUIREMENTS = Object.freeze({
   deliver: ['reasoning', 'verification']
 });
 
-function adaptiveNextStage(current, {
-  verificationFailed = false,
-  materialChange = false,
-  needsInvestigation = false,
-  executionRequired = false,
-  observationAvailable = false,
-  verificationEvidenceAvailable = false,
-  verified = false,
-  blocked = false,
-  depth = 'full',
-  coding = false,
-  research = false,
-  situation = {}
-} = {}) {
-  if (blocked) return null;
-  if (verificationFailed || materialChange) return 'replan';
-  if (current === 'verify' && !verified && !verificationEvidenceAvailable) return 'replan';
-  if (verified) return 'deliver';
-
-  // Research uses the same adaptive loop, but prioritizes evidence gaps
-  // and unresolved conflicts rather than software execution stages.
-  if (research) {
-    const researchNeedsMoreEvidence = needsInvestigation
-      || situation?.evidenceGap === true
-      || (Array.isArray(situation?.conflicts) && situation.conflicts.length > 0)
-      || (Array.isArray(situation?.unresolvedQuestions) && situation.unresolvedQuestions.length > 0);
-    if (current === 'understand') return 'model-situation';
-    if (current === 'model-situation') return researchNeedsMoreEvidence ? 'investigate' : 'reason';
-    if (current === 'investigate') return researchNeedsMoreEvidence ? 'investigate' : 'reason';
-    if (current === 'reason') return depth === 'focused' ? 'verify' : 'challenge';
-    if (current === 'challenge') return researchNeedsMoreEvidence ? 'investigate' : 'verify';
-    if (current === 'verify') return verified ? 'deliver' : researchNeedsMoreEvidence ? 'investigate' : 'replan';
-    if (current === 'replan') return 'investigate';
-    if (current === 'deliver') return null;
-  }
-
-  // Simple work still uses the same control loop, but shallowly. It should
-  // not pay for project-management stages that cannot materially improve it.
-  if (depth === 'focused' && !coding) {
-    if (current === 'understand') return 'model-situation';
-    if (current === 'model-situation') return needsInvestigation ? 'investigate' : 'reason';
-    if (current === 'investigate') return 'reason';
-    if (current === 'reason') return 'verify';
-    if (current === 'verify') return 'deliver';
-    if (current === 'deliver') return null;
-    if (current === 'replan') return 'reason';
-  }
-
-  if (current === 'understand') return 'model-situation';
-  if (current === 'model-situation') return needsInvestigation ? 'investigate' : 'reason';
-  if (current === 'investigate') return 'reason';
-  if (current === 'reason') return depth === 'focused' ? 'verify' : 'challenge';
-  if (current === 'challenge') return 'decide';
-  if (current === 'decide') return 'plan';
-  if (current === 'plan') return executionRequired ? 'execute' : 'verify';
-  if (current === 'execute') return 'observe';
-  if (current === 'observe') return observationAvailable ? 'verify' : 'verify';
-  if (current === 'verify') return observationAvailable ? 'replan' : 'deliver';
-  if (current === 'replan') return 'reason';
-  if (current === 'deliver') return null;
-  return needsInvestigation ? 'investigate' : 'understand';
+function adaptiveNextStage(current, options = {}) {
+  return nextAdaptiveStage(current, options);
 }
 
 function makeAdaptiveTask(stage, previous, {
