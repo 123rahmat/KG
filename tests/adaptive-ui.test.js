@@ -128,7 +128,7 @@ test('normal chat exposes the three logical control-agent areas without exposing
   assert.match(js, /server-controlled/);
 });
 
-test('adaptive workspace exposes distinct Normal Chat, Code and Research surfaces', async () => {
+test('adaptive workspace exposes distinct Normal Chat, Code, Research and Design surfaces', async () => {
   const js = await read('public/adaptive-workspace.js');
   assert.match(js, /Normal Chat/);
   assert.match(js, /Code Workspace/);
