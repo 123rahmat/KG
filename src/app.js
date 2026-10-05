@@ -190,7 +190,9 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
     res.json({
       ok: true,
       database: 'ready',
-      reasoning: config.ai ? { configured: true, provider: config.ai.provider } : { configured: false },
+      reasoning: config.ai
+        ? { configured: Boolean(config.ai.apiKey), provider: config.ai.provider, model: config.ai.model, healthy: config.ai.provider === 'xai' && config.ai.model === 'grok-4.7' && Boolean(config.ai.apiKey) }
+        : { configured: false, healthy: false },
       terminal: { enabled: Boolean(config.terminal?.enabled) },
       runners: {
         tools: Boolean(config.runners.tools),
