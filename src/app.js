@@ -31,6 +31,7 @@ import { registerWorkspaceSourcesRoutes } from './routes/workspace-sources.js';
 import { registerCodeWorkspaceSessionRoutes } from './routes/code-workspace-sessions.js';
 import { registerRagRoutes } from './routes/rag.js';
 import { registerFleetRoutes } from './routes/fleet.js';
+import { registerProjectRoutes } from './routes/projects.js';
 import { registerAccountRoutes } from './routes/account.js';
 import { registerSignInRoutes, registerMailAdminRoutes } from './routes/sign-in.js';
 import { Mailer } from './mailer.js';
@@ -42,7 +43,7 @@ const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..',
 
 export const VERSION = '10.4.2';
 
-export function createApp({ config, pool, identity, governance, capabilities, objects, runs, jobs = null, scheduler = null, fleet = null, audit, logger, metrics, fetchImpl = fetch }) {
+export function createApp({ config, pool, identity, governance, capabilities, objects, runs, jobs = null, scheduler = null, fleet = null, projects = null, audit, logger, metrics, fetchImpl = fetch }) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
@@ -356,7 +357,7 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
   });
   const memories = new MemoryStore(pool, { encryptionKey: config.security.personalDataEncryptionKey });
   const deps = {
-    config, pool, identity, governance, capabilities, objects, runs, jobs, scheduler, fleet, memories, audit,
+    config, pool, identity, governance, capabilities, objects, runs, jobs, scheduler, fleet, projects, memories, audit,
     logger, metrics, fetchImpl, route, scoped, idempotent
   };
   registerPlatformRoutes(app, deps);
@@ -372,6 +373,7 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
   registerCodeWorkspaceSessionRoutes(app, { pool, audit, route, scoped });
   registerRagRoutes(app, { pool, config, audit, route, scoped });
   registerFleetRoutes(app, deps);
+  registerProjectRoutes(app, deps);
 
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Unknown endpoint', code: 'no-route' }));
 
