@@ -81,10 +81,13 @@ export function grokFromStandIn(standIn) {
 
 export async function withServer(run, { env = {}, fetchImpl } = {}) {
   // A test written with a stand-in for another provider can still run against Gemini.
-  if (LEGACY_PROVIDERS.has(String(env.AI_PROVIDER ?? '').toLowerCase())) {
-    // The stand-in's model name belongs to the old provider; run it as Gemini.
-    env = { ...env, AI_PROVIDER: 'xai', AI_MODEL: 'grok-4.7' };
-    if (fetchImpl) fetchImpl = grokFromStandIn(fetchImpl);
+  const provider = String(env.AI_PROVIDER ?? '').toLowerCase();
+  if (fetchImpl && (provider === 'xai' || LEGACY_PROVIDERS.has(provider))) {
+    if (LEGACY_PROVIDERS.has(provider)) {
+      // Preserve old fixtures by running their stand-ins through the Grok compatibility adapter.
+      env = { ...env, AI_PROVIDER: 'xai', AI_MODEL: 'grok-4.7' };
+    }
+    fetchImpl = grokFromStandIn(fetchImpl);
   }
 
   const name = `pro_test_${crypto.randomBytes(6).toString('hex')}`;
