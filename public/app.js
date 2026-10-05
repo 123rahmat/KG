@@ -23,6 +23,7 @@ import { initWorkspaceSources } from './workspace-sources.js';
 import { initTerminal } from './terminal.js';
 import { initArtifactPreview } from './artifact-preview.js';
 import { initProjectHub, loadProjects } from './app-projects.js';
+import { openDesignWorkspace } from './design-workspace.js';
 
 initSettings();
 initWorkspaceSources();
@@ -1462,6 +1463,19 @@ document.addEventListener('kindgleam:select-surface', event => {
 
 document.addEventListener('kindgleam:open-code-workspace', () => {
   state.activeSurface = 'code';
+});
+
+document.addEventListener('kindgleam:open-design-workspace', async () => {
+  state.activeSurface = 'design';
+  if (state.run?.id) await openDesignWorkspace(state.run.id);
+});
+
+$('tabs').addEventListener('click', event => {
+  const design = event.target.closest('[data-surface="design"]');
+  if (!design) return;
+  event.preventDefault();
+  state.activeSurface = 'design';
+  if (state.run?.id) openDesignWorkspace(state.run.id);
 });
 
 document.addEventListener('kindgleam:project-selected', async event => {
