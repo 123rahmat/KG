@@ -1127,7 +1127,7 @@ export function renderAdaptiveWorkspace(host, mode = 'chat') {
       ])
     ]),
     element('div', { class: 'adaptive-workspace-surfaces', role: 'toolbar', 'aria-label': 'Adaptive workspace surfaces' },
-      surfaces.map(name => surfaceButton(name, mode === 'chat' && name === 'runs')))
+      surfaces.map(name => surfaceButton(name, data.workspace === (name === 'runs' ? 'normal-chat' : name))))
   );
   host.dataset.surfaceCount = String(surfaces.length);
   host.dataset.mode = mode;
