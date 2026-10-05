@@ -9,6 +9,7 @@
 
 import { resolveExternalDataNeeds } from './connectors.js';
 import { isCareNote } from './safety.js';
+import { buildRealWorldTaskModel } from './real-world-adaptation.js';
 
 const text = value => String(value ?? '').trim();
 
@@ -65,6 +66,12 @@ function collectContext(context = {}) {
     language: text(c.language),
     skillLevel: text(c.skillLevel ?? c.user?.skillLevel),
     preferences: asList(c.preferences),
+    commitments: c.commitments ?? c.promises ?? c.agendaItems ?? [],
+    dependencies: c.dependencies ?? c.prerequisites ?? [],
+    dueAt: c.dueAt ?? c.deadline ?? null,
+    startAt: c.startAt ?? null,
+    userBehavior: c.userBehavior ?? c.behavior ?? c.user?.behavior ?? {},
+    now: c.now ?? null,
     accessibility: c.accessibility ?? c.user?.accessibility ?? {},
     adaptiveControl: c.user?.adaptiveControl ?? {},
     currentState: c.currentState ?? null,
@@ -218,6 +225,13 @@ export function buildSituationModel(goal, context = {}) {
   });
   const risk = inCrisis ? 'crisis' : inferRisk(value, { ...c, constraints });
   const physical = risk === 'physical';
+  const realWorld = buildRealWorldTaskModel(value, {
+    ...c,
+    goal: value,
+    situation: { risk, physical, highImpact: risk === 'high-impact', externalSideEffect: c.externalSideEffect, peopleDecision: c.peopleDecision },
+    completedSteps: c.completedSteps,
+    failedSteps: c.failedSteps
+  });
   const highImpact = risk === 'high-impact';
   const crisis = risk === 'crisis';
   if (highImpact && !c.jurisdiction) {
@@ -310,6 +324,7 @@ export function buildSituationModel(goal, context = {}) {
     clarificationQuestions: materialQuestions,
     evidence: c.evidence,
     timeline: c.timeline,
+    realWorld,
     adaptation: {
       user: {
         skillLevel: c.skillLevel || null,
@@ -330,6 +345,14 @@ export function buildSituationModel(goal, context = {}) {
         requested: value,
         outcomes: outcome,
         successCriteria
+      },
+      realWorld: realWorld,
+      operational: {
+        realWorld,
+        nextAction: realWorld.nextAction,
+        urgency: realWorld.temporal?.urgency ?? 0,
+        userAutonomy: realWorld.userBehavior?.autonomy ?? 'collaborate',
+        externalActionBoundary: realWorld.controls?.includes('external-action-boundary') === true
       },
       capability: {
         discoveryRequired: needsCapabilityDiscovery,
@@ -473,7 +496,13 @@ export function mergeSituationEvidence(situation, evidence = {}) {
     timeline: [
       ...(Array.isArray(base.timeline) ? base.timeline : []),
       ...(Array.isArray(e.timeline) ? e.timeline : [])
-    ].slice(-100)
+    ].slice(-100),
+    commitments: [...(Array.isArray(base.realWorld?.commitments) ? base.realWorld.commitments : []), ...asList(e.commitments)],
+    dependencies: [...(Array.isArray(base.realWorld?.dependencies) ? base.realWorld.dependencies : []), ...(Array.isArray(e.dependencies) ? e.dependencies : [])],
+    dueAt: e.dueAt ?? e.deadline ?? base.realWorld?.temporal?.dueAt ?? null,
+    startAt: e.startAt ?? base.realWorld?.temporal?.startAt ?? null,
+    userBehavior: e.userBehavior ?? base.realWorld?.userBehavior ?? {},
+    now: e.now ?? null
   });
   // The ethical reading is made once, when the request arrives, and stays.
   if (base.ethics) next.ethics = base.ethics;
