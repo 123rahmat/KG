@@ -298,6 +298,7 @@ function designWorkspaceState() {
 
 function ensureDesignStateLoaded(runId) {
   if (!runId || hydratedDesignRunId === runId || hydratingDesignRunId === runId) return;
+  state.designWorkspace = designDefaults();
   hydratingDesignRunId = runId;
   api('GET', '/api/runs/' + encodeURIComponent(runId) + '/design-state', undefined, { timeoutMs: 8_000 })
     .then(payload => {
