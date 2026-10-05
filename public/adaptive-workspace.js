@@ -33,14 +33,22 @@ function researchNeed(run) {
 
 function currentStatus(run) {
   if (!run) return 'Ready for your next request';
-  if (run.state === 'complete') return 'Result verified and ready';
-  if (run.state === 'iterate') return 'Result ready — an improvement can continue from here';
-  if (run.state === 'blocked') return 'Waiting for a permitted path';
-  if (run.state === 'waiting') return 'Waiting for the next requirement or approval';
+  if (run.state === 'complete') return 'Completed and verified';
+  if (run.state === 'iterate') return 'Ready — you can continue or refine the result';
+  if (run.state === 'blocked') return 'Blocked — a permitted path is needed';
+  if (run.state === 'waiting') return 'Waiting for your input or approval';
   const task = run.tasks?.find(item => item.id === run.next);
-  return task?.metadata?.title || task?.purpose || 'Adapting the workflow to the situation';
+  const id = text(task?.id || task?.type).toLowerCase();
+  const title = text(task?.metadata?.title || task?.purpose);
+  if (id.includes('verify') || id.includes('test')) return 'Checking the result';
+  if (id.includes('investigate') || id.includes('research') || id.includes('discover')) return 'Gathering what is needed';
+  if (id.includes('code') || id.includes('build') || id.includes('implement')) return 'Working on the requested change';
+  if (id.includes('plan') || id.includes('decide')) return 'Choosing the next useful action';
+  if (id.includes('observe') || id.includes('assess') || id.includes('understand')) return 'Understanding the situation';
+  return title || 'Adapting the work to what is needed';
 }
 
+function runFocus(run) {
 function runFocus(run) {
   const situation = run?.situation ?? {};
   const classification = run?.adaptation?.classification ?? {};
@@ -130,17 +138,13 @@ function progressSnapshot(run) {
   );
   const images = attachments.filter(file => /^image\//i.test(String(file?.contentType ?? file?.type ?? ''))).length;
   const research = run?.adaptation?.researchWorkspace ?? {};
-  const agentCounts = tasks.reduce((sum, task) => {
-    const brief = task?.evidence?.multiAgent ?? task?.evidence?.structured?.multiAgent ?? null;
-    return sum + (Number(brief?.actualAgents ?? brief?.selectedAgents) || 0);
-  }, 0);
   const testCount = tasks.filter(task => task?.id === 'test-code' || /test|verif/i.test(String(task?.id) + ' ' + String(task?.type))).length;
   const verified = tasks.filter(task => task?.type === 'verify' && task?.status === 'complete').length;
   const denominator = Math.max(1, completed + failed + active + pending);
   return {
     completed, failed, active, pending,
     coverage: Math.round((completed / denominator) * 100),
-    files, images, agents: agentCounts,
+    files, images,
     sources: Number(research.sourceCount) || 0,
     evidence: Number(research.evidenceCount) || 0,
     conflicts: Array.isArray(research.conflicts) ? research.conflicts.length : 0,
@@ -154,60 +158,69 @@ function progressSnapshot(run) {
 
 export function renderWorkStatus(run) {
   const tasks = Array.isArray(run?.tasks) ? run.tasks : [];
-  const visible = tasks.slice(-7);
+  const visible = tasks.slice(-5);
   if (!visible.length) return null;
   const current = tasks.find(task => task.id === run.next) ?? tasks.find(task => !['complete','skipped'].includes(task.status));
   const execution = current?.evidence?.executionTarget || current?.evidence?.result?.executionTarget
     ? executionLabel(current)
     : null;
   const snapshot = progressSnapshot(run);
+  const status = currentStatus(run);
+  const active = run?.state === 'running' || run?.state === 'queued' || Boolean(current);
   const stats = [
-    ['Known steps', snapshot.completed + '/' + tasks.length, 'current adaptive graph'],
-    ['Work depth', snapshot.depth, snapshot.scale],
     ...(snapshot.files ? [['Files', String(snapshot.files), snapshot.images ? snapshot.images + ' image' + (snapshot.images === 1 ? '' : 's') : 'working set']] : []),
     ...(snapshot.sources || snapshot.evidence ? [['Evidence', String(snapshot.evidence), snapshot.sources + ' source' + (snapshot.sources === 1 ? '' : 's')]] : []),
-    ...(snapshot.agents ? [['Agents', String(snapshot.agents), 'advisory work recorded']] : []),
     ...(snapshot.tests ? [['Checks', String(snapshot.tests), snapshot.verified ? snapshot.verified + ' verified' : 'verification active']] : [])
   ];
   const meter = element('div', {
-    class: 'work-progress-meter', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100',
-    'aria-valuenow': String(snapshot.coverage), 'aria-label': 'Current workflow graph progress'
+    class: 'work-progress-meter' + (run?.state === 'complete' ? ' is-complete' : ''),
+    role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100',
+    'aria-valuenow': String(snapshot.coverage), 'aria-label': 'Adaptive work progress'
   }, [element('i', { style: 'width:' + snapshot.coverage + '%' })]);
   return element('div', { class: 'work-timeline', 'aria-label': 'Adaptive work progress' }, [
     element('div', { class: 'work-timeline-head' }, [
-      element('span', { class: 'small muted', text: 'Adaptive work' }),
-      current
-        ? element('span', { class: 'small', text: 'Now · ' + taskLabel(current) + (execution ? ' · ' + execution : '') })
-        : element('span', { class: 'small muted', text: run.state === 'complete' ? 'Verified result' : 'No pending step' })
+      element('div', { class: 'work-status-summary' }, [
+        element('span', { class: 'work-status-dot' + (active ? ' active' : ''), 'aria-hidden': 'true' }),
+        element('div', { class: 'work-status-copy' }, [
+          element('strong', { text: status }),
+          element('span', { class: 'small muted', text: current ? 'Current focus · ' + taskLabel(current) + (execution ? ' · ' + execution : '') : 'Adaptive work status' })
+        ])
+      ]),
+      element('span', { class: 'small muted work-status-state', text: run?.state === 'complete' ? 'Done' : run?.state === 'blocked' ? 'Blocked' : run?.state === 'waiting' ? 'Waiting' : 'Working' })
     ]),
     element('div', { class: 'work-progress-track' }, [meter]),
-    element('div', { class: 'work-status-grid adaptive-progress-grid' }, stats.slice(0, 6).map(([label, value, detail]) =>
-      element('div', { class: 'work-status-item' }, [
-        element('span', { class: 'small muted', text: label }),
-        element('strong', { text: value }),
-        element('span', { class: 'small muted', text: detail })
-      ])
-    )),
+    stats.length
+      ? element('div', { class: 'work-status-grid adaptive-progress-grid' }, stats.slice(0, 3).map(([label, value, detail]) =>
+          element('div', { class: 'work-status-item' }, [
+            element('span', { class: 'small muted', text: label }),
+            element('strong', { text: value }),
+            element('span', { class: 'small muted', text: detail })
+          ])
+        ))
+      : null,
     snapshot.failed || snapshot.conflicts || snapshot.gaps
       ? element('div', { class: 'work-progress-alerts' }, [
-          snapshot.failed ? element('span', { class: 'pill bad', text: snapshot.failed + ' failed step' + (snapshot.failed === 1 ? '' : 's') }) : null,
+          snapshot.failed ? element('span', { class: 'pill bad', text: snapshot.failed + ' step' + (snapshot.failed === 1 ? '' : 's') + ' needs attention' }) : null,
           snapshot.conflicts ? element('span', { class: 'pill warn', text: snapshot.conflicts + ' evidence conflict' + (snapshot.conflicts === 1 ? '' : 's') }) : null,
           snapshot.gaps ? element('span', { class: 'pill warn', text: snapshot.gaps + ' open research gap' + (snapshot.gaps === 1 ? '' : 's') }) : null
         ].filter(Boolean))
       : null,
-    element('div', { class: 'work-timeline-list' }, visible.map(task => {
-      const tone = taskTone(task);
-      const exec = executionLabel(task);
-      return element('div', { class: 'work-timeline-item ' + tone }, [
-        element('span', { class: 'work-timeline-dot', 'aria-hidden': 'true' }),
-        element('div', { class: 'work-timeline-copy' }, [
-          element('strong', { class: 'small', text: taskLabel(task) }),
-          element('span', { class: 'small muted', text: [task.status || 'pending', exec].filter(Boolean).join(' · ') })
-        ]),
-        task.status === 'failed' ? element('span', { class: 'small work-timeline-flag', text: 'Needs attention' }) : null
-      ].filter(Boolean));
-    }))
-  ]);
+    element('details', { class: 'work-timeline-details' }, [
+      element('summary', { class: 'small', text: 'Work details' }),
+      element('div', { class: 'work-timeline-list' }, visible.map(task => {
+        const tone = taskTone(task);
+        const exec = executionLabel(task);
+        return element('div', { class: 'work-timeline-item ' + tone }, [
+          element('span', { class: 'work-timeline-dot', 'aria-hidden': 'true' }),
+          element('div', { class: 'work-timeline-copy' }, [
+            element('strong', { class: 'small', text: taskLabel(task) }),
+            element('span', { class: 'small muted', text: [task.status || 'pending', exec].filter(Boolean).join(' · ') })
+          ]),
+          task.status === 'failed' ? element('span', { class: 'small work-timeline-flag', text: 'Needs attention' }) : null
+        ].filter(Boolean));
+      }))
+    ])
+  ].filter(Boolean));
 }
 function capabilityItems(data) {
   const run = data.run;
