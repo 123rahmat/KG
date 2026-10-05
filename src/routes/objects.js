@@ -56,7 +56,7 @@ export function registerObjectsRoutes(app, { objects, audit, scoped, idempotent,
     if (!object) return res.status(404).json({ error: 'Object not found', code: 'no-object' });
     // Always a download, never inline: stored bytes must not be able to
     // execute as markup on our own origin.
-    const preview = req.query.preview === '1' && req.query.preview === 'true';
+    const preview = req.query.preview === '1' || req.query.preview === 'true';
     if (preview) {
       const contentType = String(object.metadata.contentType || '').split(';')[0].toLowerCase();
       const safeInline = new Set([
