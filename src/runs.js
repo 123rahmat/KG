@@ -551,6 +551,40 @@ export class RunStore {
     };
   }
 
+  /** Replace the durable visual-design state for one run. */
+  async saveDesignWorkspace(scope, principal, runId, designState, { requestId } = {}) {
+    const state = normalizeDesignWorkspaceState(designState);
+    return transaction(this.pool, async client => {
+      const { rows: [run] } = await client.query(
+        `SELECT id, adaptation
+           FROM runs
+          WHERE id = $1 AND workspace_id = $2
+            AND (visibility = 'workspace' OR principal_id = $3)
+          FOR UPDATE`,
+        [text(runId), scope.workspaceId, scope.principalId]
+      );
+      if (!run) return null;
+      const adaptation = {
+        ...(run.adaptation && typeof run.adaptation === 'object' ? run.adaptation : {}),
+        designWorkspace: state
+      };
+      await client.query(
+        'UPDATE runs SET adaptation = $2::jsonb, updated_at = now() WHERE id = $1',
+        [run.id, JSON.stringify(adaptation)]
+      );
+      await client.query(
+        'INSERT INTO situation_events (run_id, workspace_id, principal_id, event_type, event) VALUES ($1, $2, $3, $4, $5::jsonb)',
+        [run.id, scope.workspaceId, principal.id, 'design-state', JSON.stringify({ version: state.version, objects: state.objects.length })]
+      );
+      await this.audit?.record({
+        principalId: principal.id, workspaceId: scope.workspaceId,
+        action: 'run.design-state.update', target: run.id, outcome: 'allowed',
+        detail: { objects: state.objects.length, canvas: state.canvas }, requestId
+      }, client);
+      return state;
+    });
+  }
+
   /** One entry per conversation, newest first, for the chat list. */
   async conversations(scope, { limit } = {}) {
     const size = Math.min(Math.max(Number(limit) || 30, 1), MAX_PAGE);
