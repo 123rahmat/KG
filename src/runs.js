@@ -205,7 +205,7 @@ export class RunStore {
     environment = null, language = '', skillLevel = '', preferences = [], currentState = null,
     completedSteps = [], failedSteps = [], evidence = [], questions = [],
     dataSources = [], connections = [], connectedServices = [], verifiedConnections = [], privacyConsent = {}, need = null, adaptiveControl = {},
-    commitments = [], dependencies = [], dueAt = null, startAt = null, userBehavior = {}, now = null, visibility = 'private',
+    commitments = [], dependencies = [], dueAt = null, startAt = null, userBehavior = {}, capacity = null, availability = null, competingCommitments = [], now = null, visibility = 'private',
     classifierHints = null, classification = null, conversationId = null, attachments = [],
     executionAvailable = null, modelSelection = null, learnedSkills = [],
     // The ethical side of the situation (safety.js ethicsOf): every step adapts to it.
