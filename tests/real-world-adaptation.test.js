@@ -60,7 +60,7 @@ test('situation model exposes the operational real-world layer', () => {
 });
 
 test('reduces an actionable workload when the user explicitly reports high attention load', () => {
-  const model = buildRealWorldTaskModel('Finish the work and send it to the team', {
+  const model = buildRealWorldTaskModel('Finish the work today', {
     capacity: { attention: 0.9 },
     completedSteps: [],
     failedSteps: []
