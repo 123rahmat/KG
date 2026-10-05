@@ -216,7 +216,10 @@ export function newChat() {
 }
 
 export async function loadRuns() {
-  const { conversations } = await api('GET', '/api/conversations?limit=100');
+  const projectQuery = state.activeProjectId
+    ? '&projectId=' + encodeURIComponent(state.activeProjectId)
+    : '';
+  const { conversations } = await api('GET', '/api/conversations?limit=100' + projectQuery);
   state.conversations = conversations;
   renderChatList();
   if (state.chat) renderChatHead();
