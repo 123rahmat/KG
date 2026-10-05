@@ -12,6 +12,7 @@
  * state. The RunStore is the enforcement boundary.
  */
 import { adaptiveEffortProfile, adaptiveBehaviorContract, adaptiveExecutionStrategy } from './adaptive-efficiency.js';
+import { realWorldExecutionPolicy } from './real-world-adaptation.js';
 import {
   adaptiveDecisionAuthority,
   buildAcceptanceContract,
@@ -193,6 +194,8 @@ export function buildUnifiedAdaptiveWorkflow({
     peopleDecision: s.peopleDecision === true
   });
   const a = acceptanceFrom(s, acceptance, p);
+  const realWorld = s.realWorld ?? {};
+  const realWorldPolicy = realWorldExecutionPolicy(realWorld);
   const executionStrategy = adaptiveExecutionStrategy({
     pressure: p.pressure,
     uncertainty: p.scores?.uncertainty,
@@ -231,6 +234,8 @@ export function buildUnifiedAdaptiveWorkflow({
     principle: 'One adaptive workflow, many specialized capabilities. Every subsystem follows the same situation, evidence, authority, execution, verification and stopping contract.',
     goal: s.goal,
     situation: s,
+    realWorld,
+    realWorldPolicy,
     profile: p,
     acceptance: a,
     authority,
