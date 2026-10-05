@@ -236,8 +236,6 @@ export function buildRealWorldTaskModel(goal, context = {}) {
     blockedDependencies,
     commitments,
     resources,
-    capacity,
-    observedBehavior,
     competingCommitments: capacity.competingCommitments,
     signals: {
       externalAction,
