@@ -421,7 +421,7 @@ export function planGoal(goal, {
     user, workspace, project, files, priorWork, constraints, resources,
     requirements, successCriteria, outputs, environment, language,
     skillLevel, preferences, currentState, completedSteps, failedSteps,
-    learnedSkills, commitments, dependencies, dueAt, startAt, userBehavior, now, commitments, dependencies, dueAt, startAt, userBehavior, now,
+    learnedSkills, commitments, dependencies, dueAt, startAt, userBehavior, capacity, availability, competingCommitments, now, commitments, dependencies, dueAt, startAt, userBehavior, now,
     evidence, questions, dataSources, connections, connectedServices, verifiedConnections, privacyConsent, need, adaptiveControl,
     workspaceType, runtimeMode, activeSurface, jurisdiction, blockedTopics, classifierHints, modelSelection,
     // Every attached file is part of the working set; only unreadable ones
