@@ -3003,4 +3003,27 @@ export const MIGRATIONS = [
     `
   }
 
+  ,{
+    version: 73,
+    name: 'project-scoped-memory-continuity',
+    sql: `
+      ALTER TABLE memories
+        ADD COLUMN IF NOT EXISTS project_id TEXT;
+
+      DROP INDEX IF EXISTS memories_scope_digest_idx;
+      CREATE UNIQUE INDEX IF NOT EXISTS memories_scope_digest_idx
+        ON memories (
+          workspace_id,
+          principal_id,
+          COALESCE(project_id, ''),
+          COALESCE(conversation_id, ''),
+          normalized_digest
+        )
+        WHERE normalized_digest IS NOT NULL AND normalized_digest <> '';
+
+      CREATE INDEX IF NOT EXISTS memories_project_idx
+        ON memories(workspace_id, principal_id, project_id, updated_at DESC);
+    `
+  }
+
 ];
