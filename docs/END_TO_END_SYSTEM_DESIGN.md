@@ -856,7 +856,7 @@ This is the canonical Kindgleam workflow.
 
 The current repository already has most of the hard foundations: progressive server-owned runs, unified adaptive decision logic, four workspace controllers, durable conversation state, project-aware continuation guards, code revision discipline, research evidence state, design state, bounded multi-agent orchestration, provider concurrency governance, durable jobs/scheduling/fleet control, PostgreSQL RLS, encrypted objects/personal data, immutable audit and execution boundaries.
 
-The next improvements should **align and harden those primitives under this contract**, rather than introduce another competing architecture. The highest-value product layer is first-class project organization so many conversations and active workstreams stay easy for a person to navigate.
+The next improvements should **align and harden those primitives under this contract**, rather than introduce another competing architecture. The human-facing Project Hub is now the organizational layer for many conversations and active workstreams; further work should improve filtering, milestones and operational views without moving workflow authority out of the Run/Task system.
 
 ## Principle
 
