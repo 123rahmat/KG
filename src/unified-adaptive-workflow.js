@@ -327,7 +327,7 @@ export function reassessUnifiedWorkflow(previous = {}, {
   const mergedEvidence = [...priorEvidence, ...(Array.isArray(evidence) ? evidence : [])].slice(-128);
   const next = buildUnifiedAdaptiveWorkflow({
     goal: mergedSituation.goal ?? prior.goal ?? '',
-    situation: mergedSituation,
+    situation: { ...mergedSituation, surface: text(surface) || text(prior.surface) || text(mergedSituation.surface) || 'normal-chat' },
     acceptance: {
       ...(prior.acceptance ?? {}),
       ...(acceptance ?? {}),
