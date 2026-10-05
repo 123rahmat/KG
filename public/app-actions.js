@@ -241,6 +241,7 @@ function actionCards(run) {
       ]),
       actionDetails(action),
       result,
+      action.result?.artifact ? element('div', { class: 'action-artifact' }, artifactChip(action.result.artifact)) : null,
       action.status === 'proposed' && canEdit() ? element('div', { class: 'row wrap' }, [
         button('Approve', event => decideAction(run, action, true, event.currentTarget), 'primary small'),
         button('Decline', event => decideAction(run, action, false, event.currentTarget), 'ghost small')
