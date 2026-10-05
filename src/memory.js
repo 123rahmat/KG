@@ -92,7 +92,7 @@ export class MemoryStore {
   }
 
   /** Automatic memories are bound to the current chat. */
-  async add(scope, { content, kind = 'fact', sourceRunId = null, conversationId = null }) {
+  async add(scope, { content, kind = 'fact', sourceRunId = null, conversationId = null, projectId = null }) {
     const value = text(content).replace(/\s+/g, ' ');
     if (!value) throw new MemoryError('Say what to remember.');
     if (value.length > MAX_MEMORY_CHARS) throw new MemoryError(`A memory is at most ${MAX_MEMORY_CHARS} characters.`);
@@ -104,17 +104,22 @@ export class MemoryStore {
     }
     const type = MEMORY_KINDS.includes(kind) ? kind : 'fact';
     const conversation = text(conversationId);
+    const project = text(projectId);
     if (conversation && !/^[A-Za-z0-9-]{8,64}$/.test(conversation)) {
       throw new MemoryError('Invalid conversation memory scope.', { status: 400, code: 'invalid-conversation' });
+    }
+    if (project && !/^[A-Za-z0-9-]{8,64}$/.test(project)) {
+      throw new MemoryError('Invalid project memory scope.', { status: 400, code: 'invalid-project' });
     }
     const key = normalized(value);
     const digest = keyedDigest(this.encryptionKey, 'memory-lookup-v1', key);
     const { rows: [same] } = await this.pool.query(
       `SELECT * FROM memories
         WHERE workspace_id = $1 AND principal_id = $2
-          AND COALESCE(conversation_id, '') = COALESCE($3, '')
-          AND normalized_digest = $4`,
-      [scope.workspaceId, scope.principalId, conversation || null, digest]
+          AND COALESCE(project_id, '') = COALESCE($3, '')
+          AND COALESCE(conversation_id, '') = COALESCE($4, '')
+          AND normalized_digest = $5`,
+      [scope.workspaceId, scope.principalId, project || null, conversation || null, digest]
     );
     if (same) {
       const { rows: [row] } = await this.pool.query(
@@ -124,28 +129,32 @@ export class MemoryStore {
     }
     const { rows: [row] } = await this.pool.query(
       `INSERT INTO memories
-        (id, workspace_id, principal_id, content, normalized, content_enc, normalized_digest, encryption_version, kind, source_run_id, conversation_id)
-       VALUES ($1, $2, $3, '', '', $4, $5, 1, $6, $7, $8) RETURNING *`,
+        (id, workspace_id, principal_id, content, normalized, content_enc, normalized_digest, encryption_version, kind, source_run_id, project_id, conversation_id)
+       VALUES ($1, $2, $3, '', '', $4, $5, 1, $6, $7, $8, $9) RETURNING *`,
       [
         crypto.randomUUID(), scope.workspaceId, scope.principalId,
         encryptJson(this.encryptionKey, 'memory-content-v1', { content: value, normalized: key }),
         keyedDigest(this.encryptionKey, 'memory-lookup-v1', key),
-        type, sourceRunId, conversation || null
+        type, sourceRunId, project || null, conversation || null
       ]
     );
     // Memory capacity is per chat, or per explicit cross-chat scope;
     // one chat can never evict another chat's private memory.
     const scopeClause = conversation
-      ? 'AND conversation_id = $3'
-      : 'AND conversation_id IS NULL';
+      ? 'AND project_id = $3 AND conversation_id = $4'
+      : project
+        ? 'AND project_id = $3 AND conversation_id IS NULL'
+        : 'AND project_id IS NULL AND conversation_id IS NULL';
     const params = conversation
-      ? [scope.workspaceId, scope.principalId, conversation, MAX_MEMORIES]
-      : [scope.workspaceId, scope.principalId, MAX_MEMORIES];
+      ? [scope.workspaceId, scope.principalId, project, conversation, MAX_MEMORIES]
+      : project
+        ? [scope.workspaceId, scope.principalId, project, MAX_MEMORIES]
+        : [scope.workspaceId, scope.principalId, MAX_MEMORIES];
     await this.pool.query(
       `DELETE FROM memories WHERE id IN (
          SELECT id FROM memories
           WHERE workspace_id = $1 AND principal_id = $2 ${scopeClause}
-          ORDER BY COALESCE(last_used_at, updated_at) DESC OFFSET $${conversation ? 4 : 3})`,
+          ORDER BY COALESCE(last_used_at, updated_at) DESC OFFSET ${conversation ? 5 : project ? 4 : 3})`,
       params
     );
     return { memory: shape(row, this.encryptionKey), created: true };
@@ -174,9 +183,9 @@ export class MemoryStore {
       : id
         ? (await this.pool.query(
             `SELECT * FROM memories
-               WHERE workspace_id = $1 AND principal_id = $2 AND conversation_id = $3
+               WHERE workspace_id = $1 AND principal_id = $2 AND project_id = $3 AND conversation_id = $4
                ORDER BY updated_at DESC LIMIT $4`,
-            [scope.workspaceId, scope.principalId, id, MAX_MEMORIES]
+            [scope.workspaceId, scope.principalId, project || null, id, MAX_MEMORIES]
           )).rows
         : [];
     const matches = rows.map(row => shape(row, this.encryptionKey)).filter(memory => {
@@ -216,8 +225,9 @@ export class MemoryStore {
    * like answers always; other memories when they share words with the goal,
    * then the most recent.
    */
-  async recall(scope, goal, { conversationId = null, crossChat = false, limit = RECALL_LIMIT } = {}) {
+  async recall(scope, goal, { conversationId = null, projectId = null, crossChat = false, limit = RECALL_LIMIT } = {}) {
     const id = text(conversationId);
+    const project = text(projectId);
     const local = id
       ? (await this.pool.query(
           `SELECT * FROM memories
@@ -233,8 +243,9 @@ export class MemoryStore {
           `SELECT * FROM memories
              WHERE workspace_id = $1 AND principal_id = $2
                AND ($3::text IS NULL OR conversation_id IS DISTINCT FROM $3)
+               AND ($4::text IS NULL OR project_id = $4)
              ORDER BY updated_at DESC LIMIT $4`,
-          [scope.workspaceId, scope.principalId, id || null, MAX_MEMORIES]
+          [scope.workspaceId, scope.principalId, id || null, project || null, MAX_MEMORIES]
         )).rows.map(row => shape(row, this.encryptionKey))]
       : local;
     if (!all.length) return [];
@@ -266,7 +277,7 @@ export async function memoriesFor(memories, scope, run) {
   return memories.recall(
     scope,
     [run?.goal, ...(run?.adaptation?.conversation ?? []).slice(-2).map(turn => turn.user)].join(' '),
-    { conversationId, crossChat }
+    { conversationId, projectId: run?.projectId ?? run?.project_id ?? null, crossChat }
   );
 }
 
@@ -287,7 +298,8 @@ registerTools([
           content: input.fact,
           kind: input.kind,
           sourceRunId: ctx.run?.id ?? null,
-          conversationId: chatScope(ctx.run)
+          conversationId: chatScope(ctx.run),
+          projectId: ctx.run?.projectId ?? ctx.run?.project_id ?? null
         });
         return { remembered: memory.content, created, scope: memory.conversationId ? 'this-chat' : 'cross-chat' };
       } catch (error) {
