@@ -240,7 +240,8 @@ export function buildUnifiedAdaptiveWorkflow({
     acceptance: a,
     authority,
     behavior,
-    controllerCatalog: modeControllerCatalogSafe(),\n    subsystems: SUBSYSTEMS.map(name => ({
+    controllerCatalog: modeControllerCatalogSafe(),
+    subsystems: SUBSYSTEMS.map(name => ({
       name,
       authority: 'server-owned',
       role: name === 'main-executor' ? 'execute-user-facing-work' : 'advisory-or-specialized',
