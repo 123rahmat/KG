@@ -349,8 +349,10 @@ export class RunStore {
     // calculating equivalent contracts in parallel.
     plan.adaptation.unifiedAdaptiveWorkflow = buildUnifiedAdaptiveWorkflow({
       goal: goalText,
+      surface: plan.surface === 'chat' ? 'normal-chat' : plan.surface,
       situation: {
         ...situation,
+        surface: plan.surface === 'chat' ? 'normal-chat' : plan.surface,
         riskScore: Number(situation.riskScore ?? 0),
         consequence: Number(situation.consequence ?? 0)
       },
@@ -404,6 +406,11 @@ export class RunStore {
     if (workspaceSourceId) plan.adaptation.workspaceSourceId = workspaceSourceId;
     const usesResearchWorkspace = plan.surface === 'research'
       || (Array.isArray(plan.adaptation?.surfaces) && plan.adaptation.surfaces.includes('research'));
+    const usesDesignWorkspace = plan.surface === 'design'
+      || (Array.isArray(plan.adaptation?.surfaces) && plan.adaptation.surfaces.includes('design'));
+    if (usesDesignWorkspace) {
+      plan.adaptation.designWorkspace = previousState?.adaptation?.designWorkspace ?? null;
+    }
     if (usesResearchWorkspace) {
       plan.adaptation.researchWorkspace = createResearchWorkspaceState({
         goal: goalText,
