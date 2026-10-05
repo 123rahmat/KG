@@ -26,6 +26,7 @@ import { initArtifactPreview } from './artifact-preview.js';
 initSettings();
 initWorkspaceSources();
 initTerminal();
+initArtifactPreview();
 
 
 /* --------------------------------------------------------------- transport */
