@@ -17,6 +17,7 @@ import { adaptConcurrency, adaptiveParallelLimit, agentWorkspaceLane, buildWorks
 import { buildSubsystemPlan, compactSubsystemPlan, createSubsystemMessage, mergeSubsystemMessages, subsystemAssignment, subsystemCommunicationContext } from './subsystem-orchestrator.js';
 import { realWorldMaturity } from './adaptive-efficiency.js';
 import { adaptiveDecisionAuthority, buildAcceptanceContract } from './adaptive-decision-authority.js';
+import { controllerForSurface } from './mode-controllers.js';
 
 export const MULTI_AGENT_MODES = Object.freeze(['auto', 'always', 'off']);
 export const DEFAULT_MULTI_AGENT_MAX_AGENTS = 6;
@@ -79,6 +80,26 @@ const ROLE_CATALOG = Object.freeze({
   'performance-reviewer': {
     purpose: 'Look for measurable performance and resource risks in the affected code: hot paths, repeated work, database/network amplification, memory growth, concurrency hazards, and unnecessary computation.',
     bestFor: ['build-code', 'code', 'refactor-code', 'review-code', 'prototype'],
+  },
+  'art-director': {
+    purpose: 'Set the visual direction, hierarchy, composition intent and aesthetic constraints for a design without owning the final mutation.',
+    bestFor: ['design', 'prototype', 'plan', 'step'],
+  },
+  'visual-designer': {
+    purpose: 'Translate the visual direction into concrete composition, typography, spacing, imagery and component-level design decisions for the current artifact.',
+    bestFor: ['design', 'prototype', 'step', 'respond'],
+  },
+  'image-editor': {
+    purpose: 'Evaluate or propose image generation/editing choices, crops, placement, treatment and asset compatibility for the current design.',
+    bestFor: ['design', 'prototype', 'step'],
+  },
+  'layout-designer': {
+    purpose: 'Check geometry, alignment, spacing, hierarchy and responsive or export-safe layout behavior against the canvas constraints.',
+    bestFor: ['design', 'prototype', 'step', 'verify'],
+  },
+  'visual-reviewer': {
+    purpose: 'Adversarially inspect a design result for visual defects, legibility, consistency, overlaps, asset integrity and output constraints.',
+    bestFor: ['design', 'prototype', 'verify', 'reassess'],
   }
 });
 
@@ -180,6 +201,7 @@ function taskSignals(run, task, progress = {}) {
   const scale = text(adaptation.scale).toLowerCase();
   const goal = text(progress?.goal ?? run?.goal);
   const flags = goalFlags(goal);
+  const designWorkspace = text(run?.surface).toLowerCase() === 'design' || text(run?.adaptation?.primarySurface).toLowerCase() === 'design';
   const goalLower = goal.toLowerCase();
   const securityFocus = /\b(?:security|secure|auth|authentication|authorization|permission|credential|secret|token|password|privacy|encrypt|encryption|payment|billing)\b/.test(goalLower);
   const performanceFocus = /\b(?:performance|latency|slow|optimi[sz]|memory|cpu|throughput|scale|scaling|query|queries|cache|caching)\b/.test(goalLower);
@@ -252,7 +274,7 @@ function taskSignals(run, task, progress = {}) {
     ? Math.min(0.18, (flags.communication ? 0.08 : 0.04) + (outputs >= 1 ? 0.04 : 0) + (constraints >= 2 ? 0.04 : 0))
     : 0;
   return {
-    executable, investigative, communication, flags, securityFocus, performanceFocus,
+    executable, investigative, communication, flags, designWorkspace, securityFocus, performanceFocus,
     scaleComplexity, implementationComplexity, decomposition, unknowns,
     evidenceDiversity, evidenceGap, stakes, recovery, depth, taskCoordinationBonus,
     concurrencyOpportunity, comparisonComplexity, communicationComplexity,
@@ -323,6 +345,7 @@ function targetAgentCount(pressure, maxAgents) {
 
 export function multiAgentDecision(run, task, { mode = 'auto', progress = {} } = {}) {
   const normalizedMode = MULTI_AGENT_MODES.includes(mode) ? mode : 'auto';
+  const controller = controllerForSurface(run?.surface || run?.adaptation?.primarySurface || 'normal-chat');
   const basePressure = decisionPressure(run, task, progress);
   const maturity = run?.adaptation?.effortProfile?.maturity ?? realWorldMaturity({
     riskScore: run?.situation?.risk === 'critical' ? 1 : run?.situation?.risk === 'high' ? 0.75 : run?.situation?.risk === 'medium' ? 0.45 : 0.15,
@@ -373,11 +396,23 @@ export function multiAgentDecision(run, task, { mode = 'auto', progress = {} } =
   }
   if (task?.type === 'verify') return { enabled: false, reason: 'dedicated-verification-review', pressure, maturity };
   if (normalizedMode === 'always') return { enabled: true, reason: 'always', pressure, maturity };
+  if (controller.mode === 'normal-chat' && controllerForSurface('normal-chat') && buildControllerShouldRecruit(controller, pressure, run)) {
+    return { enabled: true, reason: 'normal-chat-specialist-justified', pressure, maturity };
+  }
   if (maturity?.independentVerificationRequired && maturityPressure >= 0.65 && task?.type !== 'deliver') {
     return { enabled: true, adaptiveAuthority, reason: 'real-world-maturity-justified', pressure, maturity };
   }
   if (pressure >= AUTO_PANEL_THRESHOLD) return { enabled: true, reason: 'adaptive-value-justified', pressure, maturity };
   return { enabled: false, reason: 'single-agent-sufficient', pressure, maturity };
+}
+
+function buildControllerShouldRecruit(controller, pressure, run) {
+  const p = Number(pressure) || 0;
+  const uncertainty = Number(run?.situation?.uncertainty ?? 0);
+  const complexity = Number(run?.situation?.complexity ?? 0);
+  return controller.mode === 'normal-chat'
+    && (uncertainty >= 0.55 || complexity >= 0.55)
+    && p >= 0.34;
 }
 
 function roleUtility(role, run, task, progress = {}, precomputed = null) {
@@ -407,7 +442,12 @@ function roleUtility(role, run, task, progress = {}, precomputed = null) {
     debugger: signals.executable ? (signals.retrying ? 0.95 : 0.42) + signals.recovery * 0.4 : 0.05,
     'test-engineer': signals.executable ? 0.48 + (signals.successCriteria > 0 ? 0.12 : 0) + (signals.retrying ? 0.16 : 0) : 0.07,
     'security-reviewer': signals.securityFocus ? 0.92 + signals.stakes * 0.3 : (signals.executable ? 0.16 : 0.04),
-    'performance-reviewer': signals.performanceFocus ? 0.88 + signals.scaleComplexity * 0.4 : 0.05
+    'performance-reviewer': signals.performanceFocus ? 0.88 + signals.scaleComplexity * 0.4 : 0.05,
+    'art-director': signals.designWorkspace ? 0.62 + signals.depth * 0.4 + signals.comparisonComplexity * 0.2 : 0.02,
+    'visual-designer': signals.designWorkspace ? 0.66 + signals.implementationComplexity * 0.25 + signals.communicationComplexity * 0.2 : 0.02,
+    'image-editor': signals.designWorkspace ? (signals.evidenceDiversity > 0.12 ? 0.72 : 0.56) : 0.02,
+    'layout-designer': signals.designWorkspace ? 0.70 + signals.decomposition * 0.4 + signals.constraints * 0.04 : 0.02,
+    'visual-reviewer': signals.designWorkspace ? 0.72 + (signals.retrying ? 0.18 : 0) + signals.recovery * 0.4 : 0.02
   }[role] ?? 0;
   const learningBoost = run?.adaptation?.learning?.caution === true
     && ['critic', 'debugger', 'test-engineer'].includes(role) ? 0.12 : 0;
@@ -415,8 +455,14 @@ function roleUtility(role, run, task, progress = {}, precomputed = null) {
 }
 
 function roleCandidates(run, task, progress = {}, precomputed = null) {
+  const controller = controllerForSurface(run?.surface || run?.adaptation?.primarySurface || 'normal-chat');
+  const preferred = new Set(controller.roles);
   return Object.keys(ROLE_CATALOG)
-    .map(role => ({ role, utility: roleUtility(role, run, task, progress, precomputed) }))
+    .map(role => ({
+      role,
+      utility: roleUtility(role, run, task, progress, precomputed)
+        + (preferred.has(role) ? 0.12 : 0)
+    }))
     .sort((a, b) => b.utility - a.utility || a.role.localeCompare(b.role));
 }
 
