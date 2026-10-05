@@ -41,10 +41,11 @@ function currentStatus(run) {
   const id = text(task?.id || task?.type).toLowerCase();
   const title = text(task?.metadata?.title || task?.purpose);
   if (id.includes('verify') || id.includes('test')) return 'Checking the result';
-  if (id.includes('investigate') || id.includes('research') || id.includes('discover')) return 'Gathering what is needed';
+  if (id.includes('investigate') || id.includes('research') || id.includes('discover')) return 'Gathering only what is needed';
   if (id.includes('code') || id.includes('build') || id.includes('implement')) return 'Working on the requested change';
   if (id.includes('plan') || id.includes('decide')) return 'Choosing the next useful action';
   if (id.includes('observe') || id.includes('assess') || id.includes('understand')) return 'Understanding the situation';
+  if (id.includes('replan') || id.includes('recover') || id.includes('diagnos')) return 'Adjusting after new evidence';
   return title || 'Adapting the work to what is needed';
 }
 
@@ -174,7 +175,7 @@ export function renderWorkStatus(run) {
   const meter = element('div', {
     class: 'work-progress-meter' + (run?.state === 'complete' ? ' is-complete' : ''),
     role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100',
-    'aria-valuenow': String(snapshot.coverage), 'aria-label': 'Adaptive work progress'
+    'aria-valuenow': String(snapshot.coverage), 'aria-label': 'Workflow graph progress'
   }, [element('i', { style: 'width:' + snapshot.coverage + '%' })]);
   return element('div', { class: 'work-timeline', 'aria-label': 'Adaptive work progress' }, [
     element('div', { class: 'work-timeline-head' }, [
