@@ -69,6 +69,7 @@ function surfaceSet(run) {
   const workspace = selected ?? activeWorkspace(run);
   if (workspace === 'code') surfaces.add('code');
   if (workspace === 'research') surfaces.add('research');
+  if (workspace === 'design') surfaces.add('design');
   if (fileNeed(run)) surfaces.add('objects');
   return [...surfaces];
 }
