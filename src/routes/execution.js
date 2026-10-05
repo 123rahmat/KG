@@ -1506,6 +1506,10 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         physical: run.situation?.physical === true, regulated: run.situation?.regulated === true,
         peopleDecision: run.situation?.peopleDecision === true
       })),
+      modeController: run.adaptation?.unifiedAdaptiveWorkflow?.modeController
+        ?? run.adaptation?.modeController
+        ?? null,
+      surface: run.surface || run.adaptation?.primarySurface || 'normal-chat',
       adaptiveContext: {
         memory: {
           recalledItems: remembered.length,
