@@ -97,7 +97,7 @@ function surfaceButton(name, active) {
 
 export function adaptiveWorkspaceState() {
   const run = lastRun();
-  const selected = ['code', 'research', 'normal-chat'].includes(state.activeSurface) ? state.activeSurface : null;
+  const selected = ['code', 'research', 'design', 'normal-chat'].includes(state.activeSurface) ? state.activeSurface : null;
   const workspace = selected ?? activeWorkspace(run);
   return {
     run,
@@ -277,7 +277,7 @@ function designWorkspaceProject(data) {
   const attachedImages = [
     ...(Array.isArray(data.run?.adaptation?.attachments) ? data.run.adaptation.attachments : []),
     ...(Array.isArray(state.attachments) ? state.attachments : [])
-  ].filter(item => /^image\\//i.test(String(item?.contentType ?? item?.type ?? '')));
+  ].filter(item => /^image\//i.test(String(item?.contentType ?? item?.type ?? '')));
   const redraw = () => renderDeepWorkspaceShell();
 
   const canvas = element('div', { class: 'design-canvas', role: 'application', 'aria-label': 'Design canvas' }, [
@@ -396,7 +396,7 @@ function fieldInput(key, value, onChange) {
       { id:'canvas', label:'Canvas', detail:'editable composition', action:()=>renderDeepWorkspaceShell(), ready:true },
       { id:'assets', label:'Assets', detail:'images and visual inputs', action:()=>$('attachBtn')?.click(), ready:true },
       { id:'generate', label:'Generate / edit', detail:required.has('image-generation') ? 'needed for this run' : 'on demand', action:()=>{ $('goal')?.focus({preventScroll:false}); }, ready:true },
-      { id:'preview', label:'Preview', detail:'check the current visual result', action:()=>document.dispatchEvent(new CustomEvent('kindgleam:preview-design')), ready:true },
+      { id:'preview', label:'Preview', detail:'check the current visual result', action:()=>{ designWorkspaceState().previewing = true; renderDeepWorkspaceShell(); }, ready:true },
       { id:'research', label:'Research direction', detail:'switch only when evidence is needed', action:()=>document.dispatchEvent(new CustomEvent('kindgleam:select-surface',{detail:{name:'runs',workspace:'research'}})), ready:true },
       { id:'implementation', label:'Code implementation', detail:'move to Code when software is required', action:()=>document.dispatchEvent(new CustomEvent('kindgleam:open-code-workspace')), ready:true }
     ];
