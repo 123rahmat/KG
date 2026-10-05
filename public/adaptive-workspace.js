@@ -5,7 +5,7 @@
  * remains authoritative; this only turns that state into the smallest
  * useful set of visible workspace surfaces and a clear current focus.
  */
-import { state, $, element, button, api } from './ui-core.js';
+import { state, $, element, button, api, notify } from './ui-core.js';
 
 const SURFACE_META = {
   runs: { label: 'Normal Chat', icon: 'chat', kind: 'normal-chat' },
@@ -467,7 +467,7 @@ async function saveDesignSvg(design, runId) {
     contentType: 'image/svg+xml',
     content: btoa(binary),
     encoding: 'base64',
-    visibility: 'private',
+    visibility: runId && lastRun()?.visibility === 'workspace' ? 'workspace' : 'private',
     provenance: {
       source: 'design-workspace-export',
       runId,
@@ -603,7 +603,9 @@ function designWorkspaceProject(data) {
         persistDesignState(data.run?.id);
         renderDeepWorkspaceShell();
       }, 'small'),
-      !design.previewing ? button('Save SVG to Files', () => saveDesignSvg(design, data.run?.id).catch(() => {}), 'small') : null,
+      !design.previewing ? button('Save SVG to Files', () => saveDesignSvg(design, data.run?.id)
+        .then(() => notify('runNotice', 'ok', 'Design SVG saved to Files.'))
+        .catch(error => notify('runNotice', 'warn', error?.message || 'Design export could not be saved.')), 'small') : null,
       !design.previewing ? button('Preview', () => { design.previewing = true; persistDesignState(data.run?.id); redraw(false); }, 'small') : button('Exit preview', () => { design.previewing = false; persistDesignState(data.run?.id); redraw(false); }, 'primary small'),
       !design.previewing ? button('Export SVG', () => exportDesignSvg(design), 'small') : null
     ].filter(Boolean)),
