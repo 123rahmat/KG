@@ -303,13 +303,21 @@ export function adaptiveStepScope(resourcePlan = {}, task = {}, { need = null } 
     need
   });
   const needsData = ['investigate', 'discover', 'discover-capabilities', 'reassess'].includes(text(task?.type));
+  const taskSurface = text(task?.metadata?.surface || task?.surface);
+  const surfaces = taskSurface === 'design' || taskCapabilities.has('design')
+    ? ['design']
+    : taskSurface === 'research' || task?.type === 'investigate'
+      ? ['research']
+      : taskSurface === 'code' || task?.type === 'code'
+        ? ['code']
+        : ['chat'];
   return {
     level: 'step',
     capabilities,
     dataSources: needsData ? [...(selected.dataSources ?? [])] : [],
     artifacts: needsArtifacts ? [...(selected.artifacts ?? [])] : [],
     tools,
-    surfaces: task?.type === 'code' ? ['code'] : ['chat'],
+    surfaces,
     exactNeed: need && typeof need === 'object' ? need : null,
     adaptiveControl: hierarchy.effective
   };
@@ -444,7 +452,8 @@ function surfaceForRequirement(id) {
   if (id === 'evidence-retrieval' || id === 'external-data-routing') return 'research';
   if (id === 'file-analysis') return 'workspace';
   if (id === 'code-generation' || id === 'code-execution') return 'code';
-  if (['design', 'invention', 'hypothesis-generation', 'concept-evaluation', 'experiment-design'].includes(id)) return 'creation';
+  if (id === 'design') return 'design';
+  if (['invention', 'hypothesis-generation', 'concept-evaluation', 'experiment-design'].includes(id)) return 'creation';
   return null;
 }
 
