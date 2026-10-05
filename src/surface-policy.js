@@ -117,20 +117,6 @@ export const SURFACE_INTELLIGENCE_PROFILES = Object.freeze({
     qualityStrategy: 'working software, scoped changes, reproducibility, regression safety, and verified repository state',
     preferredRoles: Object.freeze(['architect', 'implementer', 'test-engineer', 'diagnostician', 'debugger', 'security-reviewer', 'performance-reviewer'])
   }),
-  design: Object.freeze({
-    id: 'design',
-    label: 'Design Workspace',
-    mode: 'editable-visual-design',
-    objective: 'Create and refine visual artifacts with a real canvas, asset set, layout controls, previews and governed export without creating a separate intelligence stack.',
-    contextPolicy: 'Keep the canvas, selected objects, dimensions, assets and active design constraints authoritative; pull additional context only when it changes the visual result.',
-    toolPolicy: 'Use image generation/editing, artifact tools and visual transformations only for the current design step; keep mutations scoped to the active artifact.',
-    agentPolicy: 'Use one primary visual executor by default; add art direction, layout, image or review roles only when their independent value is justified.',
-    verificationPolicy: 'Check composition, overlaps, legibility, asset integrity, requested dimensions and export/preview correctness before finalization.',
-    creationPolicy: 'Design artifacts are editable and previewable; no hidden mutation is allowed outside the active design scope.',
-    escalationPolicy: 'Escalate to Research for source-heavy visual investigation and to Code for implementation of a design into software.',
-    uiPolicy: 'Expose canvas, tools, layers/objects, assets, inspector and preview/export in one focused visual workspace.',
-    selectionPolicy: 'Sticky while selected; preserve canvas and visual-artifact continuity across design follow-ups.'
-  }),
   research: Object.freeze({
     id: 'research-intelligence',
     maturity: 'deep-evidence',
@@ -295,8 +281,7 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
     || flags.research === true && /\b(?:source|evidence|latest|current|paper|literature|research|investigat)\w*\b/i.test(value);
   const visualOrFile = Array.isArray(attachments) && attachments.length > 0;
   const requested = activeSurface || 'normal-chat';
-  const activeIsDesign = active === 'design';
-  const explicitDesignSwitch = EXPLICIT_MODE_SWITCH.design.test(value);
+    const explicitDesignSwitch = EXPLICIT_MODE_SWITCH.design.test(value);
   const visualDesign = /\b(?:image design|visual design|graphic design|poster|logo|branding|brand board|illustration|layout|composition|art direction|canvas|mood ?board|wireframe|mockup|visual identity)\b/i.test(value)
     || (Array.isArray(attachments) && attachments.some(item => /^image\//i.test(String(item?.contentType ?? item?.type ?? '')))
        && /\b(?:edit|transform|compose|arrange|design|layout|make|create|generate|visual)\b/i.test(value));
