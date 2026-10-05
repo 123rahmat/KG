@@ -10,6 +10,7 @@ import { renderExplore } from './app-actions.js';
 import { previewButton, previewKind } from './artifact-preview.js';
 import { activateSettingsSection, openSettings } from './app-settings-window.js';
 import { OFFLINE_QUEUE_KEY, clearDraft, clearOfflineFiles, loadOfflineFiles, loadPreferences, readDraft, setSaveState } from './app-settings.js';
+import { loadProjects, renderProjectHub } from './app-projects.js';
 
 /* ------------------------------------------------------------------ files */
 
@@ -686,6 +687,11 @@ export async function enterApp() {
   $('userInitial').textContent = (state.principal.name || '?').trim().charAt(0).toUpperCase();
   await ensureTerms();
   await loadPreferences();
+  await loadProjects().catch(() => {
+    state.projects = [];
+    state.activeProjectId = null;
+    renderProjectHub();
+  });
   await loadExecutionConfig().catch(() => {
     state.executionConfig = { targets: [], localAgentUrl: null, reasoning: { configured: false } };
   });
