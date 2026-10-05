@@ -433,7 +433,14 @@ export function subsystemCanAct(workflow = {}, subsystem = '', {
   };
 }
 
-function modeControllerCatalogSafe() {\n  return ['normal-chat', 'code', 'research', 'design'].map(mode => {\n    const c = controllerForSurface(mode);\n    return { id: c.id, mode: c.mode, objective: c.objective, roles: [...c.roles] };\n  });\n}\n\nexport { SUBSYSTEMS };
+function modeControllerCatalogSafe() {
+  return ['normal-chat', 'code', 'research', 'design'].map(mode => {
+    const c = controllerForSurface(mode);
+    return { id: c.id, mode: c.mode, objective: c.objective, roles: [...c.roles] };
+  });
+}
+
+export { SUBSYSTEMS };
 
 
 // Legacy-compatible workflow selection facade. The public selector remains
