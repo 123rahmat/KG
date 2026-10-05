@@ -328,6 +328,20 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
     res.json(run);
   }));
 
+  app.get('/api/runs/:id/design-state', scoped('viewer'), route(async (req, res) => {
+    const run = await runs.get(req.scope, req.params.id);
+    if (!run) return res.status(404).json({ error: 'Run not found', code: 'no-run' });
+    res.json({ state: run.adaptation?.designWorkspace ?? null });
+  }));
+
+  app.put('/api/runs/:id/design-state', scoped('editor'), route(async (req, res) => {
+    const saved = await runs.saveDesignWorkspace(req.scope, req.principal, req.params.id, req.body?.state ?? {}, {
+      requestId: req.requestId
+    });
+    if (!saved) return res.status(404).json({ error: 'Run not found', code: 'no-run' });
+    res.json({ state: saved });
+  }));
+
   app.get('/api/runs/:id/feedback', scoped('viewer'), route(async (req, res) => {
     const run = await runs.get(req.scope, req.params.id);
     if (!run) return res.status(404).json({ error: 'Run not found', code: 'no-run' });
