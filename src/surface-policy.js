@@ -56,11 +56,14 @@ function shouldUseCodeWorkspace(value, attachments, { actions = [], explicitCode
     && actions.some(action => ['create', 'transform', 'execute'].includes(String(action).toLowerCase()));
 }
 const EXPLICIT_MODE_SWITCH = Object.freeze({
+  design: /\b(?:switch|move|open|use|take me to|continue in|work in)\s+(?:the\s+)?(?:design|image design|visual)\s+(?:workspace|studio)?\b|\b(?:design|image design|visual)\s+workspace\b/i,
   code: /\b(?:switch|move|open|use|take me to|continue in|work in)\s+(?:the\s+)?(?:code|coding)(?:\s+workspace)?\b|\b(?:code|coding)\s+workspace\b/i,
   research: /\b(?:switch|move|open|use|take me to|continue in|work in)\s+(?:the\s+)?research(?:\s+workspace)?\b|\b(?:research|deep research)\s+workspace\b/i
 });
 const SURFACE_ALIASES = Object.freeze({
   chat: 'normal-chat',
+  design: 'design',
+  visual: 'design',
   'normal-chat': 'normal-chat',
   code: 'code',
   research: 'research'
@@ -71,6 +74,20 @@ function normalizeSurfaceId(value = '') {
 const MEDIUM_ANALYSIS = /\b(?:explain|compare|analy[sz]e|solve|calculate|derive|show|teach|why|how|which|evaluate|recommend|suggest|summari[sz]e|interpret)\b/i;
 
 export const SURFACE_INTELLIGENCE_PROFILES = Object.freeze({
+  design: Object.freeze({
+    id: 'design-intelligence',
+    maturity: 'deep-visual',
+    priority: 'visual quality, editability and output correctness, with adaptive critical-path speed',
+    contextStrategy: 'canvas-first; include selected assets, dimensions, constraints and visual references; expand only when composition or output requirements need it',
+    planningStrategy: 'adaptive visual next-step driven by composition gaps and artifact state',
+    agentStrategy: 'use art direction, layout, image editing/generation or visual review roles only when their marginal value is material',
+    parallelStrategy: 'parallelize independent asset analysis or alternatives; serialize shared canvas mutations',
+    verificationStrategy: 'visual layout, legibility, asset integrity and export checks scaled to the deliverable',
+    continuityStrategy: 'sticky canvas, asset and design-decision continuity across follow-ups',
+    costStrategy: 'start with one visual pass; add alternatives or specialist roles only when they can change the result materially',
+    qualityStrategy: 'clear visual intent, coherent composition, editable artifacts, accurate previews and correct export',
+    preferredRoles: Object.freeze(['art-director', 'visual-designer', 'image-editor', 'layout-designer', 'visual-reviewer'])
+  }),
   'normal-chat': Object.freeze({
     id: 'normal-chat-intelligence',
     maturity: 'adaptive-general',
@@ -99,6 +116,20 @@ export const SURFACE_INTELLIGENCE_PROFILES = Object.freeze({
     qualityStrategy: 'working software, scoped changes, reproducibility, regression safety, and verified repository state',
     preferredRoles: Object.freeze(['architect', 'implementer', 'test-engineer', 'diagnostician', 'debugger', 'security-reviewer', 'performance-reviewer'])
   }),
+  design: Object.freeze({
+    id: 'design',
+    label: 'Design Workspace',
+    mode: 'editable-visual-design',
+    objective: 'Create and refine visual artifacts with a real canvas, asset set, layout controls, previews and governed export without creating a separate intelligence stack.',
+    contextPolicy: 'Keep the canvas, selected objects, dimensions, assets and active design constraints authoritative; pull additional context only when it changes the visual result.',
+    toolPolicy: 'Use image generation/editing, artifact tools and visual transformations only for the current design step; keep mutations scoped to the active artifact.',
+    agentPolicy: 'Use one primary visual executor by default; add art direction, layout, image or review roles only when their independent value is justified.',
+    verificationPolicy: 'Check composition, overlaps, legibility, asset integrity, requested dimensions and export/preview correctness before finalization.',
+    creationPolicy: 'Design artifacts are editable and previewable; no hidden mutation is allowed outside the active design scope.',
+    escalationPolicy: 'Escalate to Research for source-heavy visual investigation and to Code for implementation of a design into software.',
+    uiPolicy: 'Expose canvas, tools, layers/objects, assets, inspector and preview/export in one focused visual workspace.',
+    selectionPolicy: 'Sticky while selected; preserve canvas and visual-artifact continuity across design follow-ups.'
+  }),
   research: Object.freeze({
     id: 'research-intelligence',
     maturity: 'deep-evidence',
@@ -123,6 +154,20 @@ export function surfaceIntelligenceProfile(surface = 'normal-chat') {
 export const SURFACE_POLICY_VERSION = '3';
 
 export const SURFACE_WORKSPACE_CONTRACTS = Object.freeze({
+  design: Object.freeze({
+    id: 'design',
+    label: 'Design Workspace',
+    mode: 'editable-visual-design',
+    objective: 'Create and refine visual artifacts with a real canvas, asset set, layout controls, previews and governed export without creating a separate intelligence stack.',
+    contextPolicy: 'Keep the canvas, selected objects, dimensions, assets and active design constraints authoritative; pull additional context only when it changes the visual result.',
+    toolPolicy: 'Use image generation/editing, artifact tools and visual transformations only for the current design step; keep mutations scoped to the active artifact.',
+    agentPolicy: 'Use one primary visual executor by default; add art direction, layout, image or review roles only when their independent value is justified.',
+    verificationPolicy: 'Check composition, overlaps, legibility, asset integrity, requested dimensions and export/preview correctness before finalization.',
+    creationPolicy: 'Design artifacts are editable and previewable; no hidden mutation is allowed outside the active design scope.',
+    escalationPolicy: 'Escalate to Research for source-heavy visual investigation and to Code for implementation of a design into software.',
+    uiPolicy: 'Expose canvas, tools, layers/objects, assets, inspector and preview/export in one focused visual workspace.',
+    selectionPolicy: 'Sticky while selected; preserve canvas and visual-artifact continuity across design follow-ups.'
+  }),
   'normal-chat': Object.freeze({
     id: 'normal-chat',
     label: 'Normal Chat',
@@ -170,7 +215,24 @@ export const SURFACE_WORKSPACE_CONTRACTS = Object.freeze({
 export const SURFACE_POLICY = Object.freeze({
   version: SURFACE_POLICY_VERSION,
   surfaces: Object.freeze({
-    'normal-chat': {
+    design: {
+      id: 'design',
+      maxDepth: 'deep',
+      heavyAutonomy: true,
+      deepCode: false,
+      deepResearch: false,
+      richMultimodal: true,
+      adaptiveAgents: true,
+      adaptiveTools: true,
+      adaptiveVerification: true,
+      design: true,
+      visualCanvas: true,
+      presentationCreation: true,
+      contract: SURFACE_WORKSPACE_CONTRACTS.design,
+      intelligenceProfile: SURFACE_INTELLIGENCE_PROFILES.design,
+      principle: 'Adaptive visual design with an editable canvas, governed asset operations, preview and export verification.'
+    },
+    'normal-chat':
       id: 'normal-chat',
       maxDepth: 'adaptive',
       heavyAutonomy: 'adaptive',
@@ -232,6 +294,11 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
     || flags.research === true && /\b(?:source|evidence|latest|current|paper|literature|research|investigat)\w*\b/i.test(value);
   const visualOrFile = Array.isArray(attachments) && attachments.length > 0;
   const requested = activeSurface || 'normal-chat';
+  const activeIsDesign = active === 'design';
+  const visualDesign = EXPLICIT_MODE_SWITCH.design.test(value)
+    || /\b(?:image design|visual design|graphic design|poster|logo|branding|brand board|illustration|layout|composition|art direction|canvas|mood ?board|wireframe|mockup|visual identity)\b/i.test(value)
+    || (Array.isArray(attachments) && attachments.some(item => /^image\//i.test(String(item?.contentType ?? item?.type ?? '')))
+       && /\b(?:edit|transform|compose|arrange|design|layout|make|create|generate|visual)\b/i.test(value));
 
   if (explicitCode) {
     return {
@@ -242,6 +309,19 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
       reason: 'coding-work-requires-code-surface',
       complexity: 'deep-eligible',
       workspace: SURFACE_WORKSPACE_CONTRACTS.code,
+      attachmentProfile
+    };
+  }
+
+  if (visualDesign && active !== 'code' && active !== 'research') {
+    return {
+      requested,
+      surface: 'design',
+      redirect: active !== 'design',
+      transition: active === 'design' ? 'stay' : 'switch',
+      reason: 'visual-design-work-requires-design-surface',
+      complexity: 'deep-eligible',
+      workspace: SURFACE_WORKSPACE_CONTRACTS.design,
       attachmentProfile
     };
   }
@@ -261,6 +341,18 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
 
   // Deep workspaces are sticky across ordinary follow-ups. This preserves
   // project/evidence continuity without changing the underlying intelligence.
+  if (active === 'design') {
+    return {
+      requested,
+      surface: 'design',
+      redirect: false,
+      transition: 'stay',
+      reason: 'selected-design-workspace-stays-authoritative',
+      complexity: 'deep-eligible',
+      workspace: SURFACE_WORKSPACE_CONTRACTS.design
+    };
+  }
+
   if (active === 'code') {
     return {
       requested,
