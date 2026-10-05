@@ -58,7 +58,7 @@ test('private projects do not leak to another principal in the same workspace', 
         token: other.token, workspace: other.workspace
       });
       assert.equal(hidden.status, 404);
-    })());
+    })()));
 
 test('workspace-visible projects are readable by viewers but write-gated by role', () =>
   withServer(async ({ call, seed }) =>
@@ -83,7 +83,7 @@ test('workspace-visible projects are readable by viewers but write-gated by role
         body: { name: 'Should not change' }
       });
       assert.equal(denied.status, 403);
-    })());
+    })()));
 
 test('runs reject a project outside the current workspace', () =>
   withServer(async ({ call, seed }) =>
@@ -103,4 +103,4 @@ test('runs reject a project outside the current workspace', () =>
       });
       assert.equal(run.status, 404);
       assert.equal(run.body.code, 'project-not-found');
-    })());
+    })()));
