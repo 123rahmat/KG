@@ -2541,6 +2541,7 @@ export async function runAdaptiveAgentPanel({
     decision: finalDecision,
     allocation: finalAllocation,
     waves,
+    parallelTelemetry,
     agents: agentStates,
     findings,
     arbiter,
