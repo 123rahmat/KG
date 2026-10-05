@@ -1089,10 +1089,12 @@ export function welcome() {
   ]);
 }
 
-export function userMessage(text, fileNames = []) {
+export function userMessage(text, files = []) {
+  const artifacts = (Array.isArray(files) ? files : []).map(file =>
+    typeof file === 'string' ? artifactChip(file, { preview: false }) : artifactChip(file)
+  );
   return element('div', { class: 'msg user' }, element('div', { class: 'user-stack' }, [
-    fileNames.length ? element('div', { class: 'file-chips' }, fileNames.map(name =>
-      element('span', { class: 'file-chip', text: `📄 ${name}` }))) : null,
+    artifacts.length ? element('div', { class: 'file-chips' }, artifacts) : null,
     element('div', { class: 'bubble', text })
   ]));
 }
