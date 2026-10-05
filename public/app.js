@@ -1464,6 +1464,13 @@ document.addEventListener('kindgleam:open-code-workspace', () => {
   state.activeSurface = 'code';
 });
 
+document.addEventListener('kindgleam:project-selected', async event => {
+  const projectId = event.detail?.projectId ?? null;
+  const currentProjectId = state.chat?.runs?.at(-1)?.projectId ?? state.chat?.projectId ?? null;
+  if (projectId && currentProjectId !== projectId) newChat();
+  await loadRuns().catch(() => {});
+});
+
 $('workspace').addEventListener('change', async event => {
   state.workspaceId = event.target.value;
   state.role = state.workspaces.find(workspace => workspace.id === state.workspaceId)?.role ?? 'viewer';
