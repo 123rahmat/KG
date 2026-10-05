@@ -106,3 +106,27 @@ test('server run planning persists the selected workspace controller', async () 
     }
   });
 });
+
+
+test('workspace-specialist roles are real runtime roles, not decorative controller labels', async () => {
+  const { rolesFor } = await import('../src/multi-agent.js');
+  const designRun = {
+    surface: 'design',
+    goal: 'Create and refine a product launch visual',
+    situation: { complexity: 0.8, uncertainty: 0.7, risk: 'medium', successCriteria: ['legible', 'coherent'] },
+    adaptation: { scale: 'complex', effortProfile: { maturity: { pressure: 0.8 } } },
+    attempt: 1
+  };
+  const result = rolesFor(designRun, { id: 'design', type: 'design', metadata: {} }, { mode: 'always', maxAgents: 5 });
+  assert.ok(result.roles.some(role => ['art-director', 'visual-designer', 'image-editor', 'layout-designer', 'visual-reviewer'].includes(role)));
+
+  const normalRun = {
+    surface: 'normal-chat',
+    goal: 'Help me figure out a complicated design trade-off and compare several options',
+    situation: { complexity: 0.8, uncertainty: 0.7, risk: 'medium', successCriteria: ['useful'] },
+    adaptation: { scale: 'complex', effortProfile: { maturity: { pressure: 0.7 } } },
+    attempt: 1
+  };
+  const normal = rolesFor(normalRun, { id: 'respond', type: 'respond', metadata: {} }, { mode: 'auto', maxAgents: 4 });
+  assert.ok(normal.decision.enabled);
+});
