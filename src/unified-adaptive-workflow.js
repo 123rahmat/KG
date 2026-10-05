@@ -84,6 +84,7 @@ export function nextAdaptiveStage(current, options = {}) {
   if (blocked) return null;
   if (verificationFailed || materialChange || coverage.failed) return 'replan';
   if (verified) return 'deliver';
+  const verificationNeeded = coverage.verificationNeeded || depth === 'focused';
 
   if (current === 'understand') return 'model-situation';
   if (current === 'model-situation') {
@@ -96,7 +97,7 @@ export function nextAdaptiveStage(current, options = {}) {
   if (current === 'reason') {
     if (coverage.challengeNeeded && depth !== 'focused') return 'challenge';
     if (coverage.executionRequired) return 'decide';
-    return coverage.verificationNeeded ? 'verify' : 'deliver';
+    return verificationNeeded ? 'verify' : 'deliver';
   }
   if (current === 'challenge') {
     if (coverage.evidenceGap) return 'investigate';
