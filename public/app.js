@@ -1338,26 +1338,13 @@ function toggleVoiceInput() {
 
 /* Lightweight creation controls stay inside Normal Chat. They are intent helpers,
    not a second workflow: the server still decides depth, tools and routing. */
+/* Normal Chat gets one lightweight visual intent control. The full canvas,
+   layers, objects and visual tooling live in Design Workspace. */
 const CREATE_MODES = Object.freeze({
-  design: {
-    hint: 'Design stays lightweight here; deeper product/UI implementation can switch to Code.',
-    placeholder: 'Describe the design you want…',
-    starter: 'Create a clean design for '
-  },
-  canvas: {
-    hint: 'Build a visual canvas, diagram, layout, or concept board in this conversation.',
-    placeholder: 'Describe the canvas or visual layout…',
-    starter: 'Create a visual canvas for '
-  },
   visual: {
-    hint: 'Generate or explain a visual; attach an image when you want it adapted.',
+    hint: 'Lightweight visual work stays here; open Design Workspace for a full canvas.',
     placeholder: 'Describe the visual you want…',
     starter: 'Create a visual for '
-  },
-  slides: {
-    hint: 'Create a lightweight presentation structure; evidence-heavy work can move to Research.',
-    placeholder: 'Describe the presentation you want…',
-    starter: 'Create a presentation about '
   }
 });
 
