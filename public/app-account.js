@@ -7,6 +7,7 @@ import { state, $, element, button, api, notify, guard, canEdit, downloadUrl, cl
 import { bytes, formatWhen, loadExecutionConfig, setupVoiceInput, svgIcon, timeAgo } from './app.js';
 import { fileToBase64, flushOfflineQueue, growComposer, loadRuns, newChat, openChat, renderChatHead } from './app-attachments.js';
 import { renderExplore } from './app-actions.js';
+import { previewButton, previewKind } from './artifact-preview.js';
 import { activateSettingsSection, openSettings } from './app-settings-window.js';
 import { OFFLINE_QUEUE_KEY, clearDraft, clearOfflineFiles, loadOfflineFiles, loadPreferences, readDraft, setSaveState } from './app-settings.js';
 
@@ -34,6 +35,7 @@ export async function loadObjects() {
           class: `pill ${object.lifecycle === 'archived' ? 'warn' : 'idle'}`, text: object.lifecycle
         })),
         element('td', { class: 'actions' }, [
+          previewKind(object) ? previewButton(object) : null,
           element('a', { class: 'btn small', href: downloadUrl(`/api/objects/${object.id}/content`), download: '', text: 'Download' }),
           editable ? button(object.lifecycle === 'archived' ? 'Restore' : 'Archive',
             () => guard(() => mutateObject(object, object.lifecycle === 'archived' ? 'restore' : 'archive')), 'small') : null,
