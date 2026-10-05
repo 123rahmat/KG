@@ -9,6 +9,7 @@ import { state, $, element, button } from './ui-core.js';
 
 const SURFACE_META = {
   runs: { label: 'Normal Chat', icon: 'chat', kind: 'normal-chat' },
+  design: { label: 'Design Workspace', icon: 'image', kind: 'design' },
   code: { label: 'Code Workspace', icon: 'terminal', kind: 'code' },
   research: { label: 'Research Workspace', icon: 'explore', kind: 'research' },
   objects: { label: 'Files', icon: 'files', kind: 'files' }
@@ -56,6 +57,7 @@ function runFocus(run) {
 }
 
 function activeWorkspace(run) {
+  if (run?.surface === 'design' || run?.tasks?.some(task => ['design', 'visual-design', 'image-design'].includes(task.id))) return 'design';
   if (run?.surface === 'code' || run?.tasks?.some(task => ['code', 'build-code', 'test-code'].includes(task.id))) return 'code';
   if (run?.surface === 'research' || researchNeed(run)) return 'research';
   return 'normal-chat';
@@ -63,7 +65,7 @@ function activeWorkspace(run) {
 
 function surfaceSet(run) {
   const surfaces = new Set(['runs']);
-  const selected = ['code', 'research', 'normal-chat'].includes(state.activeSurface) ? state.activeSurface : null;
+  const selected = ['code', 'research', 'design', 'normal-chat'].includes(state.activeSurface) ? state.activeSurface : null;
   const workspace = selected ?? activeWorkspace(run);
   if (workspace === 'code') surfaces.add('code');
   if (workspace === 'research') surfaces.add('research');
@@ -72,6 +74,10 @@ function surfaceSet(run) {
 }
 
 function dispatchSurface(name) {
+  if (name === 'design') {
+    document.dispatchEvent(new CustomEvent('kindgleam:select-surface', { detail: { name: 'runs', workspace: 'design' } }));
+    return;
+  }
   if (name === 'code') {
     document.dispatchEvent(new CustomEvent('kindgleam:open-code-workspace'));
     return;
@@ -225,6 +231,170 @@ export function renderWorkStatus(run) {
 function capabilityItems(data) {
   const run = data.run;
   const source = state.workspaceSource;
+function designWorkspaceState() {
+  state.designWorkspace ??= {
+    selected: null,
+    objects: [
+      { id: 'design-title', kind: 'text', x: 80, y: 70, width: 420, height: 64, text: 'Your design', fontSize: 34 },
+      { id: 'design-card', kind: 'rect', x: 80, y: 170, width: 520, height: 260, text: '' }
+    ]
+  };
+  state.designWorkspace.objects ??= [];
+  return state.designWorkspace;
+}
+
+function designCanvasNode(item, selectedId, rerender) {
+  const node = document.createElement('button');
+  node.type = 'button';
+  node.className = 'design-canvas-object ' + item.kind + (item.id === selectedId ? ' selected' : '');
+  node.style.left = item.x + 'px';
+  node.style.top = item.y + 'px';
+  node.style.width = item.width + 'px';
+  node.style.height = item.height + 'px';
+  if (item.kind === 'text') {
+    node.textContent = item.text || 'Text';
+    node.style.fontSize = (item.fontSize || 24) + 'px';
+  } else if (item.kind === 'circle') {
+    node.textContent = '';
+  } else {
+    node.textContent = item.text || '';
+  }
+  node.addEventListener('click', event => {
+    event.stopPropagation();
+    const design = designWorkspaceState();
+    design.selected = item.id;
+    rerender();
+  });
+  return node;
+}
+
+function designWorkspaceProject(data) {
+  const design = designWorkspaceState();
+  const selected = design.objects.find(item => item.id === design.selected) ?? null;
+  const attachedImages = [
+    ...(Array.isArray(data.run?.adaptation?.attachments) ? data.run.adaptation.attachments : []),
+    ...(Array.isArray(state.attachments) ? state.attachments : [])
+  ].filter(item => /^image\\//i.test(String(item?.contentType ?? item?.type ?? '')));
+  const redraw = () => renderDeepWorkspaceShell();
+
+  const canvas = element('div', { class: 'design-canvas', role: 'application', 'aria-label': 'Design canvas' }, [
+    element('div', { class: 'design-canvas-grid', 'aria-hidden': 'true' })
+  ]);
+  canvas.addEventListener('click', () => {
+    design.selected = null;
+    redraw();
+  });
+  for (const item of design.objects) canvas.append(designCanvasNode(item, design.selected, redraw));
+
+  const addObject = kind => {
+    const id = 'design-' + kind + '-' + crypto.randomUUID().slice(0, 8);
+    const defaults = kind === 'text'
+      ? { x: 90, y: 470, width: 380, height: 60, text: 'New text', fontSize: 24 }
+      : kind === 'circle'
+        ? { x: 640, y: 180, width: 160, height: 160, text: '' }
+        : { x: 650, y: 380, width: 220, height: 140, text: '' };
+    design.objects.push({ id, kind, ...defaults });
+    design.selected = id;
+    redraw();
+  };
+
+  const updateSelected = (key, value) => {
+    if (!selected) return;
+    const number = Number(value);
+    selected[key] = Number.isFinite(number) ? number : value;
+    redraw();
+  };
+
+  return [
+    element('div', { class: 'deep-workspace-head design' }, [
+      element('div', { class: 'deep-workspace-identity' }, [
+        element('span', { class: 'deep-workspace-kicker', text: 'DESIGN WORKSPACE' }),
+        element('strong', { text: data.run?.goal || 'Visual design studio' }),
+        element('span', { class: 'muted small', text: 'Canvas · assets · composition · preview' })
+      ]),
+      element('div', { class: 'deep-workspace-state' }, [
+        element('i', { 'aria-hidden': 'true' }),
+        element('span', { text: data.run?.state === 'complete' ? 'verified' : data.run ? 'active' : 'ready' })
+      ])
+    ]),
+    element('div', { class: 'design-studio-toolbar' }, [
+      button('Select', () => {}, 'primary small'),
+      button('Text', () => addObject('text'), 'small'),
+      button('Rectangle', () => addObject('rect'), 'small'),
+      button('Circle', () => addObject('circle'), 'small'),
+      button('Add assets', () => $('attachBtn')?.click(), 'small'),
+      button('Generate / edit', () => {
+        $('goal')?.focus({ preventScroll: false });
+        if (!$('goal').value.trim()) $('goal').value = 'Generate or edit the visual for this design.';
+      }, 'small'),
+      button('Preview', () => document.dispatchEvent(new CustomEvent('kindgleam:preview-design')), 'small')
+    ]),
+    element('div', { class: 'design-studio-layout' }, [
+      element('aside', { class: 'design-assets-panel' }, [
+        element('div', { class: 'design-panel-head' }, [element('strong', { text: 'Assets' }), element('span', { class: 'small muted', text: attachedImages.length + ' image' + (attachedImages.length === 1 ? '' : 's') })]),
+        attachedImages.length
+          ? element('div', { class: 'design-asset-grid' }, attachedImages.slice(0, 12).map(asset =>
+              element('div', { class: 'design-asset-tile' }, [
+                element('img', { src: '/api/objects/' + encodeURIComponent(asset.id) + '/content?preview=1', alt: asset.name || 'Design asset', loading: 'lazy' }),
+                element('span', { class: 'small truncate', text: asset.name || 'Image' })
+              ])
+            ))
+          : element('div', { class: 'design-panel-empty', text: 'Attach images or files to use them here.' })
+      ]),
+      element('section', { class: 'design-canvas-panel' }, [
+        element('div', { class: 'design-canvas-head' }, [
+          element('span', { class: 'mono', text: 'CANVAS' }),
+          element('span', { class: 'small muted', text: design.objects.length + ' objects · editable' })
+        ]),
+        canvas
+      ]),
+      element('aside', { class: 'design-inspector' }, [
+        element('div', { class: 'design-panel-head' }, [element('strong', { text: 'Inspector' }), element('span', { class: 'small muted', text: selected ? selected.kind : 'nothing selected' })]),
+        selected ? element('div', { class: 'design-inspector-fields' }, [
+          ['x', selected.x], ['y', selected.y], ['width', selected.width], ['height', selected.height],
+          ...(selected.kind === 'text' ? [['fontSize', selected.fontSize || 24]] : [])
+        ].map(([key, value]) => fieldInput(key, value, updateSelected))) : element('div', { class: 'design-panel-empty', text: 'Select an object to edit its geometry.' }),
+        selected ? button('Delete object', () => {
+          design.objects = design.objects.filter(item => item.id !== selected.id);
+          design.selected = null;
+          redraw();
+        }, 'danger small') : null
+      ])
+    ]),
+    element('div', { class: 'deep-workspace-actions design' }, [
+      button('Research visual direction', () => document.dispatchEvent(new CustomEvent('kindgleam:select-surface', { detail: { name: 'runs', workspace: 'research' } })), 'small'),
+      button('Implement in Code', () => document.dispatchEvent(new CustomEvent('kindgleam:open-code-workspace')), 'small'),
+      button('Attach asset', () => $('attachBtn')?.click(), 'small'),
+      button('Ask the adaptive designer', () => $('goal')?.focus({ preventScroll: false }), 'primary small')
+    ])
+  ];
+}
+
+function fieldInput(key, value, onChange) {
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.step = '1';
+  input.value = String(value ?? 0);
+  input.setAttribute('aria-label', key);
+  input.addEventListener('change', () => onChange(key, input.value));
+  return element('label', { class: 'design-inspector-field' }, [
+    element('span', { class: 'small muted', text: key }),
+    input
+  ]);
+}
+
+  if (data.workspace === 'design') {
+    const run = data.run;
+    const required = new Set((run?.capabilities?.required ?? []).map(text));
+    return [
+      { id:'canvas', label:'Canvas', detail:'editable composition', action:()=>renderDeepWorkspaceShell(), ready:true },
+      { id:'assets', label:'Assets', detail:'images and visual inputs', action:()=>$('attachBtn')?.click(), ready:true },
+      { id:'generate', label:'Generate / edit', detail:required.has('image-generation') ? 'needed for this run' : 'on demand', action:()=>{ $('goal')?.focus({preventScroll:false}); }, ready:true },
+      { id:'preview', label:'Preview', detail:'check the current visual result', action:()=>document.dispatchEvent(new CustomEvent('kindgleam:preview-design')), ready:true },
+      { id:'research', label:'Research direction', detail:'switch only when evidence is needed', action:()=>document.dispatchEvent(new CustomEvent('kindgleam:select-surface',{detail:{name:'runs',workspace:'research'}})), ready:true },
+      { id:'implementation', label:'Code implementation', detail:'move to Code when software is required', action:()=>document.dispatchEvent(new CustomEvent('kindgleam:open-code-workspace')), ready:true }
+    ];
+  }
   if (data.workspace === 'code') {
     const sourceConnected = source?.kind === 'github' || Boolean(run?.adaptation?.workspaceSourceId);
     const required = new Set(
@@ -479,14 +649,14 @@ function renderDeepWorkspaceShell() {
   const host = $('deepWorkspaceShell');
   if (!host) return;
   const data = adaptiveWorkspaceState();
-  const active = data.workspace === 'code' || data.workspace === 'research';
+  const active = data.workspace === 'code' || data.workspace === 'research' || data.workspace === 'design';
   host.hidden = !active;
   if (!active) {
     host.replaceChildren();
     return;
   }
   host.dataset.workspace = data.workspace;
-  host.replaceChildren(...(data.workspace === 'code' ? codeWorkspaceProject(data) : researchWorkspaceProject(data)));
+  host.replaceChildren(...(data.workspace === 'code' ? codeWorkspaceProject(data) : data.workspace === 'research' ? researchWorkspaceProject(data) : designWorkspaceProject(data)));
 }
 function renderCapabilityDock() {
   const dock = $('workspaceCapabilityDock');
@@ -495,13 +665,13 @@ function renderCapabilityDock() {
   const hint = $('workspaceCapabilityHint');
   if (!dock || !list) return;
   const data = adaptiveWorkspaceState();
-  const active = data.workspace === 'code' || data.workspace === 'research';
+  const active = data.workspace === 'code' || data.workspace === 'research' || data.workspace === 'design';
   dock.hidden = !active;
   if (!active) {
     list.replaceChildren();
     return;
   }
-  title.textContent = data.workspace === 'code' ? 'Code Workspace' : 'Research Workspace';
+  title.textContent = data.workspace === 'code' ? 'Code Workspace' : data.workspace === 'research' ? 'Research Workspace' : 'Design Workspace';
   hint.textContent = 'Adaptive tools for this work';
   list.replaceChildren(...capabilityItems(data).map(item => {
     const control = document.createElement('button');
@@ -550,7 +720,7 @@ export function syncAdaptiveWorkspace() {
   renderCapabilityDock();
 
   const data = adaptiveWorkspaceState();
-  const selected = state.activeSurface === 'code' || state.activeSurface === 'research'
+  const selected = ['code', 'research', 'design'].includes(state.activeSurface)
     ? state.activeSurface
     : data.workspace;
   document.body.dataset.adaptiveWorkspace = selected;
