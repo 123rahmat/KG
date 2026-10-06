@@ -28,6 +28,7 @@ import { classifySurfaceBoundary, surfaceRuntimePolicy, surfaceIntelligenceProfi
 import { buildUniversalContextContract } from './universal-context.js';
 import { adaptiveExecutionEnvelope } from './adaptive-execution-policy.js';
 import { decideAgentTopology } from './adaptive-agents.js';
+import { buildHumanGovernanceContract } from './human-governance.js';
 
 export const CONTRACT = 'kindgleam-open-world-situation-adaptive-v9';
 export { CAPABILITIES, SURFACES };
@@ -443,6 +444,15 @@ export function planGoal(goal, {
   };
   const policyDecision = evaluatePolicy(policies);
   const analysis = inspectGoal(value, situationContext);
+  const humanGovernance = buildHumanGovernanceContract({
+    safety: analysis.safety,
+    risk: analysis.flags?.highImpact === true ? 'high-impact' : analysis.flags?.physical === true ? 'physical' : 'ordinary',
+    externalAction: analysis.flags?.externalAction === true,
+    physical: analysis.flags?.physical === true,
+    peopleDecision: analysis.flags?.peopleDecision === true,
+    humanData: Boolean(privacyConsent?.humanData || analysis.flags?.humanData),
+    imageWork: analysis.flags?.imageWork === true || activeSurface === 'design'
+  });
 
   const universalContext = buildUniversalContextContract({
     goal: value,
@@ -527,7 +537,8 @@ export function planGoal(goal, {
       safety: analysis.safety,
       reason: analysis.safety.message,
       alternatives: analysis.safety.alternatives ?? [],
-      principles: PRINCIPLES
+      principles: PRINCIPLES,
+      humanGovernance
     };
   }
 
@@ -839,6 +850,7 @@ export function planGoal(goal, {
     agentPlan,
     next: blocked.length ? null : nextTask(tasks)?.id ?? null,
     principles: PRINCIPLES,
+    humanGovernance,
     adaptation: {
        ...adaptive,
        scale,
