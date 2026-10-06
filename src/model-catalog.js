@@ -8,7 +8,15 @@ const KNOWN = Object.freeze({
 export function modelTier() { return 'frontier'; }
 export function modelForTask() { return DEFAULT_MODEL; }
 export function modelCatalog() { return [Object.freeze({ id:'xai:grok-4.7', provider:'xai', model:DEFAULT_MODEL, name:KNOWN[DEFAULT_MODEL].name, family:'Grok', tier:'frontier', contextWindow:500_000, capabilities:['reasoning','coding','agents','research','vision','multimodal'], strengths:Object.freeze(KNOWN[DEFAULT_MODEL].strengths) })]; }
-export const MODEL_CATALOG = Object.freeze({ 'xai:grok-4.7': Object.freeze(modelCatalog()[0]) });
+const MODEL_CATALOG_DATA = Object.freeze({ 'xai:grok-4.7': Object.freeze(modelCatalog()[0]) });
+const MODEL_CATALOG_COMPAT = { ...MODEL_CATALOG_DATA };
+Object.defineProperty(MODEL_CATALOG_COMPAT, 'map', {
+  enumerable: false,
+  value: callback => Object.keys(MODEL_CATALOG_DATA).map(id => callback(MODEL_CATALOG_DATA[id], id, Object.values(MODEL_CATALOG_DATA)))
+});
+Object.defineProperty(MODEL_CATALOG_COMPAT, 'length', { enumerable: false, value: 1 });
+Object.defineProperty(MODEL_CATALOG_COMPAT, '0', { enumerable: false, value: MODEL_CATALOG_DATA['xai:grok-4.7'] });
+export const MODEL_CATALOG = Object.freeze(MODEL_CATALOG_COMPAT);
 export const MODEL_IDS = Object.freeze(['xai:grok-4.7']);
 export function normalizeModelId(value) { const id=String(value??'').trim().toLowerCase(); return id==='xai:grok-4.7'?'xai:grok-4.7':''; }
 export function modelIdsForPlan() { return ['xai:grok-4.7']; }
