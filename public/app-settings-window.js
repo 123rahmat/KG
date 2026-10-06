@@ -21,100 +21,6 @@ const SETTING_FIELDS = [
   ['setVoiceInput', 'voiceInput'], ['setVoiceLanguage', 'voiceLanguage'], ['setOfflineQueue', 'offlineQueue'], ['setCrossChatMemory', 'crossChatMemory']
 ];
 
-async function loadModels() {
-  const data = await api('GET', '/api/models').catch(() => null);
-  state.models = data;
-  renderModelControls(data);
-  return data;
-}
-
-function renderModelControls(data) {
-  const select = $('userModelSelect');
-  const manager = $('modelManager');
-  if (!data) {
-    if (select) select.replaceChildren(element('option', { text: 'Model settings unavailable' }));
-    if (manager) manager.hidden = true;
-    return;
-  }
-  const models = Array.isArray(data.models) ? data.models : [];
-  const selectable = models.filter(model => model.enabled && model.allowedByPlan && model.configured);
-  if (select) {
-    select.replaceChildren(...models.map(model => {
-      const option = element('option', {
-        value: model.id,
-        text: model.configured ? model.name : `${model.name} · not configured`
-      });
-      option.disabled = !model.enabled || !model.allowedByPlan || !model.configured;
-      option.title = !model.configured ? 'This provider API key is not configured.' : !model.enabled ? 'Disabled by the workspace administrator.' : '';
-      return option;
-    }));
-    select.value = data.preferredModelId || data.selectedModelId || selectable[0]?.id || '';
-    select.disabled = selectable.length === 0;
-  }
-  if (!manager) return;
-  manager.hidden = state.role !== 'admin';
-  if (state.role !== 'admin') return;
-  const configured = models.filter(model => model.configured && model.allowedByPlan);
-  const enabled = new Set(models.filter(model => model.enabled && model.allowedByPlan).map(model => model.id));
-  const list = $('modelManagerList');
-  if (list) list.replaceChildren(...configured.map(model => {
-    const label = element('label', { class: 'settings-model-toggle' }, [
-      element('span', {}, [
-        element('strong', { text: model.name }),
-        element('small', { class: 'muted', text: `${model.family} · ${model.model}` })
-      ]),
-      Object.assign(element('input', { type: 'checkbox', value: model.id }), { checked: enabled.has(model.id) })
-    ]);
-    return label;
-  }));
-  const defaults = configured.filter(model => enabled.has(model.id));
-  const def = $('modelDefaultSelect');
-  if (def) {
-    def.replaceChildren(...defaults.map(model => element('option', { value: model.id, text: `${model.name}${model.isDefault ? ' (server default)' : ''}` })));
-    def.value = data.workspaceDefaultModelId && enabled.has(data.workspaceDefaultModelId)
-      ? data.workspaceDefaultModelId
-      : defaults[0]?.id || '';
-  }
-}
-
-async function savePreferredModel() {
-  const id = $('userModelSelect')?.value;
-  if (!id) return;
-  const button = $('userModelSelect');
-  button.disabled = true;
-  try {
-    const result = await api('PUT', '/api/models/preference', { modelId: id });
-    $('userModelSaved').textContent = `Saved: ${result.model}`;
-    await loadModels();
-    loadUsage();
-  } catch (error) {
-    notify('userModelSaved', 'bad', error.message);
-  } finally {
-    if (button.isConnected) button.disabled = false;
-  }
-}
-
-async function saveAdminModelSettings() {
-  const button = $('modelSettingsSave');
-  const checks = [...document.querySelectorAll('#modelManagerList input[type="checkbox"]')];
-  const enabledModelIds = checks.filter(input => input.checked).map(input => input.value);
-  if (!enabledModelIds.length) return notify('modelSettingsSaved', 'bad', 'Keep at least one model enabled.');
-  button.disabled = true;
-  $('modelSettingsSaved').textContent = 'Testing the model with Gemini…';
-  try {
-    await api('PUT', '/api/models/settings', {
-      defaultModelId: $('modelDefaultSelect').value,
-      enabledModelIds
-    });
-    $('modelSettingsSaved').textContent = 'Saved';
-    await loadModels();
-  } catch (error) {
-    notify('modelSettingsSaved', 'bad', error.message);
-  } finally {
-    if (button.isConnected) button.disabled = false;
-  }
-}
-
 async function renderSkillLearning() {
   const list = $('skillLearningList');
   if (!list) return;
@@ -145,9 +51,8 @@ async function renderSkillLearning() {
 }
 function renderCapabilities() {
   const can = capabilities();
-  const provider = state.executionConfig?.reasoning?.provider;
   const rows = [
-    [can.ai, can.ai ? `Answer questions and write${provider ? ` (AI: ${provider})` : ''}` : 'No AI connected: you complete the steps yourself'],
+    [can.ai, can.ai ? 'Adaptive Gemini reasoning is available' : 'Gemini reasoning is not configured'],
     [can.ai, 'Read text files you attach (documents, notes, CSV, code)'],
     [can.research, 'Search the web for research'],
     [can.runCode, 'Run and test code'],
@@ -178,7 +83,6 @@ export function openSettings() {
     else field.value = state.settings[key] ?? '';
   }
   renderCapabilities();
-  loadModels();
   $('accountLine').textContent = `${state.principal.name} · ${state.role} in ${state.workspaces.find(item => item.id === state.workspaceId)?.name ?? state.workspaceId}`;
   document.body.classList.remove('chats-open');
   $('settings').showModal();
@@ -304,10 +208,10 @@ export function activateSettingsSection(name) {
   $('settingsDescription').textContent = section.dataset.settingsDescription || '';
   $('settingsContent').scrollTop = 0;
   // Live sections load when opened, so they always show the current state.
-  if (activeName === 'usage') { renderUsageSection(); loadUsage(); loadModels(); }
+  if (activeName === 'usage') { renderUsageSection(); loadUsage(); }
   if (activeName === 'billing') renderBillingSection();
   if (activeName === 'security') renderSecuritySection();
-  if (activeName === 'workspace') { renderWorkspaceTools(); renderReports(); loadModels(); }
+  if (activeName === 'workspace') { renderWorkspaceTools(); renderReports(); }
   if (activeName === 'schedules') { renderSchedules(); syncScheduleForm(); }
   if (activeName === 'personalization') { renderMemories(); renderSkillLearning(); }
   if (activeName === 'mail') renderMailSection().catch(error => notify('mailNotice', 'bad', error.message));
@@ -331,8 +235,6 @@ export function initSettingsWindow() {
   });
   $('openSettings').addEventListener('click', openSettings);
   $('usageRing').addEventListener('click', () => { openSettings(); activateSettingsSection('usage'); });
-  $('userModelSelect').addEventListener('change', () => guard(savePreferredModel, 'userModelSaved'));
-  $('modelSettingsSave').addEventListener('click', () => guard(saveAdminModelSettings, 'modelSettingsSaved'));
   $('billingPortal').addEventListener('click', openBillingPortal);
   $('revokeSessions').addEventListener('click', revokeOtherSessions);
   $('settingsFiles').addEventListener('click', () => { $('settings').close(); selectTab('objects'); });
