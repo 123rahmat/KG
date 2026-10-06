@@ -97,33 +97,6 @@ function databaseUsername(connectionString) {
  * priceIds). Limits of 0 or missing mean no limit on that plan. The free plan
  * is everyone without a subscription (BILLING_FREE_* and USAGE_LIMIT_*).
  */
-function parseAiProviders(raw, errors) {
-  if (!text(raw)) return [];
-  let parsed;
-  try { parsed = JSON.parse(raw); } catch { errors.push('AI_PROVIDERS_JSON must be a JSON object or array'); return []; }
-  const items = Array.isArray(parsed) ? parsed : Object.entries(parsed).map(([provider, value]) => ({ provider, ...(value ?? {}) }));
-  const out = [];
-  for (const [index, item] of items.entries()) {
-    const provider = text(item?.provider).toLowerCase();
-    const project = text(item?.project || item?.projectId);
-    const location = text(item?.location) || 'global';
-    const accessToken = text(item?.accessToken || item?.token);
-    const model = text(item?.model) || DEFAULT_MODEL;
-    if (!['google', 'vertex', 'vertex-ai'].includes(provider) || !project || !isGeminiModel(model)) {
-      errors.push('AI_PROVIDERS_JSON[' + index + '] must configure Google Vertex AI with project, location, and a supported Gemini model');
-      continue;
-    }
-    out.push({
-      provider: 'google',
-      project,
-      location,
-      accessToken: accessToken || null,
-      model,
-      modelId: normalizeModelId(model)
-    });
-  }
-  return out.slice(0, 1);
-}
 function parseJsonObject(raw, name, errors, fallback = {}) {
   if (!text(raw)) return fallback;
   try {
@@ -218,36 +191,32 @@ export function loadConfig(env = process.env) {
     errors.push('PGSSLMODE=verify requires PGSSLROOTCERT to point at a CA bundle');
   }
 
-  const vertexProject = text(env.GOOGLE_CLOUD_PROJECT || env.VERTEX_PROJECT);
-  const vertexLocation = text(env.GOOGLE_CLOUD_LOCATION || env.VERTEX_LOCATION) || 'global';
+  const vertexProject = text(env.GOOGLE_CLOUD_PROJECT);
+  const vertexLocation = text(env.GOOGLE_CLOUD_LOCATION) || 'global';
   const vertexAccessToken = text(env.VERTEX_ACCESS_TOKEN);
   const vertexModel = text(env.VERTEX_MODEL || env.AI_MODEL) || DEFAULT_MODEL;
   if (vertexProject && !isGeminiModel(vertexModel)) {
-    errors.push('VERTEX_MODEL/AI_MODEL must be a supported Gemini model');
+    errors.push('VERTEX_MODEL must be a supported Gemini model');
   }
-  const legacyProvider = text(env.AI_PROVIDER).toLowerCase();
-  if (legacyProvider && !['google', 'vertex', 'vertex-ai'].includes(legacyProvider)) {
-    errors.push('AI_PROVIDER must be google (Vertex AI) when set');
+  const providerSetting = text(env.AI_PROVIDER).toLowerCase();
+  if (providerSetting && providerSetting !== 'google') {
+    errors.push('AI_PROVIDER must be google when set');
   }
-  if (legacyProvider && !vertexProject && !text(env.AI_PROVIDERS_JSON)) {
-    errors.push('GOOGLE_CLOUD_PROJECT (or VERTEX_PROJECT) is required when AI_PROVIDER is set');
+  if (providerSetting && !vertexProject) {
+    errors.push('GOOGLE_CLOUD_PROJECT is required when AI_PROVIDER is set');
   }
-  const jsonProviders = parseAiProviders(env.AI_PROVIDERS_JSON, errors);
-  const providerEntries = jsonProviders.length
-    ? jsonProviders
-    : (vertexProject && isGeminiModel(vertexModel)
-      ? [{
-          provider: 'google',
-          project: vertexProject,
-          location: vertexLocation,
-          accessToken: vertexAccessToken || null,
-          model: vertexModel,
-          modelId: normalizeModelId(vertexModel)
-        }]
-      : []);
-  const primary = providerEntries[0] || null;
+  const primary = vertexProject && isGeminiModel(vertexModel)
+    ? {
+        provider: 'google',
+        project: vertexProject,
+        location: vertexLocation,
+        accessToken: vertexAccessToken || null,
+        model: vertexModel,
+        modelId: normalizeModelId(vertexModel)
+      }
+    : null;
   if (production && !primary) {
-    errors.push('Google Vertex AI Gemini must be configured in production with GOOGLE_CLOUD_PROJECT or AI_PROVIDERS_JSON');
+    errors.push('Google Vertex AI Gemini must be configured in production with GOOGLE_CLOUD_PROJECT');
   }
 
   // How deeply Gemini reasons. xhigh remains accepted as a compatibility alias
@@ -375,7 +344,6 @@ export function loadConfig(env = process.env) {
     ai: primary
       ? {
           provider: 'google',
-          apiKey: null,
           project: primary.project,
           location: primary.location || 'global',
           accessToken: primary.accessToken || null,
@@ -384,16 +352,7 @@ export function loadConfig(env = process.env) {
           models: [LIGHT_MODEL, DEFAULT_MODEL],
           fallbackModels: [LIGHT_MODEL],
           autoDiscover: false,
-          effort: AI_EFFORT_LEVELS.includes(aiEffort) ? aiEffort : null,
-          providers: {
-            google: {
-              project: primary.project,
-              location: primary.location || 'global',
-              accessToken: primary.accessToken || null,
-              model: primary.model || DEFAULT_MODEL,
-              modelId: primary.modelId || normalizeModelId(DEFAULT_MODEL)
-            }
-          }
+          effort: AI_EFFORT_LEVELS.includes(aiEffort) ? aiEffort : null
         }
       : null,
 
