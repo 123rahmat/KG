@@ -377,10 +377,31 @@ export async function executeAdaptiveAgentPlan(plan, {
   const requestedWaves = Array.isArray(plan?.waves) ? plan.waves : [];
   const results = new Map();
   const completed = new Set();
+  const completedTasks = new Set();
   const failed = new Set();
   const started = new Set();
   const conflicts = [];
+  const blocked = [];
   const aborted = () => Boolean(signal?.aborted);
+
+  const taskDependencies = task => list(task?.dependencies ?? task?.dependsOn ?? task?.prerequisites);
+  const validatePlan = () => {
+    const seenTasks = new Set();
+    for (const agent of agents.values()) {
+      for (const taskId of Array.isArray(agent?.taskIds) ? agent.taskIds : []) {
+        if (!taskMap.has(taskId)) return { valid: false, reason: 'unknown-task', taskId, agentId: agent.id };
+        if (seenTasks.has(taskId)) return { valid: false, reason: 'task-assigned-to-multiple-agents', taskId };
+        seenTasks.add(taskId);
+      }
+    }
+    for (const task of taskMap.values()) {
+      for (const dependency of taskDependencies(task)) {
+        if (!taskMap.has(dependency)) return { valid: false, reason: 'unknown-dependency', taskId: task.id, dependency };
+      }
+    }
+    return { valid: true };
+  };
+  const planValidation = validatePlan();
 
   const resourceKeys = task => [...new Set([
     ...(Array.isArray(task?.resourceKeys) ? task.resourceKeys : []),
@@ -415,6 +436,8 @@ export async function executeAdaptiveAgentPlan(plan, {
     for (const taskId of taskIds) {
       const task = taskMap.get(taskId);
       if (!task) return { agentId, status: 'failed', reason: 'unknown-task', taskId };
+      const unmet = taskDependencies(task).filter(dependency => !completedTasks.has(dependency));
+      if (unmet.length) return { agentId, status: 'blocked', reason: 'dependencies-not-complete', taskId, unmetDependencies: unmet };
       const expected = task.expectedRevision ?? task.revision ?? null;
       if (expected !== null && typeof currentRevision === 'function') {
         const actual = await currentRevision(task);
@@ -461,6 +484,22 @@ export async function executeAdaptiveAgentPlan(plan, {
     return { agentId, status: 'failed', reason: 'agent-failed' };
   };
 
+  if (!planValidation.valid) {
+    return {
+      status: 'failed',
+      completedAgents: [],
+      failedAgents: [],
+      startedAgents: [],
+      conflicts: [],
+      blocked,
+      results: [],
+      reason: planValidation.reason,
+      taskId: planValidation.taskId ?? null,
+      agentId: planValidation.agentId ?? null,
+      dependency: planValidation.dependency ?? null
+    };
+  }
+
   for (const requestedWave of requestedWaves) {
     if (aborted()) break;
     let pending = requestedWave.filter(id => agents.has(id));
@@ -476,8 +515,13 @@ export async function executeAdaptiveAgentPlan(plan, {
       const settled = await Promise.all(batch.map(runOne));
       for (const result of settled) {
         results.set(result.agentId, result);
-        if (result.status === 'completed') completed.add(result.agentId);
-        else if (['failed', 'stale', 'cancelled'].includes(result.status)) failed.add(result.agentId);
+        if (result.status === 'completed') {
+          completed.add(result.agentId);
+          for (const taskId of agents.get(result.agentId)?.taskIds ?? []) completedTasks.add(taskId);
+        } else if (result.status === 'blocked') {
+          blocked.push(result);
+          failed.add(result.agentId);
+        } else if (['failed', 'stale', 'cancelled'].includes(result.status)) failed.add(result.agentId);
       }
       if (typeof checkpoint === 'function') {
         await checkpoint({ completed: [...completed], failed: [...failed], results: [...results.values()], conflicts: [...conflicts] });
@@ -493,15 +537,22 @@ export async function executeAdaptiveAgentPlan(plan, {
     failedAgents: [...failed],
     startedAgents: [...started],
     conflicts,
+    blocked,
     results: [...results.values()]
   };
 
   if (summary.status === 'completed' && plan?.integrationRequired && typeof integrate === 'function') {
-    summary.integration = await integrate({
+    try {
+      summary.integration = await integrate({
       findings: summary.results.filter(item => item.status === 'completed'),
       authority: plan.authority,
       signal
-    });
+      });
+    } catch (error) {
+      summary.status = 'failed';
+      summary.integration = { status: 'failed', reason: text(error?.message) || 'integration-failed' };
+      summary.failedAgents.push('integrator');
+    }
   }
   return summary;
 }
