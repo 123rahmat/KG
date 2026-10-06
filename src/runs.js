@@ -736,7 +736,7 @@ export class RunStore {
     // look up each one's title, size and latest state through its own index.
     // Cost follows the page, not the workspace's history.
     const window = size * RECENT_WINDOW_FACTOR;
-    const { rows, windowFull, distinct } = await this.#recentConversations(params, window);
+    const { rows, windowFull, distinct } = await this.recentConversations(params, window);
     // A window that ran out of rows before it held enough conversations (one
     // very long chat) cannot prove the page complete: use the full query.
     const page = windowFull && distinct < size ? (await this.pool.query(FULL_CONVERSATIONS_SQL, params)).rows : rows;
@@ -753,7 +753,7 @@ export class RunStore {
     }));
   }
 
-  async #recentConversations(params, window) {
+  async recentConversations(params, window) {
     const { rows } = await this.pool.query(
       `WITH recent AS (
          SELECT COALESCE(conversation_id, id::text) AS conversation_id, updated_at, id
@@ -875,8 +875,8 @@ export class RunStore {
       // a failed run is never stranded (direct runs have no iterate task).
       if (run.state === 'iterate' && text(taskId) === 'iterate' && tasks.some(item => item.status === 'failed')) {
         const outcome = result.replan === true
-          ? await this.#replan(client, run, tasks, { reason: text(result.summary) || 'A task failed.' })
-          : await this.#stop(client, run);
+          ? await this.replan(client, run, tasks, { reason: text(result.summary) || 'A task failed.' })
+          : await this.stop(client, run);
         await client.query(
           'INSERT INTO situation_events (run_id, workspace_id, principal_id, event_type, event) VALUES ($1, $2, $3, $4, $5::jsonb)',
           [run.id, scope.workspaceId, principal.id, 'iterate', JSON.stringify({
@@ -1339,7 +1339,7 @@ export class RunStore {
         failed: status === 'failed',
         risk: run.situation?.risk ?? (run.situation?.highImpact ? 'high-impact' : 'ordinary')
       });
-      const applied = await this.#settle(client, run, decision, target, result, { evidence, verifiedExternalExecution, approvedPlanUpdate });
+      const applied = await this.settle(client, run, decision, target, result, { evidence, verifiedExternalExecution, approvedPlanUpdate });
       await client.query(
         'UPDATE runs SET adaptation = jsonb_set(COALESCE(adaptation, '{}'::jsonb), '{agentPlan}', $2::jsonb, true), updated_at = now() WHERE id = $1',
         [run.id, JSON.stringify(agentPlan)]
@@ -1392,7 +1392,7 @@ export class RunStore {
    * graph resets to pending and the attempt counter rises. Without the
    * counter, `iterate` is an unbounded loop that can burn budget forever.
    */
-  async #settle(client, run, decision, target, result, { evidence = result?.evidence ?? null, verifiedExternalExecution = false, approvedPlanUpdate = null } = {}) {
+  async settle(client, run, decision, target, result, { evidence = result?.evidence ?? null, verifiedExternalExecution = false, approvedPlanUpdate = null } = {}) {
     const structured = result?.evidence?.structured;
     let requirementModel = run.adaptation?.workflow === 'direct'
       ? (run.requirements ?? { version: 1, items: [], overallProgress: 100, completionReady: true })
@@ -1553,7 +1553,7 @@ export class RunStore {
     }
 
     if (target.type === 'iterate' && decision.status === 'complete' && result.replan === true) {
-      return this.#replan(client, run, decision.tasks, { reason: text(result.summary) || 'Replan requested.' });
+      return this.replan(client, run, decision.tasks, { reason: text(result.summary) || 'Replan requested.' });
     }
 
     // Only the completed task can create the next task. The server never
@@ -1592,7 +1592,7 @@ export class RunStore {
         });
       }
     } else if (decision.status === 'complete' && run.adaptation?.workflow !== 'direct') {
-      await this.#adaptSteps(client, run, target, structured && typeof structured === 'object' ? structured : {}, requirementModel);
+      await this.adaptSteps(client, run, target, structured && typeof structured === 'object' ? structured : {}, requirementModel);
     }
 
     // Adaptive checkpoint runs AFTER the next step is actually derived. This
@@ -1752,7 +1752,7 @@ export class RunStore {
    * as failed steps in its situation) before the graph resets, so the next
    * attempt is told what to do differently instead of repeating itself.
    */
-  async #replan(client, run, tasks, { reason }) {
+  async replan(client, run, tasks, { reason }) {
     if (run.attempt >= run.max_attempts) {
       await client.query(
         `UPDATE runs SET state = 'exhausted', updated_at = now(), completed_at = now() WHERE id = $1`,
@@ -1896,7 +1896,7 @@ export class RunStore {
         [run.id, JSON.stringify(requirementModel)]
       );
       if (run.adaptation?.workflow !== 'direct') {
-        await this.#adaptSteps(client, { ...run, adaptation, requirements: requirementModel }, target, {}, requirementModel);
+        await this.adaptSteps(client, { ...run, adaptation, requirements: requirementModel }, target, {}, requirementModel);
       }
       const afterDynamic = await loadTasks(client, run.id);
       const next = nextTask(afterDynamic);
@@ -1926,7 +1926,7 @@ export class RunStore {
    * changes, the next proposal replaces the future that would otherwise have
    * existed.
    */
-  async #adaptSteps(client, run, target, structured, requirementModel = normalizeRequirementModel(run.requirements, run.goal)) {
+  async adaptSteps(client, run, target, structured, requirementModel = normalizeRequirementModel(run.requirements, run.goal)) {
     const tasks = await loadTasks(client, run.id);
     const existingIds = new Set(tasks.map(item => item.id));
     const totalCreated = tasks.length;
@@ -2286,7 +2286,7 @@ export class RunStore {
   }
 
   /** Stop after a failure: the run ends as failed, with its evidence kept. */
-  async #stop(client, run) {
+  async stop(client, run) {
     await client.query(
       `UPDATE runs SET state = 'failed', updated_at = now(), completed_at = now() WHERE id = $1`,
       [run.id]
