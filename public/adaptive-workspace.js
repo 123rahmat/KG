@@ -5,7 +5,7 @@
  * remains authoritative; this only turns that state into the smallest
  * useful set of visible workspace surfaces and a clear current focus.
  */
-import { state, $, element, button, api, notify } from './ui-core.js';
+import { state, $, element, button } from './ui-core.js';
 
 const SURFACE_META = {
   runs: { label: 'Normal Chat', icon: 'chat', kind: 'normal-chat' },
