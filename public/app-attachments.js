@@ -570,6 +570,7 @@ export async function sendMessage(text) {
     if (state.chat.consent) state.consented.add(run.id);
     state.chat.runs.push(run);
     state.run = run;
+    state.cancelledRuns?.delete(run.id);
     renderThread();
     loadRuns().catch(() => {});
     await autoDrive(run);
@@ -618,15 +619,19 @@ export async function sendMessage(text) {
 
 export async function stopRun(reason) {
   const run = state.run;
-  if (!run) return;
+  if (!run || state.stoppingRun === run.id) return;
+  state.cancelledRuns ??= new Set();
+  state.cancelledRuns.add(run.id);
+  state.stoppingRun = run.id;
   state.driving = null;
-  state.drivingLabel = '';
+  state.drivingLabel = 'Stopping — no new steps will start';
   state.drivingRuns?.delete(run.id);
   state.busyRuns?.delete(run.id);
   document.dispatchEvent(new Event('kindgleam:composer-state'));
   renderThread();
   await guard(async () => {
     const stopped = await api('POST', `/api/runs/${run.id}/fail`, { reason: reason || 'stopped by user' }, { idempotencyKey: crypto.randomUUID() });
+    state.stoppingRun = null;
     renderRun(stopped);
     await loadRuns();
   }, 'runNotice');
