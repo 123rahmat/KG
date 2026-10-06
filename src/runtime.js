@@ -234,10 +234,9 @@ export async function callModel(messages, {
     adaptiveContext,
     configured: config.ai.models ?? [LIGHT_MODEL, DEFAULT_MODEL]
   });
-  const shouldAdapt = !modelId || modelId === `google:${DEFAULT_MODEL}` || modelId === DEFAULT_MODEL;
-  const selected = shouldAdapt
-    ? resolveConfiguredModel(config, `google:${adaptiveModel}`) || requested
-    : requested;
+  const selected = modelId
+    ? requested
+    : (resolveConfiguredModel(config, `google:${adaptiveModel}`) || requested);
 
   const modelKey = `google:${selected.model}`;
   providerGovernor.configure(modelKey, config.providerConcurrency ?? {});
