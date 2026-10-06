@@ -274,7 +274,8 @@ export function adaptAgentTopology(plan, {
       tasks: mergedTasks,
       risk,
       scale: current.mode === 'parallel-then-integrate' ? 'medium' : 'single',
-      budget: { maxAgents: current.agentCount, maxParallelAgents: current.maxParallel }
+      budget: { maxAgents: current.agentCount, maxParallelAgents: current.maxParallel },
+      workspace: current.workspace ?? 'normal-chat'
     });
     return { ...next, replanned: true, replanReason: 'material-new-work-discovered' };
   }
