@@ -194,3 +194,116 @@ test('refused human-harm work remains blocked by the existing safety boundary', 
   assert.equal(governance.enforcement.modelCannotOverride, true);
   assert.equal(governance.enforcement.toolCannotBypassPolicy, true);
 });
+
+
+test('multi-agent executor runs independent agents in parallel and checkpoints the wave', async () => {
+  const { executeAdaptiveAgentPlan } = await import('../src/adaptive-agents.js');
+  const plan = decideAgentTopology({
+    tasks: [
+      { id: 'a', type: 'investigate' },
+      { id: 'b', type: 'investigate' }
+    ],
+    scale: 'medium',
+    complexity: 0.8,
+    uncertainty: 0.5,
+    budget: { maxAgents: 4, maxParallelAgents: 2 }
+  });
+  const started = [];
+  let checkpoints = 0;
+  const result = await executeAdaptiveAgentPlan(plan, {
+    tasks: [
+      { id: 'a', type: 'investigate', resourceKeys: ['a'] },
+      { id: 'b', type: 'investigate', resourceKeys: ['b'] }
+    ],
+    executeAgent: async agent => {
+      started.push(agent.id);
+      await new Promise(resolve => setTimeout(resolve, 5));
+      return { ok: true };
+    },
+    checkpoint: async () => { checkpoints += 1; }
+  });
+  assert.equal(result.status, 'completed');
+  assert.equal(result.completedAgents.length, 2);
+  assert.equal(started.length, 2);
+  assert.ok(checkpoints >= 1);
+});
+
+test('multi-agent executor serializes shared-resource conflicts', async () => {
+  const { executeAdaptiveAgentPlan } = await import('../src/adaptive-agents.js');
+  const plan = decideAgentTopology({
+    tasks: [
+      { id: 'a', type: 'analyze' },
+      { id: 'b', type: 'analyze' }
+    ],
+    scale: 'medium',
+    complexity: 0.8,
+    uncertainty: 0.5,
+    budget: { maxAgents: 4, maxParallelAgents: 2 }
+  });
+  let active = 0;
+  let peak = 0;
+  const result = await executeAdaptiveAgentPlan(plan, {
+    tasks: [
+      { id: 'a', type: 'analyze', writePaths: ['shared/file.js'] },
+      { id: 'b', type: 'analyze', writePaths: ['shared/file.js'] }
+    ],
+    executeAgent: async () => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise(resolve => setTimeout(resolve, 5));
+      active -= 1;
+      return { ok: true };
+    }
+  });
+  assert.equal(result.status, 'completed');
+  assert.equal(peak, 1);
+  assert.ok(result.conflicts.length >= 1);
+});
+
+test('multi-agent executor detects stale revisions before execution', async () => {
+  const { executeAdaptiveAgentPlan } = await import('../src/adaptive-agents.js');
+  const plan = decideAgentTopology({
+    tasks: [{ id: 'a', type: 'analyze' }],
+    budget: { maxAgents: 2, maxParallelAgents: 2 }
+  });
+  let executed = false;
+  const result = await executeAdaptiveAgentPlan(plan, {
+    tasks: [{ id: 'a', type: 'analyze', revision: 3 }],
+    currentRevision: async () => 4,
+    executeAgent: async () => { executed = true; }
+  });
+  assert.equal(result.status, 'failed');
+  assert.equal(executed, false);
+  assert.equal(result.results[0].reason, 'stale-revision');
+});
+
+test('multi-agent executor stops cleanly on cancellation', async () => {
+  const { executeAdaptiveAgentPlan } = await import('../src/adaptive-agents.js');
+  const plan = decideAgentTopology({
+    tasks: [
+      { id: 'a', type: 'investigate' },
+      { id: 'b', type: 'investigate' }
+    ],
+    scale: 'medium',
+    complexity: 0.8,
+    uncertainty: 0.5,
+    budget: { maxAgents: 4, maxParallelAgents: 2 }
+  });
+  const controller = new AbortController();
+  const resultPromise = executeAdaptiveAgentPlan(plan, {
+    tasks: [
+      { id: 'a', type: 'investigate' },
+      { id: 'b', type: 'investigate' }
+    ],
+    signal: controller.signal,
+    executeAgent: async (_agent, { signal }) => {
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, 100);
+        signal.addEventListener('abort', () => { clearTimeout(timer); reject(new Error('cancelled')); }, { once: true });
+      });
+    }
+  });
+  setTimeout(() => controller.abort(), 5);
+  const result = await resultPromise;
+  assert.equal(result.status, 'cancelled');
+});
