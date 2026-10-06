@@ -242,28 +242,34 @@ export const BASE_CAPABILITIES = Object.freeze([
  */
 function directTasks(analysis) {
   const declined = analysis.ethics?.decision === 'refuse';
-  return [
-    makeTask('respond', 'respond', [], ['reasoning', 'response'],
-      declined
-        ? declinedPurpose(analysis.ethics)
-        : analysis.crisis && analysis.flags?.crisisKind === 'emergency'
-        ? 'This may be an emergency happening now. First tell the person to call their local emergency number (for example 112, 911, 999 or 1122) or get someone nearby to (for an animal: an emergency vet or animal poison line), then give short, plain first steps to stay safe until help arrives. Answer in the language the person wrote in. Do not research, delay or ask for approval.'
-        : analysis.crisis
-          ? 'Respond now, with care and without judgement: acknowledge what the person said, encourage them to reach someone they trust, and point them to immediate help (local emergency services or a crisis line). Do not research, delay or ask for approval.'
-          : analysis.reminder
-            ? 'Set up what the person asked to be reminded of or asked at a set time: propose it with schedule.create (they approve it), and say plainly when it will happen.'
+  const conversational = analysis.conversational === true;
+  const response = makeTask(
+    'respond',
+    'respond',
+    [],
+    ['reasoning', 'response'],
+    declined
+      ? declinedPurpose(analysis.ethics)
+      : analysis.crisis && analysis.flags?.crisisKind === 'emergency'
+      ? 'This may be an emergency happening now. First tell the person to call their local emergency number (for example 112, 911, 999 or 1122) or get someone nearby to (for an animal: an emergency vet or animal poison line), then give short, plain first steps to stay safe until help arrives. Answer in the language the person wrote in. Do not research, delay or ask for approval.'
+      : analysis.crisis
+        ? 'Respond now, with care and without judgement: acknowledge what the person said, encourage them to reach someone they trust, and point them to immediate help (local emergency services or a crisis line). Do not research, delay or ask for approval.'
+        : analysis.reminder
+          ? 'Set up what the person asked to be reminded of or asked at a set time: propose it with schedule.create (they approve it), and say plainly when it will happen.'
           : analysis.writing
             ? 'Do what was asked (write, rewrite, translate or reply) in a form ready to use, fitted to the person and their situation.'
             : 'Answer the question directly, stating assumptions and uncertainty.',
-      declined
-        ? { declined: true, category: analysis.ethics.category, topic: analysis.ethics.topic === true }
-        : analysis.crisis ? { crisis: true, crisisKind: analysis.flags?.crisisKind ?? 'self-harm' } : analysis.conversational ? { conversational: true } : {}),
-    // A greeting or a purely conversational reply has no claims, tools or
-    // stakes to check: a second model call would only add cost and delay.
-    ...(analysis.conversational ? [] : [makeTask('verify', 'verify', ['respond'], ['verification'],
-      'Check the answer for correctness, completeness and unsupported claims before it is presented.',
-      { verification: analysis.verification ?? verificationContract() })])
-  ];
+    {
+      ...(declined ? { declined: true, category: analysis.ethics.category, topic: analysis.ethics.topic === true } : {}),
+      ...(analysis.crisis ? { crisis: true, crisisKind: analysis.flags?.crisisKind ?? 'self-harm' } : {}),
+      ...(conversational ? { conversational: true } : {}),
+      verificationPending: !conversational
+    }
+  );
+  // Direct work still uses the same server-owned graph. Only the first
+  // response step is materialized here; verification is created after the
+  // response completes, so even the short path never pre-creates future work.
+  return [response];
 }
 
 /**
