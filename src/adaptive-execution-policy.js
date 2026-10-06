@@ -59,18 +59,21 @@ export function decideWebSearch({
   const sourceCount = Array.isArray(priorSources) ? priorSources.length : 0;
   const alreadySourced = sourceCount >= (need.research || need.evidence ? 3 : 1);
   const highImpact = ['high', 'high-impact', 'physical'].includes(text(risk).toLowerCase());
-  const shouldSearch = requested === false
+  const budgetAllowsSearch = maxSearches > 0;
+  const shouldSearch = requested === false || requested === 'disabled'
     ? false
-    : explicit || (requested !== 'disabled' && autoNeed && !(alreadySourced && !need.freshness));
+    : budgetAllowsSearch && (explicit || (autoNeed && !(alreadySourced && !need.freshness)));
   return {
     version: EXECUTION_POLICY_VERSION,
     shouldSearch,
     mode: explicit ? 'required' : shouldSearch ? 'adaptive' : 'disabled',
     reason: shouldSearch
       ? (need.freshness ? 'fresh-information-can-change-the-answer' : need.research ? 'evidence-gathering-is-material' : 'external-evidence-is-material')
-      : requested === false
+      : requested === false || requested === 'disabled'
         ? 'caller-disabled-search'
-        : alreadySourced
+        : !budgetAllowsSearch
+          ? 'search-budget-exhausted'
+          : alreadySourced
           ? 'sufficient-existing-evidence'
           : 'search-not-material-to-the-current-situation',
     informationNeed: need,
