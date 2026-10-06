@@ -29,18 +29,17 @@ test('crisis and declined requests never wait on a second agent, whatever the se
   assert.equal(reviewDecision({ workflow: 'full', adaptation: {} }, { mode: 'always' }).review, true);
 });
 
-test('the reviewer prefers a different, non-Pro model the plan allows, else the verifier\'s own', () => {
+test('the reviewer stays on the single Grok 4.7 model boundary', () => {
   const selection = {
-    planModelIds: ['google:gemini-3.8-flash', 'google:gemini-3.5-flash', 'google:gemini-2.5-pro'],
-    enabledModelIds: ['google:gemini-3.8-flash', 'google:gemini-3.5-flash', 'google:gemini-2.5-pro'],
-    configuredModelIds: ['google:gemini-3.8-flash', 'google:gemini-3.5-flash', 'google:gemini-2.5-pro']
+    planModelIds: ['xai:grok-4.7'],
+    enabledModelIds: ['xai:grok-4.7'],
+    configuredModelIds: ['xai:grok-4.7']
   };
-  assert.equal(reviewerModelFor(selection, 'google:gemini-3.8-flash'), 'google:gemini-3.5-flash');
-  assert.equal(reviewerModelFor(selection, 'google:gemini-3.8-flash', { allows: id => id !== 'google:gemini-3.5-flash' }), 'google:gemini-3.8-flash', 'Pro is never chosen to check a Flash answer');
-  assert.equal(reviewerModelFor({ ...selection, enabledModelIds: ['google:gemini-3.8-flash'] }, 'google:gemini-3.8-flash'), 'google:gemini-3.8-flash');
-  assert.equal(reviewerModelFor(null, 'google:x'), 'google:x');
+  assert.equal(reviewerModelFor(selection, 'xai:grok-4.7'), 'xai:grok-4.7');
+  assert.equal(reviewerModelFor(selection, 'xai:grok-4.7', { allows: () => true }), 'xai:grok-4.7');
+  assert.equal(reviewerModelFor({ ...selection, enabledModelIds: [] }, 'xai:grok-4.7'), 'xai:grok-4.7');
+  assert.equal(reviewerModelFor(null, 'xai:grok-4.7'), 'xai:grok-4.7');
 });
-
 test('the reviewer is shown the goal, the work and the first verdict, and treats evidence as data', () => {
   const run = { goal: 'Size a fuse', tasks: [
     { id: 'respond', type: 'respond', status: 'complete', evidence: { text: 'Use 10 A.' } },
