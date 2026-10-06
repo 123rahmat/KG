@@ -6,26 +6,7 @@ import { executionTargetCatalog } from '../execution.js';
 import { text, parseCookies, sessionCookieName } from '../http/context.js';
 import { targetConfigured } from '../http/policy.js';
 import { transaction } from '../db.js';
-import { modelsView, resolveModelSelection, adminModelSettings, validateModelChange } from '../model-routing.js';
-import { callModel } from '../runtime.js';
-
-/**
- * One tiny Vertex Gemini call with a model before it becomes a workspace default,
- * so a retired, misspelled or not-yet-available model is refused at the
- * switch instead of breaking every chat afterwards.
- */
-async function probeModel(config, fetchImpl, modelId) {
-  try {
-    const answer = await callModel([{ role: 'user', content: 'Reply with the single word OK.' }], {
-      config, fetchImpl, modelId, effort: 'low', retries: 0, timeoutMs: 20_000
-    });
-    if (!answer) return { ok: false, reason: 'not configured' };
-    if (answer.incomplete === 'refusal' || answer.incomplete === 'invalid-provider-response') return { ok: false, reason: answer.incomplete };
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, reason: error.upstreamStatus ? `HTTP ${error.upstreamStatus}` : 'unreachable' };
-  }
-}
+import { modelsView } from '../model-routing.js';
 
 export function registerPlatformRoutes(app, { config, identity, capabilities, metrics, fetchImpl, route, scoped, pool, audit }) {
   /* -------------------------------------------------------------- self */
@@ -63,103 +44,8 @@ export function registerPlatformRoutes(app, { config, identity, capabilities, me
     count: CAPABILITIES.length
   }));
 
-  app.get('/api/models', scoped('viewer'), route(async (req, res) => {
-    res.json(await modelsView(pool, config, {
-      workspaceId: req.scope.workspaceId,
-      principalId: req.principal.id,
-      canManage: req.scope.role === 'admin'
-    }));
-  }));
-
-  app.put('/api/models/preference', scoped('viewer'), route(async (req, res) => {
-    const selection = await resolveModelSelection(pool, config, {
-      workspaceId: req.scope.workspaceId,
-      principalId: req.principal.id
-    });
-    const chosen = validateModelChange({
-      modelId: req.body?.modelId,
-      planModelIds: selection.planModelIds,
-      enabledModelIds: selection.enabledModelIds,
-      config
-    });
-    if (!chosen.ok) return res.status(chosen.code === 'model-plan-forbidden' ? 403 : 400).json({
-      error: chosen.message, code: chosen.code
-    });
-    const modelId = chosen.model.id;
-    await transaction(pool, async client => {
-      const { rows: [existing] } = await client.query(
-        'SELECT settings FROM user_preferences WHERE principal_id = $1',
-        [req.principal.id]
-      );
-      const settings = { ...(existing?.settings ?? {}), preferredModel: modelId };
-      await client.query(
-        `INSERT INTO user_preferences (principal_id, settings, updated_at)
-         VALUES ($1, $2, now())
-         ON CONFLICT (principal_id) DO UPDATE
-           SET settings = EXCLUDED.settings, updated_at = now()`,
-        [req.principal.id, JSON.stringify(settings)]
-      );
-      await audit?.record({
-        principalId: req.principal.id, workspaceId: req.scope.workspaceId,
-        action: 'model.preference.update', target: modelId, outcome: 'allowed',
-        detail: { provider: chosen.model.provider, model: chosen.model.model },
-        requestId: req.requestId
-      }, client);
-    });
-    res.json({ selectedModelId: modelId, model: chosen.model.name });
-  }));
-
-  app.put('/api/models/settings', scoped('admin'), route(async (req, res) => {
-    const current = await resolveModelSelection(pool, config, {
-      workspaceId: req.scope.workspaceId,
-      principalId: req.principal.id
-    });
-    const normalized = adminModelSettings({
-      defaultModelId: req.body?.defaultModelId,
-      enabledModelIds: req.body?.enabledModelIds,
-      planModelIds: current.planModelIds,
-      config
-    });
-    if (!normalized.ok) return res.status(400).json({ error: normalized.message, code: normalized.code });
-    // A new default is tried once before anyone's chats depend on it.
-    if (normalized.defaultModel !== current.selectedModelId) {
-      const probe = await probeModel(config, fetchImpl, normalized.defaultModel);
-      if (!probe.ok) {
-        await audit?.record({
-          principalId: req.principal.id, workspaceId: req.scope.workspaceId,
-          action: 'model.workspace-settings.update', target: req.scope.workspaceId, outcome: 'denied',
-          detail: { defaultModelId: normalized.defaultModel, reason: probe.reason }, requestId: req.requestId
-        });
-        return res.status(400).json({
-          error: `Vertex AI did not accept ${normalized.defaultModel.replace(/^google:/, '')} (${probe.reason}). Check the model name, project access, and service identity; nothing was changed.`,
-          code: 'model-unavailable'
-        });
-      }
-    }
-    await transaction(pool, async client => {
-      await client.query(
-        `INSERT INTO workspace_ai_settings (workspace_id, default_model, enabled_models, updated_by, updated_at)
-         VALUES ($1, $2, $3, $4, now())
-         ON CONFLICT (workspace_id) DO UPDATE SET
-           default_model = EXCLUDED.default_model,
-           enabled_models = EXCLUDED.enabled_models,
-           updated_by = EXCLUDED.updated_by,
-           updated_at = now()`,
-        [req.scope.workspaceId, normalized.defaultModel, JSON.stringify(normalized.enabledModels), req.principal.id]
-      );
-      await audit?.record({
-        principalId: req.principal.id, workspaceId: req.scope.workspaceId,
-        action: 'model.workspace-settings.update', target: req.scope.workspaceId,
-        outcome: 'allowed',
-        detail: { defaultModelId: normalized.defaultModel, enabledModelIds: normalized.enabledModels },
-        requestId: req.requestId
-      }, client);
-    });
-    res.json(await modelsView(pool, config, {
-      workspaceId: req.scope.workspaceId,
-      principalId: req.principal.id,
-      canManage: true
-    }));
+  app.get('/api/models', scoped('viewer'), route(async (_req, res) => {
+    res.json(await modelsView(pool, config));
   }));
 
   const normalizePreferences = input => {
