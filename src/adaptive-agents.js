@@ -50,6 +50,40 @@ const ROLE_CAPABILITIES = Object.freeze({
   observer: ['external-data-routing', 'verification']
 });
 
+const WORKSPACE_ROLE_PREFERENCES = Object.freeze({
+  'normal-chat': ['lead', 'analyst', 'research', 'reviewer'],
+  code: ['lead', 'analyst', 'builder', 'tester', 'reviewer', 'integrator'],
+  research: ['research', 'analyst', 'reviewer', 'lead'],
+  design: ['lead', 'analyst', 'builder', 'reviewer']
+});
+
+const WORKSPACE_AGENT_POLICY = Object.freeze({
+  'normal-chat': Object.freeze({
+    context: 'minimum-sufficient',
+    parallel: 'read-only-when-material',
+    verification: 'adaptive',
+    mutation: 'single-owner'
+  }),
+  code: Object.freeze({
+    context: 'revision-first',
+    parallel: 'disjoint-write-sets',
+    verification: 'diff-tests-runtime',
+    mutation: 'ownership-and-revision'
+  }),
+  research: Object.freeze({
+    context: 'question-and-evidence-first',
+    parallel: 'independent-source-lanes',
+    verification: 'claim-source-provenance',
+    mutation: 'evidence-ledger-only'
+  }),
+  design: Object.freeze({
+    context: 'canvas-and-asset-first',
+    parallel: 'independent-assets',
+    verification: 'visual-and-export',
+    mutation: 'single-canvas-owner'
+  })
+});
+
 const ACTION_ROLE = Object.freeze({
   investigate: 'research',
   research: 'research',
@@ -116,8 +150,12 @@ export function decideAgentTopology({
   externalAction = false,
   physical = false,
   retrying = false,
-  humanGovernance = null
+  humanGovernance = null,
+  workspace = 'normal-chat'
 } = {}) {
+  const workspaceId = text(workspace).toLowerCase() || 'normal-chat';
+  const workspaceRoles = WORKSPACE_ROLE_PREFERENCES[workspaceId] ?? WORKSPACE_ROLE_PREFERENCES['normal-chat'];
+  const workspacePolicy = WORKSPACE_AGENT_POLICY[workspaceId] ?? WORKSPACE_AGENT_POLICY['normal-chat'];
   const work = uniqueTasks(tasks).filter(task => text(task.type) !== 'respond' || tasks.length > 1);
   const countable = work.length;
   const budgetAgents = Math.max(1, Math.min(12, Number(budget.maxAgents ?? budget.maxCapabilities ?? 4) || 4));
@@ -138,6 +176,8 @@ export function decideAgentTopology({
       agents: [{ id: 'lead-1', role: 'lead', taskIds: countable ? [work[0].id] : [], model: 'xai:grok-4.7' }],
       waves: countable ? [[ 'lead-1' ]] : [],
       integrationRequired: false,
+      workspace: workspaceId,
+      workspacePolicy,
       humanGovernance: humanGovernance ?? null,
       authority: { serverOwned: true, modelCannotAuthorize: true }
     };
@@ -147,7 +187,8 @@ export function decideAgentTopology({
   const agents = [];
   const taskAgent = new Map();
   for (const task of work.slice(0, budgetAgents)) {
-    const role = roleFor(task);
+    const baseRole = roleFor(task);
+    const role = workspaceRoles.includes(baseRole) ? baseRole : (workspaceRoles[0] ?? baseRole);
     const id = `${role}-${agents.filter(a => a.role === role).length + 1}`;
     const agent = {
       id, role, taskIds: [task.id], capabilities: ROLE_CAPABILITIES[role] ?? ['reasoning'],
@@ -181,6 +222,8 @@ export function decideAgentTopology({
       requiresAllInputs: false,
       rule: 'Integrate only completed, authorized, revision-compatible agent outputs; unresolved conflicts become blockers.'
     } : null,
+    workspace: workspaceId,
+    workspacePolicy,
     humanGovernance: humanGovernance ?? null,
     collaboration: {
       protocol: 'typed-findings',
@@ -195,6 +238,7 @@ export function decideAgentTopology({
       modelCannotGrantCapabilities: true,
       modelCannotDeclareWorldOutcome: true,
       externalActionsSerialized: highRisk || externalAction || physical,
+      workspaceMutationBoundary: workspacePolicy.mutation,
       humanGovernanceServerOwned: true
     }
   };
