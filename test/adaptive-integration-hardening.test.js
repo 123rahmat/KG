@@ -35,3 +35,19 @@ test('explicit web-search disable remains authoritative', () => {
   assert.equal(plan.adaptiveExecution.webSearch.shouldSearch, false);
   assert.equal(plan.adaptiveExecution.webSearch.reason, 'caller-disabled-search');
 });
+
+
+test('direct work materializes only the current response step', () => {
+  const plan = planGoal('Explain what adaptive execution means', scope);
+  assert.equal(plan.workflow, 'direct');
+  assert.deepEqual(plan.tasks.map(task => task.type), ['respond']);
+  assert.equal(plan.tasks[0].metadata.verificationPending, true);
+});
+
+test('pure conversation stays one-step and does not request verification', () => {
+  const plan = planGoal('hello', scope);
+  assert.equal(plan.workflow, 'direct');
+  assert.deepEqual(plan.tasks.map(task => task.type), ['respond']);
+  assert.equal(plan.tasks[0].metadata.conversational, true);
+  assert.equal(plan.tasks[0].metadata.verificationPending, false);
+});
