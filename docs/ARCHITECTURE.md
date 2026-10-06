@@ -308,7 +308,7 @@ verification needs into a persisted record with a status of *ready*, *care*,
   audited as `run.governance.escalate`.
 - **Refusals are audited** at the execution boundary as `run.execute.denied`
   (reason code only, never content).
-- Gemini receives the governance record with every task and is instructed to
+- Grok 4.7 receives the governance record with every task and is instructed to
   follow its restrictions, avoid manipulation, be transparent about what was
   and was not done, and recommend a qualified professional when stakes call
   for it.
@@ -329,7 +329,7 @@ Privacy is an invariant, not a feature a workflow can switch off:
   tenant table) keeps workspaces apart.
 - **Inside a workspace**, runs and objects are private by default and shared
   only when their creator chooses `visibility: workspace`.
-- **Egress to Gemini or a runner** needs destination policy *and* explicit
+- **Egress to Grok 4.7 or a runner** needs destination policy *and* explicit
   processing consent; a connection or a share never implies consent.
 - Credentials, payment data, sessions and secrets never appear in prompts,
   URLs, logs, audit detail or provider responses.
