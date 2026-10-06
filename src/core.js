@@ -821,6 +821,7 @@ export function planGoal(goal, {
     externalAction: analysis.flags?.externalAction === true,
     physical: analysis.flags?.physical === true && !writingDocument,
     retrying: failedSteps.length > 0,
+    workspace: adaptive.primarySurface === 'chat' ? 'normal-chat' : adaptive.primarySurface,
     humanGovernance
   });
 
