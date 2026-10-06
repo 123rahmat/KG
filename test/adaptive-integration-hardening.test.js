@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { planGoal } from '../src/core.js';
 import { buildRealWorldOutcomeContract } from '../src/real-world-outcome.js';
+import { decideAgentTopology, adaptAgentTopology } from '../src/adaptive-agents.js';
 import { completionGate, buildUnifiedAdaptiveWorkflow } from '../src/unified-adaptive-workflow.js';
 
 const scope = {
@@ -120,4 +121,57 @@ test('real-world outcome becomes complete only after observation and verificatio
     authorizationSatisfied: true
   });
   assert.equal(gate.allowed, true);
+});
+
+
+test('adaptive agents parallelize only independent low-risk work', () => {
+  const plan = decideAgentTopology({
+    tasks: [
+      { id: 'research-a', type: 'investigate' },
+      { id: 'research-b', type: 'investigate' },
+      { id: 'analyze', type: 'analyze' }
+    ],
+    scale: 'medium',
+    complexity: 0.8,
+    uncertainty: 0.5,
+    risk: 'ordinary',
+    budget: { maxAgents: 4, maxParallelAgents: 3 }
+  });
+  assert.equal(plan.mode, 'parallel-then-integrate');
+  assert.ok(plan.maxParallel > 1);
+  assert.equal(plan.authority.modelCannotAuthorize, true);
+});
+
+test('adaptive agents serialize consequential external work', () => {
+  const plan = decideAgentTopology({
+    tasks: [
+      { id: 'prepare', type: 'create' },
+      { id: 'execute', type: 'execute', dependencies: ['prepare'] }
+    ],
+    scale: 'medium',
+    complexity: 0.9,
+    uncertainty: 0.5,
+    risk: 'high-impact',
+    externalAction: true,
+    budget: { maxAgents: 4, maxParallelAgents: 4 }
+  });
+  assert.equal(plan.mode, 'serialized');
+  assert.equal(plan.maxParallel, 1);
+  assert.equal(plan.authority.externalActionsSerialized, true);
+});
+
+test('agent topology is replanned after failure', () => {
+  const plan = decideAgentTopology({
+    tasks: [
+      { id: 'a', type: 'investigate' },
+      { id: 'b', type: 'analyze' }
+    ],
+    scale: 'medium',
+    complexity: 0.7,
+    uncertainty: 0.4
+  });
+  const next = adaptAgentTopology(plan, { event: 'failed', taskId: 'a', failed: true });
+  assert.equal(next.replanned, true);
+  assert.equal(next.mode, 'pipeline');
+  assert.equal(next.failedTaskId, 'a');
 });
