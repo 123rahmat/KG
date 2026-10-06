@@ -13,6 +13,7 @@
  */
 
 import crypto from 'node:crypto';
+import { adaptAgentTopology } from './adaptive-agents.js';
 import { transaction } from './db.js';
 import { recordUsage } from './usage.js';
 import { decideAdvance, planGoal, nextTask, policyAllows, CODE_FOLLOW_UP } from './core.js';
@@ -1331,7 +1332,18 @@ export class RunStore {
          evidence === null ? null : JSON.stringify(evidence)]
       );
 
+      const currentAgentPlan = run.adaptation?.agentPlan ?? run.adaptation?.agentTopology ?? null;
+      const agentPlan = adaptAgentTopology(currentAgentPlan, {
+        event: status === 'failed' ? 'failed' : 'completed',
+        taskId: target.id,
+        failed: status === 'failed',
+        risk: run.situation?.risk ?? (run.situation?.highImpact ? 'high-impact' : 'ordinary')
+      });
       const applied = await this.#settle(client, run, decision, target, result, { evidence, verifiedExternalExecution, approvedPlanUpdate });
+      await client.query(
+        'UPDATE runs SET adaptation = jsonb_set(COALESCE(adaptation, '{}'::jsonb), '{agentPlan}', $2::jsonb, true), updated_at = now() WHERE id = $1',
+        [run.id, JSON.stringify(agentPlan)]
+      );
 
       const nextSituation = applied.situation ?? evolveSituation(run.situation ?? {}, {
         type: target.type,
