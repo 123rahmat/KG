@@ -15,50 +15,32 @@ const ENV = {
   AI_MODEL: 'gemini-3.8-flash'
 };
 
-test('model settings expose only the adaptive Vertex Gemini family', () => {
-  return withServer(async ({ call, seed }) => {
+test('model catalogue is Gemini-only, adaptive, and not user-selectable', () =>
+  withServer(async ({ call, seed }) => {
     const admin = await seed({ role: 'admin' });
-    const member = await seed({ workspace: admin.workspace, role: 'editor', name: 'Member' });
     const auth = { token: admin.token, workspace: admin.workspace };
 
-    const before = await call('GET', '/api/models', auth);
-    assert.equal(before.status, 200);
-    assert.equal(before.body.canManage, true);
-    assert.equal(before.body.adaptive, true);
-    assert.equal(before.body.selectedModelId, 'google:gemini-3.8-flash');
-    assert.deepEqual(before.body.models.map(model => model.id), [
+    const view = await call('GET', '/api/models', auth);
+    assert.equal(view.status, 200);
+    assert.equal(view.body.provider, 'google-vertex-ai');
+    assert.equal(view.body.family, 'Gemini');
+    assert.equal(view.body.adaptive, true);
+    assert.equal(view.body.userSelectable, false);
+    assert.deepEqual(view.body.models.map(model => model.id), [
       'google:gemini-3.5-flash-lite',
       'google:gemini-3.8-flash'
     ]);
 
-    const denied = await call('PUT', '/api/models/settings', {
-      token: member.token,
-      workspace: admin.workspace,
-      body: {
-        defaultModelId: 'google:gemini-3.8-flash',
-        enabledModelIds: ['google:gemini-3.5-flash-lite', 'google:gemini-3.8-flash']
-      }
+    const preference = await call('PUT', '/api/models/preference', {
+      ...auth, body: { modelId: 'google:gemini-3.8-flash' }
     });
-    assert.equal(denied.status, 403);
+    assert.equal(preference.status, 404);
 
-    const switched = await call('PUT', '/api/models/settings', {
-      ...auth,
-      body: {
-        defaultModelId: 'google:gemini-3.8-flash',
-        enabledModelIds: ['google:gemini-3.5-flash-lite', 'google:gemini-3.8-flash']
-      }
+    const settings = await call('PUT', '/api/models/settings', {
+      ...auth, body: { defaultModelId: 'google:gemini-3.8-flash' }
     });
-    assert.equal(switched.status, 200);
-    assert.equal(switched.body.selectedModelId, 'google:gemini-3.8-flash');
-
-    const invalid = await call('PUT', '/api/models/settings', {
-      ...auth,
-      body: { defaultModelId: 'unsupported:model-a', enabledModelIds: ['unsupported:model-a'] }
-    });
-    assert.equal(invalid.status, 400);
-    assert.equal(invalid.body.code, 'invalid-model');
-  }, { env: ENV });
-});
+    assert.equal(settings.status, 404);
+  }, { env: ENV }));
 
 test('when Vertex AI is rate-limited, the person is told so and nothing is recorded', () => {
   let limited = false;
