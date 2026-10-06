@@ -170,11 +170,13 @@ Learning may **not**:
 
 Skill dependencies remain explicit and cyclic dependencies are rejected.
 
-## 7. Tools and tool forging
+## 7. Tools, MCP, and tool forging
 
 The tool system is also core and must remain.
 
 Tools are discovered and invoked just in time from a governed registry. The system should choose the **smallest sufficient tool set**, not preload every tool.
+
+**Model Context Protocol (MCP)** is shared tool infrastructure, not another workspace. Configured remote MCP servers can expose external tools to NormalChat, Code, or Research when the active task justifies them. MCP discovery is cached, concurrency is bounded, calls have timeouts and circuit breaking, and actual remote tool calls are approval-gated. Read-only discovery may retry; tool calls are never automatically retried because an ambiguous network failure must not duplicate a side effect.
 
 Tool forging may define or register a missing capability only through the existing governed lifecycle:
 
@@ -324,7 +326,7 @@ Visual work remains a NormalChat capability. Simulation requests, when relevant,
 1. Exactly three user-facing AI workspaces: NormalChat, Code, Research.
 2. One shared adaptive intelligence core.
 3. Gemini family only in the production model layer.
-4. Skills, tools, files, memory, multi-agent, parallel execution, progress, permissions, and verification are shared infrastructure.
+4. Skills, tools, MCP, files, memory, multi-agent, parallel execution, progress, permissions, and verification are shared infrastructure.
 5. Files are contextual state, not a workspace.
 6. Simple tasks stay simple.
 7. Extra agents/tools/model effort are added only when they can materially improve the result.
