@@ -193,7 +193,7 @@ export function renderWorkStatus(run) {
     'aria-valuemin': '0',
     'aria-valuemax': '100',
     'aria-valuenow': String(snapshot.coverage),
-    'aria-label': 'Adaptive workflow progress'
+    'aria-label': 'Materialized workflow coverage'
   }, [element('i', { style: 'width:' + snapshot.coverage + '%' })]);
 
   const visible = tasks.slice(-5);
@@ -224,8 +224,9 @@ export function renderWorkStatus(run) {
         ])
       : null,
     element('div', { class: 'work-progress-track' }, [meter]),
+    element('div', { class: 'work-progress-hint small muted', text: 'Coverage reflects only work materialized so far; the workflow can expand or contract as evidence changes.' }),
     element('div', { class: 'work-progress-caption' }, [
-      element('span', { class: 'small muted', text: snapshot.coverage >= 100 ? 'Complete' : snapshot.completed ? snapshot.completed + ' step' + (snapshot.completed === 1 ? '' : 's') + ' finished' : 'Starting' }),
+      element('span', { class: 'small muted', text: snapshot.coverage >= 100 ? 'Current work set complete' : snapshot.completed ? snapshot.completed + ' materialized step' + (snapshot.completed === 1 ? '' : 's') + ' finished' : 'Starting' }),
       element('span', { class: 'small muted', text: snapshot.active ? 'Working now' : snapshot.pending ? 'Next step adapts from evidence' : 'No unnecessary work queued' })
     ]),
     element('div', { class: 'work-status-grid adaptive-progress-grid' }, stats.map(([label, value, detail]) =>
