@@ -10,6 +10,7 @@
 import { resolveExternalDataNeeds } from './connectors.js';
 import { isCareNote } from './safety.js';
 import { buildRealWorldTaskModel } from './real-world-adaptation.js';
+import { buildRealWorldOutcomeContract } from './real-world-outcome.js';
 
 const text = value => String(value ?? '').trim();
 
@@ -242,6 +243,16 @@ export function buildSituationModel(goal, context = {}) {
     unknowns.push('jurisdiction is required to evaluate applicable rules for a high-impact situation');
   }
 
+  const outcomeContract = buildRealWorldOutcomeContract({
+    goal: value,
+    realWorld,
+    outcomeContract,
+    successCriteria: uniq([...c.successCriteria, ...c.outputs]),
+    execution: c.execution ?? {},
+    authorizationSatisfied: c.authorizationSatisfied !== false,
+    evidence: c.evidence ?? []
+  });
+
   const successCriteria = uniq([
     ...c.successCriteria,
     ...c.outputs,
@@ -352,6 +363,7 @@ export function buildSituationModel(goal, context = {}) {
         successCriteria
       },
       realWorld: realWorld,
+      outcomeContract,
       creationMode: c.creationMode || null,
       operational: {
         realWorld,
