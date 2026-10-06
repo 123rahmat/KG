@@ -236,3 +236,152 @@ export function adaptAgentTopology(plan, {
   }
   return { ...current, replanned: true, replanReason: 'wave-completed-and-reassessed', lastEvent: eventType || 'completed', lastTaskId: text(taskId) || null };
 }
+
+
+/**
+ * Execute an already-approved topology with bounded, dependency-aware
+ * concurrency. Topology decides what may run together; this executor decides
+ * what actually runs under server-owned authority.
+ */
+export async function executeAdaptiveAgentPlan(plan, {
+  tasks = [],
+  executeAgent,
+  integrate = null,
+  checkpoint = null,
+  signal = null,
+  maxRetries = 1,
+  timeoutMs = 120000,
+  currentRevision = null
+} = {}) {
+  if (typeof executeAgent !== 'function') throw new TypeError('executeAgent is required');
+
+  const taskMap = new Map(uniqueTasks(tasks).map(task => [text(task.id), task]));
+  const agents = new Map((Array.isArray(plan?.agents) ? plan.agents : []).map(agent => [text(agent.id), agent]));
+  const requestedWaves = Array.isArray(plan?.waves) ? plan.waves : [];
+  const results = new Map();
+  const completed = new Set();
+  const failed = new Set();
+  const started = new Set();
+  const conflicts = [];
+  const aborted = () => Boolean(signal?.aborted);
+
+  const resourceKeys = task => [...new Set([
+    ...(Array.isArray(task?.resourceKeys) ? task.resourceKeys : []),
+    ...(Array.isArray(task?.writePaths) ? task.writePaths : []),
+    ...(Array.isArray(task?.artifacts) ? task.artifacts : [])
+  ].map(text).filter(Boolean))].sort();
+
+  const compatibleBatch = ids => {
+    const batch = [];
+    const held = new Set();
+    for (const agentId of ids) {
+      const agent = agents.get(agentId);
+      const keys = new Set((Array.isArray(agent?.taskIds) ? agent.taskIds : [])
+        .flatMap(id => resourceKeys(taskMap.get(id))));
+      if ([...keys].some(key => held.has(key))) {
+        conflicts.push({ agentId, reason: 'shared-resource-conflict' });
+        continue;
+      }
+      batch.push(agentId);
+      keys.forEach(key => held.add(key));
+    }
+    return batch;
+  };
+
+  const runOne = async agentId => {
+    if (aborted()) return { agentId, status: 'cancelled', reason: 'cancelled-before-start' };
+    const agent = agents.get(agentId);
+    if (!agent) return { agentId, status: 'failed', reason: 'unknown-agent' };
+    const taskIds = Array.isArray(agent.taskIds) ? agent.taskIds : [];
+    if (!taskIds.length) return { agentId, status: 'completed', output: null };
+
+    for (const taskId of taskIds) {
+      const task = taskMap.get(taskId);
+      if (!task) return { agentId, status: 'failed', reason: 'unknown-task', taskId };
+      const expected = task.expectedRevision ?? task.revision ?? null;
+      if (expected !== null && typeof currentRevision === 'function') {
+        const actual = await currentRevision(task);
+        if (String(actual ?? '') !== String(expected)) {
+          return { agentId, status: 'stale', reason: 'stale-revision', taskId, expectedRevision: expected, actualRevision: actual };
+        }
+      }
+    }
+
+    started.add(agentId);
+    let attempt = 0;
+    const retries = Math.max(0, Number(maxRetries) || 0);
+    while (attempt <= retries) {
+      if (aborted()) return { agentId, status: 'cancelled', reason: 'cancelled' };
+      attempt += 1;
+      const controller = new AbortController();
+      const onAbort = () => controller.abort(signal?.reason);
+      signal?.addEventListener?.('abort', onAbort, { once: true });
+      const timer = setTimeout(() => controller.abort(new Error('agent-timeout')), Math.max(1, Number(timeoutMs) || 120000));
+      try {
+        const output = await executeAgent(agent, {
+          tasks: taskIds.map(id => taskMap.get(id)),
+          completed: [...completed],
+          findings: [...results.values()].filter(item => item.status === 'completed'),
+          attempt,
+          idempotencyKey: 'agent:' + agentId + ':attempt:' + attempt,
+          authority: plan?.authority ?? { serverOwned: true },
+          signal: controller.signal
+        });
+        if (controller.signal.aborted) throw new Error('agent-timeout');
+        return { agentId, status: 'completed', attempt, output };
+      } catch (error) {
+        if (attempt > retries) {
+          return { agentId, status: 'failed', attempt, reason: text(error?.message) || 'agent-failed' };
+        }
+      } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener?.('abort', onAbort);
+      }
+    }
+    return { agentId, status: 'failed', reason: 'agent-failed' };
+  };
+
+  for (const requestedWave of requestedWaves) {
+    if (aborted()) break;
+    let pending = requestedWave.filter(id => agents.has(id));
+    while (pending.length) {
+      if (aborted()) break;
+      const batch = compatibleBatch(pending);
+      const batchSet = new Set(batch);
+      pending = pending.filter(id => !batchSet.has(id));
+      if (!batch.length) {
+        const one = pending.shift();
+        if (one) batch.push(one);
+      }
+      const settled = await Promise.all(batch.map(runOne));
+      for (const result of settled) {
+        results.set(result.agentId, result);
+        if (result.status === 'completed') completed.add(result.agentId);
+        else if (['failed', 'stale', 'cancelled'].includes(result.status)) failed.add(result.agentId);
+      }
+      if (typeof checkpoint === 'function') {
+        await checkpoint({ completed: [...completed], failed: [...failed], results: [...results.values()], conflicts: [...conflicts] });
+      }
+      if (settled.some(item => ['failed', 'stale'].includes(item.status))) break;
+    }
+    if (failed.size) break;
+  }
+
+  const summary = {
+    status: aborted() ? 'cancelled' : failed.size ? 'failed' : 'completed',
+    completedAgents: [...completed],
+    failedAgents: [...failed],
+    startedAgents: [...started],
+    conflicts,
+    results: [...results.values()]
+  };
+
+  if (summary.status === 'completed' && plan?.integrationRequired && typeof integrate === 'function') {
+    summary.integration = await integrate({
+      findings: summary.results.filter(item => item.status === 'completed'),
+      authority: plan.authority,
+      signal
+    });
+  }
+  return summary;
+}
