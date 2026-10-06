@@ -147,15 +147,16 @@ export class MemoryStore {
         ? 'AND project_id = $3 AND conversation_id IS NULL'
         : 'AND project_id IS NULL AND conversation_id IS NULL';
     const params = conversation
-      ? [scope.workspaceId, scope.principalId, project, conversation, MAX_MEMORIES]
+      ? [scope.workspaceId, scope.principalId, project || null, conversation]
       : project
-        ? [scope.workspaceId, scope.principalId, project, MAX_MEMORIES]
-        : [scope.workspaceId, scope.principalId, MAX_MEMORIES];
+        ? [scope.workspaceId, scope.principalId, project]
+        : [scope.workspaceId, scope.principalId];
     await this.pool.query(
       `DELETE FROM memories WHERE id IN (
          SELECT id FROM memories
           WHERE workspace_id = $1 AND principal_id = $2 ${scopeClause}
-          ORDER BY COALESCE(last_used_at, updated_at) DESC OFFSET ${conversation ? 5 : project ? 4 : 3})`,
+          ORDER BY COALESCE(last_used_at, updated_at) DESC
+          OFFSET ${MAX_MEMORIES})`,
       params
     );
     return { memory: shape(row, this.encryptionKey), created: true };
