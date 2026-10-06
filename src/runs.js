@@ -512,12 +512,12 @@ export class RunStore {
         requestId
       }, client);
 
-      return this.#load(client, scope, id);
+      return this.load(client, scope, id);
     });
   }
 
   async get(scope, id) {
-    return this.#load(this.pool, scope, text(id));
+    return this.load(this.pool, scope, text(id));
   }
 
   /**
@@ -892,7 +892,7 @@ export class RunStore {
           detail: { afterFailure: true, replan: result.replan === true, state: outcome.state, attempt: outcome.attempt },
           requestId
         }, client);
-        return this.#load(client, scope, run.id);
+        return this.load(client, scope, run.id);
       }
 
       const requestedStatus = result.status === undefined || result.status === null || result.status === ''
@@ -1381,7 +1381,7 @@ export class RunStore {
         requestId
       }, client);
 
-      return this.#load(client, scope, run.id);
+      return this.load(client, scope, run.id);
     });
   }
 
@@ -1850,7 +1850,7 @@ export class RunStore {
         principalId: principal.id, workspaceId: scope.workspaceId, action: 'run.code.repair',
         target: run.id, outcome: 'allowed', detail, requestId
       }, client);
-      return this.#load(client, scope, run.id);
+      return this.load(client, scope, run.id);
     });
   }
 
@@ -1908,7 +1908,7 @@ export class RunStore {
         principalId: principal.id, workspaceId: scope.workspaceId, action: 'run.code.not-run',
         target: run.id, outcome: 'allowed', detail: { taskId: target.id, language: text(language) }, requestId
       }, client);
-      return this.#load(client, scope, run.id);
+      return this.load(client, scope, run.id);
     });
   }
 
@@ -2349,7 +2349,7 @@ export class RunStore {
     return this.get(scope, runId);
   }
 
-  async #load(client, scope, id) {
+  async load(client, scope, id) {
     const { rows: [run] } = await client.query(
       `SELECT * FROM runs
          WHERE id = $1 AND workspace_id = $2
