@@ -330,6 +330,9 @@ export async function executeAdaptiveAgentPlan(plan, {
         if (controller.signal.aborted) throw new Error('agent-timeout');
         return { agentId, status: 'completed', attempt, output };
       } catch (error) {
+        if (controller.signal.aborted) {
+          return { agentId, status: signal?.aborted ? 'cancelled' : 'failed', attempt, reason: signal?.aborted ? 'cancelled' : 'agent-timeout' };
+        }
         if (attempt > retries) {
           return { agentId, status: 'failed', attempt, reason: text(error?.message) || 'agent-failed' };
         }
