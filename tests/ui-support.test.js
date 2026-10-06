@@ -1,27 +1,36 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { withServer, jsonResponse, stepsIn } from './helpers.js';
+import { withServer, stepsIn } from './helpers.js';
 
-const ANTHROPIC = { AI_PROVIDER: 'anthropic', AI_API_KEY: 'secret-provider-key', AI_MODEL: 'claude-opus-5-5' };
-const reply = text => jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text }], usage: { input_tokens: 3, output_tokens: 4 } });
+const VERTEX = {
+  AI_PROVIDER: 'google',
+  GOOGLE_CLOUD_PROJECT: 'test-project',
+  GOOGLE_CLOUD_LOCATION: 'global',
+  VERTEX_ACCESS_TOKEN: 'secret-provider-key',
+  AI_MODEL: 'gemini-3.8-flash'
+};
+const reply = text => new Response(JSON.stringify({
+  candidates: [{ content: { role: 'model', parts: [{ text }] }, finishReason: 'STOP' }],
+  usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 4 }
+}), { status: 200, headers: { 'content-type': 'application/json' } });
 
-test('the client can tell whether an AI is connected, and never sees the key', () =>
+test('the client can tell whether Gemini is connected, and never sees credentials', () =>
   withServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const config = await call('GET', '/api/execution/config', { token, workspace });
     assert.equal(config.status, 200);
     assert.deepEqual(config.body.reasoning, { configured: true, provider: 'google' });
     assert.ok(!JSON.stringify(config.body).includes('secret-provider-key'));
-  }, { env: ANTHROPIC }));
+  }, { env: VERTEX }));
 
-test('without an AI the client is told reasoning is not configured', () =>
+test('without Gemini configuration the client is told reasoning is not configured', () =>
   withServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const config = await call('GET', '/api/execution/config', { token, workspace });
     assert.deepEqual(config.body.reasoning, { configured: false, provider: null });
   }));
 
-test('a person can allow the AI for a step without starting the work again', () =>
+test('a person can allow Gemini for a step without starting the work again', () =>
   withServer(async ({ call, seed, worker }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
@@ -33,7 +42,6 @@ test('a person can allow the AI for a step without starting the work again', () 
     assert.equal(refused.body.execution.status, 'consent-required');
     assert.equal(refused.body.run.next, 'respond');
 
-    // Consent survives the trip through a background job.
     const queued = await call('POST', `/api/runs/${run.id}/execute`, {
       ...auth, body: { background: true, modelConsent: true }
     });
@@ -42,10 +50,10 @@ test('a person can allow the AI for a step without starting the work again', () 
     const { body: after } = await call('GET', `/api/runs/${run.id}`, auth);
     assert.equal(after.tasks.find(task => task.id === 'respond').evidence.text, 'Recursion is a function calling itself.');
     assert.equal(after.next, 'verify');
-  }, { env: ANTHROPIC, fetchImpl: async () => reply('Recursion is a function calling itself.') }));
+  }, { env: VERTEX, fetchImpl: async () => reply('Recursion is a function calling itself.') }));
 
 let aiCalls = 0;
-test('consent cannot override a policy that denies sending data to the AI', () =>
+test('consent cannot override a policy that denies sending data to Gemini', () =>
   withServer(async ({ call, seed }) => {
     const { token, workspace } = await seed({
       policies: { workspace: { id: 'no-ai', deniedDataClasses: ['user-content'] } }
@@ -57,13 +65,13 @@ test('consent cannot override a policy that denies sending data to the AI', () =
     assert.match(result.body.error, /server policy (?:denied|does not allow) a required data class/);
     const { body: audit } = await call('GET', '/api/audit', { token, workspace });
     const denied = audit.entries.find(entry => entry.action === 'run.execute.denied');
-    assert.equal(denied?.outcome, 'denied', 'the refusal is in the audit trail');
+    assert.equal(denied?.outcome, 'denied');
     assert.equal(denied.detail.code, 'situation-governance-blocked');
     assert.notEqual(result.body.run.tasks.find(task => task.id === 'respond').status, 'complete');
-    assert.equal(aiCalls, 0, 'the AI must not be called');
-  }, { env: ANTHROPIC, fetchImpl: async () => { aiCalls += 1; return reply('should not happen'); } }));
+    assert.equal(aiCalls, 0);
+  }, { env: VERTEX, fetchImpl: async () => { aiCalls += 1; return reply('should not happen'); } }));
 
-test('unusable AI code is explained, not recorded, and the step stays open', () =>
+test('unusable Gemini code is explained, not recorded, and the step stays open', () =>
   withServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
@@ -80,5 +88,5 @@ test('unusable AI code is explained, not recorded, and the step stays open', () 
     assert.match(result.body.execution.message, /write the code yourself/);
     const { body: after } = await call('GET', `/api/runs/${run.id}`, auth);
     assert.equal(after.next, 'build-code');
-    assert.ok(after.tokensUsed > 0, 'the spent tokens are still counted');
-  }, { env: ANTHROPIC, fetchImpl: async () => reply('Sure! Here is some code.') }));
+    assert.ok(after.tokensUsed > 0);
+  }, { env: VERTEX, fetchImpl: async () => reply('Sure! Here is some code.') }));
