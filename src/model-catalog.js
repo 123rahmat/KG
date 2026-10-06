@@ -90,7 +90,9 @@ export function configuredModelIds(config) {
 
 export function resolveConfiguredModel(config, modelId = '') {
   if (!vertexConfigured(config)) return null;
-  const id = normalizeModelId(modelId) || `google:${DEFAULT_MODEL}`;
+  const raw = String(modelId ?? '').trim();
+  const id = raw ? normalizeModelId(raw) : `google:${DEFAULT_MODEL}`;
+  if (!id) return null;
   const base = CATALOG_DATA[id];
   if (!base) return null;
   return {
