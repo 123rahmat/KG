@@ -20,9 +20,9 @@ const run = extra => ({
 });
 
 const selection = {
-  planModelIds: ['google:gemini-3.8-flash', 'google:gemini-3.1-pro-preview'],
-  enabledModelIds: ['google:gemini-3.8-flash', 'google:gemini-3.1-pro-preview'],
-  configuredModelIds: ['google:gemini-3.8-flash', 'google:gemini-3.1-pro-preview']
+  planModelIds: ['xai:grok-4.7', 'xai:grok-4.7'],
+  enabledModelIds: ['xai:grok-4.7', 'xai:grok-4.7'],
+  configuredModelIds: ['xai:grok-4.7', 'xai:grok-4.7']
 };
 
 const finding = (recommendation, summary, extra = {}) => ({
@@ -71,22 +71,21 @@ test('always mode preserves the requested specialist floor and parallel schedule
     task: { id: 'plan', type: 'plan' },
     basePayload: { goal: 'Plan a deterministic implementation', task: { id: 'plan', type: 'plan' } },
     selection,
-    primaryModelId: 'google:gemini-3.8-flash',
+    primaryModelId: 'xai:grok-4.7',
     config: { agents: { multiAgent: 'always', maxAgents: 4 } },
     canSpend: async () => true,
     modelCaller: async (_messages, options) => {
       calls.push(options);
-      return { text: JSON.stringify(finding('proceed', 'clear evidence', { confidence: 0.94 })), provider: 'google', model: options.modelId, usage: null };
+      return { text: JSON.stringify(finding('proceed', 'clear evidence', { confidence: 0.94 })), provider: 'xai', model: options.modelId, usage: null };
     }
   });
   assert.ok(calls.length >= 2);
   assert.ok(result.waves[0].parallel);
 });
 
-test('model selection seeks diversity but falls back to the primary model', () => {
-  const used = agentModelFor(selection, 'google:gemini-3.8-flash', 'architect');
-  assert.equal(used, 'google:gemini-3.1-pro-preview');
-  assert.equal(agentModelFor({ ...selection, enabledModelIds: ['google:gemini-3.8-flash'], configuredModelIds: ['google:gemini-3.8-flash'] }, 'google:gemini-3.8-flash', 'critic'), 'google:gemini-3.8-flash');
+test('all agent roles use the single approved Grok 4.7 model', () => {
+  assert.equal(agentModelFor(selection, 'xai:grok-4.7', 'architect'), 'xai:grok-4.7');
+  assert.equal(agentModelFor(selection, 'xai:grok-4.7', 'critic'), 'xai:grok-4.7');
 });
 
 test('agent prompts treat supplied content as data and never grant tool authority', () => {
@@ -128,9 +127,9 @@ test('the panel runs specialists, records usage, and adds an arbiter only on dis
   const fakeModel = async (messages, options) => {
     calls.push({ messages, options });
     const system = messages[0].content;
-    if (system.includes('architect')) return { text: JSON.stringify(finding('proceed', 'Architecture is coherent.')), provider: 'google', model: options.modelId, usage: { inputTokens: 2, outputTokens: 3 } };
-    if (system.includes('critic')) return { text: JSON.stringify(finding('revise', 'The plan misses a regression case.')), provider: 'google', model: options.modelId, usage: { inputTokens: 2, outputTokens: 4 } };
-    return { text: JSON.stringify(finding('revise', 'Resolve the disagreement by adding a regression test.')), provider: 'google', model: options.modelId, usage: { inputTokens: 2, outputTokens: 5 } };
+    if (system.includes('architect')) return { text: JSON.stringify(finding('proceed', 'Architecture is coherent.')), provider: 'xai', model: options.modelId, usage: { inputTokens: 2, outputTokens: 3 } };
+    if (system.includes('critic')) return { text: JSON.stringify(finding('revise', 'The plan misses a regression case.')), provider: 'xai', model: options.modelId, usage: { inputTokens: 2, outputTokens: 4 } };
+    return { text: JSON.stringify(finding('revise', 'Resolve the disagreement by adding a regression test.')), provider: 'xai', model: options.modelId, usage: { inputTokens: 2, outputTokens: 5 } };
   };
 
   const result = await runAdaptiveAgentPanel({
@@ -138,7 +137,7 @@ test('the panel runs specialists, records usage, and adds an arbiter only on dis
     task: { id: 'build-code', type: 'code' },
     basePayload: { goal: 'Build code', task: { id: 'build-code', type: 'code' } },
     selection,
-    primaryModelId: 'google:gemini-3.8-flash',
+    primaryModelId: 'xai:grok-4.7',
     config: { agents: { multiAgent: 'auto', maxAgents: 2 } },
     allowsModel: () => true,
     canSpend: async () => true,
@@ -172,12 +171,12 @@ test('the panel stops before extra calls when spend is no longer available', asy
     task: { id: 'build-code', type: 'code' },
     basePayload: { goal: 'Build code', task: { id: 'build-code', type: 'code' } },
     selection,
-    primaryModelId: 'google:gemini-3.8-flash',
+    primaryModelId: 'xai:grok-4.7',
     config: { agents: { multiAgent: 'auto', maxAgents: 3 } },
     canSpend: async () => calls === 0,
     modelCaller: async (_messages, options) => {
       calls += 1;
-      return { text: JSON.stringify(finding('proceed', 'okay')), provider: 'google', model: options.modelId, usage: null };
+      return { text: JSON.stringify(finding('proceed', 'okay')), provider: 'xai', model: options.modelId, usage: null };
     }
   });
   assert.equal(calls, 1);
@@ -189,9 +188,9 @@ test('confidence divergence triggers arbitration even when recommendations match
   const calls = [];
   const fakeModel = async (messages, options) => {
     calls.push({ messages, options });
-    if (calls.length === 1) return { text: JSON.stringify(finding('proceed', 'strong evidence', { confidence: 0.95, evidence: ['test suite'] })), provider: 'google', model: options.modelId, usage: null };
-    if (calls.length === 2) return { text: JSON.stringify(finding('proceed', 'weak evidence', { confidence: 0.45, assumptions: ['environment is unchanged'] })), provider: 'google', model: options.modelId, usage: null };
-    return { text: JSON.stringify(finding('investigate', 'Run one discriminating check before proceeding.', { confidence: 0.9 })), provider: 'google', model: options.modelId, usage: null };
+    if (calls.length === 1) return { text: JSON.stringify(finding('proceed', 'strong evidence', { confidence: 0.95, evidence: ['test suite'] })), provider: 'xai', model: options.modelId, usage: null };
+    if (calls.length === 2) return { text: JSON.stringify(finding('proceed', 'weak evidence', { confidence: 0.45, assumptions: ['environment is unchanged'] })), provider: 'xai', model: options.modelId, usage: null };
+    return { text: JSON.stringify(finding('investigate', 'Run one discriminating check before proceeding.', { confidence: 0.9 })), provider: 'xai', model: options.modelId, usage: null };
   };
 
   const result = await runAdaptiveAgentPanel({
@@ -199,7 +198,7 @@ test('confidence divergence triggers arbitration even when recommendations match
     task: { id: 'build-code', type: 'code' },
     basePayload: { goal: 'Build code', task: { id: 'build-code', type: 'code' } },
     selection,
-    primaryModelId: 'google:gemini-3.8-flash',
+    primaryModelId: 'xai:grok-4.7',
     config: { agents: { multiAgent: 'auto', maxAgents: 2 } },
     canSpend: async () => true,
     modelCaller: fakeModel
@@ -221,13 +220,13 @@ test('unresolved disagreement is explicitly surfaced when arbitration is budget-
     task: { id: 'build-code', type: 'code' },
     basePayload: { goal: 'Build code', task: { id: 'build-code', type: 'code' } },
     selection,
-    primaryModelId: 'google:gemini-3.8-flash',
+    primaryModelId: 'xai:grok-4.7',
     config: { agents: { multiAgent: 'auto', maxAgents: 2 } },
     canSpend: async () => calls < 2,
     modelCaller: async (_messages, options) => {
       calls += 1;
       const recommendation = calls === 1 ? 'proceed' : 'revise';
-      return { text: JSON.stringify(finding(recommendation, `finding-${calls}`)), provider: 'google', model: options.modelId, usage: null };
+      return { text: JSON.stringify(finding(recommendation, `finding-${calls}`)), provider: 'xai', model: options.modelId, usage: null };
     }
   });
 
@@ -298,7 +297,7 @@ test('allocation re-evaluates after each specialist completes without exposing p
     });
     return {
       text: JSON.stringify(finding('proceed', 'independent view')),
-      provider: 'google',
+      provider: 'xai',
       model: options.modelId,
       usage: null
     };
@@ -319,7 +318,7 @@ test('allocation re-evaluates after each specialist completes without exposing p
       evidenceSoFar: []
     },
     selection,
-    primaryModelId: 'google:gemini-3.8-flash',
+    primaryModelId: 'xai:grok-4.7',
     config: { agents: { multiAgent: 'auto', maxAgents: 4 } },
     canSpend: async () => true,
     modelCaller: fakeModel
@@ -378,14 +377,14 @@ test('clean independent evidence stops generic panels before exhausting the role
     task: { id: 'plan', type: 'plan' },
     basePayload: { goal: 'Plan a deterministic implementation', task: { id: 'plan', type: 'plan' } },
     selection,
-    primaryModelId: 'google:gemini-3.8-flash',
+    primaryModelId: 'xai:grok-4.7',
     config: { agents: { multiAgent: 'always', maxAgents: 7 } },
     canSpend: async () => true,
     modelCaller: async (_messages, options) => {
       calls += 1;
       return {
         text: JSON.stringify(finding('proceed', 'clear evidence', { confidence: 0.94 })),
-        provider: 'google',
+        provider: 'xai',
         model: options.modelId,
         usage: null
       };
@@ -467,7 +466,7 @@ test('coding panel converges without a needless second iteration on clean eviden
         risks: [],
         unknowns: []
       })),
-      provider: 'google',
+      provider: 'xai',
       model: options.modelId,
       usage: null
     };
@@ -482,7 +481,7 @@ test('coding panel converges without a needless second iteration on clean eviden
       codeIntelligence: { project, files: project.files }
     },
     selection,
-    primaryModelId: 'google:gemini-3.8-flash',
+    primaryModelId: 'xai:grok-4.7',
     config: { agents: { multiAgent: 'always', maxAgents: 2 } },
     canSpend: async () => true,
     modelCaller: fakeModel
@@ -515,14 +514,14 @@ test('small Code Workspace tasks use a single specialist until more depth is jus
       codeIntelligence: { project, files: project.files }
     },
     selection,
-    primaryModelId: 'google:gemini-3.8-flash',
+    primaryModelId: 'xai:grok-4.7',
     config: { agents: { multiAgent: 'auto', maxAgents: 6 } },
     canSpend: async () => true,
     modelCaller: async (_messages, options) => {
       calls += 1;
       return {
         text: JSON.stringify(finding('proceed', 'small change is understood', { confidence: 0.94 })),
-        provider: 'google',
+        provider: 'xai',
         model: options.modelId,
         usage: null
       };
@@ -561,7 +560,7 @@ test('Code Workspace gives every subsystem its own multi-agent panel with bounde
     calls.push({ body, options });
     return {
       text: JSON.stringify(finding('proceed', `${body.workspacePanel.subsystemId} ${body.workspacePanel.iteration}`)),
-      provider: 'google',
+      provider: 'xai',
       model: options.modelId,
       usage: null
     };
@@ -577,7 +576,7 @@ test('Code Workspace gives every subsystem its own multi-agent panel with bounde
       codeIntelligence: { project, files: project.files }
     },
     selection,
-    primaryModelId: 'google:gemini-3.8-flash',
+    primaryModelId: 'xai:grok-4.7',
     config: { agents: { multiAgent: 'auto', maxAgents: 6 } },
     canSpend: async () => true,
     modelCaller: fakeModel
@@ -640,14 +639,14 @@ test('Code Workspace does not mark a panel complete when a specialist is budget-
       codeIntelligence: { project, files: project.files }
     },
     selection,
-    primaryModelId: 'google:gemini-3.8-flash',
+    primaryModelId: 'xai:grok-4.7',
     config: { agents: { multiAgent: 'always', maxAgents: 3 } },
     canSpend: async () => spendChecks++ === 0,
     modelCaller: async (_messages, options) => {
       calls += 1;
       return {
         text: JSON.stringify(finding('proceed', 'one specialist completed', { confidence: 0.95 })),
-        provider: 'google',
+        provider: 'xai',
         model: options.modelId,
         usage: null
       };
@@ -667,12 +666,12 @@ test('adaptive parallel capacity contracts when the remaining budget is thin', a
     task: { id: 'plan', type: 'plan' },
     basePayload: { goal: 'Plan a deterministic implementation', task: { id: 'plan', type: 'plan' } },
     selection,
-    primaryModelId: 'google:gemini-3.8-flash',
+    primaryModelId: 'xai:grok-4.7',
     config: { agents: { multiAgent: 'always', maxAgents: 4 } },
     canSpend: async () => true,
     modelCaller: async (_messages, options) => ({
       text: JSON.stringify(finding('proceed', 'budget-constrained evidence', { confidence: 0.94 })),
-      provider: 'google',
+      provider: 'xai',
       model: options.modelId,
       usage: null
     })
@@ -721,7 +720,7 @@ test('normal-chat ZIP projects use exactly one adaptive coding panel', async () 
           contractChanges: []
         }
       } : {})),
-      provider: 'google',
+      provider: 'xai',
       model: options.modelId,
       usage: null
     };
@@ -737,7 +736,7 @@ test('normal-chat ZIP projects use exactly one adaptive coding panel', async () 
       codeIntelligence: { project, files: project.files }
     },
     selection,
-    primaryModelId: 'google:gemini-3.8-flash',
+    primaryModelId: 'xai:grok-4.7',
     config: { agents: { multiAgent: 'always', maxAgents: 4 } },
     canSpend: async () => true,
     modelCaller: fakeModel
@@ -791,7 +790,7 @@ test('coding panels stop at the adaptive ceiling when evidence never converges',
         risks: ['material risk'],
         unknowns: ['unknown one', 'unknown two', 'unknown three']
       })),
-      provider: 'google',
+      provider: 'xai',
       model: options.modelId,
       usage: null
     };
@@ -809,7 +808,7 @@ test('coding panels stop at the adaptive ceiling when evidence never converges',
       }
     },
     selection,
-    primaryModelId: 'google:gemini-3.8-flash',
+    primaryModelId: 'xai:grok-4.7',
     config: { agents: { multiAgent: 'always', maxAgents: 2 } },
     canSpend: async () => true,
     modelCaller: fakeModel
@@ -856,7 +855,7 @@ test('from-scratch coding uses the same adaptive panel engine and grows across p
           contractChanges: []
         }
       })),
-      provider: 'google',
+      provider: 'xai',
       model: options.modelId,
       usage: null
     };
@@ -872,7 +871,7 @@ test('from-scratch coding uses the same adaptive panel engine and grows across p
       subsystemPlan: null
     },
     selection,
-    primaryModelId: 'google:gemini-3.8-flash',
+    primaryModelId: 'xai:grok-4.7',
     config: { agents: { multiAgent: 'always', maxAgents: 8 } },
     canSpend: async () => true,
     modelCaller: fakeModel
