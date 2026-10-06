@@ -74,7 +74,8 @@ export function geminiFromStandIn(standIn) {
     }));
     const legacy = {
       model: vertexModelFromUrl(url),
-      input,
+      input: messages,
+      inputParts: input,
       messages,
       system: systemText || '',
       ...(tools.length ? { tools } : {}),
