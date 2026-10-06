@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { withServer, jsonResponse } from './helpers.js';
+import { withServer, jsonResponse, geminiFromStandIn } from './helpers.js';
 import { runLiveEval, judge, SCENARIOS } from '../src/live-eval.js';
 
 // A stand-in that answers the way a capable model would, so this checks the
@@ -26,7 +26,7 @@ const TOOLS = [[/copper|AFCI/i, { tool: 'web.search', input: { query: 'x' } }], 
   [/bakery/i, { tool: 'finance.project', input: { months: 12, upfrontCost: 300000, newCustomersPerMonth: 40, newCustomerGrowthPercent: 5, pricePerCustomerPerMonth: 2000, variableCostPerCustomerPerMonth: 800, fixedCostsPerMonth: 150000 } }]];
 let inventionMethodSeen = false;
 const fetchImpl = async (url, options) => {
-  if (!String(url).startsWith('https://api.openai.com/v1/responses')) return new Response('<html><title>Ohm</title><body>Ohm law V=IR</body></html>', { headers: { 'content-type': 'text/html' } });
+  if (!String(url).startsWith('https://standin.invalid/v1/responses')) return new Response('<html><title>Ohm</title><body>Ohm law V=IR</body></html>', { headers: { 'content-type': 'text/html' } });
   const body = JSON.parse(options.body);
   const request = (() => { try { const c = body.messages?.find(message => message.role === 'user')?.content; return JSON.parse(typeof c === 'string' ? c : c?.find?.(part => part.type === 'text')?.text ?? '{}'); } catch { return {}; } })();
   const reply = t => jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text: t }], usage: { input_tokens: 50, output_tokens: 20 } });
@@ -72,7 +72,14 @@ test('the live evaluation drives every situation end to end and judges it', { ti
     const byId = Object.fromEntries(report.results.map(item => [item.id, item]));
     assert.ok(byId.reminder.tools.includes('schedule.create:proposed'));
     assert.equal(byId.standard.awaitingPersonCheck, true, 'electrical work waits for a person to certify it');
-  }, { env: { AI_PROVIDER: 'anthropic', AI_API_KEY: 'x', AI_MODEL: 'gemini-3.8-flash', TOOLS_WEB_ACCESS: 'true' }, fetchImpl }));
+  }, { env: {
+    AI_PROVIDER: 'google',
+    GOOGLE_CLOUD_PROJECT: 'test-project',
+    GOOGLE_CLOUD_LOCATION: 'global',
+    VERTEX_ACCESS_TOKEN: 'test-token',
+    AI_MODEL: 'gemini-3.8-flash',
+    TOOLS_WEB_ACCESS: 'true'
+  }, fetchImpl: geminiFromStandIn(fetchImpl) }));
 
 const byIdOk = (report, id) => report.results.find(item => item.id === id)?.ok === true;
 
