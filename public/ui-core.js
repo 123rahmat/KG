@@ -42,6 +42,10 @@ export const state = {
   models: null,
   voice: { recognition: null, listening: false, baseText: '' },
   network: { online: navigator.onLine !== false, reachable: true, queue: [] },
+  // Client-side guard only: prevents an in-flight browser driver from starting
+  // another step after the person presses Stop. The server remains authoritative.
+  cancelledRuns: new Set(),
+  stoppingRun: null,
   draftSaveTimer: null,
   feedbackByRun: new Map(),
   // The person can move the current conversation between adaptive workspace envelopes.
