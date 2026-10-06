@@ -29,6 +29,7 @@ import { buildUniversalContextContract } from './universal-context.js';
 import { adaptiveExecutionEnvelope } from './adaptive-execution-policy.js';
 import { decideAgentTopology } from './adaptive-agents.js';
 import { buildHumanGovernanceContract } from './human-governance.js';
+import { workspaceEnvironment } from './surface-policy.js';
 
 export const CONTRACT = 'kindgleam-open-world-situation-adaptive-v9';
 export { CAPABILITIES, SURFACES };
@@ -836,6 +837,7 @@ export function planGoal(goal, {
       : analysis.unknownSituation ? 'adaptive-open-world' : 'adaptive',
     surface: adaptive.primarySurface,
     surfacePolicy: surfaceRuntimePolicy(adaptive.primarySurface),
+    workspaceEnvironment: workspaceEnvironment(adaptive.primarySurface),
     workspaceContract: surfaceBoundary.workspace ?? surfaceRuntimePolicy(adaptive.primarySurface).contract ?? null,
     universalContext,
     surfaceBoundary,
