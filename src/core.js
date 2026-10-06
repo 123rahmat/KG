@@ -260,7 +260,7 @@ function directTasks(analysis) {
             ? 'Do what was asked (write, rewrite, translate or reply) in a form ready to use, fitted to the person and their situation.'
             : 'Answer the question directly, stating assumptions and uncertainty.',
     {
-      ...(declined ? { declined: true, category: analysis.ethics.category, topic: analysis.ethics.topic === true } : {}),
+      ...(declined ? { declined: true, category: analysis.ethics.category, topic: analysis.ethics.topic ?? null } : {}),
       ...(analysis.crisis ? { crisis: true, crisisKind: analysis.flags?.crisisKind ?? 'self-harm' } : {}),
       ...(conversational ? { conversational: true } : {}),
       verificationPending: !conversational
