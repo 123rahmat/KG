@@ -12,9 +12,11 @@ function env(overrides = {}) {
 }
 
 const ALL_AI = {
-  AI_PROVIDERS_JSON: JSON.stringify({
-    google: { project: 'test-project', location: 'global', accessToken: 'test-token', model: 'gemini-3.8-flash' }
-  })
+  AI_PROVIDER: 'google',
+  GOOGLE_CLOUD_PROJECT: 'test-project',
+  GOOGLE_CLOUD_LOCATION: 'global',
+  VERTEX_ACCESS_TOKEN: 'test-token',
+  VERTEX_MODEL: 'gemini-3.8-flash'
 };
 
 
