@@ -406,7 +406,7 @@ export function completionGate({
   const finalizationGate = taskType === 'verify'
     || taskType === 'deliver'
     || acceptance.finalizationRequired === true;
-  const outcomeGate = outcomeContract.realWorldTask === true && (
+  const outcomeGate = finalizationGate && outcomeContract.realWorldTask === true && (
     outcomeContract.controls?.observationRequired === true
     || outcomeContract.controls?.verificationRequired === true
   );
