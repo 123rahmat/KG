@@ -163,46 +163,78 @@ function progressSnapshot(run) {
 
 export function renderWorkStatus(run) {
   const tasks = Array.isArray(run?.tasks) ? run.tasks : [];
-  const visible = tasks.slice(-5);
-  if (!visible.length) return null;
-  const current = tasks.find(task => task.id === run.next) ?? tasks.find(task => !['complete','skipped'].includes(task.status));
-  const execution = current?.evidence?.executionTarget || current?.evidence?.result?.executionTarget
-    ? executionLabel(current)
-    : null;
+  if (!tasks.length) return null;
+
+  const current = tasks.find(task => task.id === run.next)
+    ?? tasks.find(task => !['complete', 'skipped'].includes(task.status))
+    ?? null;
   const snapshot = progressSnapshot(run);
   const status = currentStatus(run);
-  const active = run?.state === 'running' || run?.state === 'queued' || Boolean(current);
+  const active = ['running', 'queued'].includes(run?.state) || Boolean(current);
+  const connectionLost = state.network?.online === false || state.network?.reachable === false;
+  const doneLabel = snapshot.completed
+    ? snapshot.completed + ' done'
+    : 'Just started';
+  const liveLabel = current
+    ? 'Current focus · ' + taskLabel(current)
+    : run?.state === 'complete'
+      ? 'All required work is complete'
+      : 'Adapting the next step';
   const stats = [
+    ['Progress', snapshot.completed + '/' + Math.max(tasks.length, snapshot.completed + snapshot.active), doneLabel],
     ...(snapshot.files ? [['Files', String(snapshot.files), snapshot.images ? snapshot.images + ' image' + (snapshot.images === 1 ? '' : 's') : 'working set']] : []),
     ...(snapshot.sources || snapshot.evidence ? [['Evidence', String(snapshot.evidence), snapshot.sources + ' source' + (snapshot.sources === 1 ? '' : 's')]] : []),
     ...(snapshot.tests ? [['Checks', String(snapshot.tests), snapshot.verified ? snapshot.verified + ' verified' : 'verification active']] : [])
-  ];
+  ].slice(0, 3);
+
   const meter = element('div', {
     class: 'work-progress-meter' + (run?.state === 'complete' ? ' is-complete' : ''),
-    role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100',
-    'aria-valuenow': String(snapshot.coverage), 'aria-label': 'Workflow graph progress'
+    role: 'progressbar',
+    'aria-valuemin': '0',
+    'aria-valuemax': '100',
+    'aria-valuenow': String(snapshot.coverage),
+    'aria-label': 'Adaptive workflow progress'
   }, [element('i', { style: 'width:' + snapshot.coverage + '%' })]);
-  return element('div', { class: 'work-timeline', 'aria-label': 'Adaptive work progress' }, [
+
+  const visible = tasks.slice(-5);
+  return element('div', {
+    class: 'work-timeline' + (connectionLost ? ' is-disconnected' : ''),
+    'aria-label': 'Adaptive work progress'
+  }, [
     element('div', { class: 'work-timeline-head' }, [
       element('div', { class: 'work-status-summary' }, [
         element('span', { class: 'work-status-dot' + (active ? ' active' : ''), 'aria-hidden': 'true' }),
         element('div', { class: 'work-status-copy' }, [
           element('strong', { text: status }),
-          element('span', { class: 'small muted', text: current ? 'Current focus · ' + taskLabel(current) + (execution ? ' · ' + execution : '') : 'Adaptive work status' })
+          element('span', { class: 'small muted', text: liveLabel })
         ])
       ]),
-      element('span', { class: 'small muted work-status-state', text: run?.state === 'complete' ? 'Done' : run?.state === 'blocked' ? 'Blocked' : run?.state === 'waiting' ? 'Waiting' : 'Working' })
+      element('span', {
+        class: 'small work-status-state',
+        text: run?.state === 'complete' ? 'Done' : run?.state === 'blocked' ? 'Blocked' : run?.state === 'waiting' ? 'Waiting' : 'Live'
+      })
     ]),
-    element('div', { class: 'work-progress-track' }, [meter]),
-    stats.length
-      ? element('div', { class: 'work-status-grid adaptive-progress-grid' }, stats.slice(0, 3).map(([label, value, detail]) =>
-          element('div', { class: 'work-status-item' }, [
-            element('span', { class: 'small muted', text: label }),
-            element('strong', { text: value }),
-            element('span', { class: 'small muted', text: detail })
+    connectionLost
+      ? element('div', { class: 'work-connection-banner', role: 'status', 'aria-live': 'polite' }, [
+          element('span', { class: 'work-connection-dot', 'aria-hidden': 'true' }),
+          element('div', {}, [
+            element('strong', { text: 'Connection lost' }),
+            element('span', { class: 'small muted', text: 'Your work is kept on the server. Reconnecting will resume the live view automatically.' })
           ])
-        ))
+        ])
       : null,
+    element('div', { class: 'work-progress-track' }, [meter]),
+    element('div', { class: 'work-progress-caption' }, [
+      element('span', { class: 'small muted', text: snapshot.coverage >= 100 ? 'Complete' : snapshot.completed ? snapshot.completed + ' step' + (snapshot.completed === 1 ? '' : 's') + ' finished' : 'Starting' }),
+      element('span', { class: 'small muted', text: snapshot.active ? 'Working now' : snapshot.pending ? 'Next step adapts from evidence' : 'No unnecessary work queued' })
+    ]),
+    element('div', { class: 'work-status-grid adaptive-progress-grid' }, stats.map(([label, value, detail]) =>
+      element('div', { class: 'work-status-item' }, [
+        element('span', { class: 'small muted', text: label }),
+        element('strong', { text: value }),
+        element('span', { class: 'small muted', text: detail })
+      ])
+    )),
     snapshot.failed || snapshot.conflicts || snapshot.gaps
       ? element('div', { class: 'work-progress-alerts' }, [
           snapshot.failed ? element('span', { class: 'pill bad', text: snapshot.failed + ' step' + (snapshot.failed === 1 ? '' : 's') + ' needs attention' }) : null,
@@ -211,7 +243,7 @@ export function renderWorkStatus(run) {
         ].filter(Boolean))
       : null,
     element('details', { class: 'work-timeline-details' }, [
-      element('summary', { class: 'small', text: 'Work details' }),
+      element('summary', { class: 'small', text: 'See work already completed' }),
       element('div', { class: 'work-timeline-list' }, visible.map(task => {
         const tone = taskTone(task);
         const exec = executionLabel(task);
