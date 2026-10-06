@@ -146,9 +146,7 @@ export const NATIVE_CAPABILITY_DEFINITIONS = Object.freeze([
 // Compatibility exports: these are the native bootstrap primitives only.
 export const CAPABILITY_DEFINITIONS = NATIVE_CAPABILITY_DEFINITIONS;
 export const CAPABILITIES = Object.freeze(CAPABILITY_DEFINITIONS.map(item => item.name));
-export const SURFACES = Object.freeze([
-  'chat', 'research', 'code', 'design', 'creation', 'workspace'
-]);
+export const SURFACES = Object.freeze(['chat', 'code', 'research']);
 
 
 const PATTERNS = Object.freeze({
@@ -407,17 +405,14 @@ export function discoverCapabilityRequirements(goal, analysis = inspectGoal(goal
 
 export const SURFACE_CATALOG = Object.freeze({
   chat: { type: 'conversation', label: 'Normal Chat', publicMode: 'normal-chat', purpose: 'Adaptive simple-to-medium conversation, explanation and rich multimodal understanding.' },
-  research: { type: 'investigation', label: 'Research Workspace', publicMode: 'research', purpose: 'Evidence gathering, source tracking, analysis and verification when justified.' },
   code: { type: 'workspace', label: 'Code Workspace', publicMode: 'code', purpose: 'Repository-aware software creation, debugging, testing and authorized execution.' },
-  creation: { type: 'conversation', label: 'Normal Chat', publicMode: 'normal-chat', internalAlias: true, purpose: 'Creation is handled as adaptive normal-chat work unless it crosses into Coding or Research.' },
-  workspace: { type: 'conversation', label: 'Normal Chat', publicMode: 'normal-chat', internalAlias: true, purpose: 'Files and artifacts can be understood in Normal Chat without opening a deep workspace workflow.' },
-  adaptive: { type: 'adaptive', label: 'Adaptive', publicMode: 'normal-chat', internalAlias: true, purpose: 'A server-selected internal work surface for a capability not represented by a fixed domain surface.' }
+  research: { type: 'investigation', label: 'Research Workspace', publicMode: 'research', purpose: 'Evidence gathering, source tracking, analysis and verification when justified.' }
 });
 
 function surfaceDescriptors(ids) {
   return ids.map(id => ({
     id,
-    ...(SURFACE_CATALOG[id] ?? SURFACE_CATALOG.adaptive),
+    ...(SURFACE_CATALOG[id] ?? SURFACE_CATALOG.chat),
     state: 'available',
     actions: ['view', 'adapt']
   }));
@@ -568,10 +563,13 @@ export function resolveAdaptiveContext(goal, {
     situation: analysis.situation,
     resourcePlan
   });
-  const selectedSurfaces = resourcePlan.selected.surfaces ?? ['chat'];
+  const requestedSurfaces = resourcePlan.selected.surfaces ?? ['chat'];
   const selectedPrimarySurface = boundary.surface === 'code' ? 'code'
     : boundary.surface === 'research' ? 'research' : 'chat';
-  resourcePlan.selected.surfaces = [...new Set(selectedSurfaces.filter(surface => ['chat','code','research'].includes(surface)).concat(selectedPrimarySurface))];
+  const selectedSurfaces = [...new Set(
+    requestedSurfaces.filter(surface => SURFACES.includes(surface)).concat(selectedPrimarySurface)
+  )];
+  resourcePlan.selected.surfaces = selectedSurfaces;
   resourcePlan.selected.primarySurface = selectedPrimarySurface;
   const modeRouting = {
     version: 1,
