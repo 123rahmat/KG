@@ -108,6 +108,57 @@ function parseJsonObject(raw, name, errors, fallback = {}) {
     return fallback;
   }
 }
+
+function parseMcpServers(raw, errors, { production = false } = {}) {
+  if (!text(raw)) return [];
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch {
+    errors.push('MCP_SERVERS_JSON must be a JSON array of MCP server definitions');
+    return [];
+  }
+  if (!Array.isArray(parsed)) {
+    errors.push('MCP_SERVERS_JSON must be a JSON array of MCP server definitions');
+    return [];
+  }
+  const names = new Set();
+  const servers = [];
+  for (const [index, item] of parsed.entries()) {
+    const name = text(item?.name).toLowerCase();
+    const rawUrl = text(item?.url);
+    let url;
+    try { url = new URL(rawUrl); } catch {
+      errors.push(`MCP_SERVERS_JSON[${index}].url must be a valid HTTP(S) URL`);
+      continue;
+    }
+    const local = ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+    if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(name) || names.has(name)) {
+      errors.push(`MCP_SERVERS_JSON[${index}].name must be unique and use a-z, 0-9, and hyphen`);
+      continue;
+    }
+    if (!['http:', 'https:'].includes(url.protocol) || (production && url.protocol !== 'https:' && !local)) {
+      errors.push(`MCP_SERVERS_JSON[${index}].url must use HTTPS in production (localhost is allowed for development)`);
+      continue;
+    }
+    names.add(name);
+    const headers = item?.headers && typeof item.headers === 'object' && !Array.isArray(item.headers)
+      ? Object.fromEntries(Object.entries(item.headers)
+          .map(([key, value]) => [text(key).toLowerCase(), text(value)])
+          .filter(([key, value]) => key && value && !['host','content-length','connection'].includes(key)))
+      : {};
+    servers.push({
+      name,
+      url: url.toString(),
+      headers,
+      timeoutMs: integer(item?.timeoutMs, 15_000, { min: 500, max: 120_000, name: `MCP_SERVERS_JSON[${index}].timeoutMs`, errors }),
+      cacheMs: integer(item?.cacheMs, 60_000, { min: 1_000, max: 3_600_000, name: `MCP_SERVERS_JSON[${index}].cacheMs`, errors }),
+      maxConcurrency: integer(item?.maxConcurrency, 4, { min: 1, max: 16, name: `MCP_SERVERS_JSON[${index}].maxConcurrency`, errors }),
+      queueTimeoutMs: integer(item?.queueTimeoutMs, 3_000, { min: 100, max: 60_000, name: `MCP_SERVERS_JSON[${index}].queueTimeoutMs`, errors }),
+      circuitFailures: integer(item?.circuitFailures, 3, { min: 1, max: 20, name: `MCP_SERVERS_JSON[${index}].circuitFailures`, errors }),
+      circuitOpenMs: integer(item?.circuitOpenMs, 30_000, { min: 1_000, max: 600_000, name: `MCP_SERVERS_JSON[${index}].circuitOpenMs`, errors })
+    });
+  }
+  return servers.slice(0, 20);
+}
 function stripePlans(raw, errors) {
   if (!text(raw)) return [];
   let parsed;
@@ -411,7 +462,12 @@ export function loadConfig(env = process.env) {
 
     tools: {
       // The AI may read public web pages through the SSRF-guarded fetcher.
-      webAccess: text(env.TOOLS_WEB_ACCESS).toLowerCase() !== 'false'
+      webAccess: text(env.TOOLS_WEB_ACCESS).toLowerCase() !== 'false',
+      // Optional external Model Context Protocol servers. MCP remains shared
+      // tool infrastructure; it never creates another workspace.
+      mcp: {
+        servers: parseMcpServers(env.MCP_SERVERS_JSON, errors, { production })
+      }
     },
 
     providerConcurrency: {
