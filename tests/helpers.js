@@ -34,7 +34,13 @@ export function recordingLogger() {
  * adapter translates the real Vertex Gemini request/response contract at the
  * boundary so old fixture bodies do not leak provider assumptions into tests.
  */
-const LEGACY_PROVIDERS = new Set(['anthropic', 'openai', 'xai', 'google', 'vertex', 'vertex-ai']);
+const VERTEX_TEST_DEFAULTS = Object.freeze({
+  AI_PROVIDER: 'google',
+  GOOGLE_CLOUD_PROJECT: 'test-project',
+  GOOGLE_CLOUD_LOCATION: 'global',
+  VERTEX_ACCESS_TOKEN: 'test-token',
+  AI_MODEL: 'gemini-3.8-flash'
+});
 const VERTEX_MARKER = '/publishers/google/models/';
 
 function vertexModelFromUrl(url) {
@@ -68,7 +74,7 @@ export function geminiFromStandIn(standIn) {
       ...(tools.length ? { tools } : {}),
       ...(body.generationConfig?.maxOutputTokens ? { max_output_tokens: body.generationConfig.maxOutputTokens } : {})
     };
-    const response = await standIn('https://api.openai.com/v1/responses', {
+    const response = await standIn('https://standin.invalid/v1/responses', {
       ...options,
       body: JSON.stringify(legacy)
     });
@@ -110,22 +116,18 @@ export function geminiFromStandIn(standIn) {
   };
 }
 
-export const grokFromStandIn = geminiFromStandIn;
 
 export async function withServer(run, { env = {}, fetchImpl } = {}) {
   const provider = String(env.AI_PROVIDER ?? '').toLowerCase();
   const vertexNative = provider === 'google' && Boolean(env.GOOGLE_CLOUD_PROJECT || env.VERTEX_PROJECT);
-  if (fetchImpl && LEGACY_PROVIDERS.has(provider) && !vertexNative) {
+  if (provider && !vertexNative) {
     const requestedModel = String(env.VERTEX_MODEL || env.AI_MODEL || '');
     env = {
       ...env,
-      AI_PROVIDER: 'google',
-      GOOGLE_CLOUD_PROJECT: env.GOOGLE_CLOUD_PROJECT || 'test-project',
-      GOOGLE_CLOUD_LOCATION: env.GOOGLE_CLOUD_LOCATION || 'global',
-      VERTEX_ACCESS_TOKEN: env.VERTEX_ACCESS_TOKEN || 'test-token',
-      AI_MODEL: /^gemini-/.test(requestedModel) ? requestedModel : 'gemini-3.8-flash'
+      ...VERTEX_TEST_DEFAULTS,
+      AI_MODEL: /^gemini-/.test(requestedModel) ? requestedModel : VERTEX_TEST_DEFAULTS.AI_MODEL
     };
-    fetchImpl = geminiFromStandIn(fetchImpl);
+    if (fetchImpl) fetchImpl = geminiFromStandIn(fetchImpl);
   }
 
   const name = `pro_test_${crypto.randomBytes(6).toString('hex')}`;
