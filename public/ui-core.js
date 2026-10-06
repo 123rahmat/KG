@@ -22,6 +22,7 @@ export const state = {
   // Runs whose person chose "I'll do this step myself".
   manualOpen: new Set(),
   busy: false,
+  sendWaiting: false,
   // The open chat: its conversation id, runs (oldest first) and a message
   // being sent. `driving` is the run whose AI steps are running on their own.
   chat: { id: null, runs: [], pending: null, consent: false },
