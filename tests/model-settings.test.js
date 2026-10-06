@@ -53,7 +53,7 @@ test('model settings expose only the adaptive Vertex Gemini family', () => {
 
     const invalid = await call('PUT', '/api/models/settings', {
       ...auth,
-      body: { defaultModelId: 'xai:grok-4.7', enabledModelIds: ['xai:grok-4.7'] }
+      body: { defaultModelId: 'unsupported:model-a', enabledModelIds: ['unsupported:model-a'] }
     });
     assert.equal(invalid.status, 400);
     assert.equal(invalid.body.code, 'invalid-model');
