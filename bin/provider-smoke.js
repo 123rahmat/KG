@@ -2,7 +2,7 @@
 /**
  * npm run smoke:providers
  *
- * Calls Gemini when credentials are configured and checks the response contract.
+ * Calls the configured Grok 4.7 credentials and checks the response contract.
  * Exit 0 when every configured provider passes (or none is configured),
  * 1 when any configured provider fails. Keys are never printed.
  */
@@ -20,5 +20,5 @@ for (const result of summary.results) {
     console.log(`    ${check.ok ? 'ok  ' : 'FAIL'} ${check.name}: ${check.detail}`);
   }
 }
-if (!summary.ran) console.log('No Gemini credentials were set; nothing was checked.');
+if (!summary.ran) console.log('No Grok 4.7 credentials were set; nothing was checked.');
 process.exitCode = summary.ok ? 0 : 1;
