@@ -19,7 +19,6 @@ const KNOWN = Object.freeze({
 });
 
 export const isGeminiModel = value => Object.hasOwn(KNOWN, String(value ?? '').trim().toLowerCase());
-export const isGrokModel = () => false;
 
 function entry(model) {
   const item = KNOWN[model];
