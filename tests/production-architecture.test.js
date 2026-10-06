@@ -68,5 +68,5 @@ test('browser and workflow boundaries remain explicit', () => {
   assert.match(app, /Content-Security-Policy|contentSecurityPolicy/i);
   assert.match(app, /helmet/i);
   assert.match(runs, /server owns the graph/i);
-  assert.doesNotMatch(runs, /function\\s+buildTasks\\s*\\(/);
+  assert.doesNotMatch(runs, /function\s+buildTasks\s*\(/);
 });
