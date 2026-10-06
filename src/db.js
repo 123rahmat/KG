@@ -408,7 +408,7 @@ async function hardenRuntimeRole(client, runtimeRole, logger) {
     ['SELECT, INSERT, UPDATE', ['governance_policies']],
     ['SELECT, INSERT, UPDATE', ['capability_specs']],
     ['SELECT, UPDATE', ['api_keys']],
-    ['SELECT, INSERT, UPDATE, DELETE', ['objects', 'blobs', 'runs', 'run_tasks', 'run_jobs', 'idempotency_keys', 'sessions', 'rate_limit_windows']],
+    ['SELECT, INSERT, UPDATE, DELETE', ['objects', 'blobs', 'runs', 'run_tasks', 'run_jobs', 'idempotency_keys', 'sessions', 'rate_limit_windows', 'projects']],
     ['SELECT, INSERT', ['audit_log', 'situation_events']],
     ['SELECT, INSERT, UPDATE', ['user_preferences']],
     ['SELECT, INSERT', ['usage_events']],
