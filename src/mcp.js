@@ -77,12 +77,26 @@ async function rpc(server, method, params, { fetchImpl = fetch, retry = false } 
           throw error;
         }
         const type = text(response.headers.get('content-type')).toLowerCase();
-        if (!type.includes('application/json')) {
-          const error = new Error('This MCP endpoint returned a streaming response; configure its JSON response mode for Kindgleam.');
-          error.code = 'mcp-streaming-response-unsupported';
-          throw error;
+        let data;
+        if (type.includes('text/event-stream')) {
+          const raw = await response.text();
+          const events = raw.split(/\r?\n\r?\n/).flatMap(block =>
+            block.split(/\r?\n/).filter(line => line.startsWith('data:')).map(line => line.slice(5).trim())
+          ).filter(Boolean);
+          for (const event of events) {
+            try {
+              const parsed = JSON.parse(event);
+              if (parsed?.id === id || parsed?.error) data = parsed;
+            } catch {}
+          }
+          if (!data) {
+            const error = new Error('MCP stream ended without a JSON-RPC response.');
+            error.code = 'mcp-invalid-stream';
+            throw error;
+          }
+        } else {
+          data = await response.json();
         }
-        const data = await response.json();
         if (data?.error) {
           const error = new Error(text(data.error.message) || 'MCP request failed.');
           error.code = 'mcp-jsonrpc-error';
@@ -103,6 +117,24 @@ async function rpc(server, method, params, { fetchImpl = fetch, retry = false } 
   }
 }
 
+async function notify(server, method, params, { fetchImpl = fetch } = {}) {
+  const response = await fetchImpl(server.url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      ...(server.headers ?? {})
+    },
+    body: JSON.stringify({ jsonrpc: '2.0', method, ...(params === undefined ? {} : { params }) }),
+    signal: AbortSignal.timeout(Math.max(500, Number(server.timeoutMs) || 15_000))
+  });
+  if (!response.ok) {
+    const error = new Error(`MCP ${server.name} notification returned HTTP ${response.status}.`);
+    error.code = 'mcp-notification-error';
+    throw error;
+  }
+}
+
 async function ensureInitialized(server, options) {
   const s = serverState(server.name);
   if (s.initialized) return;
@@ -111,14 +143,7 @@ async function ensureInitialized(server, options) {
     capabilities: {},
     clientInfo: { name: 'kindgleam', version: '1' }
   }, { ...options, retry: true });
-  // The 2026 Streamable HTTP transport has no protocol-level sessions. Sending
-  // initialized is best-effort; stateless JSON endpoints may not need it.
-  try {
-    await rpc(server, 'notifications/initialized', undefined, options);
-  } catch {
-    // A notification has no result and some JSON-only gateways answer 202/empty.
-    // The successful initialize response is sufficient to attempt discovery.
-  }
+  await notify(server, 'notifications/initialized', undefined, options);
   s.initialized = true;
 }
 
