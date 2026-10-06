@@ -140,6 +140,63 @@ export function surfaceIntelligenceProfile(surface = 'normal-chat') {
   return SURFACE_INTELLIGENCE_PROFILES[id] ?? SURFACE_INTELLIGENCE_PROFILES['normal-chat'];
 }
 
+
+
+/**
+ * Workspace environment contracts. A workspace is a real operating environment,
+ * not only a visual tab: it owns interaction state, canonical artifacts,
+ * specialized tools, verification evidence, continuity and escalation rules.
+ * The intelligence remains shared, while the environment contract is authoritative
+ * for what kind of work is being performed and what state must survive it.
+ */
+export const WORKSPACE_ENVIRONMENT_CONTRACTS = Object.freeze({
+  'normal-chat': Object.freeze({
+    environment: 'conversation',
+    stateModel: ['conversation', 'active-artifacts', 'authorized-memory', 'situation', 'next-action'],
+    canonicalArtifacts: ['messages', 'documents', 'lightweight-files', 'visual-previews'],
+    primaryTools: ['conversation', 'files', 'lightweight-analysis', 'bounded-visual-tools'],
+    verification: 'adaptive',
+    continuity: 'conversation-first',
+    mutationBoundary: 'active-artifact',
+    escalation: ['code', 'research', 'design']
+  }),
+  code: Object.freeze({
+    environment: 'software-engineering',
+    stateModel: ['repository', 'immutable-revision', 'working-set', 'dependencies', 'terminal', 'tests', 'diff', 'execution-evidence'],
+    canonicalArtifacts: ['source-files', 'tests', 'diffs', 'build-output', 'execution-receipts'],
+    primaryTools: ['repository', 'terminal', 'tests', 'runtime', 'version-control'],
+    verification: 'diff-tests-runtime',
+    continuity: 'project-and-revision-first',
+    mutationBoundary: 'approved-write-set-and-revision',
+    escalation: ['research', 'normal-chat']
+  }),
+  research: Object.freeze({
+    environment: 'evidence-investigation',
+    stateModel: ['root-question', 'subquestions', 'source-set', 'evidence-ledger', 'claims', 'conflicts', 'coverage', 'uncertainty'],
+    canonicalArtifacts: ['sources', 'citations', 'evidence-ledger', 'synthesis', 'unresolved-claims'],
+    primaryTools: ['web-search', 'source-fetch', 'document-analysis', 'citation-provenance'],
+    verification: 'claim-source-provenance',
+    continuity: 'question-and-evidence-first',
+    mutationBoundary: 'evidence-ledger',
+    escalation: ['code', 'normal-chat']
+  }),
+  design: Object.freeze({
+    environment: 'visual-canvas',
+    stateModel: ['canvas', 'object-tree', 'selection', 'guides', 'assets', 'typography', 'layout', 'preview', 'export'],
+    canonicalArtifacts: ['editable-canvas', 'objects', 'assets', 'previews', 'exports'],
+    primaryTools: ['canvas', 'asset-tools', 'visual-generation', 'image-editing', 'preview-export'],
+    verification: 'visual-and-export',
+    continuity: 'canvas-and-artifact-first',
+    mutationBoundary: 'active-canvas-owner',
+    escalation: ['research', 'code', 'normal-chat']
+  })
+});
+
+export function workspaceEnvironment(surface = 'normal-chat') {
+  const id = normalizeSurfaceId(surface);
+  return WORKSPACE_ENVIRONMENT_CONTRACTS[id] ?? WORKSPACE_ENVIRONMENT_CONTRACTS['normal-chat'];
+}
+
 export const SURFACE_POLICY_VERSION = '4';
 
 export const SURFACE_WORKSPACE_CONTRACTS = Object.freeze({
