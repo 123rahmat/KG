@@ -227,7 +227,7 @@ export const SMALL_TALK = /^\s*(?:hi|hii+|hello|hey|hiya|yo|salam|salaam|as+alam
 const SCHEDULING = /\b(remind me|reminders?|set (?:a|an) (?:alarm|reminder)|notify me|ping me|every (?:day|morning|evening|night|week|month|hour|monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekday))\b/i;
 
 /** Pieces of writing a model can produce on its own. */
-const WRITING = /\b(letters?|emails?|e-mails?|poems?|essays?|stor(?:y|ies)|posts?|captions?|speech(?:es)?|messages?|bios?|biograph\w*|resumes?|r[ée]sum[ée]s?|cvs?|cover letters?|summar\w+|articles?|blogs?|scripts? for (?:a )?(?:video|talk|podcast)|slogans?|taglines?|toasts?|invitations?|announcements?|reviews?|replies|reply|paragraphs?|outlines?|lyrics|jokes?|notes?|cards?|wishes|greetings?|condolences?|apolog(?:y|ies)|thank[- ]you|quotes?|descriptions?|headlines?|tweets?)\b/i;
+const WRITING = /\b(?:write|rewrite|rephrase|proofread|translate|translation|edit|polish|shorten|expand|letters?|emails?|e-mails?|poems?|essays?|stor(?:y|ies)|posts?|captions?|speech(?:es)?|messages?|bios?|biograph\w*|resumes?|r[ée]sum[ée]s?|cvs?|cover letters?|summar\w+|articles?|blogs?|scripts? for (?:a )?(?:video|talk|podcast)|slogans?|taglines?|toasts?|invitations?|announcements?|reviews?|replies|reply|paragraphs?|outlines?|lyrics|jokes?|notes?|cards?|wishes|greetings?|condolences?|apolog(?:y|ies)|thank[- ]you|quotes?|descriptions?|headlines?|tweets?)\b/i;
 
 /** Building a whole system rather than one piece of it. */
 const BROAD_WORK = /\b(?:build|create|make|develop|design|implement|set up)\b[^.?!]{0,60}\b(?:apps?|applications?|websites?|web ?apps?|apis?|services?|servers?|backends?|platforms?|systems?|games?|dashboards?|databases?|pipelines?|compilers?|engines?)\b/i;
@@ -668,7 +668,6 @@ export function planGoal(goal, {
     && !['coding', 'invention'].includes(intent.kind) && analysis.flags?.highImpact !== true;
   // A person in crisis gets an immediate answer, whatever else applies.
   const normalChatBounded = surfaceBoundary.surface === 'normal-chat'
-    && analysis.flags?.code !== true
     && !surfaceBoundary.redirect
     && analysis.flags?.highImpact !== true
     && analysis.situation?.clarificationRequired !== true
