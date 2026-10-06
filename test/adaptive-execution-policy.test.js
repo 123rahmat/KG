@@ -29,3 +29,15 @@ test('execution envelope adapts effort and skill budget to pressure', () => {
   assert.equal(high.webSearch.shouldSearch, true);
   assert.equal(high.verification.strength, 'strong');
 });
+
+
+test('zero search budget cannot be bypassed by an explicit search request', () => {
+  const decision = decideWebSearch({
+    goal: 'search the web for the latest documentation',
+    requested: 'required',
+    budget: { maxSearches: 0 }
+  });
+  assert.equal(decision.shouldSearch, false);
+  assert.equal(decision.reason, 'search-budget-exhausted');
+  assert.equal(decision.budget.maxSearches, 0);
+});
