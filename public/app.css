@@ -4295,3 +4295,64 @@ a.workspace-detail-row:hover { border-color: var(--line-strong); }
   .project-create-grid { grid-template-columns: 1fr; }
   .project-dialog-shell { padding: 16px; }
 }
+
+
+/* ----------------------------------------------------- adaptive live progress */
+.send[data-mode="stop"]{
+  background:var(--bad);
+  color:var(--bad-ink, #fff);
+  box-shadow:0 4px 12px color-mix(in srgb, var(--bad) 28%, transparent);
+}
+.send[data-mode="stop"]:hover:not(:disabled){
+  background:color-mix(in srgb, var(--bad) 88%, var(--ink));
+  box-shadow:0 6px 16px color-mix(in srgb, var(--bad) 34%, transparent);
+}
+.send[data-mode="busy"]{
+  cursor:wait;
+  position:relative;
+}
+.send[data-mode="busy"]::after{
+  content:'';
+  position:absolute;
+  inset:9px;
+  border:2px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-top-color:currentColor;
+  border-radius:50%;
+  animation:send-spin .75s linear infinite;
+}
+.send[data-mode="busy"] .send-icon{opacity:0}
+.send .stop-icon{display:block}
+.work-progress-caption{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:0 13px 4px;
+}
+.work-timeline.is-disconnected{
+  border:1px solid color-mix(in srgb, var(--warn) 34%, var(--line));
+  border-radius:12px;
+  background:color-mix(in srgb, var(--warn-soft) 35%, var(--panel));
+}
+.work-connection-banner{
+  display:flex;
+  align-items:flex-start;
+  gap:9px;
+  margin:7px 0 9px;
+  padding:8px 10px;
+  border:1px solid color-mix(in srgb, var(--warn) 25%, var(--line));
+  border-radius:9px;
+  background:var(--warn-soft);
+}
+.work-connection-banner>div{display:grid;gap:2px;min-width:0}
+.work-connection-banner strong{font-size:.72rem}
+.work-connection-dot{
+  width:7px;height:7px;flex:none;margin-top:4px;border-radius:50%;
+  background:var(--warn);
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--warn) 15%, transparent);
+  animation:connection-pulse 1.5s ease-in-out infinite;
+}
+@keyframes send-spin{to{transform:rotate(360deg)}}
+@keyframes connection-pulse{50%{opacity:.45;transform:scale(.82)}}
+@media (prefers-reduced-motion:reduce){
+  .send[data-mode="busy"]::after,.work-connection-dot{animation:none}
+}
