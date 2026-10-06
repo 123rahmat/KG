@@ -54,7 +54,7 @@ Project A
 
 Project B
   +-- Chat 1
-  +-- Design state
+  +-- Research state
 ```
 
 Multiple projects and conversations can remain active concurrently. Conversation continuity, project continuity, memory, workspace state and artifacts stay isolated by authorization and compatible identity.
@@ -92,11 +92,20 @@ authorized data
 
 The same adaptive economy governs model effort, agent count, tool calls, sources, artifacts, execution stages, verification and parallelism.
 
-## Files and external work
+## Shared capabilities
 
-Files are part of the shared adaptive workflow. Archives are profiled from their contents instead of trusted by extension alone.
+The three workspaces share the same governed capability layer:
 
-There is no built-in simulation engine. MATLAB/Simulink, CAD, engineering data and similar material are handled as files/code/artifacts through the workspace the current situation requires.
+- skills and skill learning
+- tool registry and tool forging
+- files and project state
+- memory and continuity
+- multi-agent and parallel-agent orchestration
+- permissions and approvals
+- live progress, cancellation and resumable jobs
+- verification, safety and governance
+
+Files are contextual state, never a fourth workspace. Visual/design work stays inside NormalChat. Simulation requests, when relevant, are ordinary Code/tool work rather than a separate product subsystem.
 
 ## Security
 
@@ -139,9 +148,11 @@ A red required CI or verification gate means the release is **not** production-r
 
 ## Source of truth
 
-The full end-to-end product architecture, workflow, security model, project/chat model, app design, operations and release gates are defined in:
+The canonical product architecture is defined in:
 
-**[docs/END_TO_END_SYSTEM_DESIGN.md](docs/END_TO_END_SYSTEM_DESIGN.md)**
+**[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**
+
+Operational release requirements remain in **docs/PRODUCTION_READINESS.md**.
 
 ## Principle
 
