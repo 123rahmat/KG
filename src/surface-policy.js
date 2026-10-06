@@ -362,7 +362,7 @@ export function classifySurfaceBoundary(goal, { activeSurface = '', attachments 
     };
   }
 
-  if ((explicitDesignSwitch || visualDesign) && active !== 'code' && active !== 'research') {
+  if ((explicitDesignSwitch || visualDesign) && !explicitResearch && active !== 'code' && active !== 'research') {
     return {
       requested,
       surface: 'design',
