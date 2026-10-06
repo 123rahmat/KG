@@ -191,9 +191,8 @@ certify the result.
 
 ## Live provider check
 
-The test suite mocks Gemini responses, so it cannot notice the Gemini API
-changing its contract. `npm run smoke:providers` calls Gemini when
-`SMOKE_GOOGLE_API_KEY` (or the app's own `AI_PROVIDER`/`AI_API_KEY`) is present, and checks the contract: a complete
+The test suite mocks Grok 4.7 responses, so it cannot notice the xAI API
+changing its contract. `npm run smoke:providers` calls Grok 4.7 when `SMOKE_XAI_API_KEY` (or the app's own `AI_PROVIDER`/`AI_API_KEY`) is present, and checks the contract: a complete
 answer, reported token usage and a valid classification. Missing credentials
 are reported as skipped, never as passing. Run it before each release;`.github/workflows/provider-smoke.yml` runs it weekly and on demand
 from repository secrets.
@@ -282,9 +281,9 @@ dependencies are missing rather than pretending they exist.
 ## Current implementation synchronization
 
 Account preferences are created by migration 17 and protected by PostgreSQL RLS. Voice and offline queue preferences are accepted and stored by the preferences API. The browser offline queue stores attachment metadata in session storage and attachment bytes in IndexedDB when available; private API responses remain uncached. Migration 29 removed the old simulation tables and schedules.
-## Gemini on Vertex AI
+## Grok 4.7 via xAI
 
-Kindgleam's production model transport is Gemini through Google Cloud Vertex AI / Gemini Enterprise Agent Platform. Set `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION=global`, then attach a least-privilege service account to the production workload so Application Default Credentials can obtain short-lived access tokens. A short-lived `GOOGLE_VERTEX_ACCESS_TOKEN` is supported for local/test runs. Vertex Express Mode with `AI_API_KEY` remains available for development only. The runtime does not call `generativelanguage.googleapis.com`.
+Kindgleam's sole production model is Grok 4.7 through the xAI API. Configure `XAI_API_KEY` and `XAI_MODEL=grok-4.7` (or the equivalent `AI_API_KEY`/`AI_MODEL` compatibility variables). The runtime accepts only provider `xai` and model `grok-4.7`; no secondary model or provider is selected by the adaptive controller.
 
 ## Release-gate verification (September 30, 2026)
 
@@ -294,13 +293,11 @@ source check clean, lint clean, 0 vulnerabilities, migrations 1-34 apply and re-
 
 Fixed in that pass:
 
-- **Vertex on Google Cloud crashed at model selection.** With a project and a service account but no API key
-  (the documented production setup), `resolveConfiguredModel` read `.apiKey` of a missing connection and threw.
+- **Grok 4.7 configuration is validated at startup.** The runtime rejects non-xAI providers and non-Grok models instead of silently selecting an alternative.
 - **Customers saw the wrong limits.** The backend, environment variables and docs use a 4-hour window
   (`fourHourTokens`, `USAGE_LIMIT_4H_TOKENS`), but the billing API and account screen used `fiveHourTokens` and
   "5-hour", so paid plans showed "No 5-hour limit". All layers now say 4 hours.
-- Lint failures from dead code left after model discovery was disabled; a test harness and tests that still
-  targeted the retired Gemini Developer API instead of Vertex request shapes.
+- Provider-smoke and tests use the Grok 4.7/xAI Responses contract; there is no alternate model transport.
 
 
 ## Current adaptive-control additions
