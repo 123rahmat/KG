@@ -51,7 +51,28 @@ async function assertRestoreRole() {
     const { rows: [owner] } = await pool.query(
       "SELECT tableowner AS name, pg_has_role(current_user, tableowner, 'MEMBER') AS member FROM pg_tables WHERE schemaname = 'public' AND tablename = 'schema_migrations'"
     );
-    if (!owner) return null;
+    if (!owner) {
+      // A fresh restore target has no schema_migrations row yet. In that case
+      // use the database owner as the restore role when the authenticated
+      // restore identity is explicitly allowed to SET ROLE to it. This keeps
+      // trusted extensions such as pgcrypto installable without granting the
+      // restore login broad database-creation privileges.
+      const { rows: [databaseOwner] } = await pool.query(
+        "SELECT pg_get_userbyid(datdba) AS name FROM pg_database WHERE datname = current_database()"
+      );
+      if (!databaseOwner?.name || databaseOwner.name === role.current_user) return null;
+      const { rows: [membership] } = await pool.query(
+        "SELECT pg_has_role(current_user, $1, 'MEMBER') AS member",
+        [databaseOwner.name]
+      );
+      if (!membership?.member) {
+        throw new Error(
+          'The restore role ' + role.current_user + ' must be a member of the target database owner role ' + databaseOwner.name
+          + ' (GRANT ' + databaseOwner.name + ' TO ' + role.current_user + '; see docs/sql/roles.sql)'
+        );
+      }
+      return databaseOwner.name;
+    }
     if (!owner.member && !role.rolsuper) {
       throw new Error(
         'The restore role ' + role.current_user + ' must be a member of the schema owner role ' + owner.name
