@@ -340,5 +340,5 @@ test('Gemini-only configuration keeps adaptive fallback inside the Vertex family
   assert.equal(config.ai.provider, 'google');
   assert.deepEqual(config.ai.models, ['gemini-3.5-flash-lite', 'gemini-3.8-flash']);
   assert.deepEqual(config.ai.fallbackModels, ['gemini-3.5-flash-lite']);
-  assert.throws(() => loadConfig({ ...env, AI_PROVIDER: 'xai' }), /AI_PROVIDER must be google/);
+  assert.throws(() => loadConfig({ ...env, AI_PROVIDER: 'unsupported' }), /AI_PROVIDER must be google/);
 });
