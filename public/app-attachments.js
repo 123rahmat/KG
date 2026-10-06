@@ -627,12 +627,25 @@ export async function stopRun(reason) {
   state.drivingLabel = 'Stopping — no new steps will start';
   state.drivingRuns?.delete(run.id);
   state.busyRuns?.delete(run.id);
+  state.network.interruptedRunId = run.id;
   document.dispatchEvent(new Event('kindgleam:composer-state'));
   renderThread();
-  await guard(async () => {
+  try {
     const stopped = await api('POST', `/api/runs/${run.id}/fail`, { reason: reason || 'stopped by user' }, { idempotencyKey: crypto.randomUUID() });
     state.stoppingRun = null;
+    state.network.interruptedRunId = null;
     renderRun(stopped);
     await loadRuns();
-  }, 'runNotice');
+  } catch (error) {
+    if (error.code === 'offline' || error.transient || navigator.onLine === false) {
+      notify('runNotice', 'warn', 'Stopping is queued. Your work stays stopped and will be finalized when the connection returns.');
+      updateConnectionUI();
+      renderThread();
+      return;
+    }
+    state.stoppingRun = null;
+    state.cancelledRuns.delete(run.id);
+    notify('runNotice', 'bad', error.message || 'Could not stop this work.');
+    renderThread();
+  }
 }
