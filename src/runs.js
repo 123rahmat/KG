@@ -1341,7 +1341,7 @@ export class RunStore {
       });
       const applied = await this.settle(client, run, decision, target, result, { evidence, verifiedExternalExecution, approvedPlanUpdate });
       await client.query(
-        'UPDATE runs SET adaptation = jsonb_set(COALESCE(adaptation, '{}'::jsonb), '{agentPlan}', $2::jsonb, true), updated_at = now() WHERE id = $1',
+        `UPDATE runs SET adaptation = jsonb_set(COALESCE(adaptation, '{}'::jsonb), '{agentPlan}', $2::jsonb, true), updated_at = now() WHERE id = $1`,
         [run.id, JSON.stringify(agentPlan)]
       );
 
