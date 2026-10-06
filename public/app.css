@@ -4357,3 +4357,71 @@ a.workspace-detail-row:hover { border-color: var(--line-strong); }
 @media (prefers-reduced-motion:reduce){
   .send[data-mode="busy"]::after,.work-connection-dot{animation:none}
 }
+
+
+/* Adaptive runtime presentation: show momentum, not a noisy task dashboard. */
+.work-timeline {
+  position: relative;
+  border-radius: 16px;
+  transition: border-color .2s var(--ease), background .2s var(--ease), box-shadow .2s var(--ease);
+}
+.work-timeline:not(.is-disconnected) { box-shadow: 0 1px 0 color-mix(in srgb, var(--line) 60%, transparent); }
+.work-timeline.is-disconnected {
+  border-color: color-mix(in srgb, var(--warn) 35%, var(--line));
+  background: color-mix(in srgb, var(--warn-soft) 32%, var(--panel));
+}
+.work-progress-track { position: relative; overflow: hidden; }
+.work-progress-meter {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 9%, var(--soft));
+}
+.work-progress-meter::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 -35%;
+  width: 35%;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 24%, transparent), transparent);
+  animation: kgProgressSweep 2.4s ease-in-out infinite;
+}
+.work-progress-meter.is-complete::after { display: none; }
+@keyframes kgProgressSweep { to { transform: translateX(385%); } }
+
+.adaptive-progress-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.work-status-item {
+  min-width: 0;
+  transition: transform .2s var(--ease), background .2s var(--ease);
+}
+.work-status-item:hover { transform: translateY(-1px); }
+.work-timeline-details summary { cursor: pointer; }
+.work-connection-banner {
+  animation: kgReconnectIn .22s var(--ease);
+}
+@keyframes kgReconnectIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+.composer .send[data-mode="stop"] {
+  background: var(--bad);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 5px 18px color-mix(in srgb, var(--bad) 24%, transparent);
+}
+.composer .send[data-mode="stop"]:hover:not(:disabled) { filter: brightness(1.06); }
+.composer .send.is-stopping,
+.composer .send.is-stopping:hover {
+  background: var(--warn);
+  cursor: wait;
+  transform: none;
+}
+.composer .send[data-mode="busy"] { cursor: wait; }
+@media (max-width: 680px) {
+  .adaptive-progress-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .work-timeline { border-radius: 14px; }
+  .work-status-copy strong { font-size: .88rem; }
+  .work-progress-caption { gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .work-progress-meter::after { animation: none; }
+  .work-timeline, .work-status-item { transition: none; }
+}
