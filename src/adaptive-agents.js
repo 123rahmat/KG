@@ -137,6 +137,78 @@ function topologicalWaves(tasks) {
 }
 
 /**
+ * Decompose a medium-or-larger unit into the smallest useful, workspace-specific
+ * advisory work units. These units are orchestration work, not new authoritative
+ * workflow nodes; the parent workflow step remains server-owned.
+ */
+export function decomposeAgentTasks(tasks = [], {
+  workspace = 'normal-chat',
+  scale = 'single',
+  complexity = 0,
+  uncertainty = 0,
+  risk = 'ordinary',
+  maxSubtasks = 4
+} = {}) {
+  const workspaceId = text(workspace).toLowerCase() || 'normal-chat';
+  const medium = ['medium', 'large', 'very-large', 'adaptive-open-world'].includes(text(scale));
+  const pressure = Number(complexity) >= 0.55 || Number(uncertainty) >= 0.35;
+  const risky = riskRank(risk) >= 2;
+  if (!medium && !pressure) return uniqueTasks(tasks);
+  if (risky) return uniqueTasks(tasks);
+  const source = uniqueTasks(tasks);
+  if (source.length !== 1) return source;
+  const parent = source[0];
+  if (parent?.metadata?.agentDecomposed === true || parent?.agentDecomposed === true) return source;
+  const id = text(parent.id);
+  const specs = {
+    'normal-chat': [
+      ['chat-analysis', 'analyze', 'Analyze the request, constraints and success criteria.', []],
+      ['chat-evidence', 'research', 'Identify only the evidence, files or facts needed to answer confidently.', ['chat-analysis']],
+      ['chat-review', 'verify', 'Independently check the proposed reasoning, omissions and uncertainty.', ['chat-analysis']]
+    ],
+    code: [
+      ['code-repo-analysis', 'analyze', 'Inspect affected architecture, dependencies, interfaces and current implementation.', []],
+      ['code-change-analysis', 'analyze', 'Derive the smallest safe change set and identify dependency/write-set boundaries.', ['code-repo-analysis']],
+      ['code-test-analysis', 'test', 'Determine the focused tests and runtime checks needed to prove the change.', ['code-repo-analysis']]
+    ],
+    research: [
+      ['research-question', 'analyze', 'Decompose the question into the smallest material evidence gaps.', []],
+      ['research-source-lane-a', 'research', 'Investigate one independent evidence lane for the highest-value unresolved gap.', ['research-question']],
+      ['research-source-lane-b', 'research', 'Investigate a second independent evidence lane without duplicating the first.', ['research-question']],
+      ['research-critique', 'verify', 'Check source quality, conflicts, provenance and remaining uncertainty.', ['research-source-lane-a', 'research-source-lane-b']]
+    ],
+    design: [
+      ['design-constraints', 'analyze', 'Analyze composition, requirements, dimensions and visual constraints.', []],
+      ['design-assets', 'analyze', 'Explore the minimum useful assets, references and visual ingredients.', ['design-constraints']],
+      ['design-layout', 'analyze', 'Explore independent layout/visual alternatives before shared-canvas mutation.', ['design-constraints']],
+      ['design-review', 'verify', 'Define visual and export checks that the final artifact must satisfy.', ['design-assets', 'design-layout']]
+    ]
+  };
+  const selected = specs[workspaceId] ?? specs['normal-chat'];
+  const limit = Math.max(2, Math.min(selected.length, Number(maxSubtasks) || selected.length));
+  return selected.slice(0, limit).map(([suffix, type, purpose, dependencies]) => ({
+    id: id + ':' + suffix,
+    type,
+    purpose,
+    dependencies: dependencies.map(dep => id + ':' + dep),
+    parentTaskId: id,
+    derivedFrom: id,
+    agentDecomposed: true,
+    metadata: {
+      ...(parent.metadata && typeof parent.metadata === 'object' ? parent.metadata : {}),
+      agentDecomposed: true,
+      parentTaskId: id,
+      advisory: true,
+      authoritativeParent: id,
+      workspace: workspaceId
+    },
+    resourceKeys: parent.resourceKeys ?? [],
+    writePaths: type === 'builder' ? (parent.writePaths ?? []) : [],
+    status: 'pending'
+  }));
+}
+
+/**
  * Decide the smallest useful agent topology for the current situation.
  */
 export function decideAgentTopology({
@@ -156,7 +228,7 @@ export function decideAgentTopology({
   const workspaceId = text(workspace).toLowerCase() || 'normal-chat';
   const workspaceRoles = WORKSPACE_ROLE_PREFERENCES[workspaceId] ?? WORKSPACE_ROLE_PREFERENCES['normal-chat'];
   const workspacePolicy = WORKSPACE_AGENT_POLICY[workspaceId] ?? WORKSPACE_AGENT_POLICY['normal-chat'];
-  const work = uniqueTasks(tasks).filter(task => text(task.type) !== 'respond' || tasks.length > 1);
+  const work = decomposeAgentTasks(uniqueTasks(tasks).filter(task => text(task.type) !== 'respond' || tasks.length > 1), { workspace: workspaceId, scale, complexity, uncertainty, risk, maxSubtasks: parallelBudget });
   const countable = work.length;
   const budgetAgents = Math.max(1, Math.min(12, Number(budget.maxAgents ?? budget.maxCapabilities ?? 4) || 4));
   const parallelBudget = Math.max(1, Math.min(budgetAgents, Number(budget.maxParallelAgents ?? 4) || 4));
