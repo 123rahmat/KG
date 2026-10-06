@@ -3043,4 +3043,17 @@ export const MIGRATIONS = [
     `
   }
 
+  ,{
+    version: 75,
+    name: 'retire-manual-model-selection',
+    sql: `
+      UPDATE user_preferences
+         SET settings = settings - 'preferredModel',
+             updated_at = now()
+       WHERE settings ? 'preferredModel';
+
+      DROP TABLE IF EXISTS workspace_ai_settings;
+    `
+  }
+
 ];
