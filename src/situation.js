@@ -246,7 +246,6 @@ export function buildSituationModel(goal, context = {}) {
   const outcomeContract = buildRealWorldOutcomeContract({
     goal: value,
     realWorld,
-    outcomeContract,
     successCriteria: uniq([...c.successCriteria, ...c.outputs]),
     execution: c.execution ?? {},
     authorizationSatisfied: c.authorizationSatisfied !== false,
