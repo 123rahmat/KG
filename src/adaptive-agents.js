@@ -228,10 +228,10 @@ export function decideAgentTopology({
   const workspaceId = text(workspace).toLowerCase() || 'normal-chat';
   const workspaceRoles = WORKSPACE_ROLE_PREFERENCES[workspaceId] ?? WORKSPACE_ROLE_PREFERENCES['normal-chat'];
   const workspacePolicy = WORKSPACE_AGENT_POLICY[workspaceId] ?? WORKSPACE_AGENT_POLICY['normal-chat'];
-  const work = decomposeAgentTasks(uniqueTasks(tasks).filter(task => text(task.type) !== 'respond' || tasks.length > 1), { workspace: workspaceId, scale, complexity, uncertainty, risk, maxSubtasks: parallelBudget });
-  const countable = work.length;
   const budgetAgents = Math.max(1, Math.min(12, Number(budget.maxAgents ?? budget.maxCapabilities ?? 4) || 4));
   const parallelBudget = Math.max(1, Math.min(budgetAgents, Number(budget.maxParallelAgents ?? 4) || 4));
+  const work = decomposeAgentTasks(uniqueTasks(tasks).filter(task => text(task.type) !== 'respond' || tasks.length > 1), { workspace: workspaceId, scale, complexity, uncertainty, risk, maxSubtasks: parallelBudget });
+  const countable = work.length;
   const highRisk = riskRank(risk) >= 2 || externalAction || physical;
   const independentCandidate = countable > 1 && !highRisk;
   const scaleNeedsParallel = ['medium', 'large', 'very-large', 'adaptive-open-world'].includes(text(scale));
