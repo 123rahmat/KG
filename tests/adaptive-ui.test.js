@@ -128,11 +128,13 @@ test('normal chat exposes the three logical control-agent areas without exposing
   assert.match(js, /server-controlled/);
 });
 
-test('adaptive workspace exposes distinct Normal Chat, Code, Research and Design surfaces', async () => {
+test('adaptive workspace exposes exactly Normal Chat, Code, and Research product surfaces', async () => {
   const js = await read('public/adaptive-workspace.js');
   assert.match(js, /Normal Chat/);
   assert.match(js, /Code Workspace/);
   assert.match(js, /Research Workspace/);
+  assert.doesNotMatch(js, /Design Workspace/);
+  assert.doesNotMatch(js, /kindgleam:open-design-workspace/);
   assert.match(js, /kindgleam:open-code-workspace/);
   assert.match(js, /kindgleam:select-surface/);
   const attachments = await read('public/app-attachments.js');

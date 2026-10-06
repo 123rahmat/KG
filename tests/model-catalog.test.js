@@ -1,10 +1,56 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MODEL_IDS, modelCatalog, normalizeModelId, publicModelCatalog, resolveConfiguredModel, modelForTask, discoverModels, buildFallbackChain } from '../src/model-catalog.js';
+import {
+  DEFAULT_MODEL, LIGHT_MODEL, MODEL_IDS, buildFallbackChain, discoverModels,
+  modelCatalog, modelForTask, normalizeModelId, publicModelCatalog, resolveConfiguredModel
+} from '../src/model-catalog.js';
 import { loadConfig } from '../src/config.js';
-const DB={DATABASE_URL:'postgres://user:pass@localhost:5432/kindgleam'};
-test('Grok 4.7 is the only supported model',()=>{assert.deepEqual(MODEL_IDS,['xai:grok-4.7']);assert.equal(normalizeModelId('xai:grok-4.7'),'xai:grok-4.7');assert.equal(normalizeModelId('XAI:GROK-4.7'),'xai:grok-4.7');for(const bad of ['google:gemini-3.8-flash','anthropic:claude','openai:gpt','xai:grok-4.6','grok-4.7'])assert.equal(normalizeModelId(bad),'',bad);});
-test('configuration exposes only Grok 4.7',()=>{const c=loadConfig({...DB,AI_PROVIDER:'xai',AI_API_KEY:'secret',AI_MODEL:'grok-4.7'});assert.equal(c.ai.provider,'xai');assert.equal(c.ai.model,'grok-4.7');assert.deepEqual(c.ai.models,['grok-4.7']);assert.deepEqual(modelCatalog(c).map(x=>x.id),['xai:grok-4.7']);assert.equal(resolveConfiguredModel(c,'xai:grok-4.7').model,'grok-4.7');assert.equal(resolveConfiguredModel(c,'google:gemini-3.8-flash'),null);assert.equal(JSON.stringify(publicModelCatalog(c)).includes('secret'),false);});
-test('other providers and models are rejected',()=>{assert.throws(()=>loadConfig({...DB,AI_PROVIDER:'google',AI_API_KEY:'k',AI_MODEL:'gemini-3.8-flash'}),/AI_PROVIDER must be xai/);assert.throws(()=>loadConfig({...DB,AI_PROVIDER:'xai',AI_API_KEY:'k',AI_MODEL:'gemini-4'}),/must be grok-4.7/);});
-test('task selection always resolves to Grok 4.7',()=>{assert.equal(modelForTask({taskType:'code',effort:'high',configured:['grok-4.7']}),'grok-4.7');assert.equal(modelForTask({taskType:'chat',configured:['grok-4.7']}),'grok-4.7');assert.equal(modelForTask({configured:[]}),'grok-4.7');});
-test('there is no model fallback cascade or upstream discovery',async()=>{assert.deepEqual(buildFallbackChain('grok-4.7',['grok-4.7']),[]);assert.deepEqual(await discoverModels(),[]);});
+
+const DB = { DATABASE_URL: 'postgres://user:pass@localhost:5432/kindgleam' };
+const vertex = {
+  ...DB,
+  AI_PROVIDER: 'google',
+  GOOGLE_CLOUD_PROJECT: 'test-project',
+  GOOGLE_CLOUD_LOCATION: 'global',
+  VERTEX_ACCESS_TOKEN: 'test-token',
+  AI_MODEL: DEFAULT_MODEL
+};
+
+test('only the approved Vertex Gemini family is exposed', () => {
+  assert.deepEqual(MODEL_IDS, ['google:gemini-3.5-flash-lite', 'google:gemini-3.8-flash']);
+  assert.equal(normalizeModelId('google:gemini-3.8-flash'), 'google:gemini-3.8-flash');
+  assert.equal(normalizeModelId('gemini-3.5-flash-lite'), 'google:gemini-3.5-flash-lite');
+  for (const bad of ['xai:grok-4.7', 'anthropic:claude', 'openai:gpt', 'gemini-4']) {
+    assert.equal(normalizeModelId(bad), '', bad);
+  }
+});
+
+test('configuration exposes Gemini through Vertex without leaking credentials', () => {
+  const config = loadConfig(vertex);
+  assert.equal(config.ai.provider, 'google');
+  assert.equal(config.ai.project, 'test-project');
+  assert.equal(config.ai.model, DEFAULT_MODEL);
+  assert.deepEqual(config.ai.models, [LIGHT_MODEL, DEFAULT_MODEL]);
+  assert.deepEqual(modelCatalog(config).map(item => item.id), MODEL_IDS);
+  assert.equal(resolveConfiguredModel(config, 'google:gemini-3.8-flash').model, DEFAULT_MODEL);
+  assert.equal(resolveConfiguredModel(config, 'xai:grok-4.7'), null);
+  assert.equal(JSON.stringify(publicModelCatalog(config)).includes('test-token'), false);
+});
+
+test('other providers and unknown Gemini models are rejected', () => {
+  assert.throws(() => loadConfig({ ...DB, AI_PROVIDER: 'xai', GOOGLE_CLOUD_PROJECT: 'p' }), /AI_PROVIDER must be google/);
+  assert.throws(() => loadConfig({ ...vertex, AI_MODEL: 'gemini-4' }), /supported Gemini model/);
+});
+
+test('adaptive task selection uses Flash-Lite for light work and 3.8 Flash for deep work', () => {
+  assert.equal(modelForTask({ taskType: 'classifier', effort: 'low' }), LIGHT_MODEL);
+  assert.equal(modelForTask({ taskType: 'chat', effort: 'low' }), LIGHT_MODEL);
+  assert.equal(modelForTask({ taskType: 'code', effort: 'high' }), DEFAULT_MODEL);
+  assert.equal(modelForTask({ taskType: 'research', effort: 'medium' }), DEFAULT_MODEL);
+});
+
+test('fallback stays inside the Gemini family and discovery never adds providers', async () => {
+  assert.deepEqual(buildFallbackChain(DEFAULT_MODEL), ['google:gemini-3.5-flash-lite']);
+  assert.deepEqual(buildFallbackChain(LIGHT_MODEL), []);
+  assert.deepEqual(await discoverModels(), []);
+});

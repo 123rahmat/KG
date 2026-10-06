@@ -191,7 +191,7 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
       ok: true,
       database: 'ready',
       reasoning: config.ai
-        ? { configured: Boolean(config.ai.apiKey), provider: config.ai.provider, model: config.ai.model, healthy: config.ai.provider === 'xai' && config.ai.model === 'grok-4.7' && Boolean(config.ai.apiKey) }
+        ? { configured: Boolean(config.ai.project), provider: config.ai.provider, model: config.ai.model, healthy: config.ai.provider === 'google' && Boolean(config.ai.project) }
         : { configured: false, healthy: false },
       terminal: { enabled: Boolean(config.terminal?.enabled) },
       runners: {
@@ -393,7 +393,7 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
   }));
   app.get('/{*splat}', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
 
-  // Grok 4.7 being busy, down or refusing the key is counted for alerting.
+  // Vertex Gemini being busy, down, or rejecting credentials is counted for alerting.
   app.use((error, req, res, next) => {
     if (error?.name === 'ModelProviderError') metrics.increment('model_provider_errors_total', { code: error.code });
     next(error);

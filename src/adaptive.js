@@ -346,7 +346,7 @@ export function discoverCapabilityRequirements(goal, analysis = inspectGoal(goal
     add({ id: 'image-understanding', category: 'multimodal', source: 'native', dynamic: false, risk: 'medium', reason: 'Understand visual inputs when the current task depends on an image or other non-human visual artifact.' });
   }
   if (visualRequest && (actions.has('create') || actions.has('transform') || text(situation.creationMode).toLowerCase() === 'visual')) {
-    add({ id: 'image-generation', category: 'creation', source: 'native', dynamic: true, risk: 'medium', reason: 'Generate or edit a visual through the governed Grok image-generation boundary and save the resulting artifact.' });
+    add({ id: 'image-generation', category: 'creation', source: 'discoverable', dynamic: true, risk: 'medium', reason: 'Generate or edit a visual through a governed configured image capability and save the resulting artifact.' });
   }
   const selfRun = SELF_RUN.test(text(goal));
   if (actions.has('create') && !f.code && !visualRequest) {
@@ -497,7 +497,6 @@ export function resolveAdaptiveContext(goal, {
   const surfaces = new Set(['chat']);
   if (boundary.surface === 'research') surfaces.add('research');
   if (boundary.surface === 'code') surfaces.add('code');
-  if (boundary.surface === 'design') surfaces.add('design');
   if (boundary.surface === 'normal-chat') surfaces.add('chat');
   // Compound situations can legitimately require a second workspace surface.
   // The primary surface stays stable, while supporting research/code is exposed
@@ -516,7 +515,6 @@ export function resolveAdaptiveContext(goal, {
   const preferred = text(activeSurface);
   const primarySurface = boundary.surface === 'code' ? 'code'
     : boundary.surface === 'research' ? 'research'
-      : boundary.surface === 'design' ? 'design'
         : analysis.unknownSituation && !['chat', 'normal-chat'].includes(preferred) ? 'adaptive'
           : 'chat';
   const provisionalControl = normalizeAdaptiveControl(adaptiveControl, {
@@ -572,21 +570,20 @@ export function resolveAdaptiveContext(goal, {
   });
   const selectedSurfaces = resourcePlan.selected.surfaces ?? ['chat'];
   const selectedPrimarySurface = boundary.surface === 'code' ? 'code'
-    : boundary.surface === 'research' ? 'research'
-      : boundary.surface === 'design' ? 'design' : 'chat';
-  resourcePlan.selected.surfaces = [...new Set(selectedSurfaces.filter(surface => ['chat','code','research','design'].includes(surface)).concat(selectedPrimarySurface))];
+    : boundary.surface === 'research' ? 'research' : 'chat';
+  resourcePlan.selected.surfaces = [...new Set(selectedSurfaces.filter(surface => ['chat','code','research'].includes(surface)).concat(selectedPrimarySurface))];
   resourcePlan.selected.primarySurface = selectedPrimarySurface;
   const modeRouting = {
     version: 1,
-    publicModes: ['normal-chat', 'code', 'research', 'design'],
+    publicModes: ['normal-chat', 'code', 'research'],
     activeMode: text(activeSurface) === 'chat' || text(activeSurface) === 'normal-chat'
       ? 'normal-chat'
-      : ['code', 'research', 'design'].includes(text(activeSurface))
+      : ['code', 'research'].includes(text(activeSurface))
         ? text(activeSurface)
         : null,
     primary: selectedPrimarySurface === 'chat' ? 'normal-chat' : selectedPrimarySurface,
     supporting: [...new Set((resourcePlan.selected.surfaces ?? [])
-      .filter(surface => ['chat', 'code', 'research', 'design'].includes(surface))
+      .filter(surface => ['chat', 'code', 'research'].includes(surface))
       .map(surface => surface === 'chat' ? 'normal-chat' : surface))]
       .filter(surface => surface !== (selectedPrimarySurface === 'chat' ? 'normal-chat' : selectedPrimarySurface)),
     transition: boundary.transition ?? 'stay',

@@ -1,5 +1,5 @@
 /**
- * Four surface-specific adaptive controllers over one shared intelligence kernel.
+ * Three surface-specific adaptive controllers over one shared intelligence kernel.
  *
  * Controllers specialize policy, context, tool and verification emphasis. They
  * do not own model state, permissions, lifecycle, memory or completion.
@@ -73,28 +73,6 @@ const CONTROLLERS = Object.freeze({
     }),
     success: 'Material claims are sufficiently supported, traceable and honestly qualified, with unresolved conflicts visible.',
     roles: Object.freeze(['researcher', 'analyst', 'critic', 'communicator'])
-  }),
-
-  design: Object.freeze({
-    id: 'design-controller',
-    mode: 'design',
-    objective: 'Turn a visual goal into an editable, coherent artifact while keeping layout, assets and output quality under control.',
-    context: Object.freeze({
-      strategy: 'canvas-first',
-      prioritize: Object.freeze(['design-goal', 'canvas-state', 'assets', 'dimensions', 'constraints', 'visual-references']),
-      expandWhen: Object.freeze(['composition-unclear', 'asset-mismatch', 'layout-overflow', 'brand-constraint', 'export-requirement'])
-    }),
-    tools: Object.freeze({
-      default: 'design-tools-on-demand',
-      autonomy: 'deep-but-editable',
-      specialistRule: 'Add visual roles for composition, image generation/editing, typography or review only when they materially improve the design.'
-    }),
-    verification: Object.freeze({
-      default: 'visual-layout-check',
-      strengthenWhen: Object.freeze(['print/export', 'brand-critical', 'dense-layout', 'accessibility-requirement', 'multi-asset-composition'])
-    }),
-    success: 'The visual artifact matches the requested intent and constraints, remains editable, previews correctly and exports in the requested format.',
-    roles: Object.freeze(['art-director', 'visual-designer', 'image-editor', 'layout-designer', 'visual-reviewer'])
   })
 });
 
@@ -147,9 +125,7 @@ export function buildModeControllerContract({
         ? !limitedBudget && !previousFailure
         : controller.mode === 'code'
           ? !limitedBudget && !previousFailure
-          : controller.mode === 'design'
-            ? !limitedBudget && !previousFailure
-            : false,
+          : false,
       reduceEffort: limitedBudget && !highUncertainty && !previousFailure,
       reuseVerifiedState: verified,
       stopWhenSatisfied: true

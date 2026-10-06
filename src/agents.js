@@ -57,13 +57,14 @@ export function reviewDecision(run, { mode = 'auto' } = {}) {
  * point), never a Pro model unless the verifier already is one, and only one
  * governance permits. Falls back to the verifier's own model.
  */
-export function reviewerModelFor(_selection, primaryId, { allows = () => true } = {}) {
-  // This deployment is intentionally single-model: every model role uses Grok 4.7.
-  // Keep the function for the existing orchestration contract, but never select
-  // or imply a second model.
-  const id = String(primaryId ?? '').trim().toLowerCase();
-  if (!allows(id)) return primaryId;
-  return id === 'xai:grok-4.7' || id === 'grok-4.7' ? 'xai:grok-4.7' : primaryId;
+export function reviewerModelFor(selection, primaryId, { allows = () => true } = {}) {
+  const primary = String(primaryId ?? '').trim().toLowerCase();
+  const configured = new Set(selection?.configuredModelIds ?? []);
+  const enabled = (selection?.enabledModelIds ?? []).filter(id => configured.size === 0 || configured.has(id));
+  const stronger = 'google:gemini-3.8-flash';
+  if (primary === 'google:gemini-3.5-flash-lite' && enabled.includes(stronger) && allows(stronger)) return stronger;
+  if (primary && allows(primary)) return primary;
+  return enabled.find(allows) ?? primaryId;
 }
 
 export const REVIEWER_PROMPT = [

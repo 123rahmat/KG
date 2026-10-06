@@ -2876,7 +2876,7 @@ export const MIGRATIONS = [
         visibility        TEXT NOT NULL DEFAULT 'private'
                            CHECK (visibility IN ('private','workspace')),
         default_surface   TEXT NOT NULL DEFAULT 'normal-chat'
-                           CHECK (default_surface IN ('normal-chat','code','research','design')),
+                           CHECK (default_surface IN ('normal-chat','code','research')),
         source_id         TEXT REFERENCES workspace_sources(id) ON DELETE SET NULL,
         current_revision  TEXT,
         settings          JSONB NOT NULL DEFAULT '{}'::jsonb
@@ -3023,6 +3023,23 @@ export const MIGRATIONS = [
 
       CREATE INDEX IF NOT EXISTS memories_project_idx
         ON memories(workspace_id, principal_id, project_id, updated_at DESC);
+    `
+  }
+
+  ,{
+    version: 74,
+    name: 'three-workspace-project-surface',
+    sql: `
+      UPDATE projects
+         SET default_surface = 'normal-chat'
+       WHERE default_surface = 'design';
+
+      ALTER TABLE projects
+        DROP CONSTRAINT IF EXISTS projects_default_surface_check;
+
+      ALTER TABLE projects
+        ADD CONSTRAINT projects_default_surface_check
+        CHECK (default_surface IN ('normal-chat','code','research'));
     `
   }
 

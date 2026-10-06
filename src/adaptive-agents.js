@@ -1,8 +1,10 @@
+import { DEFAULT_MODEL } from './model-catalog.js';
+
 /**
  * Adaptive multi-agent coordination.
  *
  * Agents are logical roles over the same server-owned workflow, not separate
- * authorities or separate models. Grok 4.7 remains the model boundary.
+ * authorities or provider boundaries. The Gemini family remains the model boundary.
  * The controller creates only the parallelism justified by independent work,
  * dependency structure, risk and budget.
  *
@@ -16,6 +18,7 @@
  */
 
 const text = value => String(value ?? '').trim();
+const AGENT_MODEL = `google:${DEFAULT_MODEL}`;
 const list = value => [...new Set((Array.isArray(value) ? value : [])
   .map(item => text(typeof item === 'string' ? item : item?.id ?? item?.name))
   .filter(Boolean))];
@@ -53,8 +56,7 @@ const ROLE_CAPABILITIES = Object.freeze({
 const WORKSPACE_ROLE_PREFERENCES = Object.freeze({
   'normal-chat': ['lead', 'analyst', 'research', 'reviewer'],
   code: ['lead', 'analyst', 'builder', 'tester', 'reviewer', 'integrator'],
-  research: ['research', 'analyst', 'reviewer', 'lead'],
-  design: ['lead', 'analyst', 'builder', 'reviewer']
+  research: ['research', 'analyst', 'reviewer', 'lead']
 });
 
 const WORKSPACE_AGENT_POLICY = Object.freeze({
@@ -75,12 +77,6 @@ const WORKSPACE_AGENT_POLICY = Object.freeze({
     parallel: 'independent-source-lanes',
     verification: 'claim-source-provenance',
     mutation: 'evidence-ledger-only'
-  }),
-  design: Object.freeze({
-    context: 'canvas-and-asset-first',
-    parallel: 'independent-assets',
-    verification: 'visual-and-export',
-    mutation: 'single-canvas-owner'
   })
 });
 
@@ -176,12 +172,6 @@ export function decomposeAgentTasks(tasks = [], {
       ['research-source-lane-a', 'research', 'Investigate one independent evidence lane for the highest-value unresolved gap.', ['research-question']],
       ['research-source-lane-b', 'research', 'Investigate a second independent evidence lane without duplicating the first.', ['research-question']],
       ['research-critique', 'verify', 'Check source quality, conflicts, provenance and remaining uncertainty.', ['research-source-lane-a', 'research-source-lane-b']]
-    ],
-    design: [
-      ['design-constraints', 'analyze', 'Analyze composition, requirements, dimensions and visual constraints.', []],
-      ['design-assets', 'analyze', 'Explore the minimum useful assets, references and visual ingredients.', ['design-constraints']],
-      ['design-layout', 'analyze', 'Explore independent layout/visual alternatives before shared-canvas mutation.', ['design-constraints']],
-      ['design-review', 'verify', 'Define visual and export checks that the final artifact must satisfy.', ['design-assets', 'design-layout']]
     ]
   };
   const selected = specs[workspaceId] ?? specs['normal-chat'];
@@ -245,7 +235,7 @@ export function decideAgentTopology({
     return {
       version: 1, mode: 'single', agentCount: 1, maxParallel: 1,
       reason: 'single-use-work-does-not-justify-agent-overhead',
-      agents: [{ id: 'lead-1', role: 'lead', taskIds: countable ? [work[0].id] : [], model: 'xai:grok-4.7' }],
+      agents: [{ id: 'lead-1', role: 'lead', taskIds: countable ? [work[0].id] : [], model: AGENT_MODEL }],
       waves: countable ? [[ 'lead-1' ]] : [],
       integrationRequired: false,
       workspace: workspaceId,
@@ -264,7 +254,7 @@ export function decideAgentTopology({
     const id = `${role}-${agents.filter(a => a.role === role).length + 1}`;
     const agent = {
       id, role, taskIds: [task.id], capabilities: ROLE_CAPABILITIES[role] ?? ['reasoning'],
-      model: 'xai:grok-4.7', authority: 'propose-and-execute-within-server-granted-scope'
+      model: AGENT_MODEL, authority: 'propose-and-execute-within-server-granted-scope'
     };
     agents.push(agent);
     taskAgent.set(task.id, id);
@@ -290,7 +280,7 @@ export function decideAgentTopology({
     integrationRequired: agents.length > 1,
     integration: agents.length > 1 ? {
       role: 'integrator',
-      model: 'xai:grok-4.7',
+      model: AGENT_MODEL,
       requiresAllInputs: false,
       rule: 'Integrate only completed, authorized, revision-compatible agent outputs; unresolved conflicts become blockers.'
     } : null,

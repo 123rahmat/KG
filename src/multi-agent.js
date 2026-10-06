@@ -201,7 +201,8 @@ function taskSignals(run, task, progress = {}) {
   const scale = text(adaptation.scale).toLowerCase();
   const goal = text(progress?.goal ?? run?.goal);
   const flags = goalFlags(goal);
-  const designWorkspace = text(run?.surface).toLowerCase() === 'design' || text(run?.adaptation?.primarySurface).toLowerCase() === 'design';
+  const visualWork = /\b(?:visual|image|poster|logo|branding|illustration|layout|composition|canvas|mockup|wireframe|presentation|diagram)\b/i.test(goal)
+    || (run?.capabilities?.required ?? []).some(item => ['image-generation','image-understanding','design'].includes(text(item)));
   const goalLower = goal.toLowerCase();
   const securityFocus = /\b(?:security|secure|auth|authentication|authorization|permission|credential|secret|token|password|privacy|encrypt|encryption|payment|billing)\b/.test(goalLower);
   const performanceFocus = /\b(?:performance|latency|slow|optimi[sz]|memory|cpu|throughput|scale|scaling|query|queries|cache|caching)\b/.test(goalLower);
@@ -274,7 +275,7 @@ function taskSignals(run, task, progress = {}) {
     ? Math.min(0.18, (flags.communication ? 0.08 : 0.04) + (outputs >= 1 ? 0.04 : 0) + (constraints >= 2 ? 0.04 : 0))
     : 0;
   return {
-    executable, investigative, communication, flags, designWorkspace, securityFocus, performanceFocus,
+    executable, investigative, communication, flags, visualWork, securityFocus, performanceFocus,
     scaleComplexity, implementationComplexity, decomposition, unknowns,
     evidenceDiversity, evidenceGap, stakes, recovery, depth, taskCoordinationBonus,
     concurrencyOpportunity, comparisonComplexity, communicationComplexity,
@@ -443,11 +444,11 @@ function roleUtility(role, run, task, progress = {}, precomputed = null) {
     'test-engineer': signals.executable ? 0.48 + (signals.successCriteria > 0 ? 0.12 : 0) + (signals.retrying ? 0.16 : 0) : 0.07,
     'security-reviewer': signals.securityFocus ? 0.92 + signals.stakes * 0.3 : (signals.executable ? 0.16 : 0.04),
     'performance-reviewer': signals.performanceFocus ? 0.88 + signals.scaleComplexity * 0.4 : 0.05,
-    'art-director': signals.designWorkspace ? 0.62 + signals.depth * 0.4 + signals.comparisonComplexity * 0.2 : 0.02,
-    'visual-designer': signals.designWorkspace ? 0.66 + signals.implementationComplexity * 0.25 + signals.communicationComplexity * 0.2 : 0.02,
-    'image-editor': signals.designWorkspace ? (signals.evidenceDiversity > 0.12 ? 0.72 : 0.56) : 0.02,
-    'layout-designer': signals.designWorkspace ? 0.70 + signals.decomposition * 0.4 + signals.constraints * 0.04 : 0.02,
-    'visual-reviewer': signals.designWorkspace ? 0.72 + (signals.retrying ? 0.18 : 0) + signals.recovery * 0.4 : 0.02
+    'art-director': signals.visualWork ? 0.62 + signals.depth * 0.4 + signals.comparisonComplexity * 0.2 : 0.02,
+    'visual-designer': signals.visualWork ? 0.66 + signals.implementationComplexity * 0.25 + signals.communicationComplexity * 0.2 : 0.02,
+    'image-editor': signals.visualWork ? (signals.evidenceDiversity > 0.12 ? 0.72 : 0.56) : 0.02,
+    'layout-designer': signals.visualWork ? 0.70 + signals.decomposition * 0.4 + signals.constraints * 0.04 : 0.02,
+    'visual-reviewer': signals.visualWork ? 0.72 + (signals.retrying ? 0.18 : 0) + signals.recovery * 0.4 : 0.02
   }[role] ?? 0;
   const learningBoost = run?.adaptation?.learning?.caution === true
     && ['critic', 'debugger', 'test-engineer'].includes(role) ? 0.12 : 0;

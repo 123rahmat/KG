@@ -308,25 +308,9 @@ State includes:
 
 Depth adapts to freshness, uncertainty, conflict and stakes.
 
-### Design Workspace
+### Visual and design work in NormalChat
 
-Canvas-first, artifact-first.
-
-State includes:
-
-- canvas dimensions
-- guides / snapping
-- object hierarchy
-- assets
-- typography
-- layout
-- preview state
-- editability
-- export provenance
-
-The design workspace is an editable visual environment, not a static image endpoint.
-
----
+Visual creation, image understanding, diagrams, layout reasoning, and presentation work are capabilities of NormalChat. They may recruit visual specialists or governed image tools when justified, but they do not create a fourth workspace or persistence boundary. Durable software implementation moves to Code; source-heavy visual research moves to Research.
 
 ## 7. Agent architecture
 
@@ -372,10 +356,10 @@ Agents are advisory and cannot directly grant permissions, mutate authoritative 
 
 ### Model boundary
 
-The current product is Grok-only:
+The current product is Gemini-family-only:
 
 ```
-xAI / Grok 4.7
+Google Cloud / Vertex Gemini
 ```
 
 The application-level model boundary stays provider-abstract, but current configuration exposes only the selected provider/model.
@@ -745,7 +729,7 @@ Kindgleam API / web instances
        +--> private PostgreSQL
        +--> isolated sandbox / tool runners
        +--> optional local-agent channel
-       +--> xAI API
+       +--> Vertex AI
        +--> GitHub / Stripe / approved integrations
 ```
 
@@ -837,7 +821,7 @@ Do not evolve the product into:
 5. Select or preserve the correct surface
 6. Compile minimum sufficient context
 7. Create one justified server-owned step
-8. Grok 4.7 reasons inside the granted envelope
+8. Vertex Gemini reasons inside the granted envelope
 9. Recruit specialists only when useful
 10. Use tools / execution only through authorized boundaries
 11. Convert results into typed evidence

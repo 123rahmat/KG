@@ -1,38 +1,374 @@
-/** Grok 4.7-only inference and execution boundaries. */
-import { MODEL_CATALOG, resolveConfiguredModel } from './model-catalog.js';
+/** Gemini-family inference on Google Vertex AI plus governed execution boundaries. */
+import { DEFAULT_MODEL, LIGHT_MODEL, modelForTask, resolveConfiguredModel } from './model-catalog.js';
 import { AdaptiveProviderGovernor } from './adaptive-provider-governor.js';
 import { decideWebSearch } from './adaptive-execution-policy.js';
-const text=value=>String(value??'').trim();
-const providerGovernor=new AdaptiveProviderGovernor();
-export const providerConcurrencyStats=()=>providerGovernor.stats();
-export const resetProviderConcurrency=()=>providerGovernor.reset();
-export const MODEL_TIMEOUT_MS=45_000;
-export const MODEL_CASCADE_MS=120_000;
-export const RUNNER_TIMEOUT_MS=60_000;
-export const SANDBOX_TIMEOUT_MS=330_000;
-const RETRY_STATUS=new Set([408,425,429,500,502,503,504]);
-const imagesOf=message=>Array.isArray(message?.images)?message.images.filter(i=>i?.data&&i?.mediaType):[];
-export function estimateModelTokens(messages=[],{maxOutputTokens=4096}={}){const chars=(Array.isArray(messages)?messages:[]).reduce((s,m)=>s+(typeof m?.content==='string'?m.content.length:0),0);const images=(Array.isArray(messages)?messages:[]).reduce((s,m)=>s+imagesOf(m).length,0);return Math.min(500_000,Math.max(256,Math.ceil(chars/4)+images*1024+(Number(maxOutputTokens)>0?Math.floor(Number(maxOutputTokens)):4096)));}
-function grokInput(messages){return (Array.isArray(messages)?messages:[]).filter(m=>m&&((typeof m.content==='string'&&m.content.trim())||imagesOf(m).length)).map(m=>{const images=imagesOf(m);const content=[...(text(m.content)?[{type:'input_text',text:String(m.content)}]:[]),...images.map(i=>({type:'input_image',image_url:'data:'+i.mediaType+';base64,'+i.data}))];return {role:m.role==='assistant'?'assistant':m.role==='system'?'system':'user',content};});}
-function grokBuild(credential,model,messages,{webSearch=false,imageGeneration=false,imageAction='auto',maxOutputTokens=null,effort=null,json=false,cacheKey=null,allowedDomains=[],excludedDomains=[]}={}){const tools=[];if(webSearch){const search={type:'web_search'};const filters={};if(Array.isArray(allowedDomains)&&allowedDomains.length)filters.allowed_domains=[...new Set(allowedDomains.map(text).filter(Boolean))].slice(0,5);if(Array.isArray(excludedDomains)&&excludedDomains.length)filters.excluded_domains=[...new Set(excludedDomains.map(text).filter(Boolean))].slice(0,5);if(Object.keys(filters).length)search.filters=filters;tools.push(search);}if(imageGeneration)tools.push({type:'image_generation',action:['generate','edit','auto'].includes(String(imageAction))?String(imageAction):'auto'});const body={model,input:grokInput(messages),...(cacheKey?{prompt_cache_key:text(cacheKey).slice(0,128)}:{}),...(effort?{reasoning:{effort:String(effort)}}:{}) ,...(maxOutputTokens?{max_output_tokens:maxOutputTokens}:{}),...(json?{text:{format:{type:'json_object'}}}:{}),...(tools.length?{tools}:{})};return {url:'https://api.x.ai/v1/responses',headers:{'content-type':'application/json',authorization:'Bearer '+credential},body};}
-function grokParse(data){const output=Array.isArray(data.output)?data.output:[];const textParts=[];const citations=[];const images=[];for(const item of output){if(item?.type==='message'){for(const part of item.content??[]){if(typeof part?.text==='string')textParts.push(part.text);}}if(item?.type==='image_generation_call'&&typeof item.result==='string'&&item.result){images.push({mediaType:'image/jpeg',data:item.result,prompt:text(item.prompt),id:text(item.id)});}for(const src of item?.sources??[]){if(src?.url)citations.push({url:text(src.url),title:text(src.title)});}for(const src of item?.content??[]){if(src?.type==='url_citation'&&src.url)citations.push({url:text(src.url),title:text(src.title)});}}const usage=data.usage||null;const inputTokens=Number(usage?.input_tokens??usage?.prompt_tokens??0);const outputTokens=Number(usage?.output_tokens??usage?.completion_tokens??0);const reasoningTokens=Number(usage?.reasoning_tokens??0);const status=text(data.status).toLowerCase();return {text:textParts.join(''),citations:[...new Map(citations.map(x=>[x.url,x])).values()],images,incomplete:status==='incomplete'?'incomplete':null,paused:false,content:output,usage:usage?{inputTokens,outputTokens,...(reasoningTokens?{reasoningTokens}: {})}:null};}
-export const MODEL_DEFAULTS=Object.freeze(Object.fromEntries(MODEL_CATALOG.map(i=>[i.provider,i.model])));
-export const SUPPORTED_PROVIDERS=Object.freeze(['xai']);
-async function readBounded(response,maxBytes){const raw=await response.text();if(Buffer.byteLength(raw,'utf8')>maxBytes){const e=new Error('Upstream response exceeded '+maxBytes+' bytes');e.code='ERESPONSETOOLARGE';throw e;}return raw;}
-const wait=ms=>new Promise(r=>setTimeout(r,ms));
-async function withRetry(attempt,{retries=1,backoffMs=500,maxWaitMs=8000,sleep=wait}={}){let last;for(let i=0;i<=retries;i++){try{const r=await attempt();if(!r.retryable||i===retries)return r;last=r;}catch(e){if(i===retries||e.code==='ERESPONSETOOLARGE')throw e;last=e;}const delay=backoffMs*2**i*(0.8+Math.random()*0.4);if(delay>maxWaitMs)break;await sleep(delay);}if(last instanceof Error)throw last;return last;}
-export function retryAfterMs(headers){const h=typeof headers?.get==='function'?headers.get('retry-after'):null;if(!h)return null;const n=Number(h);return Number.isFinite(n)?n*1000:null;}
-const MODEL_ERRORS={'model-rate-limited':'Grok is rate-limited; nothing was recorded.','model-not-authorized':'The xAI service rejected the API key; nothing was recorded.','model-not-found':'Grok 4.7 is not available to this API key.','model-unavailable':'Grok is temporarily unavailable; nothing was recorded.','model-request-rejected':'Grok rejected the request; nothing was recorded.'};
-export class ModelProviderError extends Error{constructor(provider,status,{retryAfterMs:after=null}={}){const code=status===429?'model-rate-limited':status===401||status===403?'model-not-authorized':status===404?'model-not-found':status===408||status>=500?'model-unavailable':'model-request-rejected';super(MODEL_ERRORS[code]);this.name='ModelProviderError';this.provider=provider;this.code=code;this.upstreamStatus=status;this.status=code==='model-request-rejected'?502:503;this.retryAfterSeconds=after?Math.ceil(after/1000):null;this.expose=code!=='model-request-rejected';}}
-const EFFORT_ORDER=['low','medium','high','xhigh'];
-export function effectiveEffort(requested,ceiling){const w=EFFORT_ORDER.indexOf(requested),c=EFFORT_ORDER.indexOf(ceiling);if(w<0)return c<0?'high':ceiling;return c<0?requested:EFFORT_ORDER[Math.min(w,c)];}
-export async function callModel(messages,{config,fetchImpl=fetch,sleep=wait,webSearch='auto',imageGeneration=false,imageAction='auto',timeoutMs=MODEL_TIMEOUT_MS,retries=1,maxOutputTokens=null,modelId=null,effort=null,json=false,allowBackup=()=>true,usageGate=null,usageSource='chat',cacheKey=null,searchBudget=null,allowedDomains=[],excludedDomains=[],adaptiveContext={}}={}) { if(!config?.ai)return null;const selected=resolveConfiguredModel(config,modelId||config.ai.modelId||null);if(!selected)return null;const providerLimit=config.providerConcurrency??{};providerGovernor.configure('xai:grok-4.7',providerLimit);const credential=selected.apiKey;if(!credential)return null;let reservation=null;let admittedMaxOutputTokens=Math.max(1,Math.floor(Number(maxOutputTokens)||4096));if(usageGate){try{reservation=await usageGate.reserve({estimatedTokens:estimateModelTokens(messages,{maxOutputTokens:admittedMaxOutputTokens}),usageSource});if(reservation?.estimatedTokens)admittedMaxOutputTokens=Math.max(1,Math.min(admittedMaxOutputTokens,Number(reservation.estimatedTokens)));}catch(e){if(e?.code==='usage-limit-reached')return {text:'',citations:[],usage:null,provider:'xai',model:'grok-4.7',incomplete:'usage-limit',status:'usage-limit-reached',message:e.message};throw e;}}
-const modelKey='xai:grok-4.7';const webPolicy=decideWebSearch({goal:messages?.filter(message=>message?.role==='user').map(message=>message?.content).filter(value=>typeof value==='string').join('\n').slice(-12000)??'',requested:webSearch,research:adaptiveContext.research===true,requiresFreshData:adaptiveContext.requiresFreshData===true,evidenceRequired:adaptiveContext.evidenceRequired===true,externalDataRequired:adaptiveContext.externalDataRequired===true,risk:adaptiveContext.risk??'ordinary',budget:searchBudget,priorSources:adaptiveContext.priorSources??[],allowedDomains,excludedDomains});const shouldSearch=webPolicy.shouldSearch;const doRequest=async search=>providerGovernor.run(modelKey,()=>withRetry(async()=>{const req=grokBuild(credential,'grok-4.7',messages,{webSearch:search,imageGeneration,imageAction,maxOutputTokens:admittedMaxOutputTokens,effort:effectiveEffort(effort,config.ai.effort),json,cacheKey,allowedDomains,excludedDomains});const response=await fetchImpl(req.url,{method:'POST',headers:req.headers,body:JSON.stringify(req.body),signal:AbortSignal.timeout(timeoutMs)});const raw=await readBounded(response,config.limits.responseBytes);return {retryable:!response.ok&&RETRY_STATUS.has(response.status),status:response.status,raw,retryAfterMs:retryAfterMs(response.headers)};},{sleep,retries,backoffMs:500,maxWaitMs:8000}));
-let outcome;let searchUnavailable=false;try{outcome=await doRequest(shouldSearch);}catch(e){if(shouldSearch&&(e instanceof ModelProviderError)&&(e.code==='model-request-rejected'||e.code==='model-rate-limited')){outcome=await doRequest(false);searchUnavailable=true;}else{if(reservation)await usageGate?.release(reservation).catch(()=>{});if(e?.name==='TimeoutError'||e?.name==='AbortError'||e instanceof TypeError)throw new ModelProviderError('xai',408);throw e;}}
-if(outcome.status<200||outcome.status>=300){if(reservation)await usageGate?.release(reservation).catch(()=>{});throw new ModelProviderError('xai',outcome.status,{retryAfterMs:outcome.retryAfterMs});}
-let segment;try{segment=grokParse(JSON.parse(outcome.raw));}catch{segment={text:'',citations:[],usage:null,incomplete:'invalid-provider-response'};}
-if(reservation){const u=segment.usage??{};try{await usageGate.settle({reservationId:reservation.id,source:usageSource,provider:'xai',model:'grok-4.7',inputTokens:u.inputTokens||0,outputTokens:u.outputTokens||0,conversationId:null});reservation=null;}catch(e){await usageGate.release(reservation).catch(()=>{});throw e;}}
-return {text:segment.text,citations:segment.citations,images:segment.images ?? [],content:segment.content ?? [],usage:segment.usage,provider:'xai',model:'grok-4.7',incomplete:segment.incomplete,usageRecorded:Boolean(!reservation),webSearchPolicy:webPolicy,...(searchUnavailable?{webSearchUnavailable:true}: {})};}
+
+const text = value => String(value ?? '').trim();
+const providerGovernor = new AdaptiveProviderGovernor();
+export const providerConcurrencyStats = () => providerGovernor.stats();
+export const resetProviderConcurrency = () => providerGovernor.reset();
+
+export const MODEL_TIMEOUT_MS = 45_000;
+export const MODEL_CASCADE_MS = 120_000;
+export const RUNNER_TIMEOUT_MS = 60_000;
+export const SANDBOX_TIMEOUT_MS = 330_000;
+
+const RETRY_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
+const imagesOf = message => Array.isArray(message?.images)
+  ? message.images.filter(image => image?.data && image?.mediaType)
+  : [];
+
+export function estimateModelTokens(messages = [], { maxOutputTokens = 4096 } = {}) {
+  const chars = (Array.isArray(messages) ? messages : []).reduce(
+    (sum, message) => sum + (typeof message?.content === 'string' ? message.content.length : 0),
+    0
+  );
+  const images = (Array.isArray(messages) ? messages : []).reduce((sum, message) => sum + imagesOf(message).length, 0);
+  return Math.min(1_048_576, Math.max(256, Math.ceil(chars / 4) + images * 1024 + (Number(maxOutputTokens) > 0 ? Math.floor(Number(maxOutputTokens)) : 4096)));
+}
+
+function vertexContents(messages) {
+  const source = Array.isArray(messages) ? messages : [];
+  const systemText = source.filter(message => message?.role === 'system' && text(message?.content))
+    .map(message => String(message.content)).join('\n\n');
+  const contents = source.filter(message => message?.role !== 'system').flatMap(message => {
+    const parts = [];
+    if (text(message?.content)) parts.push({ text: String(message.content) });
+    for (const image of imagesOf(message)) {
+      parts.push({ inlineData: { mimeType: image.mediaType, data: image.data } });
+    }
+    if (!parts.length) return [];
+    return [{ role: message?.role === 'assistant' ? 'model' : 'user', parts }];
+  });
+  return { systemText, contents };
+}
+
+function vertexEndpoint({ project, location = 'global', model }) {
+  const region = text(location) || 'global';
+  const host = region === 'global' ? 'aiplatform.googleapis.com' : `${region}-aiplatform.googleapis.com`;
+  return `https://${host}/v1/projects/${encodeURIComponent(project)}/locations/${encodeURIComponent(region)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`;
+}
+
+function vertexBuild(selected, messages, {
+  webSearch = false,
+  maxOutputTokens = null,
+  effort = null,
+  json = false,
+  excludedDomains = []
+} = {}) {
+  const { systemText, contents } = vertexContents(messages);
+  const generationConfig = {
+    ...(maxOutputTokens ? { maxOutputTokens } : {}),
+    ...(json ? { responseMimeType: 'application/json' } : {})
+  };
+  const thinking = effectiveEffort(effort, 'high');
+  if (thinking) generationConfig.thinkingConfig = { thinkingLevel: thinking.toUpperCase() };
+  const search = {};
+  const excluded = [...new Set((Array.isArray(excludedDomains) ? excludedDomains : []).map(text).filter(Boolean))].slice(0, 20);
+  if (excluded.length) search.excludeDomains = excluded;
+  const body = {
+    contents,
+    ...(systemText ? { systemInstruction: { parts: [{ text: systemText }] } } : {}),
+    generationConfig,
+    ...(webSearch ? { tools: [{ googleSearch: search }] } : {})
+  };
+  return { url: vertexEndpoint(selected), body };
+}
+
+function vertexParse(data) {
+  const candidates = Array.isArray(data?.candidates) ? data.candidates : [];
+  const parts = candidates.flatMap(candidate => candidate?.content?.parts ?? []);
+  const answer = parts.filter(part => typeof part?.text === 'string').map(part => part.text).join('');
+  const images = parts.filter(part => part?.inlineData?.data).map(part => ({
+    mediaType: text(part.inlineData.mimeType) || 'image/png',
+    data: part.inlineData.data
+  }));
+  const citations = candidates.flatMap(candidate => candidate?.groundingMetadata?.groundingChunks ?? [])
+    .map(chunk => chunk?.web)
+    .filter(item => item?.uri)
+    .map(item => ({ url: text(item.uri), title: text(item.title) }));
+  const usage = data?.usageMetadata ?? null;
+  const inputTokens = Number(usage?.promptTokenCount ?? 0);
+  const outputTokens = Number(usage?.candidatesTokenCount ?? 0);
+  const reasoningTokens = Number(usage?.thoughtsTokenCount ?? 0);
+  const finishReason = text(candidates[0]?.finishReason).toUpperCase();
+  return {
+    text: answer,
+    citations: [...new Map(citations.map(item => [item.url, item])).values()],
+    images,
+    content: candidates,
+    usage: usage ? {
+      inputTokens,
+      outputTokens,
+      ...(reasoningTokens ? { reasoningTokens } : {})
+    } : null,
+    incomplete: ['MAX_TOKENS', 'SAFETY', 'RECITATION', 'BLOCKLIST'].includes(finishReason) ? finishReason.toLowerCase() : null
+  };
+}
+
+export const MODEL_DEFAULTS = Object.freeze({ google: DEFAULT_MODEL });
+export const SUPPORTED_PROVIDERS = Object.freeze(['google']);
+
+async function readBounded(response, maxBytes) {
+  const raw = await response.text();
+  if (Buffer.byteLength(raw, 'utf8') > maxBytes) {
+    const error = new Error(`Upstream response exceeded ${maxBytes} bytes`);
+    error.code = 'ERESPONSETOOLARGE';
+    throw error;
+  }
+  return raw;
+}
+
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+async function withRetry(attempt, { retries = 1, backoffMs = 500, maxWaitMs = 8000, sleep = wait } = {}) {
+  let last;
+  for (let index = 0; index <= retries; index += 1) {
+    try {
+      const result = await attempt();
+      if (!result.retryable || index === retries) return result;
+      last = result;
+    } catch (error) {
+      if (index === retries || error.code === 'ERESPONSETOOLARGE') throw error;
+      last = error;
+    }
+    const delay = backoffMs * 2 ** index * (0.8 + Math.random() * 0.4);
+    if (delay > maxWaitMs) break;
+    await sleep(delay);
+  }
+  if (last instanceof Error) throw last;
+  return last;
+}
+
+export function retryAfterMs(headers) {
+  const value = typeof headers?.get === 'function' ? headers.get('retry-after') : null;
+  if (!value) return null;
+  const seconds = Number(value);
+  return Number.isFinite(seconds) ? seconds * 1000 : null;
+}
+
+const MODEL_ERRORS = {
+  'model-rate-limited': 'Vertex AI is rate-limited; nothing was recorded.',
+  'model-not-authorized': 'Google Cloud rejected the Vertex AI credentials; nothing was recorded.',
+  'model-not-found': 'The selected Gemini model is not available in this Vertex AI project.',
+  'model-unavailable': 'Vertex AI is temporarily unavailable; nothing was recorded.',
+  'model-request-rejected': 'Vertex AI rejected the request; nothing was recorded.'
+};
+
+export class ModelProviderError extends Error {
+  constructor(provider, status, { retryAfterMs: after = null } = {}) {
+    const code = status === 429 ? 'model-rate-limited'
+      : status === 401 || status === 403 ? 'model-not-authorized'
+        : status === 404 ? 'model-not-found'
+          : status === 408 || status >= 500 ? 'model-unavailable'
+            : 'model-request-rejected';
+    super(MODEL_ERRORS[code]);
+    this.name = 'ModelProviderError';
+    this.provider = provider;
+    this.code = code;
+    this.upstreamStatus = status;
+    this.status = code === 'model-request-rejected' ? 502 : 503;
+    this.retryAfterSeconds = after ? Math.ceil(after / 1000) : null;
+    this.expose = code !== 'model-request-rejected';
+  }
+}
+
+const EFFORT_ORDER = ['low', 'medium', 'high'];
+export function effectiveEffort(requested, ceiling) {
+  const normalize = value => String(value ?? '').toLowerCase() === 'xhigh' ? 'high' : String(value ?? '').toLowerCase();
+  const wanted = normalize(requested);
+  const cap = normalize(ceiling);
+  const wantedIndex = EFFORT_ORDER.indexOf(wanted);
+  const capIndex = EFFORT_ORDER.indexOf(cap);
+  if (wantedIndex < 0) return capIndex < 0 ? 'high' : cap;
+  return capIndex < 0 ? wanted : EFFORT_ORDER[Math.min(wantedIndex, capIndex)];
+}
+
+const tokenCache = new Map();
+async function vertexAccessToken(selected, fetchImpl, timeoutMs) {
+  if (text(selected?.accessToken)) return text(selected.accessToken);
+  const cacheKey = `${selected.project}:${selected.location || 'global'}`;
+  const cached = tokenCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now() + 60_000) return cached.token;
+  const response = await fetchImpl(
+    'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token',
+    { headers: { 'Metadata-Flavor': 'Google' }, signal: AbortSignal.timeout(Math.min(timeoutMs, 5000)) }
+  );
+  if (!response.ok) throw new ModelProviderError('google', response.status);
+  const data = await response.json();
+  const token = text(data?.access_token);
+  if (!token) throw new ModelProviderError('google', 401);
+  tokenCache.set(cacheKey, { token, expiresAt: Date.now() + Math.max(60, Number(data?.expires_in) || 300) * 1000 });
+  return token;
+}
+
+export async function callModel(messages, {
+  config,
+  fetchImpl = fetch,
+  sleep = wait,
+  webSearch = 'auto',
+  imageGeneration = false,
+  imageAction = 'auto',
+  timeoutMs = MODEL_TIMEOUT_MS,
+  retries = 1,
+  maxOutputTokens = null,
+  modelId = null,
+  effort = null,
+  json = false,
+  allowBackup = () => true,
+  usageGate = null,
+  usageSource = 'chat',
+  cacheKey = null,
+  searchBudget = null,
+  allowedDomains = [],
+  excludedDomains = [],
+  adaptiveContext = {}
+} = {}) {
+  if (!config?.ai) return null;
+
+  const requested = resolveConfiguredModel(config, modelId || config.ai.modelId || null);
+  if (!requested) return null;
+  const adaptiveModel = modelForTask({
+    taskType: usageSource,
+    effort,
+    adaptiveContext,
+    configured: config.ai.models ?? [LIGHT_MODEL, DEFAULT_MODEL]
+  });
+  const shouldAdapt = !modelId || modelId === `google:${DEFAULT_MODEL}` || modelId === DEFAULT_MODEL;
+  const selected = shouldAdapt
+    ? resolveConfiguredModel(config, `google:${adaptiveModel}`) || requested
+    : requested;
+
+  const modelKey = `google:${selected.model}`;
+  providerGovernor.configure(modelKey, config.providerConcurrency ?? {});
+  const accessToken = await vertexAccessToken(selected, fetchImpl, timeoutMs);
+
+  let reservation = null;
+  let admittedMaxOutputTokens = Math.max(1, Math.floor(Number(maxOutputTokens) || 4096));
+  if (usageGate) {
+    try {
+      reservation = await usageGate.reserve({
+        estimatedTokens: estimateModelTokens(messages, { maxOutputTokens: admittedMaxOutputTokens }),
+        usageSource
+      });
+      if (reservation?.estimatedTokens) {
+        admittedMaxOutputTokens = Math.max(1, Math.min(admittedMaxOutputTokens, Number(reservation.estimatedTokens)));
+      }
+    } catch (error) {
+      if (error?.code === 'usage-limit-reached') {
+        return {
+          text: '', citations: [], usage: null, provider: 'google', model: selected.model,
+          incomplete: 'usage-limit', status: 'usage-limit-reached', message: error.message
+        };
+      }
+      throw error;
+    }
+  }
+
+  const goal = messages?.filter(message => message?.role === 'user')
+    .map(message => message?.content).filter(value => typeof value === 'string').join('\n').slice(-12000) ?? '';
+  const webPolicy = decideWebSearch({
+    goal,
+    requested: webSearch,
+    research: adaptiveContext.research === true,
+    requiresFreshData: adaptiveContext.requiresFreshData === true,
+    evidenceRequired: adaptiveContext.evidenceRequired === true,
+    externalDataRequired: adaptiveContext.externalDataRequired === true,
+    risk: adaptiveContext.risk ?? 'ordinary',
+    budget: searchBudget,
+    priorSources: adaptiveContext.priorSources ?? [],
+    allowedDomains,
+    excludedDomains
+  });
+  // Vertex Google Search currently supports exclusion filters. If a strict
+  // allow-list is required, do not bypass it with integrated grounding.
+  const shouldSearch = webPolicy.shouldSearch && !(Array.isArray(allowedDomains) && allowedDomains.length);
+
+  const doRequest = async search => providerGovernor.run(modelKey, () => withRetry(async () => {
+    const req = vertexBuild(selected, messages, {
+      webSearch: search,
+      maxOutputTokens: admittedMaxOutputTokens,
+      effort: effectiveEffort(effort, config.ai.effort),
+      json,
+      excludedDomains
+    });
+    const response = await fetchImpl(req.url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify(req.body),
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+    const raw = await readBounded(response, config.limits.responseBytes);
+    return {
+      retryable: !response.ok && RETRY_STATUS.has(response.status),
+      status: response.status,
+      raw,
+      retryAfterMs: retryAfterMs(response.headers)
+    };
+  }, { sleep, retries, backoffMs: 500, maxWaitMs: 8000 }));
+
+  let outcome;
+  let searchUnavailable = false;
+  try {
+    outcome = await doRequest(shouldSearch);
+    if (shouldSearch && [400, 429].includes(outcome.status)) {
+      outcome = await doRequest(false);
+      searchUnavailable = true;
+    }
+  } catch (error) {
+    if (reservation) await usageGate?.release(reservation).catch(() => {});
+    if (error?.name === 'TimeoutError' || error?.name === 'AbortError' || error instanceof TypeError) {
+      throw new ModelProviderError('google', 408);
+    }
+    throw error;
+  }
+
+  if (outcome.status < 200 || outcome.status >= 300) {
+    if (reservation) await usageGate?.release(reservation).catch(() => {});
+    throw new ModelProviderError('google', outcome.status, { retryAfterMs: outcome.retryAfterMs });
+  }
+
+  let segment;
+  try {
+    segment = vertexParse(JSON.parse(outcome.raw));
+  } catch {
+    segment = { text: '', citations: [], images: [], content: [], usage: null, incomplete: 'invalid-provider-response' };
+  }
+
+  if (reservation) {
+    const usage = segment.usage ?? {};
+    try {
+      await usageGate.settle({
+        reservationId: reservation.id,
+        source: usageSource,
+        provider: 'google',
+        model: selected.model,
+        inputTokens: usage.inputTokens || 0,
+        outputTokens: usage.outputTokens || 0,
+        conversationId: null
+      });
+      reservation = null;
+    } catch (error) {
+      await usageGate.release(reservation).catch(() => {});
+      throw error;
+    }
+  }
+
+  return {
+    text: segment.text,
+    citations: segment.citations,
+    images: segment.images ?? [],
+    content: segment.content ?? [],
+    usage: segment.usage,
+    provider: 'google',
+    model: selected.model,
+    incomplete: segment.incomplete,
+    usageRecorded: Boolean(!reservation),
+    webSearchPolicy: webPolicy,
+    ...(searchUnavailable || (webPolicy.shouldSearch && !shouldSearch) ? { webSearchUnavailable: true } : {})
+  };
+}
+
 export async function callRunner(url, payload, { config, fetchImpl = fetch, sleep = wait, timeoutMs = RUNNER_TIMEOUT_MS, token = null } = {}) {
   const endpoint = text(url);
   if (!endpoint) {

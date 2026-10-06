@@ -2,11 +2,9 @@
 /**
  * npm run smoke:providers
  *
- * Calls the configured Grok 4.7 credentials and checks the response contract.
- * Exit 0 when every configured provider passes (or none is configured),
- * 1 when any configured provider fails. Keys are never printed.
+ * Calls the configured Google Vertex AI Gemini model and verifies the response
+ * contract. Credentials are never printed.
  */
-
 import { runProviderSmoke } from '../src/provider-smoke.js';
 
 const summary = await runProviderSmoke();
@@ -20,5 +18,5 @@ for (const result of summary.results) {
     console.log(`    ${check.ok ? 'ok  ' : 'FAIL'} ${check.name}: ${check.detail}`);
   }
 }
-if (!summary.ran) console.log('No Grok 4.7 credentials were set; nothing was checked.');
+if (!summary.ran) console.log('No Vertex AI project was configured; nothing was checked.');
 process.exitCode = summary.ok ? 0 : 1;

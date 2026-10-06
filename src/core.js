@@ -452,7 +452,7 @@ export function planGoal(goal, {
     physical: analysis.flags?.physical === true,
     peopleDecision: analysis.flags?.peopleDecision === true,
     humanData: Boolean(privacyConsent?.humanData || analysis.flags?.humanData),
-    imageWork: analysis.flags?.imageWork === true || activeSurface === 'design'
+    imageWork: analysis.flags?.imageWork === true
   });
 
   const universalContext = buildUniversalContextContract({

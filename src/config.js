@@ -1,5 +1,5 @@
 import { parseBase64Key } from './object-crypto.js';
-import { DEFAULT_MODEL, isGrokModel, normalizeModelId } from './model-catalog.js';
+import { DEFAULT_MODEL, LIGHT_MODEL, isGeminiModel, normalizeModelId } from './model-catalog.js';
 
 /**
  * Configuration: environment in, validated frozen config out.
@@ -9,7 +9,7 @@ import { DEFAULT_MODEL, isGrokModel, normalizeModelId } from './model-catalog.js
  * wrong rather than surfacing as a confusing failure under load.
  */
 
-const PROVIDERS = ['xai'];
+const PROVIDERS = ['google'];
 const LOG_LEVELS = ['debug', 'info', 'warn', 'error'];
 const AI_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh'];
 
@@ -91,7 +91,7 @@ function databaseUsername(connectionString) {
  *  {"id":"enterprise","name":"Enterprise","contactUrl":"mailto:sales@example.com",
  *   "price":"Custom","features":["…"]}]
  * These are deployment examples, not fixed product pricing. Choose limits from
- * measured Grok 4.7 costs and the deployment's infrastructure budget.
+ * measured Vertex Gemini costs and the deployment's infrastructure budget.
  * A plan with a contactUrl is sold by your team, not through Checkout: its
  * subscription is created in Stripe with metadata plan_id=<id> (or one of its
  * priceIds). Limits of 0 or missing mean no limit on that plan. The free plan
@@ -105,13 +105,22 @@ function parseAiProviders(raw, errors) {
   const out = [];
   for (const [index, item] of items.entries()) {
     const provider = text(item?.provider).toLowerCase();
-    const apiKey = text(item?.apiKey || item?.key);
+    const project = text(item?.project || item?.projectId);
+    const location = text(item?.location) || 'global';
+    const accessToken = text(item?.accessToken || item?.token);
     const model = text(item?.model) || DEFAULT_MODEL;
-    if (provider !== 'xai' || !apiKey || !isGrokModel(model)) {
-      errors.push('AI_PROVIDERS_JSON[' + index + '] must configure xai with XAI_API_KEY and model grok-4.7');
+    if (!['google', 'vertex', 'vertex-ai'].includes(provider) || !project || !isGeminiModel(model)) {
+      errors.push('AI_PROVIDERS_JSON[' + index + '] must configure Google Vertex AI with project, location, and a supported Gemini model');
       continue;
     }
-    out.push({ provider: 'xai', apiKey, model: DEFAULT_MODEL, modelId: 'xai:grok-4.7' });
+    out.push({
+      provider: 'google',
+      project,
+      location,
+      accessToken: accessToken || null,
+      model,
+      modelId: normalizeModelId(model)
+    });
   }
   return out.slice(0, 1);
 }
@@ -209,27 +218,40 @@ export function loadConfig(env = process.env) {
     errors.push('PGSSLMODE=verify requires PGSSLROOTCERT to point at a CA bundle');
   }
 
-  const xaiApiKey = text(env.XAI_API_KEY || env.AI_API_KEY);
-  const xaiModel = text(env.XAI_MODEL || env.AI_MODEL) || DEFAULT_MODEL;
-  if (xaiApiKey && !isGrokModel(xaiModel)) errors.push('XAI_MODEL/AI_MODEL must be grok-4.7');
+  const vertexProject = text(env.GOOGLE_CLOUD_PROJECT || env.VERTEX_PROJECT);
+  const vertexLocation = text(env.GOOGLE_CLOUD_LOCATION || env.VERTEX_LOCATION) || 'global';
+  const vertexAccessToken = text(env.VERTEX_ACCESS_TOKEN);
+  const vertexModel = text(env.VERTEX_MODEL || env.AI_MODEL) || DEFAULT_MODEL;
+  if (vertexProject && !isGeminiModel(vertexModel)) {
+    errors.push('VERTEX_MODEL/AI_MODEL must be a supported Gemini model');
+  }
   const legacyProvider = text(env.AI_PROVIDER).toLowerCase();
-  if (legacyProvider && legacyProvider !== 'xai') errors.push('AI_PROVIDER must be xai when set');
-  if (legacyProvider && !xaiApiKey) errors.push('XAI_API_KEY (or AI_API_KEY) is required when AI_PROVIDER is set');
+  if (legacyProvider && !['google', 'vertex', 'vertex-ai'].includes(legacyProvider)) {
+    errors.push('AI_PROVIDER must be google (Vertex AI) when set');
+  }
+  if (legacyProvider && !vertexProject && !text(env.AI_PROVIDERS_JSON)) {
+    errors.push('GOOGLE_CLOUD_PROJECT (or VERTEX_PROJECT) is required when AI_PROVIDER is set');
+  }
   const jsonProviders = parseAiProviders(env.AI_PROVIDERS_JSON, errors);
   const providerEntries = jsonProviders.length
     ? jsonProviders
-    : (xaiApiKey && isGrokModel(xaiModel)
-      ? [{ provider: 'xai', apiKey: xaiApiKey, model: DEFAULT_MODEL, modelId: 'xai:grok-4.7' }]
+    : (vertexProject && isGeminiModel(vertexModel)
+      ? [{
+          provider: 'google',
+          project: vertexProject,
+          location: vertexLocation,
+          accessToken: vertexAccessToken || null,
+          model: vertexModel,
+          modelId: normalizeModelId(vertexModel)
+        }]
       : []);
   const primary = providerEntries[0] || null;
   if (production && !primary) {
-    errors.push('Grok 4.7 must be configured in production with XAI_API_KEY or AI_PROVIDERS_JSON');
-  }
-  if (production && !providerEntries.some(item => item.provider === 'xai')) {
-    errors.push('xAI must be configured in production with XAI_API_KEY or AI_API_KEY');
+    errors.push('Google Vertex AI Gemini must be configured in production with GOOGLE_CLOUD_PROJECT or AI_PROVIDERS_JSON');
   }
 
-  // How deeply Grok reasons. Unset keeps the model's own default.
+  // How deeply Gemini reasons. xhigh remains accepted as a compatibility alias
+  // and is clamped to Vertex HIGH by the runtime.
   const aiEffort = text(env.AI_EFFORT).toLowerCase();
   if (aiEffort && !AI_EFFORT_LEVELS.includes(aiEffort)) {
     errors.push(`AI_EFFORT must be one of ${AI_EFFORT_LEVELS.join(', ')} (got "${aiEffort}")`);
@@ -352,17 +374,26 @@ export function loadConfig(env = process.env) {
 
     ai: primary
       ? {
-          provider: primary.provider,
-          apiKey: primary.apiKey || null,
-          model: primary.model || null,
-          modelId: primary.modelId,
-          models: [DEFAULT_MODEL],
-          fallbackModels: [],
-          autoDiscover: boolean(env.AI_AUTO_DISCOVER_MODELS, false),
+          provider: 'google',
+          apiKey: null,
+          project: primary.project,
+          location: primary.location || 'global',
+          accessToken: primary.accessToken || null,
+          model: primary.model || DEFAULT_MODEL,
+          modelId: primary.modelId || normalizeModelId(DEFAULT_MODEL),
+          models: [LIGHT_MODEL, DEFAULT_MODEL],
+          fallbackModels: [LIGHT_MODEL],
+          autoDiscover: false,
           effort: AI_EFFORT_LEVELS.includes(aiEffort) ? aiEffort : null,
-          providers: Object.fromEntries(providerEntries.map(item => [item.provider, {
-            apiKey: item.apiKey, model: item.model || null, modelId: item.modelId
-          }]))
+          providers: {
+            google: {
+              project: primary.project,
+              location: primary.location || 'global',
+              accessToken: primary.accessToken || null,
+              model: primary.model || DEFAULT_MODEL,
+              modelId: primary.modelId || normalizeModelId(DEFAULT_MODEL)
+            }
+          }
         }
       : null,
 

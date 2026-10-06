@@ -29,26 +29,44 @@ export function recordingLogger() {
 /**
  * Stand up an isolated database, wire the real object graph against it, and
  * hand back a client bound to an ephemeral port.
+ *
+ * Most integration fixtures use a neutral Responses-style stand-in. This
+ * adapter translates the real Vertex Gemini request/response contract at the
+ * boundary so old fixture bodies do not leak provider assumptions into tests.
  */
-/**
- * Kindgleam speaks only to Grok 4.7. Many tests describe the model's
- * replies in an older, neutral stand-in format ({ output_text, usage, output }),
- * with requests read as { input: [system, user, …], tools }. This translator
- * lets those stand-ins answer the Gemini API: Gemini requests are translated
- * to the stand-in shape, and their replies are returned as Gemini responses.
- */
-const LEGACY_PROVIDERS = new Set(['anthropic', 'openai', 'google']);
-const XAI_URL = 'https://api.x.ai/v1/responses';
+const LEGACY_PROVIDERS = new Set(['anthropic', 'openai', 'xai', 'google', 'vertex', 'vertex-ai']);
+const VERTEX_MARKER = '/publishers/google/models/';
 
-export function grokFromStandIn(standIn) {
+function vertexModelFromUrl(url) {
+  const value = String(url);
+  const start = value.indexOf(VERTEX_MARKER);
+  if (start < 0) return 'gemini-3.8-flash';
+  return decodeURIComponent(value.slice(start + VERTEX_MARKER.length).split(':')[0]) || 'gemini-3.8-flash';
+}
+
+export function geminiFromStandIn(standIn) {
   return async (url, options = {}) => {
-    if (!String(url).startsWith(XAI_URL)) return standIn(url, options);
-    const body = JSON.parse(options.body);
+    if (!String(url).includes(VERTEX_MARKER)) return standIn(url, options);
+    const body = JSON.parse(options.body || '{}');
+    const input = [];
+    const systemText = body.systemInstruction?.parts?.filter(part => typeof part?.text === 'string').map(part => part.text).join('\n\n');
+    if (systemText) input.push({ role: 'system', content: [{ type: 'input_text', text: systemText }] });
+    for (const content of Array.isArray(body.contents) ? body.contents : []) {
+      const textParts = (content.parts ?? []).filter(part => typeof part?.text === 'string').map(part => part.text);
+      if (!textParts.length) continue;
+      input.push({
+        role: content.role === 'model' ? 'assistant' : 'user',
+        content: textParts.map(text => ({ type: 'input_text', text }))
+      });
+    }
+    const tools = Array.isArray(body.tools) && body.tools.length
+      ? body.tools.map(tool => tool?.googleSearch ? { type: 'web_search' } : tool)
+      : [];
     const legacy = {
-      model: body.model ?? 'grok-4.7',
-      input: Array.isArray(body.input) ? body.input : [],
-      ...(Array.isArray(body.tools) ? { tools: body.tools } : {}),
-      ...(body.max_output_tokens ? { max_output_tokens: body.max_output_tokens } : {})
+      model: vertexModelFromUrl(url),
+      input,
+      ...(tools.length ? { tools } : {}),
+      ...(body.generationConfig?.maxOutputTokens ? { max_output_tokens: body.generationConfig.maxOutputTokens } : {})
     };
     const response = await standIn('https://api.openai.com/v1/responses', {
       ...options,
@@ -56,41 +74,58 @@ export function grokFromStandIn(standIn) {
     });
     if (!response?.ok) return response;
     const data = await response.json();
-
-    // Existing fixtures may return the older provider-shaped candidate object.
-    // Convert that fixture at the boundary into the xAI Responses contract.
     if (Array.isArray(data?.candidates)) {
-      const parts = data.candidates.flatMap(candidate => candidate?.content?.parts ?? []);
-      const answer = parts.filter(part => typeof part?.text === 'string').map(part => part.text).join('');
-      const grounding = data.candidates.flatMap(candidate => candidate?.groundingMetadata?.groundingChunks ?? [])
-        .map(chunk => chunk?.web).filter(item => item?.uri);
-      const usage = data.usageMetadata ?? {};
-      return new Response(JSON.stringify({
-        status: 'completed',
-        output: [{ type: 'message', content: answer ? [{ type: 'output_text', text: answer }] : [] }],
-        ...(grounding.length ? { output_sources: grounding.map(item => ({ url: item.uri, title: item.title })) } : {}),
-        usage: {
-          input_tokens: Number(usage.promptTokenCount ?? 0),
-          output_tokens: Number(usage.candidatesTokenCount ?? 0)
-        }
-      }), { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Response(JSON.stringify(data), { status: 200, headers: { 'content-type': 'application/json' } });
     }
-    return new Response(JSON.stringify(data), { status: 200, headers: { 'content-type': 'application/json' } });
+
+    const outputParts = Array.isArray(data?.output)
+      ? data.output.flatMap(item => item?.content ?? [])
+      : [];
+    const answer = String(
+      data?.output_text
+      ?? outputParts.find(part => typeof part?.text === 'string')?.text
+      ?? data?.text
+      ?? ''
+    );
+    const usage = data?.usage ?? {};
+    const sources = Array.isArray(data?.output_sources) ? data.output_sources : [];
+    return new Response(JSON.stringify({
+      candidates: [{
+        content: { role: 'model', parts: answer ? [{ text: answer }] : [] },
+        finishReason: 'STOP',
+        ...(sources.length ? {
+          groundingMetadata: {
+            groundingChunks: sources.filter(item => item?.url).map(item => ({
+              web: { uri: item.url, title: item.title || '' }
+            }))
+          }
+        } : {})
+      }],
+      usageMetadata: {
+        promptTokenCount: Number(usage.input_tokens ?? usage.prompt_tokens ?? 0),
+        candidatesTokenCount: Number(usage.output_tokens ?? usage.completion_tokens ?? 0),
+        thoughtsTokenCount: Number(usage.reasoning_tokens ?? 0)
+      }
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
   };
 }
 
-// Backwards-compatible test-fixture alias while older test names are migrated.
-export const geminiFromStandIn = grokFromStandIn;
+export const grokFromStandIn = geminiFromStandIn;
 
 export async function withServer(run, { env = {}, fetchImpl } = {}) {
-  // A test written with a stand-in for another provider can still run against Gemini.
   const provider = String(env.AI_PROVIDER ?? '').toLowerCase();
-  if (fetchImpl && (provider === 'xai' || LEGACY_PROVIDERS.has(provider))) {
-    if (LEGACY_PROVIDERS.has(provider)) {
-      // Preserve old fixtures by running their stand-ins through the Grok compatibility adapter.
-      env = { ...env, AI_PROVIDER: 'xai', AI_MODEL: 'grok-4.7' };
-    }
-    fetchImpl = grokFromStandIn(fetchImpl);
+  const vertexNative = provider === 'google' && Boolean(env.GOOGLE_CLOUD_PROJECT || env.VERTEX_PROJECT);
+  if (fetchImpl && LEGACY_PROVIDERS.has(provider) && !vertexNative) {
+    const requestedModel = String(env.VERTEX_MODEL || env.AI_MODEL || '');
+    env = {
+      ...env,
+      AI_PROVIDER: 'google',
+      GOOGLE_CLOUD_PROJECT: env.GOOGLE_CLOUD_PROJECT || 'test-project',
+      GOOGLE_CLOUD_LOCATION: env.GOOGLE_CLOUD_LOCATION || 'global',
+      VERTEX_ACCESS_TOKEN: env.VERTEX_ACCESS_TOKEN || 'test-token',
+      AI_MODEL: /^gemini-/.test(requestedModel) ? requestedModel : 'gemini-3.8-flash'
+    };
+    fetchImpl = geminiFromStandIn(fetchImpl);
   }
 
   const name = `pro_test_${crypto.randomBytes(6).toString('hex')}`;

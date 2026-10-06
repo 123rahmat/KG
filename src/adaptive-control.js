@@ -304,13 +304,11 @@ export function adaptiveStepScope(resourcePlan = {}, task = {}, { need = null } 
   });
   const needsData = ['investigate', 'discover', 'discover-capabilities', 'reassess'].includes(text(task?.type));
   const taskSurface = text(task?.metadata?.surface || task?.surface);
-  const surfaces = taskSurface === 'design' || taskCapabilities.has('design')
-    ? ['design']
-    : taskSurface === 'research' || task?.type === 'investigate'
-      ? ['research']
-      : taskSurface === 'code' || task?.type === 'code'
-        ? ['code']
-        : ['chat'];
+  const surfaces = taskSurface === 'research' || task?.type === 'investigate'
+    ? ['research']
+    : taskSurface === 'code' || task?.type === 'code'
+      ? ['code']
+      : ['chat'];
   return {
     level: 'step',
     capabilities,
