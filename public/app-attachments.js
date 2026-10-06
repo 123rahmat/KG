@@ -131,6 +131,7 @@ export function renderThread() {
   syncAdaptiveWorkspace();
   const composer = $('composer');
   if (composer.getBoundingClientRect().top > window.innerHeight - 40) composer.scrollIntoView({ block: 'end' });
+  document.dispatchEvent(new Event('kindgleam:composer-state'));
 }
 
 /** Called with every fresh copy of a run from the server. */
@@ -533,6 +534,8 @@ export async function sendMessage(text) {
   }
 
   state.chat.pending = { goal, reply: '', files: files.map(file => file.name) };
+  state.sendWaiting = true;
+  document.dispatchEvent(new Event('kindgleam:composer-state'));
   $('goal').value = '';
   growComposer();
   renderThread();
@@ -607,13 +610,24 @@ export async function sendMessage(text) {
       ...(error.code === 'usage-policy' ? { declined: true } : {})
     };
     renderThread();
+  } finally {
+    state.sendWaiting = false;
+    document.dispatchEvent(new Event('kindgleam:composer-state'));
   }
 }
 
 export async function stopRun(reason) {
-  if (!state.run) return;
+  const run = state.run;
+  if (!run) return;
+  state.driving = null;
+  state.drivingLabel = '';
+  state.drivingRuns?.delete(run.id);
+  state.busyRuns?.delete(run.id);
+  document.dispatchEvent(new Event('kindgleam:composer-state'));
+  renderThread();
   await guard(async () => {
-    renderRun(await api('POST', `/api/runs/${state.run.id}/fail`, { reason }));
+    const stopped = await api('POST', `/api/runs/${run.id}/fail`, { reason: reason || 'stopped by user' }, { idempotencyKey: crypto.randomUUID() });
+    renderRun(stopped);
     await loadRuns();
   }, 'runNotice');
 }
