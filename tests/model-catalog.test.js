@@ -20,7 +20,7 @@ test('only the approved Vertex Gemini family is exposed', () => {
   assert.deepEqual(MODEL_IDS, ['google:gemini-3.5-flash-lite', 'google:gemini-3.8-flash']);
   assert.equal(normalizeModelId('google:gemini-3.8-flash'), 'google:gemini-3.8-flash');
   assert.equal(normalizeModelId('gemini-3.5-flash-lite'), 'google:gemini-3.5-flash-lite');
-  for (const bad of ['xai:grok-4.7', 'anthropic:claude', 'openai:gpt', 'gemini-4']) {
+  for (const bad of ['unsupported:model-a', 'legacy:model-b', 'other:model-c', 'gemini-4']) {
     assert.equal(normalizeModelId(bad), '', bad);
   }
 });
@@ -33,12 +33,12 @@ test('configuration exposes Gemini through Vertex without leaking credentials', 
   assert.deepEqual(config.ai.models, [LIGHT_MODEL, DEFAULT_MODEL]);
   assert.deepEqual(modelCatalog(config).map(item => item.id), MODEL_IDS);
   assert.equal(resolveConfiguredModel(config, 'google:gemini-3.8-flash').model, DEFAULT_MODEL);
-  assert.equal(resolveConfiguredModel(config, 'xai:grok-4.7'), null);
+  assert.equal(resolveConfiguredModel(config, 'unsupported:model-a'), null);
   assert.equal(JSON.stringify(publicModelCatalog(config)).includes('test-token'), false);
 });
 
 test('other providers and unknown Gemini models are rejected', () => {
-  assert.throws(() => loadConfig({ ...DB, AI_PROVIDER: 'xai', GOOGLE_CLOUD_PROJECT: 'p' }), /AI_PROVIDER must be google/);
+  assert.throws(() => loadConfig({ ...DB, AI_PROVIDER: 'unsupported', GOOGLE_CLOUD_PROJECT: 'p' }), /AI_PROVIDER must be google/);
   assert.throws(() => loadConfig({ ...vertex, AI_MODEL: 'gemini-4' }), /supported Gemini model/);
 });
 
