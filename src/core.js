@@ -794,8 +794,7 @@ export function planGoal(goal, {
       verification,
       unifiedIntelligence,
       intelligenceDepth: unifiedIntelligence.reasoning.depth,
-      universalContext: universalContextSnapshot,
-      agentPlan
+      universalContext: universalContextSnapshot
     }
   );
 
