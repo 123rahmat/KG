@@ -20,6 +20,7 @@ import { describeTable } from './documents.js';
 import { readDocumentIsolated } from './document-runner.js';
 import { screenToolInput, recordRefusal, blockedTopicsFrom } from './safety.js';
 import { isSensitiveWorkspacePath } from './workspace-path.js';
+import { listMcpTools, callMcpTool } from './mcp.js';
 
 const text = value => String(value ?? '').trim();
 const MAX_TOOL_CHARS = 30_000;
@@ -242,6 +243,43 @@ const BUILT_IN = [
     input: { expression: 'e.g. "0.5 * 1.2 * 20^2"' },
     ready: () => ({ ready: true }),
     run: input => mathEvaluate(input).output
+  },
+  {
+    name: 'mcp.discover',
+    title: 'Discover connected MCP tools',
+    description: 'List tools exposed by configured Model Context Protocol servers. Discovery is cached to reduce latency and load.',
+    input: { server: 'optional configured MCP server name', refresh: 'true to refresh the cached tool list' },
+    network: true,
+    ready: ctx => (ctx.config?.tools?.mcp?.servers?.length
+      ? { ready: true }
+      : { ready: false, needs: 'admin', reason: 'No MCP servers are configured for this deployment.' }),
+    async run(input, ctx) {
+      return {
+        servers: await listMcpTools(ctx.config, {
+          server: text(input?.server),
+          force: input?.refresh === true,
+          fetchImpl: ctx.fetchImpl
+        })
+      };
+    }
+  },
+  {
+    name: 'mcp.call',
+    title: 'Use a connected MCP tool',
+    description: 'Call a named tool on a configured MCP server. MCP calls require approval because a remote tool may have side effects.',
+    input: { server: 'configured MCP server name', tool: 'remote tool name', arguments: 'tool arguments object' },
+    network: true,
+    sideEffect: true,
+    ready: ctx => (ctx.config?.tools?.mcp?.servers?.length
+      ? { ready: true }
+      : { ready: false, needs: 'admin', reason: 'No MCP servers are configured for this deployment.' }),
+    async run(input, ctx) {
+      return callMcpTool(ctx.config, {
+        server: text(input?.server),
+        tool: text(input?.tool),
+        arguments: input?.arguments && typeof input.arguments === 'object' && !Array.isArray(input.arguments) ? input.arguments : {}
+      }, { fetchImpl: ctx.fetchImpl });
+    }
   }
 ];
 
