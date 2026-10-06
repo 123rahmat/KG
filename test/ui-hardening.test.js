@@ -31,5 +31,5 @@ test('live progress has an explicit reconnect state and compact adaptive present
 test('model-authored markdown remains DOM-built and link-scheme restricted', () => {
   const markdown = read('markdown.js');
   assert.doesNotMatch(markdown, /\.innerHTML\s*=/);
-  assert.match(markdown, /\^\(https\?:\\/\\/\|mailto:\)\/i/);
+  assert.ok(markdown.includes('return /^(https?:\\/\\/|mailto:)/i.test(href);'));
 });
