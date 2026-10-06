@@ -26,6 +26,7 @@ import { selectSkillDescriptors, summarizeSkillLearning, skillContextSignature, 
 import { parallelDecision } from './parallel-orchestrator.js';
 import { classifySurfaceBoundary, surfaceRuntimePolicy, surfaceIntelligenceProfile } from './surface-policy.js';
 import { buildUniversalContextContract } from './universal-context.js';
+import { adaptiveExecutionEnvelope } from './adaptive-execution-policy.js';
 
 export const CONTRACT = 'kindgleam-open-world-situation-adaptive-v9';
 export { CAPABILITIES, SURFACES };
@@ -548,6 +549,22 @@ export function planGoal(goal, {
 
   const intent = smallTalk ? { kind: 'chat', confidence: 1, signals: ['answer'] } : classifyIntent(value, situationContext);
   const surfaceBoundary = classifySurfaceBoundary(value, { activeSurface, attachments, flags: analysis.flags, actions: analysis.goalModel?.actions ?? [] });
+  const adaptiveExecution = adaptiveExecutionEnvelope({
+    goal: value,
+    complexity: Number(analysis.situation?.complexity ?? analysis.complexity ?? 0),
+    uncertainty: Number(analysis.situation?.uncertainty ?? (analysis.unknownSituation ? 0.7 : 0)),
+    risk: analysis.flags?.highImpact === true ? 'high'
+      : analysis.flags?.physical === true ? 'medium'
+        : 'ordinary',
+    requestedWebSearch: adaptiveControl?.webSearch ?? adaptiveControl?.webSearchMode ?? 'auto',
+    research: surfaceBoundary.surface === 'research'
+      || intent.kind === 'discovery'
+      || analysis.flags?.research === true
+      || analysis.situation?.externalData?.hasExternalDataNeed === true,
+    evidenceRequired: analysis.situation?.evidenceRequired === true
+      || analysis.flags?.highImpact === true,
+    budget: adaptiveControl?.budget ?? null
+  });
   const discovered = discoverCapabilityRequirements(value, analysis);
   // Adapt to what this deployment can really run. A run that needs a missing
   // runner would stop at a step that can never finish; instead the work is
@@ -818,6 +835,7 @@ export function planGoal(goal, {
        })),
        parallel: parallelDecision({ mode: adaptiveControl?.parallelMode ?? adaptiveControl?.parallel ?? 'auto', pressure: Number(unifiedIntelligence.complexity) || 0, concurrencyOpportunity: unifiedIntelligence.scale === 'large-project' ? 0.9 : unifiedIntelligence.scale === 'complex' ? 0.7 : unifiedIntelligence.scale === 'multi-file' ? 0.45 : 0, risk: analysis.situation?.risk ?? 'ordinary', maxParallel: adaptiveControl?.maxParallel ?? adaptiveControl?.multiAgentMaxAgents ?? 4, itemCount: Math.max(1, tasks.length), explicit: adaptiveControl?.parallelMode === 'always' }), ...(notAvailableHere.length ? { notAvailableHere } : {}), ...(analysis.ownWork ? { ownWork: true } : {}) },
     intelligence: unifiedIntelligence,
+    adaptiveExecution,
     execution: {
       targets: adaptive.execution?.targets ?? [],
       targetCatalog: adaptive.execution?.targetCatalog ?? [],
