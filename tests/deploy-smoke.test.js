@@ -12,7 +12,7 @@ test('the deploy smoke check passes a healthy deployment without creating anythi
       ['health', 'readiness', 'reasoning-configured', 'app-served', 'security-headers', 'auth-required', 'sign-in', 'plan-preview']);
     const runs = await call('GET', '/api/runs', { token, workspace });
     assert.equal(runs.body.runs.length, 0, 'the smoke check created no run');
-  }, { env: { AI_PROVIDER: 'anthropic', AI_API_KEY: 'test-key' } }));
+  }, { env: { AI_PROVIDER: 'google', GOOGLE_CLOUD_PROJECT: 'test-project', VERTEX_ACCESS_TOKEN: 'test-token', AI_MODEL: 'gemini-3.8-flash' } }));
 
 test('the deploy smoke check fails when the service is not ready or the key is wrong', () =>
   withServer(async ({ base, app }) => {
