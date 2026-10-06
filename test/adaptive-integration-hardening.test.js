@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { planGoal } from '../src/core.js';
+import { buildRealWorldOutcomeContract } from '../src/real-world-outcome.js';
+import { completionGate, buildUnifiedAdaptiveWorkflow } from '../src/unified-adaptive-workflow.js';
 
 const scope = {
   user: { id: 'principal-1', crossChatMemory: false },
@@ -50,4 +52,72 @@ test('pure conversation stays one-step and does not request verification', () =>
   assert.deepEqual(plan.tasks.map(task => task.type), ['respond']);
   assert.equal(plan.tasks[0].metadata.conversational, true);
   assert.equal(plan.tasks[0].metadata.verificationPending, false);
+});
+
+
+test('real-world action requires observed and verified outcome evidence', () => {
+  const contract = buildRealWorldOutcomeContract({
+    goal: 'send the approved report to the client',
+    realWorld: {
+      realWorld: true,
+      intent: 'action',
+      risk: 'consequential',
+      signals: { externalAction: true }
+    },
+    successCriteria: ['client received the report'],
+    authorizationSatisfied: true,
+    evidence: []
+  });
+  assert.equal(contract.realWorldTask, true);
+  assert.equal(contract.controls.observationRequired, true);
+  assert.equal(contract.completion.eligible, false);
+  assert.ok(contract.gaps.includes('world-observation-required'));
+});
+
+test('real-world outcome becomes complete only after observation and verification', () => {
+  const evidence = [
+    { kind: 'observed', provenance: { source: 'authorized-tool-result', executed: true } },
+    { kind: 'verified', verification: { verdict: 'pass' } }
+  ];
+  const contract = buildRealWorldOutcomeContract({
+    goal: 'send the approved report to the client',
+    realWorld: {
+      realWorld: true,
+      intent: 'action',
+      risk: 'consequential',
+      signals: { externalAction: true }
+    },
+    successCriteria: ['client received the report'],
+    authorizationSatisfied: true,
+    evidence
+  });
+  assert.equal(contract.completion.eligible, true);
+
+  const workflow = buildUnifiedAdaptiveWorkflow({
+    goal: contract.goal,
+    situation: {
+      goal: contract.goal,
+      realWorld: contract,
+      outcomeContract: contract,
+      successCriteria: contract.successCriteria,
+      consequence: 0.8,
+      externalSideEffect: true
+    },
+    acceptance: {
+      criteria: contract.successCriteria,
+      evidence,
+      verificationRequired: true,
+      verificationSatisfied: true
+    },
+    evidence
+  });
+  const gate = completionGate({
+    workflow,
+    status: 'complete',
+    taskType: 'deliver',
+    evidence,
+    verification: { verdict: 'pass' },
+    authorizationSatisfied: true
+  });
+  assert.equal(gate.allowed, true);
 });
