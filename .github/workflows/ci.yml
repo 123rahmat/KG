@@ -134,6 +134,7 @@ jobs:
       BACKUP_DATABASE_URL: postgres://kindgleam_backup:backup@127.0.0.1:5432/kindgleam_backup_source
       RESTORE_DATABASE_URL: postgres://kindgleam_restore:restore@127.0.0.1:5432/kindgleam_backup_target
       OBJECT_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      BACKUP_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       NODE_ENV: test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
