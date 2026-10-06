@@ -393,7 +393,7 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
   }));
   app.get('/{*splat}', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
 
-  // Gemini being busy, down or refusing the key is counted for alerting.
+  // Grok 4.7 being busy, down or refusing the key is counted for alerting.
   app.use((error, req, res, next) => {
     if (error?.name === 'ModelProviderError') metrics.increment('model_provider_errors_total', { code: error.code });
     next(error);
