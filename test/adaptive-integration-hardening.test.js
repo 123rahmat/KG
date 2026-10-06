@@ -5,6 +5,7 @@ import { buildRealWorldOutcomeContract } from '../src/real-world-outcome.js';
 import { decideAgentTopology, adaptAgentTopology } from '../src/adaptive-agents.js';
 import { buildHumanGovernanceContract } from '../src/human-governance.js';
 import { completionGate, buildUnifiedAdaptiveWorkflow } from '../src/unified-adaptive-workflow.js';
+import { workspaceEnvironment } from '../src/surface-policy.js';
 
 const scope = {
   user: { id: 'principal-1', crossChatMemory: false },
@@ -354,4 +355,25 @@ test('workspace-specific agent policy is selected without creating separate inte
   });
   assert.equal(designPlan.workspacePolicy.context, 'canvas-and-asset-first');
   assert.equal(designPlan.workspacePolicy.mutation, 'single-canvas-owner');
+});
+
+
+test('specialized workspaces expose independent operating environments over shared intelligence', () => {
+  const chat = workspaceEnvironment('normal-chat');
+  const code = workspaceEnvironment('code');
+  const research = workspaceEnvironment('research');
+  const design = workspaceEnvironment('design');
+
+  assert.equal(chat.environment, 'conversation');
+  assert.equal(code.environment, 'software-engineering');
+  assert.equal(research.environment, 'evidence-investigation');
+  assert.equal(design.environment, 'visual-canvas');
+  assert.ok(code.stateModel.includes('immutable-revision'));
+  assert.ok(research.stateModel.includes('evidence-ledger'));
+  assert.ok(design.stateModel.includes('object-tree'));
+  assert.equal(code.mutationBoundary, 'approved-write-set-and-revision');
+  assert.equal(research.verification, 'claim-source-provenance');
+  assert.equal(design.verification, 'visual-and-export');
+  assert.notDeepEqual(code.stateModel, research.stateModel);
+  assert.notDeepEqual(research.stateModel, design.stateModel);
 });
