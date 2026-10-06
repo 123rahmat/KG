@@ -13,6 +13,7 @@
  */
 import { adaptiveEffortProfile, adaptiveBehaviorContract, adaptiveExecutionStrategy } from './adaptive-efficiency.js';
 import { realWorldExecutionPolicy } from './real-world-adaptation.js';
+import { buildRealWorldOutcomeContract } from './real-world-outcome.js';
 import { controllerForSurface, buildModeControllerContract } from './mode-controllers.js';
 import {
   adaptiveDecisionAuthority,
@@ -203,6 +204,14 @@ export function buildUnifiedAdaptiveWorkflow({
         : text(s.surface) === 'design' ? 'design'
           : 'normal-chat';
   const realWorld = s.realWorld ?? {};
+  const outcomeContract = s.outcomeContract ?? buildRealWorldOutcomeContract({
+    goal: s.goal,
+    realWorld,
+    successCriteria: Array.isArray(s.successCriteria) ? s.successCriteria : [],
+    execution: s.execution ?? {},
+    authorizationSatisfied: s.authorizationSatisfied !== false,
+    evidence
+  });
   const realWorldPolicy = realWorldExecutionPolicy(realWorld);
   const executionStrategy = adaptiveExecutionStrategy({
     pressure: p.pressure,
@@ -254,6 +263,7 @@ export function buildUnifiedAdaptiveWorkflow({
     goal: s.goal,
     situation: s,
     realWorld,
+    outcomeContract,
     realWorldPolicy,
     profile: p,
     acceptance: a,
@@ -368,6 +378,7 @@ export function completionGate({
   authorizationSatisfied = true
 } = {}) {
   const acceptance = workflow.acceptance ?? {};
+  const outcomeContract = workflow.outcomeContract ?? {};
   const evidenceList = Array.isArray(evidence) ? evidence : [];
   const summary = summarizeEvidence(evidenceList);
   const hasVerifiedEvidence = summary.counts.verified > 0 || Boolean(verification?.verdict === 'pass');
@@ -395,12 +406,17 @@ export function completionGate({
   const finalizationGate = taskType === 'verify'
     || taskType === 'deliver'
     || acceptance.finalizationRequired === true;
-  const gaps = [
+  const outcomeGate = outcomeContract.realWorldTask === true && (
+    outcomeContract.controls?.observationRequired === true
+    || outcomeContract.controls?.verificationRequired === true
+  );
+    const gaps = [
     ...(finalizationGate && acceptanceHasExplicitGate ? (Array.isArray(acceptance.gaps) ? acceptance.gaps : []) : []),
     ...(finalizationGate && !authorizationSatisfied ? ['authorization-missing'] : []),
     ...(verificationRequired && !verificationPassed ? ['verification-missing'] : []),
     ...(status === 'complete' && finalizationGate && acceptanceHasExplicitGate && !acceptance.satisfied ? ['acceptance-unsatisfied'] : []),
-    ...(status === 'complete' && !hasVerifiedEvidence && taskType !== 'respond' && verificationRequired ? ['evidence-insufficient'] : [])
+    ...(status === 'complete' && !hasVerifiedEvidence && taskType !== 'respond' && verificationRequired ? ['evidence-insufficient'] : []),
+    ...(status === 'complete' && outcomeGate && outcomeContract.completion?.eligible !== true ? (outcomeContract.gaps ?? ['outcome-evidence-required']) : [])
   ];
   return {
     allowed: status !== 'complete' || gaps.length === 0,
