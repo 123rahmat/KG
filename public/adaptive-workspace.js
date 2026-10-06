@@ -199,7 +199,7 @@ export function renderWorkStatus(run) {
   const visible = tasks.slice(-5);
   return element('div', {
     class: 'work-timeline' + (connectionLost ? ' is-disconnected' : ''),
-    'aria-label': 'Adaptive work progress'
+    'aria-label': 'Adaptive workflow progress'
   }, [
     element('div', { class: 'work-timeline-head' }, [
       element('div', { class: 'work-status-summary' }, [
