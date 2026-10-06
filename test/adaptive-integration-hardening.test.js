@@ -307,3 +307,51 @@ test('multi-agent executor stops cleanly on cancellation', async () => {
   const result = await resultPromise;
   assert.equal(result.status, 'cancelled');
 });
+
+
+test('workspace-specific agent policy is selected without creating separate intelligence', async () => {
+  const codePlan = decideAgentTopology({
+    workspace: 'code',
+    tasks: [
+      { id: 'inspect', type: 'analyze' },
+      { id: 'build', type: 'code' },
+      { id: 'test', type: 'test' }
+    ],
+    scale: 'medium',
+    complexity: 0.9,
+    uncertainty: 0.5,
+    budget: { maxAgents: 6, maxParallelAgents: 3 }
+  });
+  assert.equal(codePlan.workspace, 'code');
+  assert.equal(codePlan.workspacePolicy.context, 'revision-first');
+  assert.equal(codePlan.workspacePolicy.mutation, 'ownership-and-revision');
+  assert.ok(codePlan.agents.every(agent => agent.model === 'xai:grok-4.7'));
+
+  const researchPlan = decideAgentTopology({
+    workspace: 'research',
+    tasks: [
+      { id: 'sources', type: 'research' },
+      { id: 'synthesis', type: 'analyze' }
+    ],
+    scale: 'medium',
+    complexity: 0.8,
+    uncertainty: 0.6,
+    budget: { maxAgents: 4, maxParallelAgents: 2 }
+  });
+  assert.equal(researchPlan.workspacePolicy.context, 'question-and-evidence-first');
+  assert.equal(researchPlan.workspacePolicy.verification, 'claim-source-provenance');
+
+  const designPlan = decideAgentTopology({
+    workspace: 'design',
+    tasks: [
+      { id: 'layout', type: 'create' },
+      { id: 'review', type: 'verify' }
+    ],
+    scale: 'medium',
+    complexity: 0.8,
+    uncertainty: 0.4,
+    budget: { maxAgents: 4, maxParallelAgents: 2 }
+  });
+  assert.equal(designPlan.workspacePolicy.context, 'canvas-and-asset-first');
+  assert.equal(designPlan.workspacePolicy.mutation, 'single-canvas-owner');
+});
