@@ -91,7 +91,7 @@ function databaseUsername(connectionString) {
  *  {"id":"enterprise","name":"Enterprise","contactUrl":"mailto:sales@example.com",
  *   "price":"Custom","features":["…"]}]
  * These are deployment examples, not fixed product pricing. Choose limits from
- * measured Grok 3.8 Flash costs and the deployment's infrastructure budget.
+ * measured Grok 4.7 costs and the deployment's infrastructure budget.
  * A plan with a contactUrl is sold by your team, not through Checkout: its
  * subscription is created in Stripe with metadata plan_id=<id> (or one of its
  * priceIds). Limits of 0 or missing mean no limit on that plan. The free plan
