@@ -458,13 +458,6 @@ export class RunStore {
     if (workspaceSourceId) plan.adaptation.workspaceSourceId = workspaceSourceId;
     const usesResearchWorkspace = plan.surface === 'research'
       || (Array.isArray(plan.adaptation?.surfaces) && plan.adaptation.surfaces.includes('research'));
-    const usesDesignWorkspace = plan.surface === 'design'
-      || (Array.isArray(plan.adaptation?.surfaces) && plan.adaptation.surfaces.includes('design'));
-    if (usesDesignWorkspace) {
-      plan.adaptation.designWorkspace = !surfaceContextSwitched
-        ? previousState?.adaptation?.designWorkspace ?? null
-        : null;
-    }
     if (usesResearchWorkspace) {
       plan.adaptation.researchWorkspace = createResearchWorkspaceState({
         goal: goalText,
@@ -651,43 +644,6 @@ export class RunStore {
       latestEvidence,
       updatedAt: run.updated_at
     };
-  }
-
-  /** Replace the durable visual-design state for one run. */
-  async saveDesignWorkspace(scope, principal, runId, designState, { requestId } = {}) {
-    const state = normalizeDesignWorkspaceState(designState);
-    return transaction(this.pool, async client => {
-      const { rows: [run] } = await client.query(
-        `SELECT id, surface, adaptation
-           FROM runs
-          WHERE id = $1 AND workspace_id = $2
-            AND (visibility = 'workspace' OR principal_id = $3)
-          FOR UPDATE`,
-        [text(runId), scope.workspaceId, scope.principalId]
-      );
-      if (!run) return null;
-      if (run.surface !== 'design') {
-        throw new RunError('Design state can only be changed from the Design Workspace.', { status: 409, code: 'not-design-workspace' });
-      }
-      const adaptation = {
-        ...(run.adaptation && typeof run.adaptation === 'object' ? run.adaptation : {}),
-        designWorkspace: state
-      };
-      await client.query(
-        'UPDATE runs SET adaptation = $2::jsonb, updated_at = now() WHERE id = $1',
-        [run.id, JSON.stringify(adaptation)]
-      );
-      await client.query(
-        'INSERT INTO situation_events (run_id, workspace_id, principal_id, event_type, event) VALUES ($1, $2, $3, $4, $5::jsonb)',
-        [run.id, scope.workspaceId, principal.id, 'design-state', JSON.stringify({ version: state.version, objects: state.objects.length })]
-      );
-      await this.audit?.record({
-        principalId: principal.id, workspaceId: scope.workspaceId,
-        action: 'run.design-state.update', target: run.id, outcome: 'allowed',
-        detail: { objects: state.objects.length, canvas: state.canvas }, requestId
-      }, client);
-      return state;
-    });
   }
 
   /** One entry per conversation, newest first, for the chat list. */

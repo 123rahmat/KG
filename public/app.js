@@ -23,7 +23,6 @@ import { initWorkspaceSources } from './workspace-sources.js';
 import { initTerminal } from './terminal.js';
 import { initArtifactPreview } from './artifact-preview.js';
 import { initProjectHub, loadProjects } from './app-projects.js';
-import { openDesignWorkspace } from './design-workspace.js';
 
 initSettings();
 initWorkspaceSources();
@@ -1343,18 +1342,17 @@ function toggleVoiceInput() {
 
 /* Lightweight creation controls stay inside Normal Chat. They are intent helpers,
    not a second workflow: the server still decides depth, tools and routing. */
-/* Normal Chat gets one lightweight visual intent control. The full canvas,
-   layers, objects and visual tooling live in Design Workspace. */
+/* Visual creation stays inside NormalChat as an adaptive capability, not a separate workspace. */
 const CREATE_MODES = Object.freeze({
   visual: {
-    hint: 'Lightweight visual work stays here; open Design Workspace for a full canvas.',
+    hint: 'Visual work stays in this conversation and uses only the tools the request needs.',
     placeholder: 'Describe the visual you want…',
     starter: 'Create a visual for '
   }
 });
 
 function setCreateMode(mode, { seed = false } = {}) {
-  const config = CREATE_MODES[mode] ?? CREATE_MODES.design;
+  const config = CREATE_MODES[mode] ?? CREATE_MODES.visual;
   const strip = $('adaptiveCreateStrip');
   if (!strip) return;
   strip.dataset.mode = mode;
@@ -1486,19 +1484,6 @@ document.addEventListener('kindgleam:select-surface', event => {
 
 document.addEventListener('kindgleam:open-code-workspace', () => {
   state.activeSurface = 'code';
-});
-
-document.addEventListener('kindgleam:open-design-workspace', async () => {
-  state.activeSurface = 'design';
-  if (state.run?.id) await openDesignWorkspace(state.run.id);
-});
-
-$('tabs').addEventListener('click', event => {
-  const design = event.target.closest('[data-surface="design"]');
-  if (!design) return;
-  event.preventDefault();
-  state.activeSurface = 'design';
-  if (state.run?.id) openDesignWorkspace(state.run.id);
 });
 
 document.addEventListener('kindgleam:project-selected', async event => {

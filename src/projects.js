@@ -7,7 +7,7 @@
 import crypto from 'node:crypto';
 
 const text = value => String(value ?? '').trim();
-const SURFACES = new Set(['normal-chat', 'code', 'research', 'design']);
+const SURFACES = new Set(['normal-chat', 'code', 'research']);
 
 export class ProjectError extends Error {
   constructor(message, { status = 400, code = 'project-invalid' } = {}) {
@@ -23,7 +23,7 @@ export function normalizeProject(input = {}) {
   if (!name) throw new ProjectError('Project name is required.');
   const description = text(value.description).replace(/\s+/g, ' ').slice(0, 500);
   const defaultSurface = text(value.defaultSurface || value.surface) || 'normal-chat';
-  if (!SURFACES.has(defaultSurface)) throw new ProjectError('Project surface must be normal-chat, code, research or design.');
+  if (!SURFACES.has(defaultSurface)) throw new ProjectError('Project surface must be normal-chat, code or research.');
   const visibility = text(value.visibility) || 'private';
   if (!['private', 'workspace'].includes(visibility)) throw new ProjectError('Project visibility must be private or workspace.');
   return {

@@ -1,6 +1,6 @@
 # Kindgleam
 
-**One shared adaptive and agentic intelligence for normal work, code, research and design.**
+**One shared adaptive and agentic intelligence for NormalChat, Code, and Research.**
 
 Kindgleam adapts the amount of reasoning, context, tools, evidence, agents and execution to the user's actual situation instead of forcing every request through a fixed pipeline.
 
@@ -9,20 +9,19 @@ Kindgleam adapts the amount of reasoning, context, tools, evidence, agents and e
 ```
 ONE SHARED ADAPTIVE INTELLIGENCE
               |
-      +-------+--------+---------+
-      |       |        |         |
- Normal    Code     Research   Design
-  Chat   Workspace  Workspace  Workspace
+      +-------+--------+
+      |       |        |
+ Normal    Code     Research
+  Chat   Workspace  Workspace
 ```
 
-The four surfaces are **context and persistence boundaries, not separate AI brains**.
+The three surfaces are **context and persistence boundaries, not separate AI brains**.
 
 - **Normal Chat** — universal default for conversation, writing, planning, analysis, files, images, lightweight design and bounded code.
 - **Code Workspace** — durable repository engineering with exact revisions, controlled edits, execution and verification.
 - **Research Workspace** — evidence-first investigation with sources, provenance, conflicts and adaptive depth.
-- **Design Workspace** — editable visual/canvas work with assets, layout, preview and export.
 
-Current reasoning provider: **xAI Grok 4.7**.
+Current reasoning provider: **Google Vertex AI Gemini family**, selected adaptively by workload.
 
 ## Canonical adaptive workflow
 
@@ -88,7 +87,7 @@ authorized data
   -> task relevance
   -> dependency / impact expansion
   -> budgeted context
-  -> Grok
+  -> Gemini
 ```
 
 The same adaptive economy governs model effort, agent count, tool calls, sources, artifacts, execution stages, verification and parallelism.

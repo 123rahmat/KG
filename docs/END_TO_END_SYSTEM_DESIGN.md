@@ -2,7 +2,7 @@
 
 ## 1. Product contract
 
-Kindgleam is one adaptive intelligence product with four specialized operating surfaces. The core invariant is:
+Kindgleam is one adaptive intelligence product with three specialized operating surfaces. The core invariant is:
 
 > Use the minimum reliable work needed to satisfy the user's actual goal; increase depth only when the current situation justifies it; verify material outcomes; stop when the acceptance contract is satisfied.
 
@@ -11,9 +11,8 @@ The surfaces are persistence and interaction boundaries, not separate AI brains.
 - **Normal Chat** — universal default for conversation, writing, planning, analysis, files, images, lightweight design and bounded code.
 - **Code Workspace** — durable repository engineering, exact revisions, controlled edits, execution and verification.
 - **Research Workspace** — evidence-first work with durable sources, claims, conflicts and provenance.
-- **Design Workspace** — editable visual/canvas work with assets, layout, preview and export.
 
-Current reasoning provider: **xAI Grok 4.7**.
+Current reasoning provider: **Google Vertex AI Gemini family**, selected adaptively by workload.
 
 ---
 
@@ -37,7 +36,7 @@ Application control plane
     +-- Usage / billing
     +-- Audit / observability
     |
-    +-- Reasoning plane ------> Grok 4.7
+    +-- Reasoning plane ------> Vertex AI Gemini
     |
     +-- Tool plane
     |     +-- built-in safe tools

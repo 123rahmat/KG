@@ -10,8 +10,7 @@ const text = value => String(value ?? '').trim();
 const SURFACE_LABELS = Object.freeze({
   'normal-chat': 'Chat',
   code: 'Code',
-  research: 'Research',
-  design: 'Design'
+  research: 'Research'
 });
 
 function projectById(id) {
