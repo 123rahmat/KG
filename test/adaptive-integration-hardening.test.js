@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { planGoal } from '../src/core.js';
 import { buildRealWorldOutcomeContract } from '../src/real-world-outcome.js';
 import { decideAgentTopology, adaptAgentTopology } from '../src/adaptive-agents.js';
+import { buildHumanGovernanceContract } from '../src/human-governance.js';
 import { completionGate, buildUnifiedAdaptiveWorkflow } from '../src/unified-adaptive-workflow.js';
 
 const scope = {
@@ -174,4 +175,22 @@ test('agent topology is replanned after failure', () => {
   assert.equal(next.replanned, true);
   assert.equal(next.mode, 'pipeline');
   assert.equal(next.failedTaskId, 'a');
+});
+
+
+test('human-first governance is present across the adaptive planner and agent topology', () => {
+  const plan = planGoal('Design a website and create a logo', { ...scope, activeSurface: 'design' });
+  assert.equal(plan.humanGovernance.priority, 'first');
+  assert.equal(plan.humanGovernance.scope.design, true);
+  assert.equal(plan.humanGovernance.enforcement.serverOwned, true);
+  assert.equal(plan.humanGovernance.enforcement.modelCannotOverride, true);
+  assert.equal(plan.agentPlan.humanGovernance.priority, 'first');
+});
+
+test('refused human-harm work remains blocked by the existing safety boundary', () => {
+  const governance = buildHumanGovernanceContract({ safety: { decision: 'refuse', category: 'intimate-images' }, imageWork: true });
+  assert.equal(governance.status, 'blocked');
+  assert.equal(governance.decision, 'refuse');
+  assert.equal(governance.enforcement.modelCannotOverride, true);
+  assert.equal(governance.enforcement.toolCannotBypassPolicy, true);
 });
