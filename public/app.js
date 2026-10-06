@@ -922,6 +922,7 @@ function repairRerun(run) {
 export async function autoDrive(run) {
   if (!run) return run;
   state.drivingRuns ??= new Set();
+  if (state.cancelledRuns?.has(run.id) || state.stoppingRun === run.id) return run;
   if (state.drivingRuns.has(run.id)) return run;
   state.drivingRuns.add(run.id);
   let current = run;
@@ -932,7 +933,7 @@ export async function autoDrive(run) {
   };
   const waitForServerRun = async () => {
     const deadline = Date.now() + 30 * 60_000;
-    while (Date.now() < deadline && isAutomatic(current)) {
+    while (Date.now() < deadline && isAutomatic(current) && !state.cancelledRuns?.has(run.id) && state.stoppingRun !== run.id) {
       await new Promise(resolve => setTimeout(resolve, 1500));
       await refresh();
     }
@@ -942,7 +943,7 @@ export async function autoDrive(run) {
     const task = nextTaskOf(current);
     const localRequested = task?.metadata?.executionTarget === 'local';
     if (localRequested) {
-      for (let steps = 0; steps < 30 && isAutomatic(current); steps += 1) {
+      for (let steps = 0; steps < 30 && isAutomatic(current) && !state.cancelledRuns?.has(run.id) && state.stoppingRun !== run.id; steps += 1) {
         const before = String(current.next) + ':' + String(current.attempt);
         const rerun = repairRerun(current);
         if (state.chat?.id === current.conversationId || !state.chat?.id) {
@@ -950,6 +951,7 @@ export async function autoDrive(run) {
           state.drivingLabel = rerun ? 'Running the revised code' : taskLabel(nextTaskOf(current));
           renderThread();
         }
+        if (state.cancelledRuns?.has(run.id) || state.stoppingRun === run.id) break;
         const updated = await runStep(null, rerun ?? {}, current);
         if (updated) current = updated;
         if (String(current.next) + ':' + String(current.attempt) === before) break;
@@ -958,8 +960,8 @@ export async function autoDrive(run) {
       if (state.chat?.id === current.conversationId || !state.chat?.id) {
         state.run = current; state.driving = current.id; state.drivingLabel = taskLabel(task); renderThread();
       }
-      current = await runStep(null, {}, current) || current;
-      if (isAutomatic(current)) current = await waitForServerRun();
+      if (!state.cancelledRuns?.has(run.id) && state.stoppingRun !== run.id) current = await runStep(null, {}, current) || current;
+      if (isAutomatic(current) && !state.cancelledRuns?.has(run.id) && state.stoppingRun !== run.id) current = await waitForServerRun();
     }
   } finally {
     state.drivingRuns.delete(run.id);
@@ -1408,14 +1410,14 @@ $('signout').addEventListener('click', signOut);
 function syncComposerAction() {
   const control = $('createRun');
   if (!control) return;
-  const active = Boolean(state.driving || state.busyRuns?.has(state.run?.id));
+  const active = Boolean(state.driving || state.busyRuns?.has(state.run?.id) || state.stoppingRun);
   const sending = Boolean(state.sendWaiting);
   const stopIcon = control.querySelector('.stop-icon');
   const sendIcon = control.querySelector('.send-icon');
   control.dataset.mode = active ? 'stop' : sending ? 'busy' : 'send';
   control.disabled = sending && !active;
-  control.setAttribute('aria-label', active ? 'Stop current work' : sending ? 'Sending' : 'Send');
-  control.title = active ? 'Stop current work' : sending ? 'Sending…' : 'Send';
+  control.setAttribute('aria-label', state.stoppingRun ? 'Stopping current work' : active ? 'Stop current work' : sending ? 'Sending' : 'Send');
+  control.title = state.stoppingRun ? 'Stopping current work…' : active ? 'Stop current work' : sending ? 'Sending…' : 'Send';
   if (stopIcon) stopIcon.hidden = !active;
   if (sendIcon) sendIcon.hidden = active;
 }
@@ -1543,7 +1545,17 @@ async function resumeAfterReconnect() {
     if (state.run?.id !== fresh.id || state.driving || state.busy) return;
     renderRun(fresh);
     clearNotice('runNotice');
-    if (isAutomatic(fresh)) await autoDrive(fresh);
+    if (state.stoppingRun === fresh.id || state.cancelledRuns?.has(fresh.id)) {
+      try {
+        const stopped = await api('POST', `/api/runs/${fresh.id}/fail`, { reason: 'stopped by user' }, { idempotencyKey: crypto.randomUUID() });
+        state.stoppingRun = null;
+        renderRun(stopped);
+        await loadRuns();
+      } catch (error) {
+        if (error.code === 'offline' || error.transient) state.network.interruptedRunId = fresh.id;
+        else state.stoppingRun = null;
+      }
+    } else if (isAutomatic(fresh)) await autoDrive(fresh);
   } catch (error) {
     if (error.code === 'offline' || error.transient) state.network.interruptedRunId = run.id;
   }
