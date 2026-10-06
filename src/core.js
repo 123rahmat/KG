@@ -27,6 +27,7 @@ import { parallelDecision } from './parallel-orchestrator.js';
 import { classifySurfaceBoundary, surfaceRuntimePolicy, surfaceIntelligenceProfile } from './surface-policy.js';
 import { buildUniversalContextContract } from './universal-context.js';
 import { adaptiveExecutionEnvelope } from './adaptive-execution-policy.js';
+import { decideAgentTopology } from './adaptive-agents.js';
 
 export const CONTRACT = 'kindgleam-open-world-situation-adaptive-v9';
 export { CAPABILITIES, SURFACES };
@@ -793,9 +794,24 @@ export function planGoal(goal, {
       verification,
       unifiedIntelligence,
       intelligenceDepth: unifiedIntelligence.reasoning.depth,
-      universalContext: universalContextSnapshot
+      universalContext: universalContextSnapshot,
+      agentPlan
     }
   );
+
+  const agentPlan = decideAgentTopology({
+    tasks,
+    risk: analysis.flags?.highImpact === true ? 'high-impact'
+      : analysis.flags?.physical === true && !writingDocument ? 'physical' : 'ordinary',
+    scale,
+    complexity: Number(analysis.situation?.complexity ?? analysis.complexity ?? 0),
+    uncertainty: Number(analysis.situation?.uncertainty ?? 0),
+    budget: adaptiveControl?.budget ?? {},
+    executionAvailable: executionAvailable?.code !== false || executionRequired,
+    externalAction: analysis.flags?.externalAction === true,
+    physical: analysis.flags?.physical === true && !writingDocument,
+    retrying: failedSteps.length > 0
+  });
 
   return {
     contract: CONTRACT,
@@ -821,6 +837,7 @@ export function planGoal(goal, {
     governance,
     situationGovernance: adaptive.governance,
     tasks,
+    agentPlan,
     next: blocked.length ? null : nextTask(tasks)?.id ?? null,
     principles: PRINCIPLES,
     adaptation: {
