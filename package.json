@@ -14,7 +14,7 @@
     "migrate": "node bin/admin.js migrate",
     "bootstrap": "node bin/admin.js bootstrap",
     "local-agent": "node bin/local-agent.js",
-    "test": "node --test",
+    "test": "node --test --test-concurrency=1",
     "lint": "eslint .",
     "doctor": "node bin/system-doctor.js",
     "verify": "npm run check && npm run doctor && npm run eval:skills && npm run lint && npm test",
