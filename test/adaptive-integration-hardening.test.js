@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { planGoal } from '../src/core.js';
 import { buildRealWorldOutcomeContract } from '../src/real-world-outcome.js';
-import { decideAgentTopology, adaptAgentTopology } from '../src/adaptive-agents.js';
+import { decideAgentTopology, adaptAgentTopology, decomposeAgentTasks } from '../src/adaptive-agents.js';
 import { buildHumanGovernanceContract } from '../src/human-governance.js';
 import { completionGate, buildUnifiedAdaptiveWorkflow } from '../src/unified-adaptive-workflow.js';
 import { workspaceEnvironment } from '../src/surface-policy.js';
@@ -376,4 +376,31 @@ test('specialized workspaces expose independent operating environments over shar
   assert.equal(design.verification, 'visual-and-export');
   assert.notDeepEqual(code.stateModel, research.stateModel);
   assert.notDeepEqual(research.stateModel, design.stateModel);
+});
+
+test('medium work decomposes into workspace-specific parallel-ready subtasks', () => {
+  for (const workspace of ['normal-chat', 'code', 'research', 'design']) {
+    const tasks = decomposeAgentTasks([
+      { id: 'root', type: 'understand', metadata: {} }
+    ], { workspace, scale: 'medium', complexity: 0.7, uncertainty: 0.5 });
+    assert.ok(tasks.length >= 3);
+    assert.ok(tasks.every(task => task.parentTaskId === 'root'));
+    assert.ok(tasks.every(task => task.metadata?.advisory === true));
+    const plan = decideAgentTopology({
+      tasks,
+      workspace,
+      scale: 'medium',
+      complexity: 0.7,
+      uncertainty: 0.5
+    });
+    assert.equal(plan.mode, 'parallel-then-integrate');
+    assert.ok(plan.maxParallel >= 2);
+  }
+});
+
+test('high-risk work does not get parallelized by decomposition', () => {
+  const tasks = decomposeAgentTasks([{ id: 'root', type: 'understand', metadata: {} }], {
+    workspace: 'code', scale: 'large', complexity: 0.9, uncertainty: 0.8, risk: 'high'
+  });
+  assert.equal(tasks.length, 1);
 });
