@@ -16,6 +16,8 @@ test('all four workspaces have complete independent operating-environment contra
   for (const workspace of workspaces) {
     const environment = workspaceEnvironment(workspace);
     const profile = surfaceIntelligenceProfile(workspace);
+    assert.equal(environment, WORKSPACE_ENVIRONMENT_CONTRACTS[workspace]);
+    assert.equal(profile, SURFACE_INTELLIGENCE_PROFILES[workspace]);
     const contract = SURFACE_WORKSPACE_CONTRACTS[workspace];
 
     assert.ok(environment);
