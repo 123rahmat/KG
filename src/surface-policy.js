@@ -227,6 +227,10 @@ export const SURFACE_WORKSPACE_CONTRACTS = Object.freeze({
     escalationPolicy: 'Escalate to Code for repository, project, multi-file or full software-engineering work and to Research for source-heavy/current evidence work; otherwise continue adapting in Normal Chat, keeping bounded single-file/micro work here.',
     uiPolicy: 'Keep the composer central; reveal only the controls and adaptive surfaces relevant to the current situation.',
     selectionPolicy: 'Default general workspace. Keep bounded single-file, micro-artifact and lightweight visual work here; switch to Design for durable visual composition, Code for durable software engineering, and Research for durable source/evidence work.'
+    ,sharedIntelligence: true,
+    adaptiveAgents: true,
+    adaptiveTools: true,
+    adaptiveVerification: true
   }),
   code: Object.freeze({
     id: 'code',
