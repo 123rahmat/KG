@@ -68,9 +68,15 @@ export function geminiFromStandIn(standIn) {
     const tools = Array.isArray(body.tools) && body.tools.length
       ? body.tools.map(tool => tool?.googleSearch ? { type: 'web_search' } : tool)
       : [];
+    const messages = input.map(item => ({
+      role: item.role,
+      content: item.content.map(part => part.text).join('\n')
+    }));
     const legacy = {
       model: vertexModelFromUrl(url),
       input,
+      messages,
+      system: systemText || '',
       ...(tools.length ? { tools } : {}),
       ...(body.generationConfig?.maxOutputTokens ? { max_output_tokens: body.generationConfig.maxOutputTokens } : {})
     };
@@ -90,6 +96,7 @@ export function geminiFromStandIn(standIn) {
     const answer = String(
       data?.output_text
       ?? outputParts.find(part => typeof part?.text === 'string')?.text
+      ?? (Array.isArray(data?.content) ? data.content.find(part => typeof part?.text === 'string')?.text : '')
       ?? data?.text
       ?? ''
     );
