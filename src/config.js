@@ -135,8 +135,8 @@ function parseMcpServers(raw, errors, { production = false } = {}) {
       errors.push(`MCP_SERVERS_JSON[${index}].name must be unique and use a-z, 0-9, and hyphen`);
       continue;
     }
-    if (!['http:', 'https:'].includes(url.protocol) || (production && url.protocol !== 'https:' && !local)) {
-      errors.push(`MCP_SERVERS_JSON[${index}].url must use HTTPS in production (localhost is allowed for development)`);
+    if (!['http:', 'https:'].includes(url.protocol) || (production && url.protocol !== 'https:')) {
+      errors.push(`MCP_SERVERS_JSON[${index}].url must use HTTPS in production`);
       continue;
     }
     names.add(name);
