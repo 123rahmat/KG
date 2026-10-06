@@ -1545,8 +1545,41 @@ export class RunStore {
     }
 
     // Only the completed task can create the next task. The server never
-    // pre-creates future workflow stages.
-    if (decision.status === 'complete' && run.adaptation?.workflow !== 'direct') {
+    // pre-creates future workflow stages. Direct work follows the same rule:
+    // the response is materialized first, and its verification step is created
+    // only after the response has actually completed.
+    if (decision.status === 'complete' && run.adaptation?.workflow === 'direct'
+        && target.type === 'respond' && target.metadata?.verificationPending === true) {
+      const { rows: existingVerify } = await client.query(
+        "SELECT id FROM run_tasks WHERE run_id = $1 AND type = 'verify' LIMIT 1",
+        [run.id]
+      );
+      if (!existingVerify.length) {
+        const { rows: positionRows } = await client.query(
+          'SELECT COALESCE(MAX(position), -1) + 1 AS position FROM run_tasks WHERE run_id = $1',
+          [run.id]
+        );
+        await insertTask(client, run.id, {
+          id: 'verify',
+          position: Number(positionRows[0]?.position ?? 1),
+          type: 'verify',
+          dependsOn: [target.id],
+          requires: ['verification'],
+          purpose: 'Check the completed direct response for correctness, completeness and unsupported claims before delivery.',
+          metadata: {
+            adaptive: true,
+            dynamicGraph: true,
+            createdFrom: target.id,
+            verification: run.adaptation?.acceptanceContract
+              ? {
+                  ...(run.adaptation.acceptanceContract ?? {}),
+                  required: true
+                }
+              : verificationContract()
+          }
+        });
+      }
+    } else if (decision.status === 'complete' && run.adaptation?.workflow !== 'direct') {
       await this.#adaptSteps(client, run, target, structured && typeof structured === 'object' ? structured : {}, requirementModel);
     }
 
