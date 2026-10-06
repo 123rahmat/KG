@@ -130,7 +130,6 @@ function parseMcpServers(raw, errors, { production = false } = {}) {
       errors.push(`MCP_SERVERS_JSON[${index}].url must be a valid HTTP(S) URL`);
       continue;
     }
-    const local = ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
     if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(name) || names.has(name)) {
       errors.push(`MCP_SERVERS_JSON[${index}].name must be unique and use a-z, 0-9, and hyphen`);
       continue;
