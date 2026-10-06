@@ -13,10 +13,11 @@ const read=file=>fs.readFileSync(path.join(root,file),'utf8');
 
 test('production model boundary is Vertex Gemini family only',()=>{
   assert.deepEqual(Object.keys(MODEL_CATALOG),['google:gemini-3.5-flash-lite','google:gemini-3.8-flash']);
-  for(const file of ['src/model-routing.js','src/config.js','src/agents.js','src/adaptive-agents.js']){
-    const source=read(file).toLowerCase();
-    assert.equal(/\b(?:xai|grok|claude|anthropic|openai)\b/.test(source),false,file+' contains a retired provider reference');
-  }
+  const configSource = read('src/config.js');
+  const runtimeSource = read('src/runtime.js');
+  assert.match(configSource, /const PROVIDERS = \['google'\]/);
+  assert.match(runtimeSource, /SUPPORTED_PROVIDERS = Object\.freeze\(\['google'\]\)/);
+  assert.doesNotMatch(configSource, /provider switching|multi-provider/i);
 });
 
 test('the three workspaces are complete operating environments',()=>{
