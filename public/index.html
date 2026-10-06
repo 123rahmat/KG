@@ -59,6 +59,11 @@
   <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></symbol>
   <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7.5l8.5 6 8.5-6"/></symbol>
   <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m8 9-4 3 4 3M16 9l4 3-4 3M14 5l-4 14"/></symbol>
+  <symbol id="i-research" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5M10.5 7.5v3l2 1"/></symbol>
+  <symbol id="i-design" viewBox="0 0 24 24"><path d="m4 17 9-9 4 4-9 9H4z"/><path d="m13 8 2-2 4 4-2 2M5 21h14"/></symbol>
+  <symbol id="i-adapt" viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="M9 9h6v6H9zM12 3v4M12 17v4M3 12h4M17 12h4"/></symbol>
+  <symbol id="i-verify" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.2-2.7 7.9-7 9-4.3-1.1-7-4.8-7-9V6z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></symbol>
 </svg>
 
 <!-- Public landing ------------------------------------------------------ -->
@@ -69,9 +74,10 @@
       <span>Kindgleam</span>
     </a>
     <nav class="landing-nav-links" aria-label="Landing page">
-      <a href="#system">How it works</a>
-      <a href="#chat">Normal chat</a>
-      <a href="#code">Code workspace</a>
+      <a href="#system"><svg class="landing-nav-icon" aria-hidden="true"><use href="#i-adapt"/></svg>How it works</a>
+      <a href="#workspaces"><svg class="landing-nav-icon" aria-hidden="true"><use href="#i-sparkle"/></svg>Workspaces</a>
+      <a href="#chat"><svg class="landing-nav-icon" aria-hidden="true"><use href="#i-chat"/></svg>Normal chat</a>
+      <a href="#code"><svg class="landing-nav-icon" aria-hidden="true"><use href="#i-code"/></svg>Code</a>
     </nav>
     <button class="landing-signin" id="landingSignIn" type="button">Sign in</button>
   </header>
@@ -128,7 +134,41 @@
       </div>
     </section>
 
-        <section class="landing-demos" aria-labelledby="demoTitle">
+        <section class="landing-section workspace-showcase" id="workspaces" aria-labelledby="workspaceTitle">
+      <div class="section-heading">
+        <p class="landing-kicker">Four operating environments</p>
+        <h2 id="workspaceTitle">One adaptive intelligence. Four professional ways to work.</h2>
+        <p>Each workspace has its own tools, state, artifacts, and verification rules. The intelligence stays shared; the operating environment changes with the work.</p>
+      </div>
+      <div class="workspace-grid">
+        <article class="workspace-card featured">
+          <div class="workspace-icon"><svg aria-hidden="true"><use href="#i-chat"/></svg></div>
+          <div class="workspace-card-copy"><span>01 · UNIVERSAL</span><h3>Normal Chat</h3><p>Conversation, files, writing, planning, analysis, and lightweight creation without unnecessary machinery.</p></div>
+          <div class="workspace-meta"><b>Direct first</b><small>Escalates only when justified</small></div>
+        </article>
+        <article class="workspace-card">
+          <div class="workspace-icon"><svg aria-hidden="true"><use href="#i-code"/></svg></div>
+          <div class="workspace-card-copy"><span>02 · ENGINEERING</span><h3>Code</h3><p>Repository-aware work with revision-bound context, controlled edits, tests, execution evidence, and verification.</p></div>
+          <div class="workspace-meta"><b>GitHub + verification</b><small>Explicit write-back</small></div>
+        </article>
+        <article class="workspace-card">
+          <div class="workspace-icon"><svg aria-hidden="true"><use href="#i-research"/></svg></div>
+          <div class="workspace-card-copy"><span>03 · EVIDENCE</span><h3>Research</h3><p>Evidence-led investigation with source provenance, uncertainty tracking, conflict handling, and adaptive depth.</p></div>
+          <div class="workspace-meta"><b>Source first</b><small>Claims tied to evidence</small></div>
+        </article>
+        <article class="workspace-card">
+          <div class="workspace-icon"><svg aria-hidden="true"><use href="#i-design"/></svg></div>
+          <div class="workspace-card-copy"><span>04 · VISUAL</span><h3>Design</h3><p>Canvas-first creation for editable visual artifacts, assets, composition, preview, and export.</p></div>
+          <div class="workspace-meta"><b>Canvas first</b><small>Visual + export verification</small></div>
+        </article>
+      </div>
+      <div class="workspace-principle">
+        <svg class="i" aria-hidden="true"><use href="#i-shield"/></svg>
+        <span><strong>Shared intelligence, separate boundaries.</strong> Workspaces do not create four different brains; they give the same adaptive core the right context, tools, mutation boundaries, and checks.</span>
+      </div>
+    </section>
+
+    <section class="landing-demos" aria-labelledby="demoTitle">
       <div class="visual-heading demo-heading">
         <div>
           <p class="landing-kicker">See the system work</p>
