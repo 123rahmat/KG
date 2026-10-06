@@ -1405,8 +1405,29 @@ $('chatSearch').addEventListener('input', renderChatList);
 $('signin').addEventListener('submit', signIn);
 initGate();
 $('signout').addEventListener('click', signOut);
+function syncComposerAction() {
+  const control = $('createRun');
+  if (!control) return;
+  const active = Boolean(state.driving || state.busyRuns?.has(state.run?.id));
+  const sending = Boolean(state.sendWaiting);
+  const stopIcon = control.querySelector('.stop-icon');
+  const sendIcon = control.querySelector('.send-icon');
+  control.dataset.mode = active ? 'stop' : sending ? 'busy' : 'send';
+  control.disabled = sending && !active;
+  control.setAttribute('aria-label', active ? 'Stop current work' : sending ? 'Sending' : 'Send');
+  control.title = active ? 'Stop current work' : sending ? 'Sending…' : 'Send';
+  if (stopIcon) stopIcon.hidden = !active;
+  if (sendIcon) sendIcon.hidden = active;
+}
+
+document.addEventListener('kindgleam:composer-state', syncComposerAction);
+
 $('composer').addEventListener('submit', event => {
   event.preventDefault();
+  if (state.driving || state.busyRuns?.has(state.run?.id)) {
+    stopRun('stopped by user');
+    return;
+  }
   sendMessage($('goal').value);
 });
 $('newWork').addEventListener('click', newChat);
@@ -1499,7 +1520,8 @@ $('goal').addEventListener('keydown', event => {
   if (document.body.dataset.aiUsageLocked === 'true') return;
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && state.settings.enterSends) {
     event.preventDefault();
-    sendMessage($('goal').value);
+    if (state.driving || state.busyRuns?.has(state.run?.id)) stopRun('stopped by user');
+    else sendMessage($('goal').value);
   }
 });
 
