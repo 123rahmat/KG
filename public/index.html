@@ -1041,15 +1041,9 @@
           <div class="usage-days" id="usageDays" role="img" aria-label="Tokens used per day over the last 7 days"></div>
           <h3 class="settings-subhead">What the tokens went to</h3>
           <div class="usage-sources" id="usageSources"></div>
-          <h3 class="settings-subhead">Model & context window</h3>
+          <h3 class="settings-subhead">Adaptive Gemini & context window</h3>
           <div class="usage-model" id="usageModel"></div>
-          <div class="settings-model-choice" id="userModelChoice">
-            <label>Preferred AI model
-              <select id="userModelSelect" aria-describedby="userModelHint"></select>
-            </label>
-            <p class="hint" id="userModelHint">Kindgleam runs on Google Gemini through the direct Gemini API. Choose among the models your workspace administrator enabled; your plan controls usage capacity and service limits.</p>
-            <span class="small muted" id="userModelSaved" aria-live="polite"></span>
-          </div>
+          <p class="hint">Kindgleam uses the approved Gemini family through Google Vertex AI and automatically chooses the least expensive model and reasoning depth that can reliably complete the work.</p>
           <p class="hint">A token is roughly ¾ of a word. The 4-hour and weekly windows roll: usage frees up as it gets older. The context window is how much the model can read at once; long chats fill it.</p>
         </section>
 
@@ -1115,18 +1109,6 @@
           <h3 class="settings-subhead">Tools Kindgleam built</h3>
           <p class="hint">When a task needs a tool that does not exist, Kindgleam writes one, tests it in its sandbox, and asks an admin to keep it. Kept tools are reused by every chat in this workspace.</p>
           <ul class="workspace-tools" id="workspaceTools" aria-live="polite"></ul>
-          <div class="settings-model-manager" id="modelManager" hidden>
-            <h3 class="settings-subhead">AI model</h3>
-            <p class="hint">Kindgleam uses the configured Grok model for this workspace. The list is the model set offered by the server. A new default is checked before it is saved, so an unavailable or invalid model is refused instead of breaking chats.</p>
-            <div id="modelManagerList" class="model-manager-list" aria-live="polite"></div>
-            <div class="model-manager-actions">
-              <label>Workspace default
-                <select id="modelDefaultSelect"></select>
-              </label>
-              <button type="button" class="primary small" id="modelSettingsSave">Save model settings</button>
-              <span class="small muted" id="modelSettingsSaved" aria-live="polite"></span>
-            </div>
-          </div>
           <h3 class="settings-subhead">Reports and safety</h3>
           <p class="hint"><span id="reportsLead">Answers people reported.</span> Kindgleam follows a <a href="/policy.html" target="_blank" rel="noopener">usage policy</a>.</p>
           <div class="declined-summary" id="declinedSummary" hidden></div>
