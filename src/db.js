@@ -413,7 +413,7 @@ async function hardenRuntimeRole(client, runtimeRole, logger) {
     ['SELECT, INSERT, UPDATE', ['user_preferences']],
     ['SELECT, INSERT', ['usage_events']],
     ['SELECT, INSERT, UPDATE, DELETE', ['usage_reservations']],
-    ['SELECT, INSERT, UPDATE', ['workspace_billing', 'workspace_ai_settings']],
+    ['SELECT, INSERT, UPDATE', ['workspace_billing']],
     ['SELECT, INSERT', ['stripe_events']],
     ['SELECT, INSERT, UPDATE', ['run_actions']],
     ['SELECT, INSERT, UPDATE', ['workspace_tools']],
