@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { grokFromStandIn, jsonResponse } from './helpers.js';
+import { geminiFromStandIn, jsonResponse } from './helpers.js';
 import { answerWithTools, toolCatalog, toolPrompt, useTool, parseToolCall, registerTools } from '../src/toolbox.js';
 import { loadConfig } from '../src/config.js';
 import { xlsx, docx } from './document-fixtures.js';
 
-const config = loadConfig({ DATABASE_URL: 'postgres://u:p@h:5432/d', AI_PROVIDER: 'xai', AI_API_KEY: 'test-key', AI_MODEL: 'grok-4.7' });
+const config = loadConfig({ DATABASE_URL: 'postgres://u:p@h:5432/d', AI_PROVIDER: 'google', GOOGLE_CLOUD_PROJECT: 'test-project', VERTEX_ACCESS_TOKEN: 'test-token', AI_MODEL: 'gemini-3.8-flash' });
 
 /** Attached files served from memory, the way objects.read returns them. */
 function filesContext(files) {
@@ -20,7 +20,7 @@ function filesContext(files) {
 /** A model that answers from a script: each reply in turn, recording what it was sent. */
 function scripted(replies, sent) {
   let index = 0;
-  return grokFromStandIn(async (_url, options) => {
+  return geminiFromStandIn(async (_url, options) => {
     sent.push(JSON.parse(options.body));
     return jsonResponse({ output_text: replies[Math.min(index++, replies.length - 1)], usage: { input_tokens: 10, output_tokens: 5 } });
   });
