@@ -173,51 +173,6 @@ const FULL_CONVERSATIONS_SQL = `
    ORDER BY updated_at DESC, id DESC
    LIMIT $3`;
 const text = value => String(value ?? '').trim();
-const DESIGN_KINDS = new Set(['text', 'rect', 'circle', 'image']);
-const clampDesign = (value, min, max, fallback) => {
-  const n = Number(value);
-  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
-};
-function normalizeDesignWorkspaceState(input = {}) {
-  const source = input && typeof input === 'object' ? input : {};
-  const canvas = source.canvas && typeof source.canvas === 'object' ? source.canvas : {};
-  const objects = Array.isArray(source.objects) ? source.objects.slice(0, 256) : [];
-  return {
-    version: 1,
-    canvas: {
-      width: clampDesign(canvas.width, 320, 4096, 1200),
-      height: clampDesign(canvas.height, 240, 4096, 720),
-      background: text(canvas.background) || '#ffffff'
-    },
-    guides: {
-      grid: clampDesign(input?.guides?.grid, 4, 128, 24),
-      snap: input?.guides?.snap !== false,
-      showGrid: input?.guides?.showGrid !== false
-    },
-    selected: text(source.selected).slice(0, 80),
-    previewing: source.previewing === true,
-    objects: objects.map((item, index) => ({
-      id: text(item?.id).slice(0, 80) || 'design-object-' + index,
-      kind: DESIGN_KINDS.has(item?.kind) ? item.kind : 'rect',
-      x: clampDesign(item?.x, -4096, 4096, 0),
-      y: clampDesign(item?.y, -4096, 4096, 0),
-      width: clampDesign(item?.width, 8, 4096, 160),
-      height: clampDesign(item?.height, 8, 4096, 100),
-      text: String(item?.text ?? '').slice(0, 2000),
-      fontSize: clampDesign(item?.fontSize, 6, 320, 24),
-      z: clampDesign(item?.z, -10000, 10000, index),
-      rotation: clampDesign(item?.rotation, -360, 360, 0),
-      opacity: clampDesign(item?.opacity, 0, 1, 1),
-      visible: item?.visible !== false,
-      locked: item?.locked === true,
-      fill: String(item?.fill || '#eef2ff').slice(0, 32),
-      assetId: text(item?.assetId).slice(0, 80),
-      assetName: text(item?.assetName).slice(0, 200)
-    }))
-  };
-}
-
-
 /** Stable project identity used to prevent accidental cross-project continuation. */
 function projectContextKey(project, attachments = []) {
   const p = project && typeof project === 'object' ? project : {};
