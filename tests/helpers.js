@@ -37,7 +37,7 @@ export function recordingLogger() {
  * lets those stand-ins answer the Gemini API: Gemini requests are translated
  * to the stand-in shape, and their replies are returned as Gemini responses.
  */
-const LEGACY_PROVIDERS = new Set(['anthropic', 'openai']);
+const LEGACY_PROVIDERS = new Set(['anthropic', 'openai', 'google']);
 const XAI_URL = 'https://api.x.ai/v1/responses';
 
 export function grokFromStandIn(standIn) {
