@@ -209,8 +209,8 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       // approved), the files attached to this message, and tools this workspace built
       // and an administrator approved.
       ...PERSONAL_TOOLS,
-      ...(config.tools?.mcp?.servers?.length
-        ? (['tool', 'investigate'].includes(task.type) ? ['mcp.discover', 'mcp.call'] : ['mcp.discover'])
+      ...(config.tools?.mcp?.servers?.length && ['tool', 'investigate'].includes(task.type)
+        ? ['mcp.discover', 'mcp.call']
         : []),
       ...(attachments.length ? ['file.read', 'data.analyze', 'code.run'] : []),
       ...approvedTools.map(tool => tool.name)
