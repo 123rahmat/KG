@@ -820,7 +820,8 @@ export function planGoal(goal, {
     executionAvailable: executionAvailable?.code !== false || executionRequired,
     externalAction: analysis.flags?.externalAction === true,
     physical: analysis.flags?.physical === true && !writingDocument,
-    retrying: failedSteps.length > 0
+    retrying: failedSteps.length > 0,
+    humanGovernance
   });
 
   return {
