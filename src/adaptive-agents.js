@@ -115,7 +115,8 @@ export function decideAgentTopology({
   executionAvailable = true,
   externalAction = false,
   physical = false,
-  retrying = false
+  retrying = false,
+  humanGovernance = null
 } = {}) {
   const work = uniqueTasks(tasks).filter(task => text(task.type) !== 'respond' || tasks.length > 1);
   const countable = work.length;
@@ -137,6 +138,7 @@ export function decideAgentTopology({
       agents: [{ id: 'lead-1', role: 'lead', taskIds: countable ? [work[0].id] : [], model: 'xai:grok-4.7' }],
       waves: countable ? [[ 'lead-1' ]] : [],
       integrationRequired: false,
+      humanGovernance: humanGovernance ?? null,
       authority: { serverOwned: true, modelCannotAuthorize: true }
     };
   }
@@ -179,6 +181,7 @@ export function decideAgentTopology({
       requiresAllInputs: false,
       rule: 'Integrate only completed, authorized, revision-compatible agent outputs; unresolved conflicts become blockers.'
     } : null,
+    humanGovernance: humanGovernance ?? null,
     collaboration: {
       protocol: 'typed-findings',
       sharedState: 'server-owned-blackboard',
@@ -191,7 +194,8 @@ export function decideAgentTopology({
       modelCannotAuthorize: true,
       modelCannotGrantCapabilities: true,
       modelCannotDeclareWorldOutcome: true,
-      externalActionsSerialized: highRisk || externalAction || physical
+      externalActionsSerialized: highRisk || externalAction || physical,
+      humanGovernanceServerOwned: true
     }
   };
 }
