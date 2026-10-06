@@ -112,35 +112,22 @@ test('a later follow-up can inherit completed work without importing unrelated w
   }));
 
 
-test('workspace switching preserves chat history but isolates workspace-specific state', () =>
+test('workspace switching preserves chat history while visual work stays in NormalChat', () =>
   withServer(async ({ call, seed }) => {
     const { token, workspace } = await seed({ role: 'admin' });
     const auth = { token, workspace };
     const conversationId = 'chat-workspace-switch-01';
 
-    const design = (await call('POST', '/api/runs', {
+    const visual = (await call('POST', '/api/runs', {
       ...auth,
       body: {
         conversationId,
-        activeSurface: 'design',
+        activeSurface: 'normal-chat',
         goal: 'Create a product launch visual with a simple layout.'
       }
     })).body;
-
-    await call('PUT', `/api/runs/${design.id}/design-state`, {
-      ...auth,
-      body: {
-        state: {
-          canvas: { width: 1000, height: 700, background: '#fff' },
-          guides: { grid: 20, snap: true, showGrid: true },
-          selected: 'hero',
-          previewing: false,
-          objects: [
-            { id: 'hero', kind: 'rect', x: 10, y: 10, width: 200, height: 100, fill: '#eee', visible: true, locked: false }
-          ]
-        }
-      }
-    });
+    assert.equal(visual.surface, 'normal-chat');
+    assert.equal(visual.adaptation?.designWorkspace, undefined);
 
     const code = await call('POST', '/api/runs', {
       ...auth,
@@ -152,7 +139,7 @@ test('workspace switching preserves chat history but isolates workspace-specific
     });
     assert.equal(code.status, 201);
     assert.equal(code.body.adaptation?.continuation?.mode, 'workspace-switch');
-    assert.equal(code.body.adaptation?.designWorkspace, null);
-    assert.equal(code.body.adaptation?.projectOverlay, undefined);
+    assert.equal(code.body.adaptation?.designWorkspace, undefined);
     assert.ok(Array.isArray(code.body.adaptation?.conversation));
+    assert.match(code.body.adaptation.conversation.at(-1).user, /product launch visual/i);
   }));
