@@ -861,6 +861,12 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         executionReceipt: managedReceipt,
         evidence: execution.text
           ? {
+              // Evidence state is server-owned. A returned model/tool result is
+              // something the server observed; a normalized passing verifier
+              // verdict is verified evidence. Without this label the unified
+              // acceptance engine correctly treats arbitrary objects as
+              // unknown, which can strand already-checked work at delivery.
+              kind: task.type === 'verify' && execution.verdict?.verdict === 'pass' ? 'verified' : 'observed',
               ...(execution.verdict ? { verdict: execution.verdict } : {}),
               text: execution.text,
               provider: execution.provider,
