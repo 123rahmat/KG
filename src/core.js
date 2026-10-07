@@ -572,6 +572,10 @@ export function planGoal(goal, {
 
   const intent = smallTalk ? { kind: 'chat', confidence: 1, signals: ['answer'] } : classifyIntent(value, situationContext);
   const surfaceBoundary = classifySurfaceBoundary(value, { activeSurface, attachments, flags: analysis.flags, actions: analysis.goalModel?.actions ?? [] });
+  // The three-workspace surface policy is the single routing authority.
+  // Older adaptive heuristics may still describe capabilities, but they must
+  // not override the chosen NormalChat / Code / Research operating boundary.
+  const resolvedSurface = surfaceBoundary.surface === 'normal-chat' ? 'chat' : surfaceBoundary.surface;
   const adaptiveExecution = adaptiveExecutionEnvelope({
     goal: value,
     complexity: Number(analysis.situation?.complexity ?? analysis.complexity ?? 0),
@@ -820,6 +824,7 @@ export function planGoal(goal, {
     dedupedApprovalReasons.length > 0,
     {
       ...analysis,
+      surface: surfaceBoundary.surface,
       direct,
       scale,
       crisis,
@@ -853,7 +858,7 @@ export function planGoal(goal, {
     externalAction: analysis.flags?.externalAction === true,
     physical: analysis.flags?.physical === true && !writingDocument,
     retrying: failedSteps.length > 0,
-    workspace: adaptive.primarySurface === 'chat' ? 'normal-chat' : adaptive.primarySurface,
+    workspace: surfaceBoundary.surface,
     humanGovernance
   });
 
@@ -866,10 +871,10 @@ export function planGoal(goal, {
     mode: intent.kind === 'invention' || intent.kind === 'creation'
       ? 'creation'
       : analysis.unknownSituation ? 'adaptive-open-world' : 'adaptive',
-    surface: adaptive.primarySurface,
-    surfacePolicy: surfaceRuntimePolicy(adaptive.primarySurface),
-    workspaceEnvironment: workspaceEnvironment(adaptive.primarySurface),
-    workspaceContract: surfaceBoundary.workspace ?? surfaceRuntimePolicy(adaptive.primarySurface).contract ?? null,
+    surface: resolvedSurface,
+    surfacePolicy: surfaceRuntimePolicy(surfaceBoundary.surface),
+    workspaceEnvironment: workspaceEnvironment(surfaceBoundary.surface),
+    workspaceContract: surfaceBoundary.workspace ?? surfaceRuntimePolicy(surfaceBoundary.surface).contract ?? null,
     universalContext,
     surfaceBoundary,
     capabilities: {
@@ -888,6 +893,8 @@ export function planGoal(goal, {
     humanGovernance,
     adaptation: {
        ...adaptive,
+       primarySurface: resolvedSurface,
+       surfaces: [...new Set([...(adaptive.surfaces ?? []).filter(item => !['chat','code','research'].includes(item)), resolvedSurface])],
        scale,
        unifiedWorkContext,
        learning: {
