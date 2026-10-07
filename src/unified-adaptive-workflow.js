@@ -201,12 +201,12 @@ export function buildUnifiedAdaptiveWorkflow({
     peopleDecision: s.peopleDecision === true
   });
   const a = acceptanceFrom(s, acceptance, p);
-  const operatingSurface = ['code', 'research', 'design'].includes(text(surface))
-    ? text(surface)
-    : text(s.surface) === 'code' ? 'code'
-      : text(s.surface) === 'research' ? 'research'
-        : text(s.surface) === 'design' ? 'design'
-          : 'normal-chat';
+  const requestedSurface = text(surface) || text(s.surface);
+  const operatingSurface = requestedSurface === 'code'
+    ? 'code'
+    : requestedSurface === 'research'
+      ? 'research'
+      : 'normal-chat';
   const realWorld = s.realWorld ?? {};
   const outcomeContract = s.outcomeContract ?? buildRealWorldOutcomeContract({
     goal: s.goal,
