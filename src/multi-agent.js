@@ -372,6 +372,10 @@ export function multiAgentDecision(run, task, { mode = 'auto', progress = {} } =
       peopleDecision: run?.situation?.peopleDecision === true
     },
     profile: run?.adaptation?.effortProfile ?? {},
+    // The current server-owned workflow task is itself a justified candidate.
+    // Omitting it makes a satisfied acceptance contract look like there is
+    // nothing left to do, which incorrectly suppresses specialist panels.
+    candidates: task?.id ? [{ id: task.id, type: task.type }] : [],
     acceptance: buildAcceptanceContract({
       goal: run?.goal,
       criteria: run?.situation?.successCriteria ?? [],
