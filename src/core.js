@@ -267,7 +267,7 @@ function directTasks(analysis) {
       ...(declined ? { declined: true, category: analysis.ethics.category, topic: analysis.ethics.topic ?? null } : {}),
       ...(analysis.crisis ? { crisis: true, crisisKind: analysis.flags?.crisisKind ?? 'self-harm' } : {}),
       ...(conversational ? { conversational: true } : {}),
-      verificationPending: !conversational
+      ...(!conversational && !declined && !analysis.crisis ? { verificationPending: true } : {})
     }
   );
   // Direct work still uses the same server-owned graph. Only the first
