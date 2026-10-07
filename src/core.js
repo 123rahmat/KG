@@ -688,11 +688,20 @@ export function planGoal(goal, {
   // server-owned step lifecycle. Only an unscoped conversational request is
   // allowed to take the lightweight direct path.
   const workActions = new Set(['investigate', 'create', 'transform', 'execute', 'model', 'invent', 'discover']);
+  const lightweightAttachmentWork = surfaceBoundary.surface === 'normal-chat'
+    && !surfaceBoundary.redirect
+    && project == null
+    && analysis.flags?.code !== true
+    && analysis.flags?.research !== true
+    && analysis.investigationNeeded !== true
+    && analysis.situation?.externalData?.hasExternalDataNeed !== true
+    && attachments.length > 0
+    && attachments.length <= 6;
   const hasRealWork = (analysis.goalModel?.actions ?? []).some(action => workActions.has(action))
-    || attachments.length > 0
     || files.length > 0
-    || project != null;
-  const directConversation = normalChatBounded && !hasRealWork;
+    || project != null
+    || (attachments.length > 0 && !lightweightAttachmentWork);
+  const directConversation = normalChatBounded && (!hasRealWork || lightweightAttachmentWork);
   const directMath = normalChatBounded
     && LIGHTWEIGHT_MATH.test(value)
     && analysis.flags?.code !== true
