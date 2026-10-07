@@ -30,6 +30,7 @@ const fetchImpl = async (url, options) => {
   const body = JSON.parse(options.body);
   const userJson = () => {
     const users = (Array.isArray(body.messages) ? body.messages : []).filter(message => message.role === 'user').reverse();
+    let fallback = {};
     for (const message of users) {
       const raw = typeof message.content === 'string'
         ? message.content
@@ -37,10 +38,14 @@ const fetchImpl = async (url, options) => {
       if (!raw) continue;
       try {
         const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') return parsed;
+        if (!parsed || typeof parsed !== 'object') continue;
+        // Tool results can also be JSON user messages. The execution task
+        // envelope is the authoritative request and always carries task/goal.
+        if (parsed.task || parsed.goal) return parsed;
+        if (!Object.keys(fallback).length) fallback = parsed;
       } catch {}
     }
-    return {};
+    return fallback;
   };
   const request = userJson();
   const reply = t => jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text: t }], usage: { input_tokens: 50, output_tokens: 20 } });
