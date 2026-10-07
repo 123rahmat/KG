@@ -125,7 +125,7 @@ export function geminiFromStandIn(standIn) {
 }
 
 
-export async function withServer(run, { env = {}, fetchImpl } = {}) {
+export async function withServer(run, { env = {}, fetchImpl, nativeVertex = false } = {}) {
   const provider = String(env.AI_PROVIDER ?? '').toLowerCase();
   const vertexNative = provider === 'google' && Boolean(env.GOOGLE_CLOUD_PROJECT || env.VERTEX_PROJECT);
   if (provider && !vertexNative) {
@@ -135,8 +135,11 @@ export async function withServer(run, { env = {}, fetchImpl } = {}) {
       ...VERTEX_TEST_DEFAULTS,
       AI_MODEL: /^gemini-/.test(requestedModel) ? requestedModel : VERTEX_TEST_DEFAULTS.AI_MODEL
     };
-    if (fetchImpl) fetchImpl = geminiFromStandIn(fetchImpl);
   }
+  // Most integration tests use a provider-neutral stand-in. Always translate
+  // the real Vertex request/response contract at this boundary unless a test
+  // explicitly opts into inspecting raw Vertex transport.
+  if (fetchImpl && !nativeVertex) fetchImpl = geminiFromStandIn(fetchImpl);
 
   const name = `pro_test_${crypto.randomBytes(6).toString('hex')}`;
   // Requests are served by a non-superuser runtime role hardened exactly as
