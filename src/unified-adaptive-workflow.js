@@ -419,7 +419,14 @@ export function completionGate({
   // pass again because the pre-verification acceptance projection has not yet
   // been persisted as satisfied. Deliver/finalization still uses the persisted
   // acceptance contract.
-  const verifiedBoundarySatisfied = taskType === 'verify' && verificationPassed;
+  // A normalized verify pass satisfies the acceptance criteria at the verify
+  // boundary and remains authoritative for the following delivery boundary.
+  // Authorization and real-world outcome controls are still evaluated below.
+  // Without this persistence, already-verified work can be stranded because
+  // the pre-verification acceptance projection still contains historical
+  // evidence/criteria gaps.
+  const verifiedBoundarySatisfied = (taskType === 'verify' && verificationPassed)
+    || (taskType === 'deliver' && acceptance.verificationSatisfied === true);
   const gaps = [
     ...(finalizationGate && acceptanceHasExplicitGate && !verifiedBoundarySatisfied
       ? (Array.isArray(acceptance.gaps) ? acceptance.gaps : [])
