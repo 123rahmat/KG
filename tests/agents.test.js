@@ -96,7 +96,7 @@ function scenario(env, { reviewerVerdict }) {
     const finished = await call('GET', `/api/runs/${run.id}`, auth);
     outcome.verify = finished.body.tasks?.find(task => task.type === 'verify');
   }, {
-    env: { AI_PROVIDER: 'anthropic', AI_MODEL: 'claude-opus-5-5', AI_API_KEY: 'test-key', ...env },
+    env: { AI_PROVIDER: 'fixture', AI_MODEL: 'fixture-model', ...env },
     fetchImpl: async (_url, options) => {
       const body = JSON.parse(options.body);
       const system = typeof body.system === 'string' ? body.system : '';
