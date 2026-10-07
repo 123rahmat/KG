@@ -29,9 +29,14 @@ test('adaptive progress remains visible and honest during live work', () => {
   assert.equal(workPresentation(pending).percent, null, 'an empty requirement model never claims 100%');
   assert.equal(workPresentation(pending, { online: false }).disconnected, true);
   assert.equal(workPresentation(pending, { online: false }).live, false);
+  assert.equal(workPresentation(pending, { stopping: true }).live, false);
+  assert.equal(workPresentation(pending, { stopping: true }).label, 'Stopping safely');
+  assert.equal(workPresentation(pending, { stopping: true, online: false }).label, 'Stop queued');
   assert.equal(workPresentation({ ...pending, state: 'failed' }).live, false);
   assert.doesNotMatch(css, /work-progress-meter::after/);
   assert.match(css, /\.work-background-strip/);
+  assert.match(read('adaptive-workspace.js'), /Adaptive runtime activity/);
+  assert.match(read('adaptive-workspace.js'), /Work budget ·/);
   assert.match(css, /\.work-permission-strip/);
   assert.match(css, /\.composer-work-status/);
   assert.match(css, /send\[data-mode="stop"\]/);

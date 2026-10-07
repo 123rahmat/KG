@@ -7,6 +7,8 @@ test('simple work takes the fast path', () => {
   assert.equal(s.strategy, 'fast-path');
   assert.equal(s.reasoning, 'low');
   assert.equal(s.parallelizeIndependentWork, false);
+  assert.equal(s.runtimeControl.mode, 'efficient');
+  assert.equal(s.runtimeControl.modelPolicy, 'efficient-preferred');
 });
 
 test('independent healthy work can parallelize without bypassing verification', () => {
@@ -25,6 +27,8 @@ test('failure and uncertainty escalate reasoning', () => {
   assert.equal(s.strategy, 'adaptive-deep');
   assert.equal(s.reasoning, 'high');
   assert.equal(s.avoidRedundantDiscovery, true);
+  assert.equal(s.runtimeControl.mode, 'deep-quality');
+  assert.equal(s.runtimeControl.cancellation, 'cooperative-at-provider-and-step-boundaries');
 });
 
 test('verified state can short-circuit redundant work but not required verification', () => {

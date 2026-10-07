@@ -107,7 +107,7 @@ function taskLabel(task) {
 }
 
 /** Presentation only: never infer overall completion from an expanding graph. */
-export function workPresentation(run, { driving = false, online = true, consent = false, manual = false } = {}) {
+export function workPresentation(run, { driving = false, online = true, consent = false, manual = false, stopping = false } = {}) {
   const tasks = Array.isArray(run?.tasks) ? run.tasks : [];
   const terminal = ['complete', 'failed', 'blocked', 'exhausted', 'iterate'].includes(run?.state);
   const current = terminal ? null : tasks.find(task => task.id === run?.next)
@@ -117,12 +117,14 @@ export function workPresentation(run, { driving = false, online = true, consent 
   const verified = check?.status === 'complete' && (verdict?.verdict === 'pass' || verdict?.status === 'pass');
   const waiting = !terminal && (run?.state === 'waiting' || consent || manual || ['clarify', 'approval'].includes(current?.type));
   const disconnected = !terminal && !online;
-  const live = !terminal && !waiting && !disconnected && (driving || current?.status === 'running' || run?.state === 'running');
+  const live = !terminal && !waiting && !disconnected && !stopping
+    && (driving || current?.status === 'running' || run?.state === 'running');
   const labels = {
     complete: verified ? 'Completed · verified' : 'Completed', failed: 'Stopped',
     blocked: 'This request cannot proceed', exhausted: 'Work limit reached', iterate: 'Result ready'
   };
-  const label = labels[run?.state] || (disconnected ? 'Connection lost'
+  const label = labels[run?.state] || (stopping ? (disconnected ? 'Stop queued' : 'Stopping safely')
+    : disconnected ? 'Connection lost'
     : consent ? 'Your permission is needed' : manual ? 'Waiting for your input'
       : current?.type === 'approval' ? 'Your approval is needed'
         : current?.type === 'clarify' ? 'Your answer is needed' : waiting ? 'Waiting for you'
@@ -133,7 +135,7 @@ export function workPresentation(run, { driving = false, online = true, consent 
   const percent = required.length
     ? Math.min(run?.requirements?.completionReady === true ? 100 : 99, Math.round(supported.length / required.length * 100)) : null;
   return {
-    label, current, live, waiting, terminal, disconnected, verified: Boolean(verified), percent,
+    label, current, live, waiting, stopping, terminal, disconnected, verified: Boolean(verified), percent,
     completed: tasks.filter(task => task.status === 'complete').length,
     skipped: tasks.filter(task => task.status === 'skipped').length,
     tone: ['failed', 'blocked', 'exhausted'].includes(run?.state) ? 'bad'
@@ -226,6 +228,29 @@ function backgroundSnapshot(run) {
   const approvals = Array.isArray(governance?.approvals) ? governance.approvals.length : 0;
   const source = state.workspaceSource ?? {};
   const workspace = activeWorkspace(run);
+  const routing = [...tasks].reverse().map(task =>
+    task?.evidence?.modelRouting
+    || task?.evidence?.result?.modelRouting
+    || task?.evidence?.segment?.modelRouting
+  ).find(Boolean) ?? null;
+  const depth = text(run?.intelligence?.reasoning?.depth || run?.adaptation?.resourcePlan?.control?.depth).toLowerCase();
+  const runtimeMode = routing?.tier === 'frontier'
+    ? 'Deep quality'
+    : routing?.tier === 'efficient'
+      ? 'Efficient path'
+      : /deep|thorough/.test(depth)
+        ? 'Deep quality'
+        : /structured|standard|focused/.test(depth) ? 'Balanced' : 'Efficient path';
+  const adaptiveBudget = run?.adaptiveBudget ?? {};
+  const ratios = Object.entries(adaptiveBudget?.budget ?? {}).flatMap(([key, maximum]) => {
+    const remaining = adaptiveBudget?.remaining?.[key];
+    const max = Number(maximum);
+    return Number.isFinite(max) && max > 0 && Number.isFinite(Number(remaining))
+      ? [Math.max(0, Math.min(1, Number(remaining) / max))]
+      : [];
+  });
+  const budgetHeadroom = ratios.length ? Math.round(Math.min(...ratios) * 100) : null;
+  const parallel = Math.max(1, Number(multi?.maxParallel ?? multi?.decision?.maxParallel ?? 1) || 1);
 
   let permission = '';
   let permissionTone = '';
@@ -246,6 +271,9 @@ function backgroundSnapshot(run) {
     toolCount: tools.size,
     activeTool,
     executionTarget,
+    runtimeMode,
+    parallel,
+    budgetHeadroom,
     permission,
     permissionTone
   };
@@ -257,17 +285,21 @@ export function renderWorkStatus(run) {
   const view = workPresentation(run, {
     driving: state.driving === run.id || state.drivingRuns?.has(run.id) || state.busyRuns?.has(run.id),
     online: state.network?.online !== false && state.network?.reachable !== false,
-    consent: state.consentNeeded?.has(run.id), manual: state.manualOpen?.has(run.id)
+    consent: state.consentNeeded?.has(run.id), manual: state.manualOpen?.has(run.id),
+    stopping: state.stoppingRun === run.id
   });
   const snapshot = progressSnapshot(run);
   const background = backgroundSnapshot(run);
   const backgroundItems = [
+    !view.terminal ? 'Adaptive · ' + background.runtimeMode : '',
     background.activeAgents.length && view.live
       ? background.activeAgents.length + ' specialist' + (background.activeAgents.length === 1 ? '' : 's') + ' working'
       : background.completedAgents ? background.completedAgents + ' specialist' + (background.completedAgents === 1 ? '' : 's') + ' contributed' : '',
+    background.parallel > 1 && view.live ? 'Parallel · ' + background.parallel + ' lanes max' : '',
+    background.budgetHeadroom !== null && !view.terminal ? 'Work budget · ' + background.budgetHeadroom + '% headroom' : '',
     background.toolCount ? background.toolCount + ' tool' + (background.toolCount === 1 ? '' : 's') + ' in scope' : '',
     background.executionTarget ? 'Execution · ' + background.executionTarget : ''
-  ].filter(Boolean);
+  ].filter(Boolean).slice(0, 5);
   const current = view.current;
   const metrics = [
     snapshot.files ? ['Files in context', String(snapshot.files)] : null,
@@ -292,13 +324,15 @@ export function renderWorkStatus(run) {
         element('span', { class: 'work-status-dot' + (view.live ? ' active' : ''), 'aria-hidden': 'true' }),
         element('div', { class: 'work-status-copy' }, [
           element('strong', { text: view.label }),
-          element('span', { class: 'small muted', text: view.disconnected
-            ? 'The live view will reconnect automatically. Server work may still be running.'
-            : view.terminal ? view.completed + ' step' + (view.completed === 1 ? '' : 's') + ' completed' + (view.skipped ? ' · ' + view.skipped + ' skipped' : '')
-              : current?.purpose && text(current.purpose) !== view.label ? current.purpose : 'Your work continues in this conversation' })
+          element('span', { class: 'small muted', text: view.stopping
+            ? (view.disconnected ? 'The stop request will be sent when the connection returns.' : 'No new step will start while the server confirms cancellation.')
+            : view.disconnected
+              ? 'The live view will reconnect automatically. Server work may still be running.'
+              : view.terminal ? view.completed + ' step' + (view.completed === 1 ? '' : 's') + ' completed' + (view.skipped ? ' · ' + view.skipped + ' skipped' : '')
+                : current?.purpose && text(current.purpose) !== view.label ? current.purpose : 'Your work continues in this conversation' })
         ])
       ]),
-      element('span', { class: 'small work-status-state', text: view.live ? 'Working' : view.waiting ? 'Action needed' : view.terminal ? 'Saved' : view.disconnected ? 'Offline' : 'Ready' })
+      element('span', { class: 'small work-status-state', text: view.stopping ? 'Stopping' : view.live ? 'Working' : view.waiting ? 'Action needed' : view.terminal ? 'Saved' : view.disconnected ? 'Offline' : 'Ready' })
     ]),
     background.permission ? element('div', { class: 'work-permission-strip ' + background.permissionTone }, [
       element('span', { class: 'work-permission-mark', 'aria-hidden': 'true' }),
@@ -308,7 +342,7 @@ export function renderWorkStatus(run) {
     meter ? element('div', { class: 'work-progress-caption small muted', text: view.percent + '% of required outcomes supported by evidence' }) : null,
     !view.terminal && !meter ? element('div', { class: 'work-progress-caption small muted', text: view.completed ? view.completed + ' step' + (view.completed === 1 ? '' : 's') + ' completed · next action adapts as needed' : 'Only the work your request needs' }) : null,
     metrics.length ? element('div', { class: 'work-evidence-chips' }, metrics.map(([label, value]) => element('span', { class: 'work-evidence-chip', text: value + ' ' + label.toLowerCase() }))) : null,
-    backgroundItems.length ? element('div', { class: 'work-background-strip', 'aria-label': 'Background activity' }, [
+    backgroundItems.length ? element('div', { class: 'work-background-strip', 'aria-label': 'Adaptive runtime activity' }, [
       ...backgroundItems.map(item => element('span', { class: 'work-background-chip small', text: item }))
     ]) : null,
     snapshot.conflicts || snapshot.gaps ? element('div', { class: 'work-progress-alerts' }, [
@@ -443,7 +477,8 @@ function workspaceWorkView(run) {
   return workPresentation(run, {
     driving: state.driving === run?.id || state.drivingRuns?.has(run?.id) || state.busyRuns?.has(run?.id),
     online: state.network?.online !== false && state.network?.reachable !== false,
-    consent: state.consentNeeded?.has(run?.id), manual: state.manualOpen?.has(run?.id)
+    consent: state.consentNeeded?.has(run?.id), manual: state.manualOpen?.has(run?.id),
+    stopping: state.stoppingRun === run?.id
   });
 }
 

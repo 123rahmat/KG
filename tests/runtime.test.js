@@ -86,3 +86,19 @@ test('retry-after is parsed without provider-specific assumptions', () => {
   assert.equal(retryAfterMs(new Headers({ 'retry-after': '2' })), 2000);
   assert.equal(retryAfterMs(new Headers()), null);
 });
+
+
+test('adaptive routing chooses the efficient model for low-pressure chat and explains the choice', async () => {
+  let seenUrl = '';
+  const answer = await callModel([{ role: 'user', content: 'Summarize this short note.' }], {
+    config: base,
+    effort: 'low',
+    adaptiveContext: { complexity: 0.1, uncertainty: 0, risk: 'ordinary' },
+    retries: 0,
+    fetchImpl: async (url) => { seenUrl = url; return response('short summary'); }
+  });
+  assert.match(seenUrl, /gemini-3\.5-flash-lite:generateContent$/);
+  assert.equal(answer.model, 'gemini-3.5-flash-lite');
+  assert.equal(answer.modelRouting.tier, 'efficient');
+  assert.equal(answer.modelRouting.reason, 'minimum-sufficient-model');
+});

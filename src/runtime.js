@@ -1,5 +1,5 @@
 /** Gemini-family inference on Google Vertex AI plus governed execution boundaries. */
-import { DEFAULT_MODEL, LIGHT_MODEL, modelForTask, resolveConfiguredModel } from './model-catalog.js';
+import { DEFAULT_MODEL, LIGHT_MODEL, modelDecisionForTask, resolveConfiguredModel } from './model-catalog.js';
 import { AdaptiveProviderGovernor } from './adaptive-provider-governor.js';
 import { decideWebSearch } from './adaptive-execution-policy.js';
 
@@ -293,7 +293,7 @@ export async function callModel(messages, {
 
   const requested = resolveConfiguredModel(config, modelId || config.ai.modelId || null);
   if (!requested) return null;
-  const adaptiveModel = modelForTask({
+  const routingDecision = modelDecisionForTask({
     taskType: usageSource,
     effort,
     adaptiveContext,
@@ -301,7 +301,7 @@ export async function callModel(messages, {
   });
   const selected = modelId
     ? requested
-    : (resolveConfiguredModel(config, `google:${adaptiveModel}`) || requested);
+    : (resolveConfiguredModel(config, `google:${routingDecision.model}`) || requested);
 
   const modelKey = `google:${selected.model}`;
   providerGovernor.configure(modelKey, config.providerConcurrency ?? {});
@@ -428,6 +428,12 @@ export async function callModel(messages, {
     usage: segment.usage,
     provider: 'google',
     model: selected.model,
+    modelRouting: {
+      tier: routingDecision.tier,
+      reason: modelId ? 'explicit-model' : routingDecision.reason,
+      qualityProtected: routingDecision.qualityProtected,
+      budgetConstrained: routingDecision.budgetConstrained
+    },
     incomplete: segment.incomplete,
     usageRecorded: Boolean(!reservation),
     webSearchPolicy: webPolicy,

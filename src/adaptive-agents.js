@@ -1,4 +1,4 @@
-import { DEFAULT_MODEL } from './model-catalog.js';
+import { DEFAULT_MODEL, LIGHT_MODEL } from './model-catalog.js';
 
 /**
  * Adaptive multi-agent coordination.
@@ -18,7 +18,8 @@ import { DEFAULT_MODEL } from './model-catalog.js';
  */
 
 const text = value => String(value ?? '').trim();
-const AGENT_MODEL = `google:${DEFAULT_MODEL}`;
+const frontierAgentModel = `google:${DEFAULT_MODEL}`;
+const efficientAgentModel = `google:${LIGHT_MODEL}`;
 const list = value => [...new Set((Array.isArray(value) ? value : [])
   .map(item => text(typeof item === 'string' ? item : item?.id ?? item?.name))
   .filter(Boolean))];
@@ -99,6 +100,26 @@ const ACTION_ROLE = Object.freeze({
 
 function riskRank(value) {
   return ({ ordinary: 0, medium: 1, high: 2, 'high-impact': 3, physical: 3, crisis: 4 }[text(value).toLowerCase()] ?? 0);
+}
+
+export function agentModelFor({
+  workspace = 'normal-chat',
+  role = 'lead',
+  complexity = 0,
+  uncertainty = 0,
+  risk = 'ordinary',
+  retrying = false
+} = {}) {
+  const workspaceId = text(workspace).toLowerCase() || 'normal-chat';
+  const agentRole = text(role).toLowerCase() || 'lead';
+  const frontierRole = ['research', 'builder', 'tester', 'reviewer', 'integrator'].includes(agentRole);
+  const qualityPressure = workspaceId !== 'normal-chat'
+    || frontierRole
+    || riskRank(risk) >= 2
+    || retrying
+    || Number(complexity) >= 0.65
+    || Number(uncertainty) >= 0.55;
+  return qualityPressure ? frontierAgentModel : efficientAgentModel;
 }
 
 function uniqueTasks(tasks) {
@@ -235,7 +256,12 @@ export function decideAgentTopology({
     return {
       version: 1, mode: 'single', agentCount: 1, maxParallel: 1,
       reason: 'single-use-work-does-not-justify-agent-overhead',
-      agents: [{ id: 'lead-1', role: 'lead', taskIds: countable ? [work[0].id] : [], model: AGENT_MODEL }],
+      agents: [{
+        id: 'lead-1',
+        role: 'lead',
+        taskIds: countable ? [work[0].id] : [],
+        model: agentModelFor({ workspace: workspaceId, role: 'lead', complexity, uncertainty, risk, retrying })
+      }],
       waves: countable ? [[ 'lead-1' ]] : [],
       integrationRequired: false,
       workspace: workspaceId,
@@ -254,7 +280,8 @@ export function decideAgentTopology({
     const id = `${role}-${agents.filter(a => a.role === role).length + 1}`;
     const agent = {
       id, role, taskIds: [task.id], capabilities: ROLE_CAPABILITIES[role] ?? ['reasoning'],
-      model: AGENT_MODEL, authority: 'propose-and-execute-within-server-granted-scope'
+      model: agentModelFor({ workspace: workspaceId, role, complexity, uncertainty, risk, retrying }),
+      authority: 'propose-and-execute-within-server-granted-scope'
     };
     agents.push(agent);
     taskAgent.set(task.id, id);
@@ -285,12 +312,13 @@ export function decideAgentTopology({
     integrationRequired: agents.length > 1,
     integration: agents.length > 1 ? {
       role: 'integrator',
-      model: AGENT_MODEL,
+      model: agentModelFor({ workspace: workspaceId, role: 'integrator', complexity, uncertainty, risk, retrying }),
       requiresAllInputs: false,
       rule: 'Integrate only completed, authorized, revision-compatible agent outputs; unresolved conflicts become blockers.'
     } : null,
     workspace: workspaceId,
     workspacePolicy,
+    modelPolicy: 'adaptive-per-role',
     humanGovernance: humanGovernance ?? null,
     collaboration: {
       protocol: 'typed-findings',

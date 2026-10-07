@@ -60,16 +60,72 @@ export function modelTier(model = DEFAULT_MODEL) {
   return KNOWN[model]?.tier ?? KNOWN[DEFAULT_MODEL].tier;
 }
 
-export function modelForTask({ taskType = '', effort = '', adaptiveContext = {}, configured = [] } = {}) {
-  const available = new Set((configured.length ? configured : [LIGHT_MODEL, DEFAULT_MODEL]).map(value => normalizeModelId(value).replace(/^google:/, '') || String(value)));
-  const heavy = ['code', 'coding', 'research', 'investigate', 'verify', 'agent', 'multi-agent'].some(kind => String(taskType).toLowerCase().includes(kind))
+const clamp01 = value => Math.max(0, Math.min(1, Number(value) || 0));
+
+export function modelDecisionForTask({ taskType = '', effort = '', adaptiveContext = {}, configured = [] } = {}) {
+  const available = new Set((configured.length ? configured : [LIGHT_MODEL, DEFAULT_MODEL])
+    .map(value => normalizeModelId(value).replace(/^google:/, '') || String(value)));
+  const task = String(taskType).toLowerCase();
+  const requestedEffort = String(effort).toLowerCase();
+  const risk = String(adaptiveContext?.risk ?? '').toLowerCase();
+  const complexity = clamp01(adaptiveContext?.complexity);
+  const uncertainty = clamp01(adaptiveContext?.uncertainty);
+  const qualityGap = clamp01(adaptiveContext?.qualityGap ?? adaptiveContext?.verificationGap);
+  const failures = Math.max(0, Number(adaptiveContext?.failureCount ?? adaptiveContext?.failedAttempts) || 0);
+  const remainingBudgetRatio = adaptiveContext?.remainingBudgetRatio == null
+    ? 1
+    : clamp01(adaptiveContext.remainingBudgetRatio);
+  const specialized = ['code', 'coding', 'research', 'investigate', 'verify', 'review', 'agent', 'multi-agent']
+    .some(kind => task.includes(kind));
+  const highRisk = ['high', 'critical', 'high-impact', 'physical', 'regulated'].includes(risk);
+  const hardQualityNeed = specialized
     || adaptiveContext?.research === true
     || adaptiveContext?.code === true
-    || ['medium', 'high', 'xhigh'].includes(String(effort).toLowerCase())
-    || ['high', 'critical'].includes(String(adaptiveContext?.risk).toLowerCase());
-  if (heavy && available.has(DEFAULT_MODEL)) return DEFAULT_MODEL;
-  if (available.has(LIGHT_MODEL)) return LIGHT_MODEL;
-  return DEFAULT_MODEL;
+    || ['high', 'xhigh'].includes(requestedEffort)
+    || highRisk
+    || failures > 0
+    || qualityGap >= 0.35;
+  const mediumNeed = requestedEffort === 'medium'
+    && (complexity >= (remainingBudgetRatio < 0.2 ? 0.7 : 0.45)
+      || uncertainty >= 0.5
+      || qualityGap >= 0.2);
+  const frontier = hardQualityNeed || mediumNeed;
+
+  if (frontier && available.has(DEFAULT_MODEL)) {
+    const reason = specialized ? 'specialized-task'
+      : highRisk ? 'risk-requires-quality'
+        : failures > 0 ? 'recovery-after-failure'
+          : qualityGap >= 0.35 ? 'verification-gap'
+            : ['high', 'xhigh'].includes(requestedEffort) ? 'high-reasoning'
+              : 'adaptive-complexity';
+    return {
+      model: DEFAULT_MODEL,
+      tier: 'frontier',
+      reason,
+      qualityProtected: true,
+      budgetConstrained: remainingBudgetRatio < 0.2
+    };
+  }
+  if (available.has(LIGHT_MODEL)) {
+    return {
+      model: LIGHT_MODEL,
+      tier: 'efficient',
+      reason: frontier ? 'frontier-unavailable' : 'minimum-sufficient-model',
+      qualityProtected: !frontier,
+      budgetConstrained: remainingBudgetRatio < 0.2
+    };
+  }
+  return {
+    model: DEFAULT_MODEL,
+    tier: 'frontier',
+    reason: 'only-configured-model',
+    qualityProtected: true,
+    budgetConstrained: remainingBudgetRatio < 0.2
+  };
+}
+
+export function modelForTask(options = {}) {
+  return modelDecisionForTask(options).model;
 }
 
 export function modelIdsForPlan() {

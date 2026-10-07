@@ -73,8 +73,14 @@ export class AdaptiveProviderGovernor {
     return values.map(state => ({
       key: state.key,
       concurrency: state.concurrency,
+      maxConcurrency: state.maxConcurrency,
       active: state.active,
       queued: state.queued.length,
+      utilization: state.concurrency ? Number((state.active / state.concurrency).toFixed(3)) : 0,
+      queuePressure: Number((state.queued.length / Math.max(1, state.concurrency)).toFixed(3)),
+      capacityState: state.queued.length ? 'queued'
+        : state.active >= state.concurrency ? 'busy'
+          : state.active ? 'active' : 'idle',
       successStreak: state.successStreak,
       failureStreak: state.failureStreak,
       lastLatencyMs: state.lastLatencyMs,

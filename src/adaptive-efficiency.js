@@ -157,6 +157,16 @@ export function adaptiveExecutionStrategy({
 
   const stop = verificationSatisfied
     || (!verificationRequired && !deepReasoning && !previousFailure && p < 0.30);
+  const runtimeControl = {
+    mode: deepReasoning ? 'deep-quality' : targetedReasoning ? 'balanced' : 'efficient',
+    modelPolicy: deepReasoning ? 'frontier-preferred' : targetedReasoning ? 'adaptive' : 'efficient-preferred',
+    parallelism: parallelize ? 'bounded-independent-work' : 'serial-by-default',
+    qualityFloor: verificationRequired || highRisk ? 'verified-before-completion' : 'sufficient-evidence',
+    budgetMode: budget < 0.25 ? 'conserve' : 'normal',
+    cancellation: 'cooperative-at-provider-and-step-boundaries',
+    escalateOn: ['quality-gap', 'uncertainty', 'failure', 'high-risk', 'verification-gap'],
+    deescalateOn: ['verified-success', 'stable-evidence', 'budget-pressure-without-quality-risk']
+  };
 
   return {
     strategy: deepReasoning ? 'adaptive-deep' : targetedReasoning ? 'adaptive-targeted' : 'fast-path',
@@ -168,6 +178,7 @@ export function adaptiveExecutionStrategy({
     avoidRedundantDiscovery: reuseVerifiedState || previousFailure || !deepReasoning,
     verification,
     stopWhenSatisfied: stop,
+    runtimeControl,
     budgetPressure: budget < 0.25 ? 'conserve' : 'normal',
     principle: 'Optimize critical-path time without trading away required evidence or verification.'
   };

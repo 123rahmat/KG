@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { executeAdaptiveAgentPlan, decideAgentTopology, adaptAgentTopology } from '../src/adaptive-agents.js';
+import { executeAdaptiveAgentPlan, decideAgentTopology, adaptAgentTopology, agentModelFor } from '../src/adaptive-agents.js';
 
 test('serialized and retrying topologies retain every selected task', () => {
   for (const options of [{ risk: 'high-impact' }, { retrying: true }]) {
@@ -138,4 +138,23 @@ test('adaptive executor converts integration exceptions into an explicit failed 
   assert.equal(result.integration.status, 'failed');
   assert.equal(result.integration.reason, 'integration unavailable');
   assert.equal(result.failedAgents.includes('integrator'), true);
+});
+
+
+test('agent model policy spends frontier capacity only where quality pressure justifies it', () => {
+  assert.equal(agentModelFor({ workspace: 'normal-chat', role: 'lead', complexity: 0.2 }), 'google:gemini-3.5-flash-lite');
+  assert.equal(agentModelFor({ workspace: 'normal-chat', role: 'reviewer', complexity: 0.2 }), 'google:gemini-3.8-flash');
+  assert.equal(agentModelFor({ workspace: 'code', role: 'lead', complexity: 0.2 }), 'google:gemini-3.8-flash');
+  assert.equal(agentModelFor({ workspace: 'normal-chat', role: 'lead', risk: 'high-impact' }), 'google:gemini-3.8-flash');
+
+  const plan = decideAgentTopology({
+    workspace: 'normal-chat',
+    tasks: [{ id: 'a', type: 'analyze' }, { id: 'b', type: 'verify' }],
+    scale: 'medium',
+    complexity: 0.4,
+    budget: { maxAgents: 2, maxParallelAgents: 2 }
+  });
+  assert.equal(plan.modelPolicy, 'adaptive-per-role');
+  assert.equal(plan.agents.find(agent => agent.role === 'analyst')?.model, 'google:gemini-3.5-flash-lite');
+  assert.equal(plan.agents.find(agent => agent.role === 'reviewer')?.model, 'google:gemini-3.8-flash');
 });

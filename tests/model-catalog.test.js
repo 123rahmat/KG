@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DEFAULT_MODEL, LIGHT_MODEL, MODEL_IDS, buildFallbackChain, discoverModels,
-  modelCatalog, modelForTask, normalizeModelId, publicModelCatalog, resolveConfiguredModel
+  modelCatalog, modelDecisionForTask, modelForTask, normalizeModelId, publicModelCatalog, resolveConfiguredModel
 } from '../src/model-catalog.js';
 import { loadConfig } from '../src/config.js';
 
@@ -47,6 +47,10 @@ test('adaptive task selection uses Flash-Lite for light work and 3.8 Flash for d
   assert.equal(modelForTask({ taskType: 'chat', effort: 'low' }), LIGHT_MODEL);
   assert.equal(modelForTask({ taskType: 'code', effort: 'high' }), DEFAULT_MODEL);
   assert.equal(modelForTask({ taskType: 'research', effort: 'medium' }), DEFAULT_MODEL);
+  assert.equal(modelForTask({ taskType: 'chat', effort: 'medium', adaptiveContext: { complexity: 0.2 } }), LIGHT_MODEL);
+  assert.equal(modelForTask({ taskType: 'chat', effort: 'medium', adaptiveContext: { uncertainty: 0.7 } }), DEFAULT_MODEL);
+  assert.equal(modelForTask({ taskType: 'chat', effort: 'low', adaptiveContext: { failureCount: 1 } }), DEFAULT_MODEL);
+  assert.equal(modelDecisionForTask({ taskType: 'chat', effort: 'low' }).reason, 'minimum-sufficient-model');
 });
 
 test('fallback stays inside the Gemini family and discovery never adds providers', async () => {
