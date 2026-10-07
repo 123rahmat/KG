@@ -409,6 +409,13 @@ export function toolsForRequirements(requirements = [], { artifacts = [], need =
   if (ids.has('response') && /\b(?:calculate|compute|work out|exact(?:ly)?|how much|how many)\b/i.test(needText)) {
     tools.push('math.evaluate');
   }
+  // Financial projections are better served by the deterministic first-party
+  // projection tool than by free-form arithmetic. Expose it only when the
+  // requested deliverable is clearly a business/finance projection.
+  if (/\b(?:financial|finance|business|bakery|startup|start-up|revenue|profit|cash ?flow|break-even|projection|forecast|budget)\b/i.test(needText)
+      && /\b(?:project|projection|forecast|model|estimate|break-even|months?|revenue|profit|costs?)\b/i.test(needText)) {
+    tools.push('finance.project');
+  }
   if ((Array.isArray(artifacts) ? artifacts : []).some(value => /\.(?:xlsx|csv)$/i.test(text(value)))) tools.push('data.analyze');
   return [...new Set(tools)];
 }
