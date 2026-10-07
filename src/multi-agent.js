@@ -2267,6 +2267,11 @@ export async function runAdaptiveAgentPanel({
       budgetParallelLimit()
     )
   );
+  // Parallel admission is safe only when spend can be reserved atomically.
+  // A plain canSpend() check can race: two jobs may both see the same remaining
+  // budget before either has consumed it. Without a usage reservation gate,
+  // start serially and reassess after each observed result.
+  if (!usageGate && run?.maxTokens == null) effectiveMaxParallel = 1;
 
   while (true) {
     allocationRounds += 1;
