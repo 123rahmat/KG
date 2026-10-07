@@ -410,9 +410,16 @@ export function completionGate({
   const finalizationGate = taskType === 'verify'
     || taskType === 'deliver'
     || acceptance.finalizationRequired === true;
+  // The real-world outcome gate is for proving an external/world-state
+  // transition, not for re-verifying ordinary informational or advisory work.
+  // Normal acceptance + verification already covers answers, analysis,
+  // decision support, memory/tool results, code review, and design/invention
+  // artifacts. World-state proof remains mandatory when observation of an
+  // external or physical effect is actually required.
   const outcomeGate = finalizationGate && outcomeContract.realWorldTask === true && (
-    outcomeContract.controls?.observationRequired === true
-    || outcomeContract.controls?.verificationRequired === true
+    outcomeContract.externalEffect === true
+    || outcomeContract.physical === true
+    || outcomeContract.controls?.observationRequired === true
   );
   // A verify verdict is already normalized against every required success
   // criterion before it reaches this gate. Do not reject that same verified
