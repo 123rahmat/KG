@@ -43,14 +43,14 @@ test('the forged-graph attack cannot mark work verified', () =>
       }
     });
 
-    assert.equal(forged.status, 409);
-    assert.equal(forged.body.code, 'unmet-dependencies');
-    // A plain question is answered directly; verify still depends on the answer.
-    assert.deepEqual(forged.body.detail.unmet, ['respond']);
+    assert.equal(forged.status, 404);
+    assert.equal(forged.body.code, 'unknown-task');
 
-    // And the stored run is untouched by the attempt.
+    // And the stored run is untouched by the attempt. Future verification is
+    // not materialized until the server completes and reassesses the response.
     const after = await call('GET', `/api/runs/${run.id}`, { token, workspace });
-    assert.equal(after.body.tasks.find(task => task.id === 'verify').status, 'pending');
+    assert.equal(after.body.tasks.some(task => task.id === 'verify'), false);
+    assert.equal(after.body.tasks.find(task => task.id === 'respond').status, 'pending');
     assert.equal(after.body.state, 'respond');
   }));
 
