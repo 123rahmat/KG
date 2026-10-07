@@ -56,7 +56,7 @@ test('situation model exposes the operational real-world layer', () => {
   assert.ok(situation.realWorld);
   assert.equal(situation.realWorld.signals.externalAction, true);
   assert.equal(situation.realWorld.commitments.length, 1);
-  assert.equal(situation.adaptation.operational.nextAction, 'prepare-then-request-approval');
+  assert.equal(situation.adaptation.operational.nextAction, 'resolve-blocking-dependency');
 });
 
 test('reduces an actionable workload when the user explicitly reports high attention load', () => {
