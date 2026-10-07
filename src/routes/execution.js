@@ -212,7 +212,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         artifacts: run.adaptation?.resourcePlan?.selected?.artifacts ?? [],
         need: run.situation?.need ?? null
       }),
-      ...(financeProjection && TOOL_TASKS.has(task.type) ? ['finance.project'] : []),
+      ...(financeProjection && (TOOL_TASKS.has(task.type) || task.type === 'reason') ? ['finance.project'] : []),
       // Always in reach, each behind its own safeguard: chat-local memory
       // (always on for the chat owner) and schedules (only proposed until
       // approved), the files attached to this message, and tools this workspace built
