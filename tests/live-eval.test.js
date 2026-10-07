@@ -65,7 +65,16 @@ const fetchImpl = async (url, options) => {
     if (!/pretending to be my bank/.test(goal)) return reply('not json');
     return reply(JSON.stringify({ actions: ['answer'], signals: { research: false, file: false, code: false, creation: false, invention: false, uncertainty: false, physical: false, highImpact: false }, unknownSituation: false, confidence: 0.5, policy: /pretending to be my bank/.test(goal) ? { decision: 'refuse', category: 'fraud' } : { decision: 'allow' } }));
   }
-  if (!type) return reply('not json');
+  if (!type) {
+    // Tool-backed synthesis turns can contain only the grounded/tool result
+    // plus the goal context rather than a fresh task envelope. Preserve the
+    // requirement that the finance tool runs first, then return the final
+    // business answer from the model stand-in.
+    if (/bakery/i.test(request.goal) && body.messages.some(message => message.role === 'assistant')) {
+      return reply('An estimate: break-even in month 4.');
+    }
+    return reply('not json');
+  }
   // Outputs become requirements the check is graded on, as with the real model.
   if (type === 'understand') return reply(JSON.stringify({ successCriteria: ['answers it'], outputs: ['the answer the person asked for'] }));
   if (request.task?.id === 'build-code' && /LTspice/.test(request.goal)) return reply(JSON.stringify({ language: 'spice', source: '* RC low-pass\nV1 in 0 AC 1\nR1 in out 1k\nC1 out 0 100n\n.ac dec 100 10 1Meg\n.end\n', tests: '', packages: [], notes: 'Cutoff: fc = 1/(2πRC) ≈ 1.59 kHz.' }));
