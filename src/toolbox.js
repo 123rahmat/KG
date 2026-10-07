@@ -550,7 +550,10 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
     // search cycle instead of converging on the requested answer.
     const answer = await callModel(conversation, {
       config, fetchImpl, ...options,
-      ...(round > 0 ? { webSearch: false } : {})
+      // Governed tool loops must never be short-circuited by provider-side
+      // grounding. Web access here happens only through the explicit toolbox,
+      // so sources, approvals, progress and verification remain auditable.
+      webSearch: false
     });
     if (!answer) return null;
     usage.inputTokens += answer.usage?.inputTokens ?? 0;
