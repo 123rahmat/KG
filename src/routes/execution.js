@@ -1428,7 +1428,24 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       : null;
     const verificationContext = grounding ? verificationBrief(run, grounding) : null;
     const attached = await attachmentTexts(scope, run, task, { focus: stepFocus(run, task) });
-    const codeIntelligenceResult = await codeIntelligenceForStep(run, task, scope).catch(() => null);
+    let codeIntelligenceResult = null;
+    try {
+      codeIntelligenceResult = await codeIntelligenceForStep(run, task, scope);
+    } catch (error) {
+      metrics?.increment('code_context_errors_total', { code: error?.code || 'error' });
+      // Never let project-aware coding silently degrade into context-free
+      // generation. That can overwrite the wrong files or hallucinate a
+      // repository state. Surface the failure as a bounded execution result.
+      if (task?.id === 'build-code' || isCodeTask(task)) {
+        return {
+          configured: true,
+          executed: false,
+          status: 'code-context-unavailable',
+          code: error?.code || 'code-context-error',
+          message: error?.message || 'The current project context could not be compiled safely.'
+        };
+      }
+    }
     const codeIntelligence = codeIntelligenceResult?.pack ?? null;
     const subsystemPlan = codeIntelligenceResult?.subsystemPlan ?? null;
     const remembered = await memoriesFor(memories, scope ?? currentDbScope(), run).catch(() => []);
