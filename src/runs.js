@@ -250,13 +250,18 @@ export class RunStore {
     // silently inheriting each other's files/state.
     const requestedProjectKey = projectContextKey(project, attachments)
       || (linkedProjectId ? 'project:' + linkedProjectId : null);
-    const previousSurface = text(
+    const normalizeWorkspaceSurface = value => {
+      const surface = text(value);
+      return surface === 'chat' ? 'normal-chat' : surface;
+    };
+    const previousSurface = normalizeWorkspaceSurface(
       previousState?.adaptation?.modeController?.surface
       || previousState?.adaptation?.unifiedAdaptiveWorkflow?.surface
       || previousState?.adaptation?.primarySurface
       || ''
     );
-    const explicitSurface = text(activeSurface);
+    const explicitSurface = normalizeWorkspaceSurface(activeSurface);
+    const inheritedSurface = explicitSurface || previousSurface;
     let projectOverlay = null;
     let projectContextSwitched = false;
     const mayInheritWorkspaceState = !previousSurface || !explicitSurface || previousSurface === explicitSurface;
@@ -278,12 +283,12 @@ export class RunStore {
       completedSteps, failedSteps, evidence, questions, dataSources, connections, connectedServices,
       commitments, dependencies, dueAt, startAt, userBehavior, capacity, availability, competingCommitments, now, creationMode,
       privacyConsent, need, adaptiveControl, verifiedConnections, workspaceType, runtimeMode,
-      activeSurface, jurisdiction, classifierHints, modelSelection, learnedSkills
+      activeSurface: inheritedSurface, jurisdiction, classifierHints, modelSelection, learnedSkills
     };
     const situation = buildSituationModel(goalText, situationContext);
     if (ethics) situation.ethics = ethics;
     const plan = planGoal(goalText, {
-      policies, activeSurface, timeZone, runtimeMode, workspaceType, jurisdiction,
+      policies, activeSurface: inheritedSurface, timeZone, runtimeMode, workspaceType, jurisdiction,
       conversation: history,
       attachments,
       executionAvailable,
