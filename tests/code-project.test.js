@@ -17,6 +17,7 @@ const geminiReply = (textValue, { groundingMetadata = undefined, finishReason = 
   }],
   usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 2, totalTokenCount: 4 }
 });
+const withVertexServer = (run, options = {}) => withServer(run, { ...options, nativeVertex: true });
 
 function modelRequest(options) {
   const body = JSON.parse(options.body);
@@ -166,7 +167,7 @@ test('a zipped package folder keeps its name: it is part of every import', () =>
 });
 
 test('a small plan that grows is no longer called small', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const { body: run } = await call('POST', '/api/runs', { ...auth, body: { goal: 'Build and run a Python script.' } });
@@ -235,7 +236,7 @@ test('a zipped project is read as its source files, without installed, generated
 test('a project attached as a zip is changed by the files the AI returns, and the sandbox runs the whole project', () => {
   const runnerRequests = [];
   const seen = [];
-  return withServer(async ({ call, seed }) => {
+  return withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const file = await call('POST', '/api/objects', {
@@ -296,7 +297,7 @@ test('in a run, the code step of a large attached project reads the files its re
   for (let index = 0; index < 40; index += 1) big[`shop/app/module${index}.py`] = `def helper_${index}():\n    return ${index}\n`.padEnd(3000, '#');
   big['shop/billing/invoice.py'] = 'def invoice_total(lines):\n    return sum(lines)\n';
   big['shop/tests/test_invoice.py'] = 'from billing.invoice import invoice_total\n';
-  return withServer(async ({ call, seed }) => {
+  return withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const file = await call('POST', '/api/objects', {
@@ -335,7 +336,7 @@ test('in a run, the code step of a large attached project reads the files its re
 
 test('code in a language the sandbox cannot run goes on untested, says why, and needs a person to certify it', () => {
   const seen = [];
-  return withServer(async ({ call, seed }) => {
+  return withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const { body: run } = await call('POST', '/api/runs', { ...auth, body: { goal: 'Write a Go program main.go that prints the 10th Fibonacci number, with tests.', privacyConsent: { modelProvider: true } } });
@@ -440,7 +441,7 @@ test('a small project is shown whole; a larger one only as far as the step needs
 
 test('a fixed version of the code is really run again, not replayed from the first run', () => {
   const executions = [];
-  return withServer(async ({ call, seed }) => {
+  return withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const { body: run } = await call('POST', '/api/runs', { ...auth, body: { goal: 'Write a Python function is_prime(n) with unit tests, and run the tests.', privacyConsent: { modelProvider: true } } });
@@ -517,7 +518,7 @@ test('a zipped Go or Rust project keeps its build files', () => {
 });
 
 test('code in a language the sandbox has no toolchain for (a SPICE netlist) goes on untested instead of failing each run', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const { body: run } = await call('POST', '/api/runs', { ...auth, body: { goal: 'Write and run a Python script that prints 55.' } });
@@ -537,7 +538,7 @@ test('code in a language the sandbox has no toolchain for (a SPICE netlist) goes
 test('a follow-up in the same chat continues the project from the version the last turn left', () => {
   const runnerRequests = [];
   const seen = [];
-  return withServer(async ({ call, seed }) => {
+  return withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const conversationId = 'chat-project-follow-up';
@@ -604,7 +605,7 @@ test('a follow-up in the same chat continues the project from the version the la
 });
 
 test('fixing an attached project goes to code even when understanding asks to investigate', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const file = await call('POST', '/api/objects', {
@@ -646,7 +647,7 @@ test('a follow-up shows the AI a single attached code file as it is now, with th
 });
 
 test('high-impact work on the person\'s own file is still checked against outside evidence', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const upload = (name, content) => call('POST', '/api/objects', { ...auth, body: { name, type: 'attachment', contentType: 'text/x-python', content } });
@@ -660,7 +661,7 @@ test('high-impact work on the person\'s own file is still checked against outsid
   }));
 
 test('a new app is planned with the person first; the code follows the agreed plan and their changes', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     // Drive the steps as a person would, until the code step; returns the steps seen.
