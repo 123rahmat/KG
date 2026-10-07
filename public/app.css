@@ -949,7 +949,7 @@ label textarea, label input, label select { font-weight: 400; }
 .architecture-connector.loop { height: 34px; }
 .architecture-split {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 .architecture-branch {
@@ -958,7 +958,8 @@ label textarea, label input, label select { font-weight: 400; }
   border: 1px solid var(--line);
   background: var(--softer);
 }
-.architecture-branch.code {
+.architecture-branch.code,
+.architecture-branch.research {
   border-color: color-mix(in srgb, var(--accent) 23%, var(--line));
 }
 .branch-tag {
@@ -3323,7 +3324,8 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
   transition: opacity .5s var(--ease), transform .5s var(--ease), border-color .5s var(--ease), background .5s var(--ease), box-shadow .5s var(--ease);
 }
 [data-chat-step].is-active,
-[data-code-step].is-active {
+[data-code-step].is-active,
+[data-research-step].is-active {
   opacity: 1;
   transform: none;
 }
@@ -3369,7 +3371,8 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
   box-shadow: 0 0 0 5px var(--accent-soft);
   opacity: .3;
 }
-.workflow-demo[data-demo="chat"] .scene-connector span { animation: demoFlowDown 2.4s linear infinite; }
+.workflow-demo[data-demo="chat"] .scene-connector span,
+.workflow-demo[data-demo="research"] .scene-connector span { animation: demoFlowDown 2.4s linear infinite; }
 .chat-core-row {
   display: grid;
   grid-template-columns: 160px 1fr;
@@ -3561,7 +3564,8 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
 }
 @media (prefers-reduced-motion: reduce) {
   .demo-status i,
-  .workflow-demo[data-demo="chat"] .scene-connector span {
+  .workflow-demo[data-demo="chat"] .scene-connector span,
+  .workflow-demo[data-demo="research"] .scene-connector span {
     animation: none !important;
   }
   .chat-message,
@@ -4311,6 +4315,7 @@ a.workspace-detail-row:focus-visible{
 
 @media (max-width: 980px) {
   .workspace-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .architecture-split { grid-template-columns: 1fr; }
   .landing-nav-links { gap: 15px; }
 }
 @media (max-width: 700px) {

@@ -92,7 +92,7 @@ const LABEL_BY_ID = {
   'test-code': 'Run and test the code',
   'investigation-work': 'Research',
   'artifact-work': 'Look through your files',
-  'adaptive-tool': 'Use a specialised tool',
+  'adaptive-tool': 'Use a specialized tool',
   investigate: 'Work out what is unknown'
 };
 
@@ -322,7 +322,7 @@ async function waitForJob(runId, jobId, button) {
     } catch (error) {
       if (error.code === 'offline' || error.transient) {
         if (button) button.textContent = 'Waiting for connection…';
-        state.drivingLabel = 'Reconnecting — your step keeps running on the server';
+        state.drivingLabel = 'Reconnecting — your work is still running safely';
         renderThread();
         await waitForConnection();
         continue;
@@ -423,7 +423,7 @@ async function runStep(button, extra = {}, targetRun = state.run) {
     }, 'runNotice', error => {
       if (error.code !== 'offline' && !error.transient) return null;
       state.network.interruptedRunId = run.id;
-      return 'Connection lost. This continues on its own as soon as you are back online.';
+      return 'Connection lost. Your work can continue safely; this view will update when you reconnect.';
     });
   } finally {
     state.busyRuns.delete(run.id);
@@ -1174,7 +1174,7 @@ export async function saveAnswer(value, runId) {
 
 const TOOL_LABELS = {
   'web.search': ['search', 'Searched the web'], 'web.fetch': ['explore', 'Read a web page'], 'web.download': ['download', 'Downloaded a file'],
-  'file.read': ['files', 'Read your file'], 'data.analyze': ['activity', 'Analysed a table'], 'math.evaluate': ['check', 'Calculated'],
+  'file.read': ['files', 'Read your file'], 'data.analyze': ['activity', 'Analyzed a table'], 'math.evaluate': ['check', 'Calculated'],
   'code.run': ['run', 'Ran code in the sandbox'], 'tool.create': ['sparkle', 'Built a new tool'],
   'schedule.create': ['bell', 'Scheduled'], 'schedule.list': ['activity', 'Checked your schedules'],
   'memory.save': ['memory', 'Saved to memory'], 'memory.forget': ['memory', 'Forgot from memory'],
@@ -1210,6 +1210,13 @@ function initLandingWorkflowDemos() {
       progressSelector: '[data-code-progress]',
       stepCount: 6,
       duration: 2500
+    },
+    {
+      root: document.querySelector('[data-demo="research"]'),
+      itemSelector: '[data-research-step]',
+      progressSelector: '[data-research-progress]',
+      stepCount: 5,
+      duration: 2400
     }
   ].filter(item => item.root);
 

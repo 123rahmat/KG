@@ -291,13 +291,13 @@ export function renderWorkStatus(run) {
   const snapshot = progressSnapshot(run);
   const background = backgroundSnapshot(run);
   const backgroundItems = [
-    !view.terminal ? 'Adaptive · ' + background.runtimeMode : '',
+    !view.terminal ? 'Work mode · ' + background.runtimeMode : '',
     background.activeAgents.length && view.live
       ? background.activeAgents.length + ' specialist' + (background.activeAgents.length === 1 ? '' : 's') + ' working'
       : background.completedAgents ? background.completedAgents + ' specialist' + (background.completedAgents === 1 ? '' : 's') + ' contributed' : '',
-    background.parallel > 1 && view.live ? 'Parallel · ' + background.parallel + ' lanes max' : '',
-    background.budgetHeadroom !== null && !view.terminal ? 'Work budget · ' + background.budgetHeadroom + '% headroom' : '',
-    background.toolCount ? background.toolCount + ' tool' + (background.toolCount === 1 ? '' : 's') + ' in scope' : '',
+    background.parallel > 1 && view.live ? 'Parallel work · up to ' + background.parallel : '',
+    background.budgetHeadroom !== null && !view.terminal ? 'Work capacity · ' + background.budgetHeadroom + '% available' : '',
+    background.toolCount ? background.toolCount + ' tool' + (background.toolCount === 1 ? '' : 's') + ' available' : '',
     background.executionTarget ? 'Execution · ' + background.executionTarget : ''
   ].filter(Boolean).slice(0, 5);
   const current = view.current;
@@ -342,7 +342,7 @@ export function renderWorkStatus(run) {
     meter ? element('div', { class: 'work-progress-caption small muted', text: view.percent + '% of required outcomes supported by evidence' }) : null,
     !view.terminal && !meter ? element('div', { class: 'work-progress-caption small muted', text: view.completed ? view.completed + ' step' + (view.completed === 1 ? '' : 's') + ' completed · next action adapts as needed' : 'Only the work your request needs' }) : null,
     metrics.length ? element('div', { class: 'work-evidence-chips' }, metrics.map(([label, value]) => element('span', { class: 'work-evidence-chip', text: value + ' ' + label.toLowerCase() }))) : null,
-    backgroundItems.length ? element('div', { class: 'work-background-strip', 'aria-label': 'Adaptive runtime activity' }, [
+    backgroundItems.length ? element('div', { class: 'work-background-strip', 'aria-label': 'Current work details' }, [
       ...backgroundItems.map(item => element('span', { class: 'work-background-chip small', text: item }))
     ]) : null,
     snapshot.conflicts || snapshot.gaps ? element('div', { class: 'work-progress-alerts' }, [
@@ -372,14 +372,14 @@ function capabilityItems(data) {
       {
         id: 'github',
         label: sourceConnected ? 'GitHub connected' : 'GitHub project',
-        detail: sourceConnected ? 'revision-bound' : 'connect a repository',
+        detail: sourceConnected ? 'tied to the selected revision' : 'connect a repository',
         action: () => $('openProjectSources')?.click(),
         ready: sourceConnected
       },
       {
         id: 'files',
         label: 'ZIP + single-file inputs',
-        detail: 'combine into one project',
+        detail: 'add to the current project context',
         action: () => $('attachBtn')?.click(),
         ready: true
       },
@@ -424,7 +424,7 @@ function capabilityItems(data) {
       {
         id: 'search',
         label: 'Search + gather',
-        detail: 'only justified sources',
+        detail: 'focused on useful sources',
         action: () => $('goal')?.focus({ preventScroll: false }),
         ready: true
       },
@@ -442,7 +442,7 @@ function capabilityItems(data) {
           ? 'conflicts need resolution'
           : evidence?.status === 'needs-evidence'
             ? 'more evidence may be needed'
-            : `${evidenceCount} ledger item${evidenceCount === 1 ? '' : 's'}`,
+            : `${evidenceCount} evidence item${evidenceCount === 1 ? '' : 's'}`,
         action: () => $('thread')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }),
         ready: evidenceCount > 0
       },
@@ -529,7 +529,7 @@ function codeWorkspaceProject(data) {
   const view = workspaceWorkView(run);
   const source = state.workspaceSource ?? {};
   const repo = workspaceValue(source.repoFullName, source.repositoryFullName, source.repo, source.repository?.fullName, source.name) || 'No GitHub project connected';
-  const revision = workspaceValue(source.commitSha, source.repoRef, source.revision, source.currentRevision, source.metadata?.commitSha, run?.adaptation?.workspaceSourceRevision, run?.adaptation?.codeWorkspace?.baseRevision) || 'Revision selected by workspace';
+  const revision = workspaceValue(source.commitSha, source.repoRef, source.revision, source.currentRevision, source.metadata?.commitSha, run?.adaptation?.workspaceSourceRevision, run?.adaptation?.codeWorkspace?.baseRevision) || 'Selected project revision';
   const attached = Array.isArray(run?.adaptation?.attachments) ? run.adaptation.attachments.length : state.attachments?.length ?? 0;
   const overlay = Array.isArray(run?.adaptation?.projectOverlay) ? run.adaptation.projectOverlay.length : 0;
   const task = currentTask(run);
@@ -577,7 +577,7 @@ function codeWorkspaceProject(data) {
         element('div', { class: 'deep-workspace-metrics' }, [
           metric('Revision', revision, true),
           metric('Attached inputs', String(attached), false),
-          metric('Working overlay', String(overlay), false)
+          metric('Working inputs', String(overlay), false)
         ])
       ]),
       element('section', { class: 'deep-workspace-card work-card' }, [
@@ -586,11 +586,11 @@ function codeWorkspaceProject(data) {
           element('span', { class: 'small muted', text: task?.status || 'ready' })
         ]),
         element('strong', { text: task ? taskLabel(task) : view.label }),
-        element('p', { class: 'small muted', text: run ? currentStatus(run) : 'Start a coding request to build the project context.' }),
+        element('p', { class: 'small muted', text: run ? currentStatus(run) : 'Start a coding request to load the relevant project context.' }),
         element('div', { class: 'deep-workspace-badges' }, [
           badge('Tests', tests.length ? tests.length + ' tracked' : 'on demand'),
           badge('Write-back', source?.permissions?.write === true ? 'approval' : 'read-only'),
-          badge('Agents', 'adaptive')
+          badge('Specialists', 'adaptive')
         ])
       ])
     ]),
@@ -647,7 +647,7 @@ function researchWorkspaceProject(data) {
   const conflicts = Array.isArray(research.conflicts) ? research.conflicts.length : Number(research.conflictCount ?? 0);
   const task = currentTask(run);
   const sourceStatus = sourceCount ? sourceCount + ' tracked' : 'not started';
-  const evidenceStatus = conflicts ? conflicts + ' conflicts' : evidenceCount ? evidenceCount + ' ledger items' : 'awaiting evidence';
+  const evidenceStatus = conflicts ? conflicts + ' conflicts' : evidenceCount ? evidenceCount + ' evidence items' : 'awaiting evidence';
   const sources = Array.isArray(research.sourceSet) ? research.sourceSet.slice(0, 8) : [];
   const evidenceLedger = Array.isArray(research.evidenceLedger) ? research.evidenceLedger.slice(0, 8) : [];
   const gaps = Array.isArray(research.unresolvedQuestions) ? research.unresolvedQuestions.slice(0, 6) : [];
@@ -656,8 +656,8 @@ function researchWorkspaceProject(data) {
     element('div', { class: 'deep-workspace-head research' }, [
       element('div', { class: 'deep-workspace-identity' }, [
         element('span', { class: 'deep-workspace-kicker', text: 'RESEARCH PROJECT' }),
-        element('strong', { text: research.activeQuestion || run?.goal || 'Research dossier' }),
-        element('span', { class: 'muted small', text: workspaceValue(research.status, 'evidence-first investigation') })
+        element('strong', { text: research.activeQuestion || run?.goal || 'Research project' }),
+        element('span', { class: 'muted small', text: workspaceValue(research.status, 'Evidence-first investigation') })
       ]),
       element('div', {
         class: 'deep-workspace-state',

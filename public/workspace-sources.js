@@ -6,7 +6,7 @@ function updateSourceUI() {
   const source = state.workspaceSource;
   if (sync) { sync.hidden = !source; sync.textContent = 'Sync GitHub'; }
   if (status) {
-    const base = source ? `GitHub · ${source.name || 'GitHub repository'}` : 'No GitHub repository connected';
+    const base = source ? `GitHub · ${source.name || 'GitHub repository'}` : 'Connect a GitHub repository to start project work';
     const ingestion = source?.metadata?.ingestion;
     status.textContent = ingestion?.partial
       ? `${base} · incomplete (${Number(ingestion.skippedCount) || 0} files omitted)`
@@ -41,7 +41,7 @@ export async function loadGithubRepositories() {
     return repos;
   } catch (error) {
     if (status) status.textContent = '';
-    notify('projectSourcesNotice', 'warn', error.message || 'GitHub repositories could not be loaded.');
+    notify('projectSourcesNotice', 'warn', error.message || 'Couldn’t load your GitHub repositories. Check access and try again.');
     return [];
   }
 }
@@ -65,7 +65,7 @@ export async function loadGithubBranches() {
     if (branch) branch.disabled = branches.length === 0;
     if (selected.dataset.defaultBranch && branches.some(item => item.name === selected.dataset.defaultBranch)) branch.value = selected.dataset.defaultBranch;
     if (connect) connect.disabled = !branch?.value;
-  } catch (error) { notify('projectSourcesNotice', 'warn', error.message || 'GitHub branches could not be loaded.'); }
+  } catch (error) { notify('projectSourcesNotice', 'warn', error.message || 'Couldn’t load branches for this repository. Check access and try again.'); }
 }
 
 export async function connectGitHub() {
@@ -85,7 +85,7 @@ export async function connectGitHub() {
     notify('runNotice', 'info', `Connected GitHub repository ${owner}/${repo} · ${ref}`);
     return result.source;
   } catch (error) {
-    notify('projectSourcesNotice', 'warn', error.message || 'GitHub could not be connected.'); return null;
+    notify('projectSourcesNotice', 'warn', error.message || 'Couldn’t connect to GitHub. Check access and try again.'); return null;
   } finally { const button = $('connectGithub'); if (button) button.disabled = false; }
 }
 
@@ -113,6 +113,6 @@ export async function initWorkspaceSources() {
   github?.addEventListener('click', () => connectGitHub());
   sync?.addEventListener('click', async () => {
     try { const result = await syncActiveWorkspaceSource(); if (result) notify('projectSourcesNotice', 'info', result.unchanged ? 'GitHub repository is already up to date.' : 'GitHub repository synchronized.'); }
-    catch (error) { notify('projectSourcesNotice', 'warn', error.message || 'GitHub repository synchronization failed.'); }
+    catch (error) { notify('projectSourcesNotice', 'warn', error.message || 'Couldn’t refresh the GitHub project. Check access and try again.'); }
   });
 }

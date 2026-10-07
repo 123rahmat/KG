@@ -281,8 +281,7 @@ function dateGroup(value) {
 const CHAT_SURFACE_LABELS = Object.freeze({
   'normal-chat': 'Chat',
   code: 'Code',
-  research: 'Research',
-  design: 'Design'
+  research: 'Research'
 });
 
 export function renderChatList() {

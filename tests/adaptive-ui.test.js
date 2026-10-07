@@ -143,6 +143,7 @@ test('adaptive workspace exposes exactly Normal Chat, Code, and Research product
   assert.match(app, /state\.activeSurface = 'research'/);
   assert.match(app, /state\.activeSurface = 'code'/);
   assert.match(actions, /Research Workspace/);
+  assert.doesNotMatch(attachments, /design:\s*['"]Design['"]/);
 });
 
 
@@ -203,4 +204,22 @@ test('Research Workspace opens in the dedicated workspace surface, not Explore',
   const js = await read('public/adaptive-workspace.js');
   assert.match(js, /name: 'runs', workspace: 'research'/);
   assert.doesNotMatch(js, /name: 'explore', workspace: 'research'/);
+});
+
+
+test('landing presents all three workspaces with equal product-level storytelling', async () => {
+  const html = await read('public/index.html');
+  const app = await read('public/app.js');
+  const css = await read('public/app.css');
+  assert.match(html, /One intelligence\. Three workspaces with a clear purpose\./);
+  assert.match(html, /href="#research"/);
+  assert.match(html, /data-demo="chat"/);
+  assert.match(html, /data-demo="code"/);
+  assert.match(html, /data-demo="research"/);
+  assert.match(html, /id="research" aria-labelledby="researchTitle"/);
+  assert.match(html, /Research that shows what the evidence actually supports/);
+  assert.match(app, /data-demo="research"/);
+  assert.match(app, /data-research-step/);
+  assert.match(css, /\[data-research-step\]\.is-active/);
+  assert.match(css, /architecture-split[\s\S]*repeat\(3, minmax\(0, 1fr\)\)/);
 });
