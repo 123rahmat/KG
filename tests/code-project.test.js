@@ -17,29 +17,36 @@ const geminiReply = (textValue, { groundingMetadata = undefined, finishReason = 
   }],
   usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 2, totalTokenCount: 4 }
 });
-const withVertexServer = (run, options = {}) => withServer(run, { ...options, nativeVertex: true });
+const withVertexServer = (run, options = {}) => withServer(run, options);
 
 function modelRequest(options) {
   const body = JSON.parse(options.body);
-  const texts = (Array.isArray(body.contents) ? body.contents : [])
+  const vertexTexts = (Array.isArray(body.contents) ? body.contents : [])
     .filter(message => message?.role === 'user')
     .flatMap(message => Array.isArray(message?.parts) ? message.parts : [])
-    .map(part => typeof part?.text === 'string' ? part.text : '')
-    .reverse();
+    .map(part => typeof part?.text === 'string' ? part.text : '');
+  const neutralTexts = (Array.isArray(body.messages) ? body.messages : [])
+    .filter(message => message?.role === 'user')
+    .map(message => typeof message?.content === 'string'
+      ? message.content
+      : Array.isArray(message?.content)
+        ? message.content.map(part => part?.text ?? '').join('\n')
+        : '');
+  const texts = [...vertexTexts, ...neutralTexts].filter(Boolean).reverse();
   let request = {};
-  for (const text of texts) {
+  for (const value of texts) {
     try {
-      const parsed = JSON.parse(text);
+      const parsed = JSON.parse(value);
       if (parsed && typeof parsed === 'object' && parsed.task) {
         request = parsed;
         break;
       }
     } catch {
-      const start = text.indexOf('{');
-      const end = text.lastIndexOf('}');
+      const start = value.indexOf('{');
+      const end = value.lastIndexOf('}');
       if (start >= 0 && end > start) {
         try {
-          const parsed = JSON.parse(text.slice(start, end + 1));
+          const parsed = JSON.parse(value.slice(start, end + 1));
           if (parsed && typeof parsed === 'object' && parsed.task) {
             request = parsed;
             break;
