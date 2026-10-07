@@ -1,7 +1,7 @@
 {
   "name": "Kindgleam",
   "short_name": "Kindgleam",
-  "description": "A kind light for every question: an adaptive workspace for questions, coding, research and files.",
+  "description": "Adaptive AI for everyday work, software projects, and evidence-driven research.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
