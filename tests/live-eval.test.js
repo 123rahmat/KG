@@ -65,7 +65,7 @@ test('the live evaluation drives every situation end to end and judges it', { ti
     const { token, workspace } = await seed();
     const report = await runLiveEval({ baseUrl: base, token, workspace });
     const failed = report.results.filter(item => !item.ok && !item.skipped);
-    assert.deepEqual(failed.map(item => [item.id, item.problems]), []);
+    assert.deepEqual(failed.map(item => [item.id, item.problems]), [], JSON.stringify(failed, null, 2));
     assert.equal(report.passed + report.skipped, SCENARIOS.length);
     assert.deepEqual(report.results.filter(item => item.skipped).map(item => item.id), ['run-code', 'compound'], 'no sandbox here');
     assert.equal(byIdOk(report, 'invention'), true, 'a novel goal is discovered, researched and prototyped end to end');
