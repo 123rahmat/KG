@@ -128,7 +128,7 @@ test('readiness reports what is actually configured', () =>
   withVertexServer(async ({ call }) => {
     const { body } = await call('GET', '/api/ready');
     assert.equal(body.ok, true);
-    assert.deepEqual(body.reasoning, { configured: false });
+    assert.deepEqual(body.reasoning, { configured: false, healthy: false });
     assert.equal(body.runners.tools, false);
     assert.equal(body.runners.sandbox, false);
     assert.equal('professorCloudSimulation' in body.runners, false, 'no simulation runner exists');
@@ -141,7 +141,7 @@ test('configuration is validated before anything starts', async () => {
   assert.throws(() => loadConfig({ DATABASE_URL: 'mysql://x/y' }), /must be a postgres/);
   assert.throws(
     () => loadConfig({ DATABASE_URL: 'postgres://x/y', AI_PROVIDER: 'nope', AI_API_KEY: 'k' }),
-    /AI_PROVIDER must be one of/
+    /AI_PROVIDER must be google/
   );
   assert.throws(
     () => loadConfig({ DATABASE_URL: 'postgres://x/y', NODE_ENV: 'production', COOKIE_SECURE: 'false' }),
