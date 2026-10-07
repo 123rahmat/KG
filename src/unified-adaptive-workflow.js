@@ -385,9 +385,14 @@ export function completionGate({
   const outcomeContract = workflow.outcomeContract ?? {};
   const evidenceList = Array.isArray(evidence) ? evidence : [];
   const summary = summarizeEvidence(evidenceList);
+  const persistedVerifierPass = evidenceList.some(item =>
+    item?.kind === 'verified'
+      && (item?.verdict?.verdict === 'pass' || item?.verification?.verdict === 'pass')
+  );
   const verificationPassed = verification?.verdict === 'pass'
     || verification?.verification?.verdict === 'pass'
-    || acceptance.verificationSatisfied === true;
+    || acceptance.verificationSatisfied === true
+    || persistedVerifierPass;
   const hasVerifiedEvidence = summary.counts.verified > 0 || verificationPassed;
   // Independent verification is a completion requirement for the
   // verification/finalization boundary, not for every intermediate step. A
