@@ -65,8 +65,8 @@ test('adaptive context exposes situation and dynamic workspace without inventing
   );
 
   assert.equal(context.openWorld, true);
-  assert.ok(context.surfaces.includes('adaptive'));
   assert.ok(context.surfaces.includes('code'));
+  assert.ok(context.surfaces.every(surface => ['chat','code','research'].includes(surface)));
   assert.equal(context.execution.approvalRequired, true);
   // The plan reports its real implementation state; nothing is ready to run yet.
   assert.equal(context.resourcePlan.status, 'implementation-required');

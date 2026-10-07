@@ -66,7 +66,9 @@ test('invention goals compile an explicit cross-domain invention loop', () => {
   assert.ok(context.requirements.includes('hypothesis-generation'));
   assert.ok(context.requirements.includes('concept-evaluation'));
   assert.ok(context.requirements.includes('experiment-design'));
-  assert.ok(context.surfaceDescriptors.some(surface => surface.id === 'adaptive'));
+  assert.equal(context.openWorld, true);
+  assert.ok(context.requirements.some(id => ['capability-discovery','adaptive-execution'].includes(id)));
+  assert.ok(context.surfaceDescriptors.every(surface => ['chat','code','research'].includes(surface.id)));
 });
 
 

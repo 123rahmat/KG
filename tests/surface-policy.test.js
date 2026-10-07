@@ -64,7 +64,7 @@ test('adaptive context exposes exactly three public modes and supports compound 
   assert.deepEqual(Object.keys(SURFACE_WORKSPACE_CONTRACTS), ['normal-chat','code','research']);
   assert.equal(context.primarySurface,'code');
   assert.ok(context.resourcePlan.selected.surfaces.includes('research'));
-  assert.ok(context.resourcePlan.selected.surfaces.every(surface => ['chat','code','research','adaptive'].includes(surface)));
+  assert.ok(context.resourcePlan.selected.surfaces.every(surface => ['chat','code','research'].includes(surface)));
 });
 
 test('archive contents outrank the zip extension', () => {
