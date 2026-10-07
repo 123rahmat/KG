@@ -1,6 +1,6 @@
 # Kindgleam
 
-**One shared adaptive and agentic intelligence for NormalChat, Code, and Research.**
+**One shared adaptive intelligence for Normal Chat, Code, and Research.**
 
 Kindgleam adapts the amount of reasoning, context, tools, evidence, agents and execution to the user's actual situation instead of forcing every request through a fixed pipeline.
 
@@ -63,7 +63,7 @@ Parallelism is bounded and adaptive so model, database and execution resources d
 
 ## Agentic behavior
 
-Agents are adaptive specialists over the same runtime:
+Specialists are recruited adaptively over the same runtime:
 
 ```
 direct
@@ -105,7 +105,7 @@ The three workspaces share the same governed capability layer:
 - live progress, cancellation and resumable jobs
 - verification, safety and governance
 
-Files are contextual state, never a fourth workspace. Visual/design work stays inside NormalChat. Simulation requests, when relevant, are ordinary Code/tool work rather than a separate product subsystem.
+Files are contextual state, never a fourth workspace. Visual and design work stays inside Normal Chat. Simulation requests, when relevant, are ordinary Code/tool work rather than a separate product subsystem.
 
 ## Security
 
