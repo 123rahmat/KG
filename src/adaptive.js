@@ -502,7 +502,6 @@ export function resolveAdaptiveContext(goal, {
     || externalData.hasExternalDataNeed === true;
   if (boundary.surface === 'code' && researchNeed) surfaces.add('research');
   if (boundary.surface === 'research' && codeNeed) surfaces.add('code');
-  if (analysis.unknownSituation || capabilityRequirements.some(item => item.dynamic)) surfaces.add('adaptive');
 
   const allowed = ['auto', 'local', 'hosted', 'hybrid'];
   const requested = allowed.includes(text(runtimeMode)) ? text(runtimeMode) : 'auto';
@@ -510,8 +509,7 @@ export function resolveAdaptiveContext(goal, {
   const preferred = text(activeSurface);
   const primarySurface = boundary.surface === 'code' ? 'code'
     : boundary.surface === 'research' ? 'research'
-        : analysis.unknownSituation && !['chat', 'normal-chat'].includes(preferred) ? 'adaptive'
-          : 'chat';
+      : 'chat';
   const provisionalControl = normalizeAdaptiveControl(adaptiveControl, {
     inferredDepth: analysis.situation?.need?.depth || 'standard'
   });
