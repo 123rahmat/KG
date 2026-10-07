@@ -40,7 +40,7 @@ export const SURFACE_INTELLIGENCE_PROFILES=Object.freeze({
     parallelStrategy:'parallelize independent read-only work only when latency benefit exceeds coordination cost',
     verificationStrategy:'verify when claims, files, tools, transformations or stakes justify it',
     continuityStrategy:'preserve conversation and artifact context without forced escalation',
-    costStrategy:'prefer one strong model call and bounded context; spend more only when it can change the outcome',
+    costStrategy:'prefer the minimum-sufficient model tier, one agent by default, and bounded context; escalate only when quality, uncertainty, verification or risk can change the outcome',
     qualityStrategy:'clarity, usefulness, correct context selection, honest uncertainty',
     preferredRoles:Object.freeze(['communicator','analyst','researcher','critic','visual-designer'])
   }),
@@ -52,7 +52,7 @@ export const SURFACE_INTELLIGENCE_PROFILES=Object.freeze({
     parallelStrategy:'parallelize independent analysis and disjoint immutable-revision lanes; serialize shared mutations',
     verificationStrategy:'diff + targeted tests/build/runtime evidence',
     continuityStrategy:'sticky project/revision continuity with explicit scope and write isolation',
-    costStrategy:'keep small fixes single-agent; add specialists only for material evidence or latency benefit',
+    costStrategy:'keep small fixes single-agent, use efficient coordination where safe, and reserve frontier capacity for implementation, testing, review, recovery and materially difficult analysis',
     qualityStrategy:'working software, scoped changes, reproducibility, regression safety, verified repository state',
     preferredRoles:Object.freeze(['architect','implementer','test-engineer','diagnostician','debugger','security-reviewer','performance-reviewer'])
   }),
@@ -64,7 +64,7 @@ export const SURFACE_INTELLIGENCE_PROFILES=Object.freeze({
     parallelStrategy:'parallelize independent source discovery; avoid duplicate search',
     verificationStrategy:'provenance + claim-to-source checks with conflict challenge',
     continuityStrategy:'sticky question, source ledger, evidence ledger, conflicts and unresolved questions',
-    costStrategy:'stop when sufficiently supported; spend more only when new evidence can change a material conclusion',
+    costStrategy:'use efficient scoping and synthesis, reserve frontier capacity for evidence gathering and critique, avoid duplicate search, and stop when more evidence cannot change a material conclusion',
     qualityStrategy:'traceable claims, source diversity, calibrated uncertainty, conflict visibility',
     preferredRoles:Object.freeze(['researcher','analyst','critic','communicator'])
   })

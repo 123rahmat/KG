@@ -144,7 +144,10 @@ test('adaptive executor converts integration exceptions into an explicit failed 
 test('agent model policy spends frontier capacity only where quality pressure justifies it', () => {
   assert.equal(agentModelFor({ workspace: 'normal-chat', role: 'lead', complexity: 0.2 }), 'google:gemini-3.5-flash-lite');
   assert.equal(agentModelFor({ workspace: 'normal-chat', role: 'reviewer', complexity: 0.2 }), 'google:gemini-3.8-flash');
-  assert.equal(agentModelFor({ workspace: 'code', role: 'lead', complexity: 0.2 }), 'google:gemini-3.8-flash');
+  assert.equal(agentModelFor({ workspace: 'code', role: 'lead', complexity: 0.2 }), 'google:gemini-3.5-flash-lite');
+  assert.equal(agentModelFor({ workspace: 'code', role: 'builder', complexity: 0.2 }), 'google:gemini-3.8-flash');
+  assert.equal(agentModelFor({ workspace: 'research', role: 'lead', complexity: 0.2 }), 'google:gemini-3.5-flash-lite');
+  assert.equal(agentModelFor({ workspace: 'research', role: 'research', complexity: 0.2 }), 'google:gemini-3.8-flash');
   assert.equal(agentModelFor({ workspace: 'normal-chat', role: 'lead', risk: 'high-impact' }), 'google:gemini-3.8-flash');
 
   const plan = decideAgentTopology({
@@ -157,4 +160,42 @@ test('agent model policy spends frontier capacity only where quality pressure ju
   assert.equal(plan.modelPolicy, 'adaptive-per-role');
   assert.equal(plan.agents.find(agent => agent.role === 'analyst')?.model, 'google:gemini-3.5-flash-lite');
   assert.equal(plan.agents.find(agent => agent.role === 'reviewer')?.model, 'google:gemini-3.8-flash');
+});
+
+
+test('simple medium Normal Chat does not pay multi-agent overhead without real pressure', () => {
+  const plan = decideAgentTopology({
+    workspace: 'normal-chat',
+    tasks: [{ id:'answer', type:'analyze' }],
+    scale: 'medium',
+    complexity: .3,
+    uncertainty: .15,
+    budget: { maxAgents: 4, maxParallelAgents: 4 }
+  });
+  assert.equal(plan.mode, 'single');
+  assert.equal(plan.agentCount, 1);
+  assert.equal(plan.computePolicy.recommendedAgents, 1);
+  assert.equal(plan.agents[0].model, 'google:gemini-3.5-flash-lite');
+});
+
+test('Code and Research preserve frontier models on quality-critical roles while bounding concurrency', () => {
+  const code = decideAgentTopology({
+    workspace:'code',
+    tasks:[{id:'analyze',type:'analyze'},{id:'build',type:'code'},{id:'test',type:'test'}],
+    scale:'medium', complexity:.6, uncertainty:.35,
+    budget:{maxAgents:6,maxParallelAgents:6}
+  });
+  assert.ok(code.maxParallel <= code.computePolicy.maxParallel);
+  assert.equal(code.agents.find(agent=>agent.role==='builder')?.model,'google:gemini-3.8-flash');
+  assert.equal(code.agents.find(agent=>agent.role==='tester')?.model,'google:gemini-3.8-flash');
+
+  const research = decideAgentTopology({
+    workspace:'research',
+    tasks:[{id:'scope',type:'analyze'},{id:'source',type:'research'},{id:'review',type:'verify'}],
+    scale:'medium', complexity:.55, uncertainty:.55,
+    budget:{maxAgents:6,maxParallelAgents:6}
+  });
+  assert.ok(research.maxParallel <= research.computePolicy.maxParallel);
+  assert.equal(research.agents.find(agent=>agent.role==='research')?.model,'google:gemini-3.8-flash');
+  assert.equal(research.agents.find(agent=>agent.role==='reviewer')?.model,'google:gemini-3.8-flash');
 });

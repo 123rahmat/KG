@@ -1,4 +1,5 @@
 import { DEFAULT_MODEL, LIGHT_MODEL } from './model-catalog.js';
+import { workspaceComputePolicy } from './mode-controllers.js';
 
 /**
  * Adaptive multi-agent coordination.
@@ -112,14 +113,22 @@ export function agentModelFor({
 } = {}) {
   const workspaceId = text(workspace).toLowerCase() || 'normal-chat';
   const agentRole = text(role).toLowerCase() || 'lead';
-  const frontierRole = ['research', 'builder', 'tester', 'reviewer', 'integrator'].includes(agentRole);
-  const qualityPressure = workspaceId !== 'normal-chat'
-    || frontierRole
-    || riskRank(risk) >= 2
+  const highPressure = riskRank(risk) >= 2
     || retrying
-    || Number(complexity) >= 0.65
-    || Number(uncertainty) >= 0.55;
-  return qualityPressure ? frontierAgentModel : efficientAgentModel;
+    || Number(complexity) >= 0.72
+    || Number(uncertainty) >= 0.65;
+  const criticalByWorkspace = {
+    'normal-chat': new Set(['research', 'builder', 'tester', 'reviewer', 'integrator']),
+    code: new Set(['builder', 'tester', 'reviewer', 'integrator']),
+    research: new Set(['research', 'reviewer', 'integrator'])
+  };
+  const criticalRole = (criticalByWorkspace[workspaceId] ?? criticalByWorkspace['normal-chat']).has(agentRole);
+  const specialistPressure = workspaceId === 'code' && agentRole === 'analyst'
+    ? Number(complexity) >= 0.55 || Number(uncertainty) >= 0.45
+    : workspaceId === 'research' && agentRole === 'analyst'
+      ? Number(complexity) >= 0.62 || Number(uncertainty) >= 0.5
+      : false;
+  return highPressure || criticalRole || specialistPressure ? frontierAgentModel : efficientAgentModel;
 }
 
 function uniqueTasks(tasks) {
@@ -167,13 +176,22 @@ export function decomposeAgentTasks(tasks = [], {
   maxSubtasks = 4
 } = {}) {
   const workspaceId = text(workspace).toLowerCase() || 'normal-chat';
-  const medium = ['medium', 'large', 'very-large', 'adaptive-open-world'].includes(text(scale));
+  const scaleId = text(scale);
+  const medium = ['medium', 'large', 'very-large', 'adaptive-open-world'].includes(scaleId);
+  const large = ['large', 'very-large', 'adaptive-open-world'].includes(scaleId);
   const pressure = Number(complexity) >= 0.55 || Number(uncertainty) >= 0.35;
   const risky = riskRank(risk) >= 2;
   if (!medium && !pressure) return uniqueTasks(tasks);
   if (risky) return uniqueTasks(tasks);
   const source = uniqueTasks(tasks);
   if (source.length !== 1) return source;
+  const decompositionJustified = large
+    || (workspaceId === 'normal-chat'
+      ? Number(complexity) >= 0.65 || Number(uncertainty) >= 0.5
+      : workspaceId === 'code'
+        ? Number(complexity) >= 0.5 || Number(uncertainty) >= 0.35
+        : Number(complexity) >= 0.4 || Number(uncertainty) >= 0.25);
+  if (!decompositionJustified) return source;
   const parent = source[0];
   if (parent?.metadata?.agentDecomposed === true || parent?.agentDecomposed === true) return source;
   const id = text(parent.id);
@@ -239,9 +257,30 @@ export function decideAgentTopology({
   const workspaceId = text(workspace).toLowerCase() || 'normal-chat';
   const workspaceRoles = WORKSPACE_ROLE_PREFERENCES[workspaceId] ?? WORKSPACE_ROLE_PREFERENCES['normal-chat'];
   const workspacePolicy = WORKSPACE_AGENT_POLICY[workspaceId] ?? WORKSPACE_AGENT_POLICY['normal-chat'];
-  const budgetAgents = Math.max(1, Math.min(12, Number(budget.maxAgents ?? budget.maxCapabilities ?? 4) || 4));
-  const parallelBudget = Math.max(1, Math.min(budgetAgents, Number(budget.maxParallelAgents ?? 4) || 4));
-  const work = decomposeAgentTasks(uniqueTasks(tasks).filter(task => text(task.type) !== 'respond' || tasks.length > 1), { workspace: workspaceId, scale, complexity, uncertainty, risk, maxSubtasks: parallelBudget });
+  const sourceTasks = uniqueTasks(tasks).filter(task => text(task.type) !== 'respond' || tasks.length > 1);
+  const independentWork = sourceTasks.length > 1 ? Math.min(1, 0.45 + sourceTasks.length * 0.12) : 0;
+  const computePolicy = workspaceComputePolicy({
+    surface: workspaceId,
+    complexity,
+    uncertainty,
+    risk,
+    previousFailure: retrying,
+    remainingBudgetRatio: Number(budget.remainingBudgetRatio ?? 1),
+    independentWork,
+    verificationRequired: sourceTasks.some(task => ['verify','test'].includes(text(task.type)))
+  });
+  const requestedAgents = Math.max(1, Math.min(12, Number(budget.maxAgents ?? budget.maxCapabilities ?? computePolicy.maxAgents) || computePolicy.maxAgents));
+  const requestedParallel = Math.max(1, Math.min(requestedAgents, Number(budget.maxParallelAgents ?? computePolicy.maxParallel) || computePolicy.maxParallel));
+  const parallelBudget = Math.max(1, Math.min(requestedParallel, computePolicy.maxParallel || 1));
+  const work = decomposeAgentTasks(sourceTasks, {
+    workspace: workspaceId,
+    scale,
+    complexity,
+    uncertainty,
+    risk,
+    maxSubtasks: Math.max(1, Math.min(requestedAgents, computePolicy.recommendedAgents || requestedAgents))
+  });
+  const budgetAgents = Math.max(1, Math.min(12, Math.max(requestedAgents, work.length)));
   const countable = work.length;
   const highRisk = riskRank(risk) >= 2 || externalAction || physical;
   const independentCandidate = countable > 1 && !highRisk;
@@ -266,6 +305,8 @@ export function decideAgentTopology({
       integrationRequired: false,
       workspace: workspaceId,
       workspacePolicy,
+      computePolicy,
+      modelPolicy: 'adaptive-per-role',
       humanGovernance: humanGovernance ?? null,
       authority: { serverOwned: true, modelCannotAuthorize: true }
     };
@@ -318,6 +359,7 @@ export function decideAgentTopology({
     } : null,
     workspace: workspaceId,
     workspacePolicy,
+    computePolicy,
     modelPolicy: 'adaptive-per-role',
     humanGovernance: humanGovernance ?? null,
     collaboration: {

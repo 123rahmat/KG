@@ -88,5 +88,5 @@ test('specialized maturity profiles share one intelligence while differing by wo
   assert.match(code.parallelStrategy,/disjoint immutable-revision/i);
   assert.match(research.contextStrategy,/question-first/i);
   assert.match(research.verificationStrategy,/provenance/i);
-  assert.match(normal.costStrategy,/one strong model call/i);
+  assert.match(normal.costStrategy,/minimum-sufficient model tier/i);
 });

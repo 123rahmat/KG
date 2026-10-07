@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildModeControllerContract, controllerForSurface, modeControllerCatalog } from '../src/mode-controllers.js';
+import { buildModeControllerContract, controllerForSurface, modeControllerCatalog, workspaceComputePolicy } from '../src/mode-controllers.js';
 import { classifySurfaceBoundary, surfaceIntelligenceProfile, surfaceRuntimePolicy } from '../src/surface-policy.js';
 
 test('three mode controllers are distinct policies over one shared contract', () => {
@@ -60,4 +60,22 @@ test('visual specialists can still be recruited inside NormalChat', async () => 
     capabilities:{required:['image-generation']}};
   const result=rolesFor(run,{id:'design',type:'design',metadata:{}},{mode:'always',maxAgents:5});
   assert.ok(result.roles.some(role=>['art-director','visual-designer','image-editor','layout-designer','visual-reviewer'].includes(role)));
+});
+
+
+test('workspace compute policy keeps simple chat cheap and expands specialized work only when justified', () => {
+  const chat = workspaceComputePolicy({ surface:'normal-chat', complexity:.15, uncertainty:.05, independentWork:.2 });
+  assert.equal(chat.recommendedAgents, 1);
+  assert.equal(chat.maxParallel, 1);
+  assert.equal(chat.modelPolicy, 'efficient-first');
+
+  const code = workspaceComputePolicy({ surface:'code', complexity:.8, uncertainty:.45, independentWork:.8, verificationRequired:true });
+  assert.ok(code.recommendedAgents >= 3);
+  assert.ok(code.maxParallel >= 2);
+  assert.match(code.modelPolicy, /frontier-build-and-verify/);
+
+  const research = workspaceComputePolicy({ surface:'research', complexity:.6, uncertainty:.65, independentWork:.9, verificationRequired:true });
+  assert.ok(research.recommendedAgents >= 3);
+  assert.ok(research.maxParallel >= 2);
+  assert.equal(research.qualityFloor, 'verified-before-completion');
 });

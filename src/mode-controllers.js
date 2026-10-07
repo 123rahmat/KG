@@ -8,6 +8,87 @@ const text = value => String(value ?? '').trim();
 const uniq = value => [...new Set((Array.isArray(value) ? value : []).map(text).filter(Boolean))];
 const clamp01 = value => Math.min(1, Math.max(0, Number.isFinite(Number(value)) ? Number(value) : 0));
 
+const RUNTIME_PROFILES = Object.freeze({
+  'normal-chat': Object.freeze({
+    agentCeiling: 3,
+    parallelCeiling: 2,
+    modelPolicy: 'efficient-first',
+    contextBudget: 'minimum-sufficient',
+    verificationBudget: 'targeted-unless-risk-or-artifact'
+  }),
+  code: Object.freeze({
+    agentCeiling: 5,
+    parallelCeiling: 3,
+    modelPolicy: 'efficient-coordination-frontier-build-and-verify',
+    contextBudget: 'revision-first-targeted-expansion',
+    verificationBudget: 'diff-tests-runtime'
+  }),
+  research: Object.freeze({
+    agentCeiling: 5,
+    parallelCeiling: 4,
+    modelPolicy: 'efficient-scoping-frontier-evidence-and-critique',
+    contextBudget: 'question-first-evidence-gap-expansion',
+    verificationBudget: 'claim-source-provenance'
+  })
+});
+
+const riskPressure = risk => ['critical','high','high-impact','physical','regulated'].includes(text(risk).toLowerCase()) ? 0.9 : 0;
+
+export function workspaceComputePolicy({
+  surface = 'normal-chat',
+  complexity = 0,
+  uncertainty = 0,
+  risk = 'medium',
+  previousFailure = false,
+  remainingBudgetRatio = 1,
+  independentWork = 0,
+  verificationRequired = false
+} = {}) {
+  const key = ['normal-chat','code','research'].includes(text(surface).toLowerCase())
+    ? text(surface).toLowerCase()
+    : 'normal-chat';
+  const profile = RUNTIME_PROFILES[key];
+  const budget = clamp01(remainingBudgetRatio);
+  const pressure = Math.max(
+    clamp01(complexity),
+    clamp01(uncertainty) * 0.95,
+    riskPressure(risk),
+    previousFailure ? 0.95 : 0,
+    verificationRequired ? 0.62 : 0
+  );
+  const independent = clamp01(independentWork);
+  const conserve = budget < 0.25 && pressure < 0.8 && !previousFailure;
+
+  let recommendedAgents = 1;
+  if (key === 'normal-chat') recommendedAgents = pressure >= 0.78 ? 3 : pressure >= 0.52 ? 2 : 1;
+  else if (key === 'code') recommendedAgents = pressure >= 0.78 ? 4 : pressure >= 0.48 ? 3 : 1;
+  else recommendedAgents = pressure >= 0.72 ? 4 : pressure >= 0.42 ? 3 : 1;
+
+  if (conserve) recommendedAgents = Math.max(1, recommendedAgents - 1);
+  recommendedAgents = Math.min(profile.agentCeiling, recommendedAgents);
+
+  const parallelThreshold = key === 'normal-chat' ? 0.68 : key === 'code' ? 0.52 : 0.42;
+  let maxParallel = independent >= parallelThreshold && !previousFailure ? profile.parallelCeiling : 1;
+  maxParallel = Math.min(maxParallel, recommendedAgents);
+  if (conserve) maxParallel = 1;
+
+  return Object.freeze({
+    workspace: key,
+    pressure: Number(pressure.toFixed(3)),
+    budgetMode: conserve ? 'conserve' : 'normal',
+    recommendedAgents,
+    maxAgents: profile.agentCeiling,
+    maxParallel,
+    modelPolicy: profile.modelPolicy,
+    contextBudget: profile.contextBudget,
+    verificationBudget: profile.verificationBudget,
+    qualityFloor: verificationRequired || riskPressure(risk) >= 0.9
+      ? 'verified-before-completion'
+      : key === 'normal-chat' ? 'sufficient-and-clear' : 'evidence-backed',
+    stopRule: 'stop-when-acceptance-is-satisfied-and-more-work-has-no-material-value'
+  });
+}
+
 const CONTROLLERS = Object.freeze({
   'normal-chat': Object.freeze({
     id: 'normal-chat-controller',
@@ -112,6 +193,21 @@ export function buildModeControllerContract({
   const escalate = previousFailure || highUncertainty || complex || normalizedRisk === 'high' || normalizedRisk === 'critical';
   const verified = acceptance?.verificationSatisfied === true;
   const criteria = uniq(acceptance?.criteria ?? situation?.successCriteria);
+  const inferredIndependentWork = Number(
+    situation?.independentWork
+      ?? situation?.parallelOpportunity
+      ?? (controller.mode === 'normal-chat' ? 0 : (complex || highUncertainty || highPressure ? 0.7 : 0))
+  );
+  const compute = workspaceComputePolicy({
+    surface: controller.mode,
+    complexity,
+    uncertainty,
+    risk: normalizedRisk,
+    previousFailure,
+    remainingBudgetRatio,
+    independentWork: inferredIndependentWork,
+    verificationRequired: acceptance?.verificationRequired === true || criteria.length > 0
+  });
   return Object.freeze({
     version: MODE_CONTROLLER_VERSION,
     controller: controller.id,
@@ -120,12 +216,8 @@ export function buildModeControllerContract({
     decision: {
       defaultAction: controller.mode === 'normal-chat' ? 'direct' : 'specialized-next-step',
       broadenContext: escalate,
-      recruitSpecialist: controller.mode !== 'normal-chat' && (escalate || highPressure),
-      parallelIndependentWork: controller.mode === 'research'
-        ? !limitedBudget && !previousFailure
-        : controller.mode === 'code'
-          ? !limitedBudget && !previousFailure
-          : false,
+      recruitSpecialist: compute.recommendedAgents > 1 && (controller.mode !== 'normal-chat' || escalate || highPressure),
+      parallelIndependentWork: compute.maxParallel > 1,
       reduceEffort: limitedBudget && !highUncertainty && !previousFailure,
       reuseVerifiedState: verified,
       stopWhenSatisfied: true
@@ -133,6 +225,7 @@ export function buildModeControllerContract({
     context: controller.context,
     tools: controller.tools,
     verification: controller.verification,
+    compute,
     success: {
       statement: controller.success,
       criteriaCount: criteria.length,
