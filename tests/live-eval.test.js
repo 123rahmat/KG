@@ -32,18 +32,21 @@ const fetchImpl = async (url, options) => {
     const users = (Array.isArray(body.messages) ? body.messages : []).filter(message => message.role === 'user').reverse();
     let fallback = {};
     for (const message of users) {
-      const raw = typeof message.content === 'string'
-        ? message.content
-        : message.content?.find?.(part => part.type === 'text')?.text;
-      if (!raw) continue;
-      try {
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== 'object') continue;
-        // Tool results can also be JSON user messages. The execution task
-        // envelope is the authoritative request and always carries task/goal.
-        if (parsed.task || parsed.goal) return parsed;
-        if (!Object.keys(fallback).length) fallback = parsed;
-      } catch {}
+      const rawTexts = typeof message.content === 'string'
+        ? [message.content]
+        : (Array.isArray(message.content)
+            ? message.content.filter(part => part?.type === 'text' && part.text).map(part => part.text)
+            : []);
+      for (const raw of [...rawTexts].reverse()) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (!parsed || typeof parsed !== 'object') continue;
+          // Tool results can also be JSON user messages. The execution task
+          // envelope is the authoritative request and always carries task/goal.
+          if (parsed.task || parsed.goal) return parsed;
+          if (!Object.keys(fallback).length) fallback = parsed;
+        } catch {}
+      }
     }
     return fallback;
   };
