@@ -1748,7 +1748,7 @@ pre.out {
 
 .inspector-actions{padding-top:3px}
 
-@keyframes sim-flow{to{stroke-dashoffset:-15}}@keyframes sim-pulse{50%{opacity:.35;transform:scale(1.4)}}
+
 
 /* The three columns need about 1040px of the page itself (the sidebar takes the rest of the screen). */
 
