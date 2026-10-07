@@ -211,7 +211,11 @@ test('greetings, simple writing and reminders take the short path; real work doe
   for (const goal of ['Write a Python script that renames photos by date', 'Design a new type of bicycle brake']) {
     assert.equal(planGoal(goal).workflow, 'full', goal);
   }
-  assert.equal(planGoal('Write a summary of this report', { attachments: [{ id: 'a', name: 'r.pdf' }] }).workflow, 'full');
+  assert.equal(
+    planGoal('Write a summary of this report', { attachments: [{ id: 'a', name: 'r.pdf' }] }).workflow,
+    'direct',
+    'a single readable document stays lightweight in NormalChat'
+  );
 });
 
 test('words are read in context: a rulebook "code", a landlord dispute, a letter about electrical work', () => {
