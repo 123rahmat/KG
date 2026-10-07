@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { withServer, jsonResponse } from './helpers.js';
 import { docx, pdf, png } from './document-fixtures.js';
 
-const ANTHROPIC = { AI_PROVIDER: 'anthropic', AI_API_KEY: 'test-key', AI_MODEL: 'claude-opus-5-5' };
+const MODEL_FIXTURE = { AI_PROVIDER: 'fixture', AI_MODEL: 'fixture-model' };
 const reply = text => jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text }], usage: { input_tokens: 2, output_tokens: 2 } });
 // The task request is the first user message: a string, or, when images are
 // attached, content blocks with the images first and the text last.
@@ -37,7 +37,7 @@ test('the AI reads the text of a file attached to a message', () => {
     const sent = seen.find(request => request.task?.type === 'respond');
     assert.equal(sent.attachments[0].name, 'notes.txt');
     assert.equal(sent.attachments[0].text, 'Meeting moved to Friday at 10.');
-  }, { env: ANTHROPIC, fetchImpl: async (_url, options) => { seen.push(requestOf(options)); return reply('The meeting is on Friday at 10.'); } });
+  }, { env: MODEL_FIXTURE, fetchImpl: async (_url, options) => { seen.push(requestOf(options)); return reply('The meeting is on Friday at 10.'); } });
 });
 
 test('Word and PDF files are read as text, and images are shown to the model', () => {
@@ -66,12 +66,12 @@ test('Word and PDF files are read as text, and images are shown to the model', (
     assert.equal(sent.attachments[2].kind, 'image');
     const parts = body.messages[0].content;
     assert.ok(Array.isArray(parts), 'the user message carries the image');
-    // Claude takes images before the text they belong with.
+    // the model takes images before the text they belong with.
     assert.equal(parts[0].type, 'image');
     assert.deepEqual([parts[0].source.type, parts[0].source.media_type], ['base64', 'image/png']);
     assert.ok(parts[0].source.data.length > 0);
     assert.equal(parts.at(-1).type, 'text');
-  }, { env: ANTHROPIC, fetchImpl: async (_url, options) => { bodies.push(JSON.parse(options.body)); return reply('Consistent.'); } });
+  }, { env: MODEL_FIXTURE, fetchImpl: async (_url, options) => { bodies.push(JSON.parse(options.body)); return reply('Consistent.'); } });
 });
 
 test('a file that cannot be read is listed, not read', () =>
