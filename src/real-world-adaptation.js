@@ -212,13 +212,15 @@ export function buildRealWorldTaskModel(goal, context = {}) {
   if (completion === 'complete') next = 'deliver-and-stop';
   else if (blockedDependencies.length) next = 'resolve-blocking-dependency';
   else if (completion === 'recovery') next = 'diagnose-before-retry';
+  // Explicitly reported overload is a user-state constraint. Preserve
+  // deadline awareness, but reduce the immediate cognitive burden first.
+  else if (capacity.attentionLoad >= 0.8 && actionability >= 0.65) next = 'reduce-to-smallest-next-action';
   else if (temporal.status === 'overdue') next = 'surface-deadline-and-replan';
   else if (externalAction) next = 'prepare-then-request-approval';
   else if (intent === 'monitoring') next = 'establish-observation-and-check-in';
   else if (intent === 'coordination') next = 'prepare-commitments-and-coordination';
   else if (intent === 'decision') next = 'present-options-and-consequences';
   else if (intent === 'routine') next = 'convert-to-repeatable-routine';
-  else if (capacity.attentionLoad >= 0.8 && actionability >= 0.65 && temporal.urgency < 0.8) next = 'reduce-to-smallest-next-action';
   else if (actionability >= 0.8) next = 'prepare-concrete-next-action';
   else if (completion === 'in-progress') next = 'resume-from-current-state';
 
