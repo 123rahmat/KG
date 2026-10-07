@@ -26,11 +26,16 @@ test('adaptive progress remains visible and honest during live work', () => {
   const css = read('app.css');
 
   assert.match(workspace, /Adaptive workflow progress/);
-  assert.match(workspace, /Current focus/);
+  assert.match(workspace, /Server-confirmed materialized steps/);
+  assert.match(workspace, /Background activity and completed steps/);
+  assert.match(workspace, /Approval needed/);
   assert.match(workspace, /Connection lost/);
   assert.match(workspace, /Next step adapts from evidence/);
-  assert.match(css, /work-progress-meter::after/);
-  assert.match(css, /composer \.send\[data-mode="stop"\]/);
+  assert.match(css, /\.work-progress-segments/);
+  assert.match(css, /\.work-background-strip/);
+  assert.match(css, /\.work-permission-strip/);
+  assert.doesNotMatch(css, /work-progress-meter::after/);
+  assert.match(css, /send\[data-mode="stop"\]/);
   assert.match(css, /is-stopping/);
 });
 
