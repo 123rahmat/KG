@@ -674,6 +674,7 @@ export function planGoal(goal, {
     && analysis.investigationNeeded !== true
     && analysis.situation?.clarificationRequired !== true
     && analysis.situation?.externalData?.hasExternalDataNeed !== true
+    && failedSteps.length === 0
     && governance.constraints.requireHumanApproval !== true
     && governanceReasons.length === 0
     && (analysis.flags?.physical !== true || noPhysicalAction);
