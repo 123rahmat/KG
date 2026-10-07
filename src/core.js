@@ -652,7 +652,7 @@ export function planGoal(goal, {
   // is answered and checked with physical care, but it takes no action in
   // the world, so there is nothing to approve.
   const goalActions = analysis.goalModel?.actions ?? [];
-  const physicalQuestion = analysis.flags?.physical === true && analysis.flags?.highImpact !== true
+  const physicalQuestion = analysis.flags?.physical === true
     && analysis.flags?.externalAction !== true
     && goalActions.length > 0 && goalActions.every(action => action === 'answer');
   const noPhysicalAction = writingDocument || physicalQuestion;
@@ -664,7 +664,7 @@ export function planGoal(goal, {
   const approvalReasonsList = crisis ? [] : approvalReasons({
     governanceRequired: governance.constraints.requireHumanApproval || governanceReasons.length > 0,
     execution: executionRequired,
-    highImpact: analysis.flags?.highImpact === true,
+    highImpact: analysis.flags?.highImpact === true && !noPhysicalAction,
     physical: analysis.flags?.physical === true && !noPhysicalAction
   }).concat(governanceReasons);
   const dedupedApprovalReasons = [...new Set(approvalReasonsList.filter(Boolean))];
