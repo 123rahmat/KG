@@ -277,7 +277,7 @@ jobs:
           CREATE ROLE kindgleam_backup LOGIN BYPASSRLS PASSWORD 'backup';
           CREATE ROLE kindgleam_restore LOGIN BYPASSRLS PASSWORD 'restore';
           GRANT kindgleam_migrate TO kindgleam_restore WITH INHERIT FALSE, SET TRUE;
-          ALTER DATABASE kindgleam SET OWNER TO kindgleam_migrate;
+          ALTER DATABASE kindgleam OWNER TO kindgleam_migrate;
           SQL
       - name: Boot the production application against real PostgreSQL
         run: |
