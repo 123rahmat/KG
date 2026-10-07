@@ -94,7 +94,6 @@ const fetchImpl = async (url, options) => {
   const turn = body.messages.filter(m => m.role === 'assistant').length;
   const tool = TOOLS.find(([re]) => re.test(request.goal));
   if (tool && turn === 0 && type !== 'deliver') {
-    if (tool[1].tool === 'finance.project') pendingBusinessSynthesis = true;
     return reply(JSON.stringify(tool[1]));
   }
   return reply((ANSWERS.find(([re]) => re.test(request.goal)) ?? [0, 'ok'])[1]);
