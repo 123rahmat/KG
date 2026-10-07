@@ -1132,6 +1132,23 @@ export class RunStore {
         };
       }
 
+      if (status === 'complete' && EVIDENCE_REQUIRED.has(target.type) && isEmpty(evidence)) {
+        // Recorded outside the transaction, for the same reason as above.
+        await this.audit?.record({
+          principalId: principal.id,
+          workspaceId: scope.workspaceId,
+          action: 'run.advance',
+          target: `${run.id}:${target.id}`,
+          outcome: 'denied',
+          detail: { reason: 'evidence-required', taskType: target.type },
+          requestId
+        });
+        throw new RunError(
+          `Task "${target.id}" records what actually happened and cannot complete without evidence`,
+          { status: 422, code: 'evidence-required' }
+        );
+      }
+
       // Completion is decided from the unified workflow contract, never from a model/status claim alone.
       if (status === 'complete') {
         const priorUnified = run.adaptation?.unifiedAdaptiveWorkflow ?? {};
@@ -1220,22 +1237,7 @@ export class RunStore {
         }
       }
 
-      if (status === 'complete' && EVIDENCE_REQUIRED.has(target.type) && isEmpty(evidence)) {
-        // Recorded outside the transaction, for the same reason as above.
-        await this.audit?.record({
-          principalId: principal.id,
-          workspaceId: scope.workspaceId,
-          action: 'run.advance',
-          target: `${run.id}:${target.id}`,
-          outcome: 'denied',
-          detail: { reason: 'evidence-required', taskType: target.type },
-          requestId
-        });
-        throw new RunError(
-          `Task "${target.id}" records what actually happened and cannot complete without evidence`,
-          { status: 422, code: 'evidence-required' }
-        );
-      }
+
 
       await client.query(
         `UPDATE run_tasks SET status = $3, summary = $4, evidence = $5, completed_at = now()
