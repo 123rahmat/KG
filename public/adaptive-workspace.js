@@ -126,12 +126,6 @@ function progressSnapshot(run) {
   const research = run?.adaptation?.researchWorkspace ?? {};
   const testCount = tasks.filter(task => task?.id === 'test-code' || /test|verif/i.test(String(task?.id) + ' ' + String(task?.type))).length;
   const verified = tasks.filter(task => task?.type === 'verify' && task?.status === 'complete').length;
-  const multi = [...tasks].reverse().map(task => task?.evidence?.multiAgent).find(Boolean)
-    ?? run?.adaptation?.multiAgent
-    ?? null;
-  const agentStates = Array.isArray(multi?.agentStates) ? multi.agentStates : [];
-  const agents = agentStates.length || Number(multi?.agentCount) || 0;
-  const activeAgents = agentStates.filter(item => ['running', 'queued', 'active'].includes(text(item?.status).toLowerCase())).length;
   return {
     completed, failed, active, pending,
     files, images,
@@ -141,32 +135,87 @@ function progressSnapshot(run) {
     gaps: Array.isArray(research.unresolvedQuestions) ? research.unresolvedQuestions.length : 0,
     tests: testCount,
     verified,
-    agents,
-    activeAgents,
     depth: text(run?.intelligence?.reasoning?.depth || run?.adaptation?.resourcePlan?.control?.depth) || 'adaptive',
     scale: text(run?.adaptation?.scale || run?.intelligence?.scale) || 'task'
   };
 }
 
-function workspaceLabel(run) {
-  const surface = text(run?.surface || run?.adaptation?.surface?.surface || state.activeSurface).toLowerCase();
-  if (surface === 'code') return 'Code';
-  if (surface === 'research') return 'Research';
-  return 'NormalChat';
+function backgroundSnapshot(run) {
+  const tasks = Array.isArray(run?.tasks) ? run.tasks : [];
+  const multi = tasks.map(task => task?.evidence?.multiAgent).filter(Boolean).at(-1)
+    ?? run?.adaptation?.multiAgent
+    ?? null;
+  const agentStates = Array.isArray(multi?.agentStates) ? multi.agentStates : [];
+  const activeAgents = agentStates
+    .filter(item => ['running', 'queued', 'working'].includes(text(item?.status).toLowerCase()))
+    .map(item => text(item?.role))
+    .filter(Boolean);
+  const completedAgents = agentStates.filter(item => item?.status === 'complete').length;
+
+  const tools = new Set();
+  let activeTool = '';
+  for (const task of tasks) {
+    for (const item of task?.evidence?.tools ?? []) {
+      if (item?.tool) tools.add(text(item.tool));
+      if (item?.status === 'running' || item?.outcome === 'running') activeTool = text(item.tool);
+    }
+  }
+
+  const execution = [...tasks].reverse().find(task =>
+    task?.evidence?.executionTarget
+    || task?.evidence?.result?.executionTarget
+    || task?.evidence?.receipt?.executionTarget
+  );
+  const executionTarget = executionLabel(execution);
+  const next = tasks.find(task => task.id === run?.next) ?? null;
+  const governance = run?.situationGovernance ?? run?.adaptation?.governance ?? {};
+  const approvals = Array.isArray(governance?.approvals) ? governance.approvals.length : 0;
+  const source = state.workspaceSource ?? {};
+  const workspace = activeWorkspace(run);
+
+  let permission = '';
+  let permissionTone = '';
+  if (next?.type === 'approval' || approvals) {
+    permission = 'Approval needed';
+    permissionTone = 'warn';
+  } else if (workspace === 'code' && source?.kind === 'github') {
+    permission = source?.permissions?.write === true ? 'Write access connected · approval still required' : 'Repository is read-only';
+    permissionTone = source?.permissions?.write === true ? 'ok' : 'neutral';
+  } else if (governance?.status === 'blocked') {
+    permission = 'Blocked by policy';
+    permissionTone = 'bad';
+  }
+
+  return {
+    activeAgents,
+    completedAgents,
+    toolCount: tools.size,
+    activeTool,
+    executionTarget,
+    permission,
+    permissionTone
+  };
 }
 
-function permissionSnapshot(run, current) {
-  if (run?.state === 'blocked') {
-    return { label: 'Blocked', detail: 'A permitted path is required', tone: 'bad' };
-  }
-  if (run?.state === 'waiting' || current?.type === 'approval' || ['waiting', 'approval'].includes(current?.status)) {
-    return { label: 'Approval needed', detail: 'Nothing requiring approval proceeds until you decide', tone: 'warn' };
-  }
-  const surface = text(run?.surface || run?.adaptation?.surface?.surface || state.activeSurface).toLowerCase();
-  if (surface === 'code' && state.workspaceSource?.permissions?.write !== true) {
-    return { label: 'Read-only', detail: 'Repository write-back is not enabled', tone: 'quiet' };
-  }
-  return { label: 'Guarded', detail: 'Server permissions remain enforced', tone: 'ok' };
+function progressSegments(tasks, current) {
+  return element('div', {
+    class: 'work-progress-segments',
+    role: 'progressbar',
+    'aria-valuemin': '0',
+    'aria-valuemax': String(Math.max(tasks.length, 1)),
+    'aria-valuenow': String(tasks.filter(task => ['complete', 'skipped'].includes(task?.status)).length),
+    'aria-label': 'Server-confirmed materialized steps'
+  }, tasks.length
+    ? tasks.map(task => {
+        const tone = taskTone(task);
+        const isCurrent = current?.id === task?.id;
+        return element('span', {
+          class: 'work-progress-segment ' + tone + (isCurrent ? ' current' : ''),
+          title: taskLabel(task) + ' · ' + (task?.status || 'pending'),
+          'aria-hidden': 'true'
+        });
+      })
+    : [element('span', { class: 'work-progress-segment pending', 'aria-hidden': 'true' })]);
 }
 
 export function renderWorkStatus(run) {
@@ -177,99 +226,86 @@ export function renderWorkStatus(run) {
     ?? tasks.find(task => !['complete', 'skipped'].includes(task.status))
     ?? null;
   const snapshot = progressSnapshot(run);
-  const status = currentStatus(run);
+  const background = backgroundSnapshot(run);
   const connectionLost = state.network?.online === false || state.network?.reachable === false;
-  const permission = permissionSnapshot(run, current);
-  const lastExecution = [...tasks].reverse().map(executionLabel).find(Boolean);
-  const stateLabel = run?.state === 'complete'
-    ? 'Done'
-    : run?.state === 'blocked'
-      ? 'Blocked'
-      : run?.state === 'waiting'
-        ? 'Waiting'
-        : run?.state === 'iterate'
-          ? 'Ready'
-          : 'Live';
-  const live = !['complete', 'blocked', 'waiting', 'iterate'].includes(run?.state);
-  const liveLabel = current
-    ? 'Current focus · ' + taskLabel(current)
-    : run?.state === 'complete'
-      ? 'All required work is complete'
-      : 'Adapting the next useful step';
+  const workspace = activeWorkspace(run);
+  const workspaceLabel = workspace === 'code' ? 'Code' : workspace === 'research' ? 'Research' : 'NormalChat';
 
-  const stats = [
-    ['Completed', String(snapshot.completed), snapshot.active ? snapshot.active + ' active now' : snapshot.pending ? snapshot.pending + ' materialized next' : 'current work set'],
-    ...(snapshot.files ? [['Files', String(snapshot.files), snapshot.images ? snapshot.images + ' image' + (snapshot.images === 1 ? '' : 's') : 'working set']] : []),
-    ...(snapshot.sources || snapshot.evidence ? [['Evidence', String(snapshot.evidence), snapshot.sources + ' source' + (snapshot.sources === 1 ? '' : 's')]] : []),
-    ...(snapshot.tests ? [['Checks', String(snapshot.tests), snapshot.verified ? snapshot.verified + ' verified' : 'verification active']] : []),
-    ...(snapshot.agents ? [['Specialists', String(snapshot.agents), snapshot.activeAgents ? snapshot.activeAgents + ' active' : 'adaptive team']] : [])
-  ].slice(0, 4);
+  const stats = workspace === 'code'
+    ? [
+        ['Files', String(snapshot.files), snapshot.images ? snapshot.images + ' image' + (snapshot.images === 1 ? '' : 's') : 'working set'],
+        ['Checks', String(snapshot.tests), snapshot.verified ? snapshot.verified + ' verified' : 'adaptive verification'],
+        ['Steps', snapshot.completed + '/' + Math.max(tasks.length, 1), snapshot.pending ? snapshot.pending + ' materialized next' : 'current set covered']
+      ]
+    : workspace === 'research'
+      ? [
+          ['Sources', String(snapshot.sources), 'tracked evidence sources'],
+          ['Evidence', String(snapshot.evidence), snapshot.conflicts ? snapshot.conflicts + ' conflict' + (snapshot.conflicts === 1 ? '' : 's') : 'traceable findings'],
+          ['Open gaps', String(snapshot.gaps), snapshot.gaps ? 'still being resolved' : 'none recorded']
+        ]
+      : [
+          ['Steps', snapshot.completed + '/' + Math.max(tasks.length, 1), 'server-confirmed'],
+          ...(background.toolCount ? [['Tools', String(background.toolCount), background.activeTool ? 'using ' + background.activeTool : 'used when needed']] : []),
+          ['Verification', snapshot.verified ? 'Passed' : snapshot.tests ? 'Active' : 'Adaptive', snapshot.verified ? 'evidence checked' : 'only when justified']
+        ];
 
-  const runtime = [
-    { label: workspaceLabel(run), detail: 'workspace', tone: 'quiet' },
-    { label: snapshot.depth === 'adaptive' ? 'Adaptive reasoning' : snapshot.depth + ' reasoning', detail: snapshot.scale, tone: 'quiet' },
-    ...(lastExecution ? [{ label: lastExecution, detail: 'execution', tone: 'quiet' }] : []),
-    { label: permission.label, detail: permission.detail, tone: permission.tone }
-  ];
+  const backgroundItems = [
+    background.activeAgents.length
+      ? background.activeAgents.length + ' specialist' + (background.activeAgents.length === 1 ? '' : 's') + ' working'
+      : background.completedAgents
+        ? background.completedAgents + ' specialist' + (background.completedAgents === 1 ? '' : 's') + ' contributed'
+        : '',
+    background.toolCount ? background.toolCount + ' tool' + (background.toolCount === 1 ? '' : 's') + ' in scope' : '',
+    background.executionTarget ? 'Execution · ' + background.executionTarget : ''
+  ].filter(Boolean);
 
   const visible = tasks.slice(-6);
   return element('div', {
     class: 'work-timeline' + (connectionLost ? ' is-disconnected' : ''),
-    'aria-label': 'Live adaptive work status'
+    'aria-label': 'Adaptive workflow progress'
   }, [
-    element('div', { class: 'work-timeline-head' }, [
-      element('div', { class: 'work-status-summary' }, [
-        element('span', { class: 'work-status-dot' + (live ? ' active' : ''), 'aria-hidden': 'true' }),
-        element('div', { class: 'work-status-copy' }, [
-          element('strong', { text: status }),
-          element('span', { class: 'small muted', text: liveLabel })
-        ])
-      ]),
-      element('span', {
-        class: 'small work-status-state',
-        'data-state': text(run?.state || 'working'),
-        text: stateLabel
-      })
-    ]),
     connectionLost
       ? element('div', { class: 'work-connection-banner', role: 'status', 'aria-live': 'polite' }, [
           element('span', { class: 'work-connection-dot', 'aria-hidden': 'true' }),
           element('div', {}, [
-            element('strong', { text: 'Connection lost — work is still server-owned' }),
-            element('span', { class: 'small muted', text: 'This view will reconnect automatically. In-flight server work is not restarted from the browser.' })
+            element('strong', { text: 'Connection lost — background work is still protected' }),
+            element('span', { class: 'small muted', text: 'The server keeps the job state. The live view reconnects automatically when the connection returns.' })
           ])
         ])
       : null,
-    element('div', { class: 'work-runtime-strip', 'aria-label': 'Background system state' },
-      runtime.map(item => element('span', {
-        class: 'work-runtime-chip',
-        'data-tone': item.tone,
-        title: item.detail,
-        text: item.label
-      }))
-    ),
-    element('ol', { class: 'work-stage-rail', 'aria-label': 'Materialized workflow steps' }, visible.map(task => {
-      const tone = taskTone(task);
-      const selected = current?.id === task.id;
-      const exec = executionLabel(task);
-      return element('li', {
-        class: 'work-stage-item ' + tone,
-        ...(selected ? { 'aria-current': 'step' } : {})
-      }, [
-        element('span', { class: 'work-stage-marker', 'aria-hidden': 'true' }),
-        element('div', { class: 'work-stage-copy' }, [
-          element('strong', { text: taskLabel(task) }),
-          element('span', { class: 'small muted', text: [selected ? 'Now' : task.status || 'pending', exec].filter(Boolean).join(' · ') })
+
+    background.permission
+      ? element('div', {
+          class: 'work-permission-strip ' + background.permissionTone,
+          role: background.permissionTone === 'warn' || background.permissionTone === 'bad' ? 'status' : undefined
+        }, [
+          element('span', { class: 'work-permission-mark', 'aria-hidden': 'true' }),
+          element('span', { class: 'small', text: background.permission })
         ])
-      ]);
-    })),
-    element('div', { class: 'work-status-grid adaptive-progress-grid' }, stats.map(([label, value, detail]) =>
+      : null,
+
+    progressSegments(tasks, current),
+
+    element('div', { class: 'work-progress-caption' }, [
+      element('span', { class: 'small muted', text: workspaceLabel + ' · ' + snapshot.completed + ' completed materialized step' + (snapshot.completed === 1 ? '' : 's') }),
+      element('span', { class: 'small muted', text: snapshot.active ? 'Working now' : snapshot.pending ? 'Next step adapts from evidence' : 'No unnecessary work queued' })
+    ]),
+
+    element('div', { class: 'work-status-grid adaptive-progress-grid' }, stats.slice(0, 3).map(([label, value, detail]) =>
       element('div', { class: 'work-status-item' }, [
         element('span', { class: 'small muted', text: label }),
         element('strong', { text: value }),
         element('span', { class: 'small muted', text: detail })
       ])
     )),
+
+    backgroundItems.length
+      ? element('div', { class: 'work-background-strip', 'aria-label': 'Background activity' }, [
+          element('span', { class: 'small muted work-background-label', text: 'Background' }),
+          ...backgroundItems.map(item => element('span', { class: 'work-background-chip small', text: item }))
+        ])
+      : null,
+
     snapshot.failed || snapshot.conflicts || snapshot.gaps
       ? element('div', { class: 'work-progress-alerts' }, [
           snapshot.failed ? element('span', { class: 'pill bad', text: snapshot.failed + ' step' + (snapshot.failed === 1 ? '' : 's') + ' needs attention' }) : null,
@@ -277,26 +313,25 @@ export function renderWorkStatus(run) {
           snapshot.gaps ? element('span', { class: 'pill warn', text: snapshot.gaps + ' open research gap' + (snapshot.gaps === 1 ? '' : 's') }) : null
         ].filter(Boolean))
       : null,
+
     element('details', { class: 'work-timeline-details' }, [
-      element('summary', { class: 'small', text: 'Background details' }),
-      element('div', { class: 'work-background-details' }, [
-        element('span', { class: 'small muted', text: 'Only server-reported work is shown here. The workflow may expand or contract when new evidence changes what is needed.' }),
-        element('div', { class: 'work-timeline-list' }, visible.map(task => {
-          const tone = taskTone(task);
-          const exec = executionLabel(task);
-          return element('div', { class: 'work-timeline-item ' + tone }, [
-            element('span', { class: 'work-timeline-dot', 'aria-hidden': 'true' }),
-            element('div', { class: 'work-timeline-copy' }, [
-              element('strong', { class: 'small', text: taskLabel(task) }),
-              element('span', { class: 'small muted', text: [task.status || 'pending', exec].filter(Boolean).join(' · ') })
-            ]),
-            task.status === 'failed' ? element('span', { class: 'small work-timeline-flag', text: 'Needs attention' }) : null
-          ].filter(Boolean));
-        }))
-      ])
+      element('summary', { class: 'small', text: 'Background activity and completed steps' }),
+      element('div', { class: 'work-timeline-list' }, visible.map(task => {
+        const tone = taskTone(task);
+        const exec = executionLabel(task);
+        return element('div', { class: 'work-timeline-item ' + tone }, [
+          element('span', { class: 'work-timeline-dot', 'aria-hidden': 'true' }),
+          element('div', { class: 'work-timeline-copy' }, [
+            element('strong', { class: 'small', text: taskLabel(task) }),
+            element('span', { class: 'small muted', text: [task.status || 'pending', exec].filter(Boolean).join(' · ') })
+          ]),
+          task.status === 'failed' ? element('span', { class: 'small work-timeline-flag', text: 'Needs attention' }) : null
+        ].filter(Boolean));
+      }))
     ])
   ].filter(Boolean));
 }
+
 function capabilityItems(data) {
   const run = data.run;
   const source = state.workspaceSource;
