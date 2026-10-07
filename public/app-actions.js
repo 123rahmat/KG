@@ -908,10 +908,8 @@ export function assistantMessage(run, active) {
   }
   if (actionText) parts.push(answerActions(run, actionText));
   if (driving) {
-    parts.push(element('div', { class: 'thinking' }, [
-      element('span', { class: 'pulse' }),
-      element('span', { text: `${state.drivingLabel || 'Working'}…` })
-    ]));
+    // The live-work panel above is the single progress surface. Avoid a second
+    // spinner/narration line that would duplicate server-confirmed status.
   } else if (run.state === 'complete') {
     if (!text) parts.push(element('p', { class: 'muted small', text: 'Finished.' }));
   } else if (TERMINAL_STATES.includes(run.state)) {
