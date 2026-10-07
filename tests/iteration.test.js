@@ -139,7 +139,7 @@ test('the situation shapes the work, verification judges it, and a replan learns
     assert.equal(done.body.run.attempt, 2);
     assert.equal(done.body.run.tasks.find(task => task.id === 'verify').evidence.verdict.verdict, 'pass');
   }, {
-    env: { AI_PROVIDER: 'anthropic', AI_API_KEY: 'test-key', AI_MODEL: 'claude-opus-5-5' },
+    env: { AI_PROVIDER: 'fixture', AI_MODEL: 'fixture-model' },
     fetchImpl: async (_url, options) => {
       const body = JSON.parse(options.body);
       if (String(body.system ?? '').startsWith('Classify')) return reply('{}');
@@ -163,7 +163,7 @@ test('an unreadable verdict records nothing', () =>
     assert.equal(judged.body.execution.status, 'verification-inconclusive');
     assert.equal(judged.body.run.tasks.find(task => task.id === 'verify').status, 'pending');
   }, {
-    env: { AI_PROVIDER: 'anthropic', AI_API_KEY: 'test-key', AI_MODEL: 'claude-opus-5-5' },
+    env: { AI_PROVIDER: 'fixture', AI_MODEL: 'fixture-model' },
     fetchImpl: async () => reply('Looks fine to me.')
   }));
 
@@ -176,7 +176,7 @@ test('a pass that lists a problem is treated as a fail', () =>
     const judged = await call('POST', `/api/runs/${run.id}/execute`, { ...auth, body: {} });
     assert.equal(judged.body.run.state, 'iterate');
   }, {
-    env: { AI_PROVIDER: 'anthropic', AI_API_KEY: 'test-key', AI_MODEL: 'claude-opus-5-5' },
+    env: { AI_PROVIDER: 'fixture', AI_MODEL: 'fixture-model' },
     fetchImpl: async (_url, options) => {
       const body = JSON.parse(options.body);
       const user = body.messages.find(message => message.role === 'user')?.content ?? '{}';
@@ -219,9 +219,8 @@ test('generated code is carried into the authorized execution stage', () => {
     assert.equal(runnerRequests[0].payload.source, 'print(42)');
   }, {
     env: {
-      AI_PROVIDER: 'anthropic',
-      AI_MODEL: 'claude-opus-5-5',
-      AI_API_KEY: 'test-key',
+      AI_PROVIDER: 'fixture',
+      AI_MODEL: 'fixture-model',
       SANDBOX_RUNNER_URL: 'http://sandbox.test',
       RUNNER_TOKEN: 'runner-' + 'x'.repeat(31)
     },
@@ -324,8 +323,7 @@ test('failing code goes back with its error output for a targeted fix, and stops
     assert.equal(result.body.run.state, 'iterate');
   }, {
     env: {
-      AI_PROVIDER: 'anthropic', AI_MODEL: 'claude-opus-5-5', AI_API_KEY: 'test-key',
-      SANDBOX_RUNNER_URL: 'http://sandbox.test', RUNNER_TOKEN: 'runner-' + 'x'.repeat(31)
+      AI_PROVIDER: 'fixture', AI_MODEL: 'fixture-model', SANDBOX_RUNNER_URL: 'http://sandbox.test', RUNNER_TOKEN: 'runner-' + 'x'.repeat(31)
     },
     fetchImpl: async (url, options) => {
       if (!String(url).startsWith('http://sandbox.test')) {
@@ -387,8 +385,7 @@ test('code that ran without tests of its own needs a person to certify it', () =
     assert.equal(checked.body.execution.advisoryVerdict.verdict, 'pass');
   }, {
     env: {
-      AI_PROVIDER: 'anthropic', AI_MODEL: 'claude-opus-5-5', AI_API_KEY: 'test-key',
-      SANDBOX_RUNNER_URL: 'http://sandbox.test', RUNNER_TOKEN: 'runner-' + 'x'.repeat(31)
+      AI_PROVIDER: 'fixture', AI_MODEL: 'fixture-model', SANDBOX_RUNNER_URL: 'http://sandbox.test', RUNNER_TOKEN: 'runner-' + 'x'.repeat(31)
     },
     fetchImpl: async (url, options) => {
       if (String(url).startsWith('http://sandbox.test')) {
