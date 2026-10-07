@@ -743,17 +743,21 @@ export function workStatusCard(run) {
     ?? tasks.find(task => !['complete', 'skipped'].includes(task.status))
     ?? null;
   const current = next?.metadata?.title || next?.purpose || next?.id
-    || (run.state === 'complete' ? 'Verified result' : 'Adapting the next useful step');
-  const done = tasks.filter(task => ['complete', 'skipped'].includes(task.status)).length;
+    || (run.state === 'complete' ? 'Verified result' : 'Adapting the workflow');
+  const workspace = run?.surface === 'code'
+    ? 'Code'
+    : run?.surface === 'research'
+      ? 'Research'
+      : 'NormalChat';
   const status = run.state === 'complete'
-    ? 'Finished'
+    ? 'Verified'
     : run.state === 'blocked'
-      ? 'Blocked by policy'
+      ? 'Blocked'
       : run.state === 'waiting'
         ? 'Waiting for you'
         : run.state === 'iterate'
           ? 'Ready to refine'
-          : 'Working in the background';
+          : 'Live';
   const tone = run.state === 'blocked' || failed
     ? 'bad'
     : waiting || run.state === 'waiting'
@@ -761,27 +765,31 @@ export function workStatusCard(run) {
       : run.state === 'complete'
         ? 'ok'
         : '';
-  const summary = [
-    status,
-    done ? done + ' completed' : null,
-    failed ? failed + ' needs attention' : null
-  ].filter(Boolean).join(' · ');
 
-  return element('details', { class: 'work-status-card ' + tone, open: run.state !== 'complete' }, [
-    element('summary', { class: 'work-status-summary' }, [
+  return element('details', {
+    class: 'work-status-card ' + tone,
+    open: run.state !== 'complete'
+  }, [
+    element('summary', {
+      class: 'work-status-summary',
+      'aria-label': 'Live work status'
+    }, [
       element('span', { class: 'work-status-mark', 'aria-hidden': 'true' }),
       element('div', { class: 'work-status-head' }, [
         element('strong', { text: 'Live work' }),
-        element('span', { class: 'small muted', text: summary })
+        element('span', { class: 'small muted', text: workspace + ' · ' + status })
       ]),
-      element('span', { class: 'work-status-now', text: current })
+      element('div', { class: 'work-status-now' }, [
+        element('span', { class: 'work-status-now-label small muted', text: 'Now' }),
+        element('strong', { class: 'small', text: current })
+      ])
     ]),
     renderWorkStatus(run),
     workDetailsCard(run),
     failed
       ? element('p', {
           class: 'work-status-warning small',
-          text: failed + ' step' + (failed === 1 ? '' : 's') + ' failed; evidence is preserved for repair or replanning.'
+          text: failed + ' step' + (failed === 1 ? '' : 's') + ' needs repair or replanning. The failure evidence is preserved.'
         })
       : null
   ].filter(Boolean));
