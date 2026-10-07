@@ -2,7 +2,7 @@
   "name": "kindgleam",
   "version": "10.4.2",
   "private": true,
-  "description": "Open-world adaptive workflow for known, unknown and future goals.",
+  "description": "Adaptive AI for everyday work, software projects, and evidence-driven research.",
   "type": "module",
   "engines": {
     "node": ">=22.0.0"
