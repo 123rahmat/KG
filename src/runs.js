@@ -1415,6 +1415,47 @@ export class RunStore {
             ? structured
             : (run.adaptation?.lastReassessment ?? null)
         };
+
+    // Persist the same evidence/acceptance projection used by the completion
+    // gate. Previously a verify step could pass, but the following deliver
+    // step still saw verificationSatisfied=false from the original plan and
+    // rejected already-verified work.
+    if (decision.status === 'complete') {
+      const priorUnified = run.adaptation?.unifiedAdaptiveWorkflow ?? {};
+      const priorEvidence = Array.isArray(priorUnified?.evidence?.items)
+        ? priorUnified.evidence.items
+        : [];
+      const currentEvidence = evidence === null || evidence === undefined ? [] : [evidence];
+      const unifiedEvidence = [...priorEvidence, ...currentEvidence].slice(-128);
+      const verificationPassed = target.type === 'verify'
+        && (evidence?.verdict?.verdict === 'pass'
+          || evidence?.verification?.verdict === 'pass'
+          || result?.evidence?.verdict?.verdict === 'pass');
+      const unified = reassessUnifiedWorkflow(priorUnified, {
+        event: { type: target.type === 'verify' ? 'verification' : target.type, material: true },
+        situation: run.situation ?? {},
+        acceptance: {
+          ...(priorUnified.acceptance ?? {}),
+          evidence: unifiedEvidence,
+          verificationSatisfied: priorUnified.acceptance?.verificationSatisfied === true || verificationPassed
+        },
+        evidence: unifiedEvidence,
+        failedAttempts: Number(run.attempt ?? 0),
+        candidates: [target.id],
+        surface: run.surface || priorUnified.surface || 'normal-chat'
+      });
+      adaptiveUpdate.unifiedAdaptiveWorkflow = unified;
+      adaptiveUpdate.acceptanceContract = unified.acceptance;
+      adaptiveUpdate.adaptiveBehavior = {
+        ...(adaptiveUpdate.adaptiveBehavior ?? {}),
+        ...unified.behavior,
+        modeController: unified.modeController,
+        executionStrategy: unified.execution
+      };
+      adaptiveUpdate.modeController = unified.modeController;
+      adaptiveUpdate.adaptiveDecision = unified.authority;
+    }
+
     if (approvedPlanUpdate) adaptiveUpdate.approvedPlan = approvedPlanUpdate;
     const usesResearchWorkspace = run.surface === 'research'
       || (Array.isArray(run.adaptation?.surfaces) && run.adaptation.surfaces.includes('research'));
