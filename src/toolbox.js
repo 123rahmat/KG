@@ -61,6 +61,72 @@ function safeArtifactName(name, fallback = 'generated-artifact.txt') {
   return value;
 }
 
+function finiteNumber(value, { min = -Infinity, max = Infinity, fallback = 0 } = {}) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
+}
+
+function financeProjection(input = {}) {
+  const months = Math.round(finiteNumber(input.months, { min: 1, max: 120, fallback: 12 }));
+  const upfrontCost = finiteNumber(input.upfrontCost, { min: 0, max: 1e12 });
+  const initialCustomers = finiteNumber(input.initialCustomers, { min: 0, max: 1e9 });
+  const newCustomersPerMonth = finiteNumber(input.newCustomersPerMonth, { min: 0, max: 1e9 });
+  const growthRate = finiteNumber(input.newCustomerGrowthPercent, { min: -100, max: 1000 }) / 100;
+  const price = finiteNumber(input.pricePerCustomerPerMonth, { min: 0, max: 1e12 });
+  const variableCost = finiteNumber(input.variableCostPerCustomerPerMonth, { min: 0, max: 1e12 });
+  const fixedCosts = finiteNumber(input.fixedCostsPerMonth, { min: 0, max: 1e12 });
+
+  let activeCustomers = initialCustomers;
+  let cumulativeCashFlow = -upfrontCost;
+  let breakEvenMonth = null;
+  const rows = [];
+
+  for (let month = 1; month <= months; month += 1) {
+    const newCustomers = newCustomersPerMonth * (1 + growthRate) ** (month - 1);
+    activeCustomers += newCustomers;
+    const revenue = activeCustomers * price;
+    const variableCosts = activeCustomers * variableCost;
+    const operatingProfit = revenue - variableCosts - fixedCosts;
+    cumulativeCashFlow += operatingProfit;
+    if (breakEvenMonth === null && cumulativeCashFlow >= 0) breakEvenMonth = month;
+    rows.push({
+      month,
+      newCustomers: Number(newCustomers.toFixed(2)),
+      activeCustomers: Number(activeCustomers.toFixed(2)),
+      revenue: Number(revenue.toFixed(2)),
+      variableCosts: Number(variableCosts.toFixed(2)),
+      fixedCosts: Number(fixedCosts.toFixed(2)),
+      operatingProfit: Number(operatingProfit.toFixed(2)),
+      cumulativeCashFlow: Number(cumulativeCashFlow.toFixed(2))
+    });
+  }
+
+  return {
+    assumptions: {
+      months,
+      upfrontCost,
+      initialCustomers,
+      newCustomersPerMonth,
+      newCustomerGrowthPercent: Number((growthRate * 100).toFixed(4)),
+      pricePerCustomerPerMonth: price,
+      variableCostPerCustomerPerMonth: variableCost,
+      fixedCostsPerMonth: fixedCosts,
+      churnPercent: 0,
+      note: 'This simple deterministic projection assumes customers remain active unless a future version is given an explicit churn/retention assumption.'
+    },
+    breakEvenMonth,
+    totals: {
+      revenue: Number(rows.reduce((sum, row) => sum + row.revenue, 0).toFixed(2)),
+      variableCosts: Number(rows.reduce((sum, row) => sum + row.variableCosts, 0).toFixed(2)),
+      fixedCosts: Number(rows.reduce((sum, row) => sum + row.fixedCosts, 0).toFixed(2)),
+      operatingProfit: Number(rows.reduce((sum, row) => sum + row.operatingProfit, 0).toFixed(2)),
+      endingCashFlow: Number((rows.at(-1)?.cumulativeCashFlow ?? -upfrontCost).toFixed(2))
+    },
+    months: rows
+  };
+}
+
 const BUILT_IN = [
   {
     name: 'artifact.create',
@@ -235,6 +301,23 @@ const BUILT_IN = [
         ...(offset + MAX_TOOL_CHARS < full.length ? { next: offset + MAX_TOOL_CHARS } : {})
       };
     }
+  },
+  {
+    name: 'finance.project',
+    title: 'Project business cash flow',
+    description: 'Calculate a deterministic monthly business projection from customer growth, price, variable cost, fixed cost and upfront cost. Use it for forecasts instead of guessing arithmetic.',
+    input: {
+      months: 'projection length, 1-120',
+      upfrontCost: 'one-time starting cost',
+      initialCustomers: 'existing customers at month 0 (default 0)',
+      newCustomersPerMonth: 'new customers in month 1',
+      newCustomerGrowthPercent: 'monthly growth rate of new customer acquisition',
+      pricePerCustomerPerMonth: 'monthly revenue per active customer',
+      variableCostPerCustomerPerMonth: 'monthly variable cost per active customer',
+      fixedCostsPerMonth: 'monthly fixed costs'
+    },
+    ready: () => ({ ready: true }),
+    run: input => financeProjection(input)
   },
   {
     name: 'math.evaluate',
