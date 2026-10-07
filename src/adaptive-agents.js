@@ -262,7 +262,12 @@ export function decideAgentTopology({
 
   const topo = topologicalWaves(work.slice(0, budgetAgents));
   const waves = topo.waves.map(wave => wave.map(taskId => taskAgent.get(taskId)).filter(Boolean));
-  const effectiveWaves = shouldParallelize ? waves : waves.map(wave => wave.slice(0, 1));
+  const width = shouldParallelize ? Math.floor(parallelBudget) : 1;
+  const effectiveWaves = waves.flatMap(wave => {
+    const chunks = [];
+    for (let index = 0; index < wave.length; index += width) chunks.push(wave.slice(index, index + width));
+    return chunks;
+  });
   const mode = highRisk ? 'serialized'
     : topo.cycle ? 'pipeline'
       : effectiveWaves.some(wave => wave.length > 1) ? 'parallel-then-integrate' : 'pipeline';
@@ -327,7 +332,8 @@ export function adaptAgentTopology(plan, {
       replanned: true,
       replanReason: 'agent-failure-requires-bounded-recovery',
       failedTaskId: text(taskId) || null,
-      waves: current.waves.length ? current.waves.map(wave => wave.filter(Boolean).slice(0, 1)) : []
+      maxParallel: 1,
+      waves: current.waves.flatMap(wave => wave.filter(Boolean).map(id => [id]))
     };
   }
   if (additions.length) {
@@ -344,6 +350,39 @@ export function adaptAgentTopology(plan, {
   return { ...current, replanned: true, replanReason: 'wave-completed-and-reassessed', lastEvent: eventType || 'completed', lastTaskId: text(taskId) || null };
 }
 
+
+/** Settle the workflow even if a provider ignores cancellation. Late results
+ * stay outside the result ledger; provider callbacks must honor the signal to
+ * stop their own I/O or side effects. */
+async function boundedAgentCall(operation, { signal, timeoutMs }) {
+  const controller = new AbortController();
+  const cancelled = () => controller.abort(signal?.reason);
+  let interrupt;
+  const interruption = new Promise((_, reject) => {
+    interrupt = () => {
+      const error = new Error(signal?.aborted ? 'cancelled' : 'agent-timeout');
+      error.code = signal?.aborted ? 'cancelled' : 'agent-timeout';
+      reject(error);
+    };
+    controller.signal.addEventListener('abort', interrupt, { once: true });
+  });
+  signal?.addEventListener?.('abort', cancelled, { once: true });
+  const timer = setTimeout(() => controller.abort(), Math.max(1, Number(timeoutMs) || 120000));
+  try {
+    if (signal?.aborted) cancelled();
+    return await Promise.race([
+      interruption,
+      Promise.resolve().then(() => {
+        if (controller.signal.aborted) throw new Error('cancelled');
+        return operation(controller.signal);
+      })
+    ]);
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener?.('abort', cancelled);
+    controller.signal.removeEventListener('abort', interrupt);
+  }
+}
 
 /**
  * Execute an already-approved topology with bounded, dependency-aware
@@ -388,10 +427,24 @@ export async function executeAdaptiveAgentPlan(plan, {
       for (const dependency of taskDependencies(task)) {
         if (!taskMap.has(dependency)) return { valid: false, reason: 'unknown-dependency', taskId: task.id, dependency };
       }
+      if (!seenTasks.has(task.id)) return { valid: false, reason: 'unassigned-task', taskId: task.id };
+    }
+    const scheduled = new Set();
+    for (const wave of requestedWaves) {
+      if (!Array.isArray(wave)) return { valid: false, reason: 'invalid-wave' };
+      for (const id of wave) {
+        if (!agents.has(id)) return { valid: false, reason: 'unknown-agent', agentId: id };
+        if (scheduled.has(id)) return { valid: false, reason: 'duplicate-agent-schedule', agentId: id };
+        scheduled.add(id);
+      }
+    }
+    for (const id of agents.keys()) {
+      if (!scheduled.has(id)) return { valid: false, reason: 'unscheduled-agent', agentId: id };
     }
     return { valid: true };
   };
   const planValidation = validatePlan();
+  const parallelLimit = Math.max(1, Math.min(12, Math.floor(Number(plan?.maxParallel) || agents.size || 1)));
 
   const resourceKeys = task => [...new Set([
     ...(Array.isArray(task?.resourceKeys) ? task.resourceKeys : []),
@@ -403,6 +456,7 @@ export async function executeAdaptiveAgentPlan(plan, {
     const batch = [];
     const held = new Set();
     for (const agentId of ids) {
+      if (batch.length >= parallelLimit) break;
       const agent = agents.get(agentId);
       const keys = new Set((Array.isArray(agent?.taskIds) ? agent.taskIds : [])
         .flatMap(id => resourceKeys(taskMap.get(id))));
@@ -443,32 +497,24 @@ export async function executeAdaptiveAgentPlan(plan, {
     while (attempt <= retries) {
       if (aborted()) return { agentId, status: 'cancelled', reason: 'cancelled' };
       attempt += 1;
-      const controller = new AbortController();
-      const onAbort = () => controller.abort(signal?.reason);
-      signal?.addEventListener?.('abort', onAbort, { once: true });
-      const timer = setTimeout(() => controller.abort(new Error('agent-timeout')), Math.max(1, Number(timeoutMs) || 120000));
       try {
-        const output = await executeAgent(agent, {
+        const output = await boundedAgentCall(agentSignal => executeAgent(agent, {
           tasks: taskIds.map(id => taskMap.get(id)),
           completed: [...completed],
           findings: [...results.values()].filter(item => item.status === 'completed'),
           attempt,
           idempotencyKey: 'agent:' + agentId + ':attempt:' + attempt,
           authority: plan?.authority ?? { serverOwned: true },
-          signal: controller.signal
-        });
-        if (controller.signal.aborted) throw new Error('agent-timeout');
+          signal: agentSignal
+        }), { signal, timeoutMs });
         return { agentId, status: 'completed', attempt, output };
       } catch (error) {
-        if (controller.signal.aborted) {
+        if (signal?.aborted || error?.code === 'agent-timeout' || error?.code === 'cancelled') {
           return { agentId, status: signal?.aborted ? 'cancelled' : 'failed', attempt, reason: signal?.aborted ? 'cancelled' : 'agent-timeout' };
         }
         if (attempt > retries) {
           return { agentId, status: 'failed', attempt, reason: text(error?.message) || 'agent-failed' };
         }
-      } finally {
-        clearTimeout(timer);
-        signal?.removeEventListener?.('abort', onAbort);
       }
     }
     return { agentId, status: 'failed', reason: 'agent-failed' };
@@ -533,13 +579,13 @@ export async function executeAdaptiveAgentPlan(plan, {
 
   if (summary.status === 'completed' && plan?.integrationRequired && typeof integrate === 'function') {
     try {
-      summary.integration = await integrate({
+      summary.integration = await boundedAgentCall(agentSignal => integrate({
       findings: summary.results.filter(item => item.status === 'completed'),
       authority: plan.authority,
-      signal
-      });
+      signal: agentSignal
+      }), { signal, timeoutMs });
     } catch (error) {
-      summary.status = 'failed';
+      summary.status = signal?.aborted ? 'cancelled' : 'failed';
       summary.integration = { status: 'failed', reason: text(error?.message) || 'integration-failed' };
       summary.failedAgents.push('integrator');
     }

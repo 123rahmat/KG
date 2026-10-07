@@ -433,13 +433,65 @@ function workspaceValue(...values) {
 }
 
 function currentTask(run) {
+  if (workPresentation(run).terminal) return null;
   return run?.tasks?.find(task => task.id === run.next)
     ?? run?.tasks?.find(task => !['complete', 'skipped'].includes(task.status))
     ?? null;
 }
 
+function workspaceWorkView(run) {
+  return workPresentation(run, {
+    driving: state.driving === run?.id || state.drivingRuns?.has(run?.id) || state.busyRuns?.has(run?.id),
+    online: state.network?.online !== false && state.network?.reachable !== false,
+    consent: state.consentNeeded?.has(run?.id), manual: state.manualOpen?.has(run?.id)
+  });
+}
+
+const workspaceAreas = new Map();
+
+function openWorkspaceArea(name) {
+  const host = $('deepWorkspaceShell');
+  const area = host?.querySelector('[data-workspace-area="' + name + '"]');
+  if (!area) return;
+  workspaceAreas.set(host.dataset.workspace, name);
+  for (const control of host.querySelectorAll('[data-workspace-nav]')) {
+    const active = control.dataset.workspaceNav === name;
+    control.classList.toggle('active', active);
+    if (active) control.setAttribute('aria-current', 'location');
+    else control.removeAttribute('aria-current');
+  }
+  area.focus({ preventScroll: true });
+  area.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
+}
+
+function workspaceNavigation(workspace, areas) {
+  const selected = workspaceAreas.get(workspace) || 'overview';
+  return element('nav', { class: 'deep-workspace-nav', 'aria-label': (workspace === 'code' ? 'Code' : 'Research') + ' project areas' }, areas.map(([id, label]) => {
+    const control = button(label, () => openWorkspaceArea(id), (id === selected ? 'active ' : '') + 'small');
+    control.dataset.workspaceNav = id;
+    control.dataset.workspaceControl = 'nav:' + id;
+    control.setAttribute('aria-controls', 'workspace-' + workspace + '-' + id);
+    if (id === selected) control.setAttribute('aria-current', 'location');
+    return control;
+  }));
+}
+
+function workspaceArea(workspace, id, className) {
+  return { class: className, id: 'workspace-' + workspace + '-' + id, 'data-workspace-area': id, tabindex: '-1', 'aria-label': id === 'overview' ? 'Workspace overview' : id };
+}
+
+function researchSource(source, scope) {
+  const url = text(source?.url);
+  const web = /^https?:\/\//i.test(url);
+  return element(web ? 'a' : 'span', {
+    class: 'workspace-detail-row source-row', ...(web ? { href: url, target: '_blank', rel: 'noopener noreferrer', 'data-workspace-control': scope + ':' + (source?.key || url) } : {}),
+    text: source?.title || source?.provider || url || 'Source'
+  });
+}
+
 function codeWorkspaceProject(data) {
   const run = data.run;
+  const view = workspaceWorkView(run);
   const source = state.workspaceSource ?? {};
   const repo = workspaceValue(source.repoFullName, source.repositoryFullName, source.repo, source.repository?.fullName, source.name) || 'No GitHub project connected';
   const revision = workspaceValue(source.commitSha, source.repoRef, source.revision, source.currentRevision, source.metadata?.commitSha, run?.adaptation?.workspaceSourceRevision, run?.adaptation?.codeWorkspace?.baseRevision) || 'Revision selected by workspace';
@@ -452,6 +504,11 @@ function codeWorkspaceProject(data) {
     ...(Array.isArray(lastChange?.files) ? lastChange.files : []),
     ...(Array.isArray(lastChange?.deleted) ? lastChange.deleted : [])
   ].filter(Boolean).slice(0, 12);
+  const files = [...new Set([
+    ...(source.metadata?.manifest ?? []).map(file => file.path),
+    ...(run?.adaptation?.projectOverlay ?? []).map(file => file.path),
+    ...(run?.adaptation?.attachments ?? state.attachments ?? []).map(file => file.path || file.name)
+  ].map(text).filter(Boolean))];
   const verificationRows = tests.slice(-6).map(item => ({
     title: taskLabel(item),
     status: item.status || 'pending',
@@ -471,16 +528,11 @@ function codeWorkspaceProject(data) {
         'data-state': run?.state || 'ready'
       }, [
         element('i', { 'aria-hidden': 'true' }),
-        element('span', { text: run?.state === 'complete' ? (workPresentation(run).verified ? 'verified' : 'completed') : run?.state === 'waiting' ? 'waiting' : run?.state === 'blocked' ? 'blocked' : run ? 'active' : 'ready' })
+        element('span', { text: view.terminal || view.waiting || view.disconnected ? view.label : run ? 'active' : 'ready' })
       ])
     ]),
-    element('nav', { class: 'deep-workspace-nav', 'aria-label': 'Code project areas' }, [
-      button('Overview', () => {}, 'active small'),
-      button('Files', () => $('attachBtn')?.click(), 'small'),
-      button('Changes', () => $('thread')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 'small'),
-      button('Tests', () => $('openTerminal')?.click(), 'small')
-    ]),
-    element('div', { class: 'deep-workspace-grid' }, [
+    workspaceNavigation('code', [['overview', 'Overview'], ['files', 'Files'], ['changes', 'Changes'], ['tests', 'Tests']]),
+    element('div', workspaceArea('code', 'overview', 'deep-workspace-grid'), [
       element('section', { class: 'deep-workspace-card project-card' }, [
         element('div', { class: 'deep-workspace-card-head' }, [
           element('span', { class: 'mono', text: 'PROJECT' }),
@@ -498,7 +550,7 @@ function codeWorkspaceProject(data) {
           element('span', { class: 'mono', text: 'CURRENT WORK' }),
           element('span', { class: 'small muted', text: task?.status || 'ready' })
         ]),
-        element('strong', { text: taskLabel(task) }),
+        element('strong', { text: task ? taskLabel(task) : view.label }),
         element('p', { class: 'small muted', text: run ? currentStatus(run) : 'Start a coding request to build the project context.' }),
         element('div', { class: 'deep-workspace-badges' }, [
           badge('Tests', tests.length ? tests.length + ' tracked' : 'on demand'),
@@ -508,7 +560,16 @@ function codeWorkspaceProject(data) {
       ])
     ]),
     element('div', { class: 'deep-workspace-section-grid' }, [
-      element('section', { class: 'deep-workspace-card detail-card' }, [
+      element('section', workspaceArea('code', 'files', 'deep-workspace-card detail-card'), [
+        element('div', { class: 'deep-workspace-card-head' }, [
+          element('span', { class: 'mono', text: 'FILE CONTEXT' }),
+          element('span', { class: 'small muted', text: files.length ? Math.min(files.length, 20) + ' of ' + files.length + ' paths' : 'no files connected' })
+        ]),
+        files.length ? element('div', { class: 'workspace-detail-list' }, files.slice(0, 20).map(path => element('code', { class: 'workspace-detail-row', text: path })))
+          : element('p', { class: 'small muted', text: 'Connect a GitHub project or attach a ZIP or code file to build the file context.' }),
+        source.metadata?.ingestion?.partial ? element('p', { class: 'small tone-warn', text: 'This snapshot is partial; some files were omitted during ingestion.' }) : null
+      ].filter(Boolean)),
+      element('section', workspaceArea('code', 'changes', 'deep-workspace-card detail-card'), [
         element('div', { class: 'deep-workspace-card-head' }, [
           element('span', { class: 'mono', text: 'CHANGE SURFACE' }),
           element('span', { class: 'small muted', text: changedFiles.length ? changedFiles.length + ' paths' : 'no recorded change yet' })
@@ -517,7 +578,7 @@ function codeWorkspaceProject(data) {
           ? element('div', { class: 'workspace-detail-list' }, changedFiles.map(path => element('code', { class: 'workspace-detail-row', text: path })))
           : element('p', { class: 'small muted', text: 'The workspace will show affected paths after a code change is recorded.' })
       ]),
-      element('section', { class: 'deep-workspace-card detail-card' }, [
+      element('section', workspaceArea('code', 'tests', 'deep-workspace-card detail-card'), [
         element('div', { class: 'deep-workspace-card-head' }, [
           element('span', { class: 'mono', text: 'VERIFICATION' }),
           element('span', { class: 'small muted', text: verificationRows.length + ' checks' })
@@ -536,13 +597,14 @@ function codeWorkspaceProject(data) {
       button('GitHub project', () => $('openProjectSources')?.click(), 'small'),
       button('ZIP / code file', () => $('attachCodeInput')?.click(), 'small'),
       button('Terminal', () => $('openTerminal')?.click(), 'small'),
-      button('Review changes', () => $('thread')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 'primary small')
+      button('Review changes', () => openWorkspaceArea('changes'), 'primary small')
     ])
   ];
 }
 
 function researchWorkspaceProject(data) {
   const run = data.run;
+  const view = workspaceWorkView(run);
   const research = run?.adaptation?.researchWorkspace ?? {};
   const sourceCount = Number(research.sourceCount ?? 0);
   const evidenceCount = Number(research.evidenceCount ?? 0);
@@ -570,20 +632,12 @@ function researchWorkspaceProject(data) {
       }, [
         element('i', { 'aria-hidden': 'true' }),
         element('span', {
-          text: run?.state === 'complete' ? 'synthesized'
-            : run?.state === 'waiting' ? 'waiting'
-              : run?.state === 'blocked' ? 'blocked'
-                : run ? 'investigating' : 'ready'
+          text: view.terminal || view.waiting || view.disconnected ? view.label : run ? 'investigating' : 'ready'
         })
       ])
     ]),
-    element('nav', { class: 'deep-workspace-nav', 'aria-label': 'Research project areas' }, [
-      button('Overview', () => {}, 'active small'),
-      button('Sources', () => $('thread')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 'small'),
-      button('Evidence', () => $('thread')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 'small'),
-      button('Gaps', () => $('goal')?.focus({ preventScroll: false }), 'small')
-    ]),
-    element('div', { class: 'deep-workspace-grid' }, [
+    workspaceNavigation('research', [['overview', 'Overview'], ['sources', 'Sources'], ['evidence', 'Evidence'], ['gaps', 'Gaps']]),
+    element('div', workspaceArea('research', 'overview', 'deep-workspace-grid'), [
       element('section', { class: 'deep-workspace-card project-card' }, [
         element('div', { class: 'deep-workspace-card-head' }, [
           element('span', { class: 'mono', text: 'SOURCE SET' }),
@@ -601,7 +655,7 @@ function researchWorkspaceProject(data) {
           element('span', { class: 'mono', text: 'INVESTIGATION' }),
           element('span', { class: 'small muted', text: task?.status || 'ready' })
         ]),
-        element('strong', { text: taskLabel(task) || 'Evidence-driven next step' }),
+        element('strong', { text: task ? taskLabel(task) : view.label }),
         element('p', { class: 'small muted', text: currentStatus(run) }),
         element('div', { class: 'deep-workspace-badges' }, [
           badge('Evidence', evidenceStatus),
@@ -611,38 +665,31 @@ function researchWorkspaceProject(data) {
       ])
     ]),
     element('div', { class: 'deep-workspace-section-grid' }, [
-      element('section', { class: 'deep-workspace-card detail-card' }, [
+      element('section', workspaceArea('research', 'sources', 'deep-workspace-card detail-card'), [
         element('div', { class: 'deep-workspace-card-head' }, [
           element('span', { class: 'mono', text: 'SOURCE LEDGER' }),
           element('span', { class: 'small muted', text: sources.length + ' visible' })
         ]),
         sources.length
-          ? element('div', { class: 'workspace-detail-list' }, sources.map(source =>
-              element('a', {
-                class: 'workspace-detail-row source-row',
-                href: source.url || '#',
-                target: source.url ? '_blank' : undefined,
-                rel: source.url ? 'noopener noreferrer' : undefined,
-                text: source.title || source.provider || source.url || 'Source'
-              })
-            ))
+          ? element('div', { class: 'workspace-detail-list' }, sources.map(source => researchSource(source, 'sources')))
           : element('p', { class: 'small muted', text: 'Sources appear here as research evidence is gathered.' })
       ]),
-      element('section', { class: 'deep-workspace-card detail-card' }, [
+      element('section', workspaceArea('research', 'evidence', 'deep-workspace-card detail-card'), [
         element('div', { class: 'deep-workspace-card-head' }, [
           element('span', { class: 'mono', text: 'EVIDENCE LEDGER' }),
           element('span', { class: 'small muted', text: evidenceLedger.length + ' visible' })
         ]),
         evidenceLedger.length
-          ? element('div', { class: 'workspace-detail-list' }, evidenceLedger.map(item =>
+          ? element('div', { class: 'workspace-detail-list' }, evidenceLedger.map((item, index) =>
               element('div', { class: 'workspace-detail-row' }, [
                 element('strong', { text: text(item.summary).slice(0, 240) }),
-                element('span', { class: 'muted small', text: (item.sourceKeys?.length || 0) + ' linked source' + ((item.sourceKeys?.length || 0) === 1 ? '' : 's') })
+                element('span', { class: 'muted small', text: (item.sourceKeys?.length || 0) + ' linked source' + ((item.sourceKeys?.length || 0) === 1 ? '' : 's') }),
+                ...((item.sourceKeys ?? []).map(key => (research.sourceSet ?? []).find(source => source.key === key)).filter(Boolean).map(source => researchSource(source, 'evidence:' + (item.id || index))))
               ])
             ))
           : element('p', { class: 'small muted', text: 'Evidence is added only when the research step produces traceable findings.' })
       ]),
-      element('section', { class: 'deep-workspace-card detail-card' }, [
+      element('section', workspaceArea('research', 'gaps', 'deep-workspace-card detail-card'), [
         element('div', { class: 'deep-workspace-card-head' }, [
           element('span', { class: 'mono', text: 'OPEN GAPS' }),
           element('span', { class: 'small muted', text: gaps.length ? 'needs attention' : 'none recorded' })
@@ -654,8 +701,8 @@ function researchWorkspaceProject(data) {
     ]),
     element('div', { class: 'deep-workspace-actions' }, [
       button('Search + gather', () => $('goal')?.focus({ preventScroll: false }), 'primary small'),
-      button('Review sources', () => $('thread')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 'small'),
-      button('Review evidence', () => $('thread')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 'small'),
+      button('Review sources', () => openWorkspaceArea('sources'), 'small'),
+      button('Review evidence', () => openWorkspaceArea('evidence'), 'small'),
       button('Add research direction', () => $('goal')?.focus({ preventScroll: false }), 'small')
     ])
   ];
@@ -685,8 +732,14 @@ function renderDeepWorkspaceShell() {
     host.replaceChildren();
     return;
   }
+  const focused = host.contains(document.activeElement) ? document.activeElement : null;
+  const controlKey = focused?.dataset.workspaceControl;
+  const areaKey = focused?.dataset.workspaceArea;
   host.dataset.workspace = data.workspace;
   host.replaceChildren(...(data.workspace === 'code' ? codeWorkspaceProject(data) : researchWorkspaceProject(data)));
+  for (const control of host.querySelectorAll('.deep-workspace-actions button')) control.dataset.workspaceControl = 'action:' + control.textContent;
+  if (controlKey) [...host.querySelectorAll('[data-workspace-control]')].find(control => control.dataset.workspaceControl === controlKey)?.focus({ preventScroll: true });
+  else if (areaKey) host.querySelector('[data-workspace-area="' + areaKey + '"]')?.focus({ preventScroll: true });
 }
 function renderCapabilityDock() {
   const dock = $('workspaceCapabilityDock');

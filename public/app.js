@@ -1506,11 +1506,14 @@ document.addEventListener('kindgleam:select-surface', event => {
   if (workspace) state.activeSurface = workspace;
   else if (name === 'explore') state.activeSurface = 'research';
   else if (name === 'runs') state.activeSurface = 'normal-chat';
-  if (name) selectTab(name);
+  renderThread();
+  if (name && (name !== 'runs' || $('tab-runs').hidden)) selectTab(name);
 });
 
 document.addEventListener('kindgleam:open-code-workspace', () => {
   state.activeSurface = 'code';
+  renderThread();
+  if ($('tab-runs').hidden) selectTab('runs');
 });
 
 document.addEventListener('kindgleam:project-selected', async event => {

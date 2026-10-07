@@ -108,7 +108,6 @@ export async function initWorkspaceSources() {
   const github = $('connectGithub'); const sync = $('syncWorkspaceSource'); const repoButton = $('loadGithubRepositories');
   const repoSelect = $('githubRepository'); const branchSelect = $('githubBranch');
   open?.addEventListener('click', () => dialog?.showModal()); close?.addEventListener('click', () => dialog?.close());
-  document.addEventListener('kindgleam:open-code-workspace', () => dialog?.showModal());
   repoButton?.addEventListener('click', () => loadGithubRepositories()); repoSelect?.addEventListener('change', () => loadGithubBranches());
   branchSelect?.addEventListener('change', () => { if (github) github.disabled = !branchSelect.value; });
   github?.addEventListener('click', () => connectGitHub());

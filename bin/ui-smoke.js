@@ -76,9 +76,19 @@ try {
  assert.equal(await page.locator('.work-status-copy strong').last().textContent(),'Connection lost');
  assert.equal(await page.locator('[data-work-live="true"]').count(),0);
  await page.screenshot({path:artifact('offline-desktop.png')});
- await page.evaluate(()=>{const {state,renderThread}=window.qa;state.network.online=true;state.network.reachable=true;state.activeSurface='code';state.workspaceSource={id:'project',kind:'github',name:'123rahmat/KG',repoRef:'main',permissions:{write:true},metadata:{commitSha:'abc123',manifest:[]}};renderThread();});
+ await page.evaluate(()=>{const {state,renderThread}=window.qa;state.network.online=true;state.network.reachable=true;state.activeSurface='normal-chat';state.workspaceSource={id:'project',kind:'github',name:'123rahmat/KG',repoRef:'main',permissions:{write:true},metadata:{commitSha:'abc123',manifest:[{path:'src/app.js'}]}};renderThread();});
+ await page.locator('#adaptiveWorkspaceBar [data-surface="code"]').click();
+ assert.equal(await page.evaluate(()=>document.body.dataset.adaptiveWorkspace),'code','switching to Code must update the UI immediately');
+ assert.equal(await page.locator('#projectSourcesDialog').isVisible(),false,'an existing project does not need another connection dialog');
+ await page.locator('#deepWorkspaceShell nav').getByRole('button',{name:'Files',exact:true}).click();
+ assert.equal(await page.evaluate(()=>document.activeElement?.dataset.workspaceArea),'files','Files must open the project context');
+ assert.equal(await page.locator('[data-workspace-area="files"]').textContent().then(text=>text.includes('src/app.js')),true);
+ await page.locator('#deepWorkspaceShell nav').getByRole('button',{name:'Tests',exact:true}).focus();
+ await page.evaluate(()=>{window.qa.state.run.updatedAt=new Date(Date.now()+6000).toISOString();window.qa.renderThread();});
+ assert.equal(await page.evaluate(()=>document.activeElement?.textContent),'Tests','workspace controls retain keyboard focus during updates');
+ await page.evaluate(()=>window.scrollTo(0,0));
  await page.screenshot({path:artifact('code-desktop.png')});
- await page.evaluate(()=>{document.documentElement.dataset.theme='dark';window.scrollTo(0,document.scrollingElement.scrollHeight);});
+ await page.evaluate(()=>{document.documentElement.dataset.theme='dark';window.scrollTo(0,0);});
  await page.screenshot({path:artifact('code-dark.png')});
  await page.evaluate(()=>{document.documentElement.dataset.theme='light';});
  for(const width of [320,390,768,1024]) {
@@ -87,7 +97,21 @@ try {
   await page.screenshot({path:artifact(`code-${width}.png`)});
  }
  await page.setViewportSize({width:390,height:844});
- await page.evaluate(()=>{const {state,renderThread}=window.qa;state.activeSurface='research';state.run.adaptation.researchWorkspace={sourceCount:3,evidenceCount:5,unresolvedQuestions:['Need a primary source']};renderThread();window.scrollTo(0,0);});
+ await page.evaluate(()=>{const {state,renderThread}=window.qa;state.activeSurface='research';state.run.adaptation.researchWorkspace={sourceCount:2,evidenceCount:1,sourceSet:[{key:'s1',title:'Primary source',url:'https://example.com/paper'},{key:'s2',title:'Invalid source',url:'javascript:alert(1)'}],evidenceLedger:[{summary:'A supported finding',sourceKeys:['s1']}],unresolvedQuestions:['Need a primary source']};renderThread();window.scrollTo(0,0);});
+ for(const [name,area] of [['Sources','sources'],['Evidence','evidence'],['Gaps','gaps']]) {
+  await page.locator('#deepWorkspaceShell nav').getByRole('button',{name,exact:true}).click();
+  assert.equal(await page.evaluate(()=>document.activeElement?.dataset.workspaceArea),area,`${name} must open its own section`);
+ }
+ assert.equal(await page.locator('[data-workspace-area="sources"] a').count(),1,'only web sources become clickable links');
+ assert.equal(await page.locator('[data-workspace-area="evidence"] a').getAttribute('href'),'https://example.com/paper','findings link to their supporting source');
+ await page.locator('[data-workspace-area="evidence"] a').focus();
+ await page.evaluate(()=>{window.qa.state.run.updatedAt=new Date(Date.now()+7000).toISOString();window.qa.renderThread();});
+ assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute('href')),'https://example.com/paper','evidence links keep keyboard focus on refresh');
+ await page.evaluate(()=>{window.qa.state.run.state='failed';window.qa.renderThread();});
+ assert.equal(await page.locator('.deep-workspace-state span').textContent(),'Stopped','stopped research must not look active');
+ await page.evaluate(()=>{window.qa.state.activeSurface='code';window.qa.renderThread();});
+ assert.equal(await page.locator('.deep-workspace-state span').textContent(),'Stopped','stopped code work must not look active');
+ await page.evaluate(()=>{window.qa.state.activeSurface='research';window.qa.renderThread();window.scrollTo(0,0);});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),true,'research must fit mobile');
  await page.screenshot({path:artifact('research-mobile.png')});
  await page.evaluate(()=>{document.getElementById('app').hidden=true;document.getElementById('landing').hidden=false;window.scrollTo(0,0);});
@@ -95,5 +119,5 @@ try {
  await page.screenshot({path:artifact('landing-mobile.png')});
  assert.deepEqual(errors,[],'no client runtime errors');
  console.log('Screenshots: ' + output);
- console.log('PASS: stable history, scroll anchoring, jump to latest, drafts, focus, caret, approvals, text selection, offline truth, responsive code/research/landing, no runtime errors');
+ console.log('PASS: stable history, scroll anchoring, drafts, focus, approvals, selection, truthful status, workspace switching/navigation, file context, evidence links, responsive layouts, no runtime errors');
 } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}
