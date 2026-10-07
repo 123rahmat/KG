@@ -206,7 +206,7 @@ export async function assertRlsReady(pool) {
     'objects', 'blobs', 'runs', 'run_tasks', 'audit_log',
     'governance_policies', 'capability_specs', 'situation_events', 'run_jobs', 'skill_profiles', 'skill_observations',
     'idempotency_keys', 'user_preferences',
-    'usage_events', 'usage_reservations', 'workspace_billing', 'principal_ai_entitlements', 'workspace_ai_settings', 'stripe_events', 'run_actions', 'workspace_tools', 'schedules', 'notifications', 'memories', 'safety_events', 'safety_reports', 'terms_acceptances',
+    'usage_events', 'usage_reservations', 'workspace_billing', 'principal_ai_entitlements', 'stripe_events', 'run_actions', 'workspace_tools', 'schedules', 'notifications', 'memories', 'safety_events', 'safety_reports', 'terms_acceptances',
     'workspace_sources', 'run_agents', 'run_waves', 'code_workspace_sessions', 'rag_documents', 'run_blackboards', 'adaptive_cache', 'run_feedback', 'evolution_proposals', 'fleet_projects', 'fleet_project_dependencies', 'fleet_dispatches'
   ];
   const { rows: tables } = await pool.query(
