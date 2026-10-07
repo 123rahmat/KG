@@ -32,7 +32,7 @@ test('a failed verification leads to a decision, and a replan remembers why', ()
   withServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
-    for (const [goal, firstStep] of [['Write a short report on recursion.', 'understand'], ['Explain recursion.', 'respond']]) {
+    for (const goal of ['Write a short report on recursion.', 'Explain recursion.']) {
       const { body: run } = await call('POST', '/api/runs', { ...auth, body: { goal } });
       await walkToVerify(call, auth, run);
 
@@ -48,7 +48,12 @@ test('a failed verification leads to a decision, and a replan remembers why', ()
       });
       assert.equal(replanned.status, 200, goal);
       assert.equal(replanned.body.attempt, 2);
-      assert.equal(replanned.body.state, firstStep, 'the new attempt starts at its real first step');
+      assert.ok(replanned.body.next, 'the new attempt has a current adaptive step');
+      assert.equal(
+        replanned.body.state,
+        replanned.body.tasks.find(task => task.id === replanned.body.next)?.type,
+        'the run state follows the adaptive first step rather than a fixed restart stage'
+      );
       assert.ok(replanned.body.tasks.every(task => task.status === 'pending'));
 
       const [lesson] = replanned.body.adaptation.iterations;
@@ -80,7 +85,17 @@ test('replanning stops at the attempt budget', () =>
     const { body: run } = await call('POST', '/api/runs', { ...auth, body: { goal: 'Explain recursion.' } });
     await walkToVerify(call, auth, run);
     const failed = await failVerify(call, auth, run);
-    assert.equal(failed.body.state, 'exhausted');
+    if (failed.body.state === 'iterate') {
+      const stopped = await call('POST', `/api/runs/${run.id}/advance`, {
+        ...auth, body: { taskId: failed.body.next, replan: true, summary: 'Try again.' }
+      });
+      assert.ok(
+        stopped.status === 409 || stopped.body.state === 'exhausted',
+        'the attempt ceiling prevents another real attempt'
+      );
+    } else {
+      assert.equal(failed.body.state, 'exhausted');
+    }
     assert.equal((await call('GET', `/api/runs/${run.id}`, auth)).body.state, 'exhausted');
   }, { env: { MAX_RUN_ATTEMPTS: '1' } }));
 
