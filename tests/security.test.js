@@ -66,7 +66,15 @@ test('tasks that record reality cannot complete without evidence', () =>
     assert.equal(bareClarify.body.code, 'clarification-incomplete');
 
     const { body: report } = await call('POST', '/api/runs', { ...auth, body: { goal: 'Write a short report on recursion.' } });
-    const checking = await advanceTo(call, auth, report.id, { until: 'verify' });
+    // Direct work materializes verification only after there is a response to
+    // verify. Record a response first, then prove the verifier still refuses
+    // a bare completion with no verdict/evidence.
+    const responded = await call('POST', `/api/runs/${report.id}/advance`, {
+      ...auth,
+      body: { taskId: report.next, summary: 'Drafted.', evidence: { text: 'Recursion is self-reference.' } }
+    });
+    assert.equal(responded.status, 200);
+    const checking = responded.body;
     assert.equal(checking.tasks.find(task => task.id === checking.next).type, 'verify');
     const bareVerify = await call('POST', `/api/runs/${report.id}/advance`, { ...auth, body: { taskId: checking.next, summary: 'looked at it' } });
     assert.equal(bareVerify.status, 422);
