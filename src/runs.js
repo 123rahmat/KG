@@ -1160,10 +1160,23 @@ export class RunStore {
         const priorEvidence = Array.isArray(priorUnified?.evidence?.items) ? priorUnified.evidence.items : [];
         const currentEvidence = result.evidence === null || result.evidence === undefined ? [] : [result.evidence];
         const allEvidence = [...priorEvidence, ...currentEvidence];
+        const persistedVerify = target.type === 'deliver'
+          ? tasks.find(item =>
+              item.type === 'verify'
+              && item.status === 'complete'
+              && item.evidence?.verdict?.verdict === 'pass'
+            )
+          : null;
+        const verifiedEarlier = persistedVerify != null
+          || priorUnified.acceptance?.verificationSatisfied === true;
         const completionWorkflow = reassessUnifiedWorkflow(priorUnified, {
           event: { type: target.type, material: true },
           situation: run.situation ?? {},
-          acceptance: { ...(priorUnified.acceptance ?? {}), evidence: allEvidence },
+          acceptance: {
+            ...(priorUnified.acceptance ?? {}),
+            evidence: allEvidence,
+            verificationSatisfied: verifiedEarlier
+          },
           evidence: allEvidence,
           failedAttempts: Number(run.attempt ?? 0),
           candidates: [target.id],
@@ -1174,7 +1187,10 @@ export class RunStore {
           status,
           taskType: target.type,
           evidence: allEvidence,
-          verification: result.evidence?.verdict ?? result.evidence?.verification ?? null,
+          verification: persistedVerify?.evidence?.verdict
+            ?? result.evidence?.verdict
+            ?? result.evidence?.verification
+            ?? null,
           authorizationSatisfied: run.situation?.authorizationSatisfied !== false
         });
         if (!gate.allowed) {
