@@ -622,8 +622,8 @@
       <div class="project-hub-head">
         <div class="project-hub-title"><strong>Projects</strong><span class="small muted" id="projectSummary">Loading projects…</span></div>
         <div class="project-hub-actions">
-          <button type="button" class="icon-btn" id="newProject" aria-label="New project" title="New project">+</button>
-          <button type="button" class="icon-btn" id="projectManage" aria-label="Manage projects" title="Manage projects">⚙</button>
+          <button type="button" class="icon-btn" id="newProject" aria-label="New project" title="New project"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg></button>
+          <button type="button" class="icon-btn" id="projectManage" aria-label="Manage projects" title="Manage projects"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg></button>
         </div>
       </div>
       <select id="projectSelect" aria-label="Current project"><option value="">All projects</option></select>
@@ -709,11 +709,11 @@
           </div>
           <label class="sr-only" for="goal">Message</label>
           <div class="adaptive-create-strip" id="adaptiveCreateStrip" role="toolbar" aria-label="Visual intent in Normal Chat">
-            <span class="adaptive-create-label">Quick control</span>
+            <span class="adaptive-create-label">Visual intent</span>
             <button type="button" class="create-chip active" data-create-mode="visual" aria-pressed="true">
               <svg class="i" aria-hidden="true"><use href="#i-image"/></svg><span>Visual</span>
             </button>
-            <span class="adaptive-create-hint" id="adaptiveCreateHint">Lightweight visual work stays here; open Design for the full canvas.</span>
+            <span class="adaptive-create-hint" id="adaptiveCreateHint">Visual work stays in NormalChat and uses only the capabilities the request needs.</span>
           </div>
           <textarea id="goal" rows="1" placeholder="Ask anything…"></textarea>
           <div class="composer-bar">
