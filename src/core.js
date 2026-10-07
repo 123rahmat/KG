@@ -904,6 +904,11 @@ export function planGoal(goal, {
          patternContext: skillPatternContext
        },
        skillPlan,
+       // Use the final action-aware verification contract. The preliminary
+       // adaptive situation contract can be stricter because it does not yet
+       // know whether a physical topic is merely informational or actually
+       // changes the real world.
+       verification,
        skills: selectedSkills.map(item => ({
          name: item.name,
          version: item.version,
