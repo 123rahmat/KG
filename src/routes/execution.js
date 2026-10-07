@@ -241,6 +241,16 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         : text(run.adaptation?.resourcePlan?.control?.capabilityInvestment) || 'ask',
       modelId: run.adaptation?.modelSelection || null,
       allowedTools,
+      // Exact, read-only calculations selected by the server should not rely
+      // on the model deciding whether to use them. Execute them once, then let
+      // Gemini explain the evidence.
+      ...(financeProjection ? {
+        requiredTool: {
+          tool: 'finance.project',
+          input: { goal: run.goal },
+          why: 'Use the deterministic projection before explaining the forecast.'
+        }
+      } : {}),
       // Tools this workspace built and approved earlier (tool-forge.js).
       dynamicTools: approvedTools,
       propose: workScope?.workspaceId
