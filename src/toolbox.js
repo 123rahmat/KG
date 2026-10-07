@@ -67,15 +67,36 @@ function finiteNumber(value, { min = -Infinity, max = Infinity, fallback = 0 } =
   return Math.min(max, Math.max(min, number));
 }
 
+function financeNumber(value) {
+  const number = Number(String(value ?? '').replaceAll(',', '').trim());
+  return Number.isFinite(number) ? number : undefined;
+}
+
+function financeInputsFromGoal(goal) {
+  const value = text(goal);
+  const capture = pattern => financeNumber(value.match(pattern)?.[1]);
+  return {
+    months: capture(/\b(\d{1,3})\s+months?\b/i),
+    upfrontCost: capture(/([\d,.]+)\s+(?:start[- ]?up|startup|upfront|initial)\s+cost\b/i),
+    newCustomersPerMonth: capture(/([\d,.]+)\s+new customers?\s+(?:a|per)\s+month\b/i),
+    newCustomerGrowthPercent: capture(/(?:growing|growth(?: rate)?(?: of)?)\s+([\d.]+)\s*%/i),
+    pricePerCustomerPerMonth: capture(/([\d,.]+)\s+per customer\s+(?:a|per)\s+month\b/i),
+    variableCostPerCustomerPerMonth: capture(/([\d,.]+)\s+(?:variable\s+)?cost per customer(?:\s+(?:a|per)\s+month)?\b/i),
+    fixedCostsPerMonth: capture(/([\d,.]+)\s+fixed costs?\s+(?:a|per)\s+month\b/i)
+  };
+}
+
 function financeProjection(input = {}) {
-  const months = Math.round(finiteNumber(input.months, { min: 1, max: 120, fallback: 12 }));
-  const upfrontCost = finiteNumber(input.upfrontCost, { min: 0, max: 1e12 });
-  const initialCustomers = finiteNumber(input.initialCustomers, { min: 0, max: 1e9 });
-  const newCustomersPerMonth = finiteNumber(input.newCustomersPerMonth, { min: 0, max: 1e9 });
-  const growthRate = finiteNumber(input.newCustomerGrowthPercent, { min: -100, max: 1000 }) / 100;
-  const price = finiteNumber(input.pricePerCustomerPerMonth, { min: 0, max: 1e12 });
-  const variableCost = finiteNumber(input.variableCostPerCustomerPerMonth, { min: 0, max: 1e12 });
-  const fixedCosts = finiteNumber(input.fixedCostsPerMonth, { min: 0, max: 1e12 });
+  const parsed = financeInputsFromGoal(input.goal);
+  const value = (key, fallback = undefined) => input[key] ?? parsed[key] ?? fallback;
+  const months = Math.round(finiteNumber(value('months', 12), { min: 1, max: 120, fallback: 12 }));
+  const upfrontCost = finiteNumber(value('upfrontCost', 0), { min: 0, max: 1e12 });
+  const initialCustomers = finiteNumber(value('initialCustomers', 0), { min: 0, max: 1e9 });
+  const newCustomersPerMonth = finiteNumber(value('newCustomersPerMonth', 0), { min: 0, max: 1e9 });
+  const growthRate = finiteNumber(value('newCustomerGrowthPercent', 0), { min: -100, max: 1000 }) / 100;
+  const price = finiteNumber(value('pricePerCustomerPerMonth', 0), { min: 0, max: 1e12 });
+  const variableCost = finiteNumber(value('variableCostPerCustomerPerMonth', 0), { min: 0, max: 1e12 });
+  const fixedCosts = finiteNumber(value('fixedCostsPerMonth', 0), { min: 0, max: 1e12 });
 
   let activeCustomers = initialCustomers;
   let cumulativeCashFlow = -upfrontCost;
@@ -307,6 +328,7 @@ const BUILT_IN = [
     title: 'Project business cash flow',
     description: 'Calculate a deterministic monthly business projection from customer growth, price, variable cost, fixed cost and upfront cost. Use it for forecasts instead of guessing arithmetic.',
     input: {
+      goal: 'optional natural-language projection request; numeric fields override values parsed from it',
       months: 'projection length, 1-120',
       upfrontCost: 'one-time starting cost',
       initialCustomers: 'existing customers at month 0 (default 0)',
