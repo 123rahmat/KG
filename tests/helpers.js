@@ -122,14 +122,23 @@ export function geminiFromStandIn(standIn) {
       ?? ''
     );
     const usage = data?.usage ?? {};
-    const sources = Array.isArray(data?.output_sources) ? data.output_sources : [];
+    const contentCitations = [
+      ...(Array.isArray(data?.content) ? data.content : []),
+      ...outputParts
+    ].flatMap(part => Array.isArray(part?.citations) ? part.citations : [])
+      .filter(item => item?.url)
+      .map(item => ({ url: item.url, title: item.title || '' }));
+    const sources = [
+      ...(Array.isArray(data?.output_sources) ? data.output_sources : []),
+      ...contentCitations
+    ];
     return new Response(JSON.stringify({
       candidates: [{
         content: { role: 'model', parts: answer ? [{ text: answer }] : [] },
         finishReason: 'STOP',
         ...(sources.length ? {
           groundingMetadata: {
-            groundingChunks: sources.filter(item => item?.url).map(item => ({
+            groundingChunks: [...new Map(sources.filter(item => item?.url).map(item => [item.url, item])).values()].map(item => ({
               web: { uri: item.url, title: item.title || '' }
             }))
           }
