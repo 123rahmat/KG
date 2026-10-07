@@ -19,6 +19,8 @@ tests:
         values: '0+10x10'
       - series: 'model_provider_errors_total{job="kindgleam", instance="app-1", code="model-not-authorized"}'
         values: '0 0 3 3 3'
+      - series: 'model_provider_queue_pressure{job="kindgleam", instance="app-1", model="google:gemini-3.8-flash"}'
+        values: '0 0 1.2 1.2 1.2 1.2 1.2 1.2'
     alert_rule_test:
       - eval_time: 3m
         alertname: KindgleamGeminiKeyRejected
@@ -35,6 +37,11 @@ tests:
         exp_alerts:
           - exp_labels: { severity: page, job: kindgleam, instance: app-1, state: waiting }
             exp_annotations: { summary: 'Requests on app-1 are waiting for database connections' }
+      - eval_time: 7m
+        alertname: KindgleamProviderQueuePressure
+        exp_alerts:
+          - exp_labels: { severity: ticket, instance: app-1 }
+            exp_annotations: { summary: 'AI provider queue pressure is sustained on app-1' }
       - eval_time: 3m
         alertname: KindgleamReadinessFailing
         exp_alerts:
@@ -57,8 +64,11 @@ tests:
         values: '0x10'
       - series: 'http_requests_total{job="kindgleam", instance="app-1", method="GET", status="200"}'
         values: '0+100x10'
+      - series: 'model_provider_queue_pressure{job="kindgleam", instance="app-1", model="google:gemini-3.8-flash"}'
+        values: '0x10'
     alert_rule_test:
       - { eval_time: 10m, alertname: KindgleamInstanceDown, exp_alerts: [] }
       - { eval_time: 10m, alertname: KindgleamDatabasePoolExhausted, exp_alerts: [] }
       - { eval_time: 10m, alertname: KindgleamReadinessFailing, exp_alerts: [] }
       - { eval_time: 10m, alertname: KindgleamHighErrorRate, exp_alerts: [] }
+      - { eval_time: 10m, alertname: KindgleamProviderQueuePressure, exp_alerts: [] }

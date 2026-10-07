@@ -89,6 +89,15 @@ groups:
         annotations:
           summary: 'Gemini is rate-limiting Kindgleam; raise the project quota or tier'
 
+      - alert: KindgleamProviderQueuePressure
+        # Sustained queue pressure means adaptive concurrency has reached useful
+        # capacity and users are waiting before calls even reach the provider.
+        expr: max by (instance) (model_provider_queue_pressure{job="kindgleam"}) >= 1
+        for: 5m
+        labels: { severity: ticket }
+        annotations:
+          summary: 'AI provider queue pressure is sustained on {{ $labels.instance }}'
+
       - alert: KindgleamRateLimitStoreErrors
         # The PostgreSQL rate-limit store failed; limits may not be enforced.
         expr: increase(rate_limit_store_errors_total{job="kindgleam"}[5m]) > 0

@@ -91,6 +91,11 @@ check('workspace-content-hash', /createHash\(['"]sha256['"]\)/.test(workspace), 
 check('safety-boundary', /export|function/.test(safety) && /BLOCK|deny|refus/i.test(safety), 'safety module is present with decision/refusal logic');
 check('verification-separation', /verify|verification/i.test(verification), 'verification remains a distinct subsystem');
 check('provider-governor-enforced', /providerGovernor\.run\(modelKey/.test(runtime), 'model traffic passes through the adaptive concurrency boundary');
+check('provider-pressure-observability',
+  /providerConcurrencyStats/.test(serverSource)
+    && /model_provider_queue_pressure/.test(serverSource)
+    && /KindgleamProviderQueuePressure/.test(await read('docs/ops/prometheus-alerts.yml')),
+  'adaptive provider pressure is exported as live metrics and covered by an operational alert');
 check('runner-side-effect-no-retry', /retries:\s*0/.test(runtime), 'side-effecting runner POSTs do not retry ambiguously');
 check('adaptive-efficiency-integrated', /adaptiveEffortProfile\(/.test(adaptive), 'adaptive efficiency participates in situation analysis');
 check('adaptive-scope-controller', /reconcileAdaptiveTransition|adaptiveBudgetStatus/.test(adaptiveControl), 'adaptive scope is re-evaluated at transitions');

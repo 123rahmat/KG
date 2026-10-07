@@ -25,6 +25,7 @@ import { createApp, VERSION } from './src/app.js';
 import { attachTerminalServer } from './src/terminal.js';
 import { FleetStore, createFleetWorker } from './src/fleet-control.js';
 import { ProjectStore } from './src/projects.js';
+import { providerConcurrencyStats } from './src/runtime.js';
 
 /** Wire the object graph. Exported so tests build the same one. */
 export function build({ config, logger, metrics, fetchImpl }) {
@@ -72,6 +73,17 @@ export async function start({ env = process.env } = {}) {
   const config = loadConfig(env);
   const logger = createLogger({ level: config.logLevel });
   const metrics = createMetrics();
+  const providerSeries = field => providerConcurrencyStats().map(row => ({
+    tags: { model: row.key },
+    value: Number(row[field]) || 0
+  }));
+  metrics.gauge('model_provider_active', () => providerSeries('active'));
+  metrics.gauge('model_provider_concurrency', () => providerSeries('concurrency'));
+  metrics.gauge('model_provider_queued', () => providerSeries('queued'));
+  metrics.gauge('model_provider_utilization', () => providerSeries('utilization'));
+  metrics.gauge('model_provider_queue_pressure', () => providerSeries('queuePressure'));
+  metrics.gauge('model_provider_last_latency_ms', () => providerSeries('lastLatencyMs'));
+  metrics.gauge('model_provider_failure_streak', () => providerSeries('failureStreak'));
 
   logger.info('starting', { version: VERSION, nodeEnv: config.nodeEnv, node: process.version });
 
