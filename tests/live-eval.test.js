@@ -28,15 +28,28 @@ let inventionMethodSeen = false;
 const fetchImpl = async (url, options) => {
   if (!String(url).startsWith('https://standin.invalid/v1/responses')) return new Response('<html><title>Ohm</title><body>Ohm law V=IR</body></html>', { headers: { 'content-type': 'text/html' } });
   const body = JSON.parse(options.body);
-  const request = (() => { try { const c = body.messages?.find(message => message.role === 'user')?.content; return JSON.parse(typeof c === 'string' ? c : c?.find?.(part => part.type === 'text')?.text ?? '{}'); } catch { return {}; } })();
+  const userJson = () => {
+    const users = (Array.isArray(body.messages) ? body.messages : []).filter(message => message.role === 'user').reverse();
+    for (const message of users) {
+      const raw = typeof message.content === 'string'
+        ? message.content
+        : message.content?.find?.(part => part.type === 'text')?.text;
+      if (!raw) continue;
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') return parsed;
+      } catch {}
+    }
+    return {};
+  };
+  const request = userJson();
   const reply = t => jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text: t }], usage: { input_tokens: 50, output_tokens: 20 } });
   if (request.task?.type === 'verify') return reply(JSON.stringify({ verdict: 'pass', criteria: (request.situation?.successCriteria ?? []).map(criterion => ({ criterion, met: true })), problems: [], confirmedLinks: request.verification?.unretrievedLinks ?? [] }));
   if (body.tools) return jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'x', citations: [{ type: 'web_search_result_location', url: 'https://example.org/a', title: 'A' }] }], usage: { input_tokens: 5, output_tokens: 5 } });
   const type = request.task?.type;
   // The classifier's policy reading: this stand-in declines the bank impersonation.
   if (/Classify the goal/.test(String(body.system ?? ''))) {
-    const classifierUser = body.messages?.find(message => message.role === 'user')?.content ?? '{}';
-    const goal = JSON.parse(classifierUser).goal;
+    const goal = userJson().goal;
     // Only the model reads these emergencies (another language, a pet).
     if (/بخار|dark chocolate/.test(goal)) return reply(JSON.stringify({ actions: ['answer'], signals: { research: false, file: false, code: false, creation: false, invention: false, uncertainty: false, physical: false, highImpact: true }, unknownSituation: false, confidence: 0.9, crisis: 'emergency', policy: { decision: 'allow' } }));
     if (!/pretending to be my bank/.test(goal)) return reply('not json');
