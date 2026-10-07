@@ -131,6 +131,8 @@ test('adaptive workspace exposes exactly Normal Chat, Code, and Research product
   assert.match(js, /Research Workspace/);
   assert.doesNotMatch(js, /Design Workspace/);
   assert.doesNotMatch(js, /kindgleam:open-design-workspace/);
+  const css = await read('public/app.css');
+  assert.doesNotMatch(css, /data-workspace="design"|design-studio|design-canvas|design-inspector/);
   assert.match(js, /kindgleam:open-code-workspace/);
   assert.match(js, /kindgleam:select-surface/);
   const attachments = await read('public/app-attachments.js');
