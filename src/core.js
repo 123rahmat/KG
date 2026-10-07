@@ -637,10 +637,11 @@ export function planGoal(goal, {
     && !attachments.length && !files.length
     && analysis.flags?.code !== true
     && analysis.flags?.highImpact !== true
-    && analysis.flags?.externalAction !== true
     && analysis.flags?.research !== true
     && analysis.investigationNeeded !== true
-    && analysis.situation?.externalData?.hasExternalDataNeed !== true;
+    && analysis.situation?.externalData?.hasExternalDataNeed !== true
+    && !(analysis.flags?.physical === true && /\b(?:instructions?|steps?|how to|guide|procedure|rewir|install|repair|operate|dose|treat)\b/i.test(value))
+    && !(analysis.flags?.externalAction === true && (analysis.goalModel?.actions ?? []).includes('execute'));
   // A letter or post about physical work is still only writing.
   const writingDocument = writing;
   // A question about physical things ("how many amps does a kettle draw")
@@ -710,12 +711,16 @@ export function planGoal(goal, {
     && analysis.flags?.code !== true
     && analysis.flags?.highImpact !== true
     && !attachments.length && !files.length;
+  const retrying = failedSteps.length > 0;
+  const governedWork = governance.constraints.requireHumanApproval === true || governanceReasons.length > 0;
   const direct = crisis
     || declined
-    || writingDocument
-    || directMath
-    || ((smallTalk || reminder) && !attachments.length)
-    || directConversation;
+    || (!retrying && !governedWork && (
+      writingDocument
+      || directMath
+      || ((smallTalk || reminder) && !attachments.length)
+      || directConversation
+    ));
   const scale = direct ? 'single' : workScale({
     capabilities: granted,
     unknownSituation: analysis.unknownSituation === true,
