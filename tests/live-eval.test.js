@@ -25,7 +25,6 @@ const TOOLS = [[/copper|AFCI/i, { tool: 'web.search', input: { query: 'x' } }], 
   [/remember that I live/i, { tool: 'memory.save', input: { fact: 'Lives in Lahore; prefers metric units', kind: 'about' } }],
   [/bakery/i, { tool: 'finance.project', input: { months: 12, upfrontCost: 300000, newCustomersPerMonth: 40, newCustomerGrowthPercent: 5, pricePerCustomerPerMonth: 2000, variableCostPerCustomerPerMonth: 800, fixedCostsPerMonth: 150000 } }]];
 let inventionMethodSeen = false;
-let pendingBusinessSynthesis = false;
 const fetchImpl = async (url, options) => {
   if (!String(url).startsWith('https://standin.invalid/v1/responses')) return new Response('<html><title>Ohm</title><body>Ohm law V=IR</body></html>', { headers: { 'content-type': 'text/html' } });
   const body = JSON.parse(options.body);
