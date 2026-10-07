@@ -26,6 +26,7 @@ const VERTEX = {
   VERTEX_ACCESS_TOKEN: 'test-token',
   AI_MODEL: 'gemini-3.8-flash'
 };
+const withVertexServer = (run, options = {}) => withServer(run, { ...options, nativeVertex: true });
 const requestFrom = body => {
   const system = body.systemInstruction?.parts?.filter(part => typeof part?.text === 'string').map(part => part.text).join('\n') ?? '';
   const contents = Array.isArray(body.contents) ? body.contents : [];
@@ -112,7 +113,7 @@ async function discover(call, auth, runId, capabilities) {
 /* ------------------------------------------------------------- platform */
 
 test('liveness stays up even when the database does not', () =>
-  withServer(async ({ call, appPool }) => {
+  withVertexServer(async ({ call, appPool }) => {
     await appPool.end();
     const health = await call('GET', '/api/health');
     assert.equal(health.status, 200);
@@ -124,7 +125,7 @@ test('liveness stays up even when the database does not', () =>
   }));
 
 test('readiness reports what is actually configured', () =>
-  withServer(async ({ call }) => {
+  withVertexServer(async ({ call }) => {
     const { body } = await call('GET', '/api/ready');
     assert.equal(body.ok, true);
     assert.deepEqual(body.reasoning, { configured: false });
@@ -149,7 +150,7 @@ test('configuration is validated before anything starts', async () => {
 });
 
 test('unknown API paths are JSON, not the single page app', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token } = await seed();
     const unknown = await call('GET', '/api/nope', { token });
     assert.equal(unknown.status, 404);
@@ -161,7 +162,7 @@ test('unknown API paths are JSON, not the single page app', () =>
   }));
 
 test('every response carries a request id, and malformed JSON is a 400', () =>
-  withServer(async ({ call, seed, base }) => {
+  withVertexServer(async ({ call, seed, base }) => {
     const { token } = await seed();
     const ok = await call('GET', '/api/me', { token });
     assert.match(ok.headers.get('x-request-id'), /^[0-9a-f-]{36}$/);
@@ -178,7 +179,7 @@ test('every response carries a request id, and malformed JSON is a 400', () =>
 /* -------------------------------------------------------------- workflow */
 
 test('planning previews a goal without creating or executing anything', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const { body: plan } = await call('POST', '/api/plan', {
       token, workspace, body: { goal: 'Simulate a pendulum.' }
@@ -191,7 +192,7 @@ test('planning previews a goal without creating or executing anything', () =>
   }));
 
 test('a run persists, survives a reload, and lists newest first', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const first = await call('POST', '/api/runs', { token, workspace, body: { goal: 'Explain recursion.' } });
     const second = await call('POST', '/api/runs', { token, workspace, body: { goal: 'Simulate a pendulum.' } });
@@ -207,7 +208,7 @@ test('a run persists, survives a reload, and lists newest first', () =>
   }));
 
 test('run listing pages with a cursor', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     for (let i = 0; i < 5; i += 1) {
       await call('POST', '/api/runs', { token, workspace, body: { goal: `Explain topic ${i}.` } });
@@ -223,7 +224,7 @@ test('run listing pages with a cursor', () =>
   }));
 
 test('execution drives the model and records what it returned', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const { body: run } = await call('POST', '/api/runs', {
       token, workspace, body: { goal: 'Explain recursion.', privacyConsent: { modelProvider: true } }
@@ -248,7 +249,7 @@ test('execution drives the model and records what it returned', () =>
   }));
 
 test('a configured model does not receive run content without consent', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const { body: run } = await call('POST', '/api/runs', {
       token, workspace, body: { goal: 'Explain recursion.' }
@@ -264,7 +265,7 @@ test('a configured model does not receive run content without consent', () =>
   }));
 
 test('with no model configured the task stays pending and says nothing ran', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const { body: run } = await call('POST', '/api/runs', {
       token, workspace, body: { goal: 'Explain recursion.' }
@@ -280,7 +281,7 @@ test('with no model configured the task stays pending and says nothing ran', () 
   }));
 
 test('code goals go to the code runner, and an unreachable runner records nothing', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const { body: run } = await call('POST', '/api/runs', {
       token, workspace, body: { goal: 'Refactor this Python module.' }
@@ -296,7 +297,7 @@ test('code goals go to the code runner, and an unreachable runner records nothin
   }));
 
 test('Code Workspace is GitHub-only and keeps revision-bound write-back gates', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
 
@@ -372,7 +373,7 @@ test('Code Workspace is GitHub-only and keeps revision-bound write-back gates', 
 
 test('research searches the web with the AI provider, reads what it found, and keeps the sources', () => {
   const calls = [];
-  return withServer(async ({ call, seed }) => {
+  return withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const { body: run } = await call('POST', '/api/runs', {
       token,
@@ -445,7 +446,7 @@ test('research searches the web with the AI provider, reads what it found, and k
 
 test('verifying researched work checks its facts on the web, and an unsupported claim fails it', () => {
   const verifyCalls = [];
-  return withServer(async ({ call, seed }) => {
+  return withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const { body: run } = await call('POST', '/api/runs', { ...auth, body: { goal: 'Research the latest evidence about an unfamiliar topic.', privacyConsent: { modelProvider: true } } });
@@ -511,7 +512,7 @@ test('verifying researched work checks its facts on the web, and an unsupported 
 });
 
 test('adaptive investigation uses the configured generic tool runner and explicit approval', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const { body: run } = await call('POST', '/api/runs', {
       token,
@@ -557,7 +558,7 @@ test('adaptive investigation uses the configured generic tool runner and explici
   }));
 
 test('a failing runner is reported as failed, never as a result', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const { body: run } = await call('POST', '/api/runs', {
       token, workspace, body: { goal: 'Refactor this Python module.' }
@@ -572,7 +573,7 @@ test('a failing runner is reported as failed, never as a result', () =>
   }));
 
 test('approval and iterate refuse to execute themselves', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed({
       policies: { workspace: { id: 'w', requireHumanApproval: true } }
     });
@@ -593,7 +594,7 @@ test('approval and iterate refuse to execute themselves', () =>
   }));
 
 test('workspace administrators can manage enterprise governance without touching platform policy', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const set = await call('POST', '/api/governance', {
       token, workspace,
@@ -614,7 +615,7 @@ test('workspace administrators can manage enterprise governance without touching
   }));
 
 test('an enterprise administrator can manage its organization policy', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed({
       workspace: 'enterprise-ws',
       organizationType: 'enterprise'
@@ -631,7 +632,7 @@ test('an enterprise administrator can manage its organization policy', () =>
   }));
 
 test('a policy-blocked run refuses to execute and names the capability', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed({
       policies: { workspace: { id: 'w', deniedCapabilities: ['code-execution'] } }
     });
@@ -646,7 +647,7 @@ test('a policy-blocked run refuses to execute and names the capability', () =>
   }, { env: RUNNERS }));
 
 test('iterate starts a new attempt and the budget eventually stops it', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const { body: run } = await call('POST', '/api/runs', { ...auth, body: { goal: 'Write a short report on recursion.' } });
@@ -682,7 +683,7 @@ test('iterate starts a new attempt and the budget eventually stops it', () =>
   }, { env: { MAX_RUN_ATTEMPTS: '2' } }));
 
 test('finishing without a replan completes the run', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const { body: run } = await call('POST', '/api/runs', { ...auth, body: { goal: 'Write a short report on recursion.' } });
@@ -700,7 +701,7 @@ test('finishing without a replan completes the run', () =>
 /* ------------------------------------------------------------------ prefs */
 
 test('account preferences are isolated and writable, and the built-in simulation API is gone', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const first = await seed({ workspace: 'pref-ws', name: 'First' });
     const second = await seed({ workspace: 'pref-ws', name: 'Second' });
 
@@ -724,7 +725,7 @@ test('account preferences are isolated and writable, and the built-in simulation
 /* --------------------------------------------------------------- objects */
 
 test('objects round-trip and identical bytes are stored once', () =>
-  withServer(async ({ call, seed, pool }) => {
+  withVertexServer(async ({ call, seed, pool }) => {
     const { token, workspace } = await seed();
     const first = await call('POST', '/api/objects', {
       token, workspace, body: { name: 'a.txt', type: 'document', content: 'hello' }
@@ -750,7 +751,7 @@ test('objects round-trip and identical bytes are stored once', () =>
   }));
 
 test('base64 content round-trips and invalid base64 is refused', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const encoded = Buffer.from('binary payload').toString('base64');
     const { body: object } = await call('POST', '/api/objects', {
@@ -766,7 +767,7 @@ test('base64 content round-trips and invalid base64 is refused', () =>
   }));
 
 test('quotas are enforced per workspace', () =>
-  withServer(async ({ call, seed, pool }) => {
+  withVertexServer(async ({ call, seed, pool }) => {
     const { token, workspace } = await seed();
     await pool.query('UPDATE workspaces SET max_objects = 2, max_bytes = 40 WHERE id = $1', [workspace]);
 
@@ -779,7 +780,7 @@ test('quotas are enforced per workspace', () =>
   }));
 
 test('an object larger than the per-object limit is refused', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const response = await call('POST', '/api/objects', {
       token, workspace, body: { content: 'x'.repeat(2000) }
@@ -788,7 +789,7 @@ test('an object larger than the per-object limit is refused', () =>
   }, { env: { MAX_OBJECT_BYTES: '1024', MAX_REQUEST_BYTES: '4096' } }));
 
 test('usage reflects what is stored', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     await call('POST', '/api/objects', { token, workspace, body: { content: 'hello' } });
     const { body: usage } = await call('GET', '/api/objects/usage', { token, workspace });
@@ -799,7 +800,7 @@ test('usage reflects what is stored', () =>
 /* ----------------------------------------------------- idempotency, audit */
 
 test('a retried POST with the same idempotency key does the work once', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const body = { goal: 'Explain recursion.' };
     const headers = { 'idempotency-key': 'abc-123' };
@@ -821,7 +822,7 @@ test('a retried POST with the same idempotency key does the work once', () =>
   }));
 
 test('the audit trail records allowed and denied actions alike', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const { body: run } = await call('POST', '/api/runs', {
       token, workspace, body: { goal: 'Explain recursion.' }
@@ -837,7 +838,7 @@ test('the audit trail records allowed and denied actions alike', () =>
   }));
 
 test('metrics are exported in Prometheus format', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     await call('GET', '/api/runs', { token, workspace });
     const { body, headers } = await call('GET', '/api/metrics', { token });
@@ -850,7 +851,7 @@ test('metrics are exported in Prometheus format', () =>
   }));
 
 test('the rate limiter answers with 429 and a retry hint', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     let limited = null;
     for (let i = 0; i < 12 && !limited; i += 1) {
@@ -863,7 +864,7 @@ test('the rate limiter answers with 429 and a retry hint', () =>
   }, { env: { RATE_MAX: '5' } }));
 
 test('object content is encrypted at rest and digests are workspace-scoped', () =>
-  withServer(async ({ call, seed, pool }) => {
+  withVertexServer(async ({ call, seed, pool }) => {
     const acme = await seed({ workspace: 'acme' });
     const other = await seed({ workspace: 'other' });
 
@@ -897,7 +898,7 @@ test('object content is encrypted at rest and digests are workspace-scoped', () 
   }));
 
 test('managed sandbox execution must return an explicit execution receipt', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const { body: run } = await call('POST', '/api/runs', {
       token,
@@ -940,7 +941,7 @@ test('managed sandbox execution must return an explicit execution receipt', () =
   }));
 
 test('managed runner success without executed=true is rejected as a fake success', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const { body: run } = await call('POST', '/api/runs', {
       token,
@@ -965,7 +966,7 @@ test('managed runner success without executed=true is rejected as a fake success
   }));
 
 test('security profile exposes the enforced PA-ONE-X invariants without secrets', () =>
-  withServer(async ({ call }) => {
+  withVertexServer(async ({ call }) => {
     const response = await call('GET', '/api/security/profile');
     assert.equal(response.status, 200);
     assert.equal(response.body.model, 'PA-ONE-X');
@@ -975,7 +976,7 @@ test('security profile exposes the enforced PA-ONE-X invariants without secrets'
   }));
 
 test('malformed infrastructure headers are rejected before routing', () =>
-  withServer(async ({ call }) => {
+  withVertexServer(async ({ call }) => {
     const response = await call('GET', '/api/health', {
       headers: { 'x-real-ip': 'forged' }
     });
@@ -984,7 +985,7 @@ test('malformed infrastructure headers are rejected before routing', () =>
   }));
 
 test('invalid trusted request ids are replaced at ingress', () =>
-  withServer(async ({ call }) => {
+  withVertexServer(async ({ call }) => {
     const response = await call('GET', '/api/health', {
       headers: { 'x-request-id': 'not valid spaces' }
     });
@@ -992,7 +993,7 @@ test('invalid trusted request ids are replaced at ingress', () =>
   }));
 
 test('audit history is immutable at the database layer', () =>
-  withServer(async ({ call, seed, pool }) => {
+  withVertexServer(async ({ call, seed, pool }) => {
     const { token, workspace } = await seed();
     // Only state changes are audited; create a run to produce a record.
     const created = await call('POST', '/api/runs', { token, workspace, body: { goal: 'Explain recursion.' } });
@@ -1006,7 +1007,7 @@ test('audit history is immutable at the database layer', () =>
   }));
 
 test('understand can discover hidden novelty and expand the server-owned graph', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const { body: run } = await call('POST', '/api/runs', {
       token,
@@ -1051,7 +1052,7 @@ test('understand can discover hidden novelty and expand the server-owned graph',
   }));
 
 test('governance follows discovery: a high-impact capability found mid-run tightens it and is audited', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const created = await call('POST', '/api/runs', {
       token, workspace,
@@ -1088,7 +1089,7 @@ test('governance follows discovery: a high-impact capability found mid-run tight
   }));
 
 test('discovered capability is persisted as a candidate and requires approval before dynamic execution', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const created = await call('POST', '/api/runs', { ...auth, body: { goal: 'Invent an unfamiliar tool for an unknown process.' } });
@@ -1121,7 +1122,7 @@ test('discovered capability is persisted as a candidate and requires approval be
   }));
 
 test('capability registry is isolated by workspace', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const first = await seed({ workspace: 'one' });
     const second = await seed({ workspace: 'two' });
 
@@ -1141,7 +1142,7 @@ test('capability registry is isolated by workspace', () =>
   }));
 
 test('a malformed pagination cursor is a client error, not a database error', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const bad = Buffer.from(JSON.stringify({ c: 'not-a-date', i: 'x' })).toString('base64url');
     for (const path of ['/api/runs', '/api/objects']) {
@@ -1154,7 +1155,7 @@ test('a malformed pagination cursor is a client error, not a database error', ()
   }));
 
 test('paging never skips rows created within the same millisecond', () =>
-  withServer(async ({ call, seed, pool }) => {
+  withVertexServer(async ({ call, seed, pool }) => {
     const { token, workspace } = await seed();
     for (let i = 0; i < 4; i += 1) {
       const created = await call('POST', '/api/runs', { token, workspace, body: { goal: `Explain topic ${i}.` } });
@@ -1182,7 +1183,7 @@ test('paging never skips rows created within the same millisecond', () =>
   }));
 
 test('unexpected errors never expose driver codes or row data', () =>
-  withServer(async ({ call, seed, appPool: pool, logger }) => {
+  withVertexServer(async ({ call, seed, appPool: pool, logger }) => {
     const { token, workspace } = await seed();
     const query = pool.query.bind(pool);
     pool.query = (sql, ...rest) => {
@@ -1206,7 +1207,7 @@ test('unexpected errors never expose driver codes or row data', () =>
   }));
 
 test('a declared data-class allow-list still fails closed for model reasoning', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed({
       policies: { platform: { id: 'p', allowedDataClasses: ['public-web'] } }
     });
@@ -1225,7 +1226,7 @@ test('a declared data-class allow-list still fails closed for model reasoning', 
   }));
 
 test('a declined model answer leaves the task pending and records nothing', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const { body: run } = await call('POST', '/api/runs', {
       token, workspace, body: { goal: 'Explain recursion.', privacyConsent: { modelProvider: true } }
@@ -1249,7 +1250,7 @@ test('a declined model answer leaves the task pending and records nothing', () =
 /* --------------------------------------------------- goal classification */
 
 test('with consent, the model classification replaces misleading keywords', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     // Keywords read "figure out" as an unknown domain and "rise" as nothing;
     // the model reads an ordinary question.
@@ -1275,7 +1276,7 @@ test('with consent, the model classification replaces misleading keywords', () =
   }));
 
 test('the model cannot lower a risk the keyword rules detected', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const plan = await call('POST', '/api/plan', {
       token, workspace,
@@ -1290,7 +1291,7 @@ test('the model cannot lower a risk the keyword rules detected', () =>
   }));
 
 test('malformed or partial classifier output falls back to keywords', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const plan = await call('POST', '/api/plan', {
       token, workspace, body: { goal: 'Explain recursion.', privacyConsent: { modelProvider: true } }
@@ -1305,7 +1306,7 @@ test('malformed or partial classifier output falls back to keywords', () =>
   }));
 
 test('governance that denies the model keeps classification on keywords', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed({
       policies: { platform: { id: 'p', deniedModels: ['*'] } }
     });
@@ -1320,7 +1321,7 @@ test('governance that denies the model keeps classification on keywords', () =>
   }));
 
 test('a direct question is answered and verified in two steps, then completes', () =>
-  withServer(async ({ call, seed }) => {
+  withVertexServer(async ({ call, seed }) => {
     const { token, workspace } = await seed();
     const { body: run } = await call('POST', '/api/runs', {
       token, workspace, body: { goal: 'Explain recursion.', privacyConsent: { modelProvider: true } }
@@ -1349,7 +1350,7 @@ test('a direct question is answered and verified in two steps, then completes', 
   }));
 
 test('a capability found on reassessment is governed like any other, and two never collide', () =>
-  withServer(async ({ call, seed, pool }) => {
+  withVertexServer(async ({ call, seed, pool }) => {
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const { body: run } = await call('POST', '/api/runs', { ...auth, body: { goal: 'Invent an unfamiliar tool for an unknown process.' } });
@@ -1383,7 +1384,7 @@ test('a capability found on reassessment is governed like any other, and two nev
   }));
 
 test('readiness reports 503 while the process drains for shutdown, and health stays up', () =>
-  withServer(async ({ call, app }) => {
+  withVertexServer(async ({ call, app }) => {
     assert.equal((await call('GET', '/api/ready')).status, 200);
     app.locals.draining = true;
     const draining = await call('GET', '/api/ready');
@@ -1393,7 +1394,7 @@ test('readiness reports 503 while the process drains for shutdown, and health st
   }));
 
 test('with METRICS_TOKEN, monitoring can read metrics even while the database is down', () =>
-  withServer(async ({ call, appPool }) => {
+  withVertexServer(async ({ call, appPool }) => {
     const token = 'm'.repeat(40);
     const page = await call('GET', '/api/metrics', { headers: { authorization: `Bearer ${token}` } });
     assert.equal(page.status, 200);
@@ -1407,7 +1408,7 @@ test('with METRICS_TOKEN, monitoring can read metrics even while the database is
   }, { env: { METRICS_TOKEN: 'm'.repeat(40) } }));
 
 test('a wrong metrics token gets no bypass', () =>
-  withServer(async ({ call }) => {
+  withVertexServer(async ({ call }) => {
     const wrong = await call('GET', '/api/metrics', { headers: { authorization: `Bearer ${'x'.repeat(40)}` } });
     assert.equal(wrong.status, 401);
   }, { env: { METRICS_TOKEN: 'm'.repeat(40) } }));
