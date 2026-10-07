@@ -61,9 +61,10 @@ test('adaptive context exposes exactly three public modes and supports compound 
   const context=resolveAdaptiveContext('Research the current dependency release and then update the repository.', {
     activeSurface:'code', attachedCode:true, files:[{name:'package.json'}], attachedArtifacts:[{name:'package.json'}]
   });
-  assert.deepEqual(context.adaptiveSnapshot.modeRouting.publicModes,['normal-chat','code','research']);
-  assert.equal(context.adaptiveSnapshot.modeRouting.primary,'code');
-  assert.ok(context.adaptiveSnapshot.resourcePlan.selected.surfaces.includes('research'));
+  assert.deepEqual(Object.keys(SURFACE_WORKSPACE_CONTRACTS), ['normal-chat','code','research']);
+  assert.equal(context.primarySurface,'code');
+  assert.ok(context.resourcePlan.selected.surfaces.includes('research'));
+  assert.ok(context.resourcePlan.selected.surfaces.every(surface => ['chat','code','research','adaptive'].includes(surface)));
 });
 
 test('archive contents outrank the zip extension', () => {
