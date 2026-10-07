@@ -513,6 +513,7 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
             + clip(taskContext, 6000)
             + '\n\nAvailable tool results:\n'
             + JSON.stringify(clip(toolResults, MAX_TOOL_CHARS * 2))
+            + '\n\nNo more tools can be used. Answer from the available results now.'
         }
       ], {
         config,
