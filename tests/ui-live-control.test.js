@@ -35,8 +35,8 @@ test('adaptive progress remains visible and honest during live work', () => {
   assert.equal(workPresentation({ ...pending, state: 'failed' }).live, false);
   assert.doesNotMatch(css, /work-progress-meter::after/);
   assert.match(css, /\.work-background-strip/);
-  assert.match(read('adaptive-workspace.js'), /Adaptive runtime activity/);
-  assert.match(read('adaptive-workspace.js'), /Work budget ·/);
+  assert.match(read('adaptive-workspace.js'), /Current work details/);
+  assert.match(read('adaptive-workspace.js'), /Work capacity ·/);
   assert.match(css, /\.work-permission-strip/);
   assert.match(css, /\.composer-work-status/);
   assert.match(css, /send\[data-mode="stop"\]/);
