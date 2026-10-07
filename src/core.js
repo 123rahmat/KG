@@ -228,6 +228,7 @@ const SCHEDULING = /\b(remind me|reminders?|set (?:a|an) (?:alarm|reminder)|noti
 
 /** Pieces of writing a model can produce on its own. */
 const WRITING = /\b(?:write|rewrite|rephrase|proofread|translate|translation|edit|polish|shorten|expand|letters?|emails?|e-mails?|poems?|essays?|stor(?:y|ies)|posts?|captions?|speech(?:es)?|messages?|bios?|biograph\w*|resumes?|r[ée]sum[ée]s?|cvs?|cover letters?|summar\w+|articles?|blogs?|scripts? for (?:a )?(?:video|talk|podcast)|slogans?|taglines?|toasts?|invitations?|announcements?|reviews?|replies|reply|paragraphs?|outlines?|lyrics|jokes?|notes?|cards?|wishes|greetings?|condolences?|apolog(?:y|ies)|thank[- ]you|quotes?|descriptions?|headlines?|tweets?)\b/i;
+const LIGHTWEIGHT_MATH = /^(?:simplify|solve|calculate|evaluate|factor|expand|differentiate|integrate)\b/i;
 
 /** Building a whole system rather than one piece of it. */
 const BROAD_WORK = /\b(?:build|create|make|develop|design|implement|set up)\b[^.?!]{0,60}\b(?:apps?|applications?|websites?|web ?apps?|apis?|services?|servers?|backends?|platforms?|systems?|games?|dashboards?|databases?|pipelines?|compilers?|engines?)\b/i;
@@ -633,7 +634,10 @@ export function planGoal(goal, {
     && !attachments.length && !files.length
     && analysis.flags?.code !== true
     && analysis.flags?.highImpact !== true
-    && analysis.flags?.externalAction !== true;
+    && analysis.flags?.externalAction !== true
+    && analysis.flags?.research !== true
+    && analysis.investigationNeeded !== true
+    && analysis.situation?.externalData?.hasExternalDataNeed !== true;
   // A letter or post about physical work is still only writing.
   const writingDocument = writing;
   // A question about physical things ("how many amps does a kettle draw")
@@ -641,8 +645,8 @@ export function planGoal(goal, {
   // the world, so there is nothing to approve.
   const goalActions = analysis.goalModel?.actions ?? [];
   const physicalQuestion = analysis.flags?.physical === true && analysis.flags?.highImpact !== true
-    && goalActions.length > 0 && goalActions.every(action => action === 'answer')
-    && capabilityRequirements.every(item => BUILT_IN.includes(item.id));
+    && analysis.flags?.externalAction !== true
+    && goalActions.length > 0 && goalActions.every(action => action === 'answer');
   const noPhysicalAction = writingDocument || physicalQuestion;
   const crisis = analysis.flags?.crisis === true;
   // A letter or post about physical work is only writing: it takes no
@@ -689,9 +693,15 @@ export function planGoal(goal, {
     || files.length > 0
     || project != null;
   const directConversation = normalChatBounded && !hasRealWork;
+  const directMath = normalChatBounded
+    && LIGHTWEIGHT_MATH.test(value)
+    && analysis.flags?.code !== true
+    && analysis.flags?.highImpact !== true
+    && !attachments.length && !files.length;
   const direct = crisis
     || declined
     || writingDocument
+    || directMath
     || ((smallTalk || reminder) && !attachments.length)
     || directConversation;
   const scale = direct ? 'single' : workScale({
