@@ -179,15 +179,15 @@ function backgroundSnapshot(run) {
 
   let permission = '';
   let permissionTone = '';
-  if (next?.type === 'approval' || approvals) {
+  if (governance?.status === 'blocked') {
+    permission = 'Blocked by policy';
+    permissionTone = 'bad';
+  } else if (next?.type === 'approval' || approvals) {
     permission = 'Approval needed';
     permissionTone = 'warn';
   } else if (workspace === 'code' && source?.kind === 'github') {
     permission = source?.permissions?.write === true ? 'Write access connected · approval still required' : 'Repository is read-only';
     permissionTone = source?.permissions?.write === true ? 'ok' : 'neutral';
-  } else if (governance?.status === 'blocked') {
-    permission = 'Blocked by policy';
-    permissionTone = 'bad';
   }
 
   return {
