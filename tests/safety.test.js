@@ -69,7 +69,7 @@ test('a declined request is answered for the person\'s real need; without the mo
     const other = await seed({ name: 'Other', role: 'editor' });
     assert.equal((await call('POST', '/api/runs', { token: other.token, workspace, body: { goal: 'What is the capital of France?' } })).status, 201);
   }, {
-    env: { AI_PROVIDER: 'anthropic', AI_API_KEY: 'test-key', AI_MODEL: 'claude-opus-5-5' },
+    env: { AI_PROVIDER: 'fixture', AI_MODEL: 'fixture-model' },
     fetchImpl: async (_url, options) => {
       const body = JSON.parse(options.body);
       const system = body.system ?? '';
@@ -140,7 +140,7 @@ test('anyone who can read an answer can report it; only admins review reports', 
     assert.deepEqual(review.declined, []);
     const resolved = await call('POST', `/api/reports/${report.body.report.id}`, { ...asAdmin, body: { status: 'resolved' } });
     assert.equal(resolved.body.report.status, 'resolved');
-  }, { env: { AI_PROVIDER: 'anthropic', AI_API_KEY: 'test-key', AI_MODEL: 'claude-opus-5-5' }, fetchImpl: async () => jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Lyon.' }], usage: { input_tokens: 1, output_tokens: 1 } }) }));
+  }, { env: { AI_PROVIDER: 'fixture', AI_MODEL: 'fixture-model' }, fetchImpl: async () => jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Lyon.' }], usage: { input_tokens: 1, output_tokens: 1 } }) }));
 
 test('religion is not discussed, for any religion; passing mentions are fine', () => {
   const on = { blockedTopics: ['religion'] };
@@ -210,7 +210,7 @@ test('a religious answer is replaced before anyone sees it', () =>
     assert.doesNotMatch(answered.text, /Quran/);
     const { rows } = await pool.query("SELECT DISTINCT kind, source FROM safety_events WHERE category = 'religion'");
     assert.deepEqual(rows, [{ kind: 'off-topic', source: 'model' }]);
-  }, { env: { AI_PROVIDER: 'anthropic', AI_API_KEY: 'test-key', AI_MODEL: 'claude-opus-5-5' }, fetchImpl: async () => jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Keep Friday free. According to the Quran, Eid prayers are required.' }], usage: { input_tokens: 2, output_tokens: 2 } }) }));
+  }, { env: { AI_PROVIDER: 'fixture', AI_MODEL: 'fixture-model' }, fetchImpl: async () => jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Keep Friday free. According to the Quran, Eid prayers are required.' }], usage: { input_tokens: 2, output_tokens: 2 } }) }));
 
 test('a topic the site does not discuss gets the fixed kind reply, even when the model read the request', () =>
   withServer(async ({ call, seed }) => {
@@ -222,6 +222,6 @@ test('a topic the site does not discuss gets the fixed kind reply, even when the
     assert.equal(asked.body.category, 'religion');
     assert.ok(asked.body.alternatives.length);
   }, {
-    env: { AI_PROVIDER: 'anthropic', AI_API_KEY: 'test-key', AI_MODEL: 'claude-opus-5-5', BLOCKED_TOPICS: 'religion' },
+    env: { AI_PROVIDER: 'fixture', AI_MODEL: 'fixture-model', BLOCKED_TOPICS: 'religion' },
     fetchImpl: async () => jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(policyReply({ decision: 'refuse', category: 'religion', intent: 'understand', need: 'a religious ruling', affected: 'none', vulnerable: false })) }], usage: { input_tokens: 5, output_tokens: 5 } })
   }));
