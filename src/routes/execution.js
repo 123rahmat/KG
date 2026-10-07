@@ -147,7 +147,12 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
   /** What tools may use in a step: the person's files and scope, and a way to propose actions. */
   function selectedAttachmentNames(run) {
     const selected = run.adaptation?.resourcePlan?.selected?.artifacts;
-    return Array.isArray(selected) ? new Set(selected.map(text).filter(Boolean).map(name => name.toLowerCase())) : null;
+    if (!Array.isArray(selected)) return null;
+    const names = selected.map(text).filter(Boolean).map(name => name.toLowerCase());
+    // An empty adaptive artifact selection means "no narrowing", not
+    // "discard the user's attachments". Attached project/file context is
+    // authoritative unless a non-empty scope explicitly narrows it.
+    return names.length ? new Set(names) : null;
   }
 
   function scopedAttachments(run, task = null) {
