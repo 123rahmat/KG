@@ -59,7 +59,8 @@ test('ZIP archives adapt to their contents instead of always becoming code proje
   assert.equal(documents.format, 'bundle');
   assert.equal(documents.archiveKind, 'document-bundle');
   assert.equal(documents.items.length, 2);
-  assert.equal(documents.items[0].text, 'Quarterly report');
+  assert.equal(documents.items.find(item => item.path === 'report.txt')?.text, 'Quarterly report');
+  assert.equal(documents.items.find(item => item.path === 'notes.md')?.text, '# Notes');
 
   const research = await readDocument(zipRaw([
     makeEntry('paper-results.txt', 'Study results'),
