@@ -8,7 +8,7 @@
 import { classifyAttachmentSet } from './documents.js';
 
 const text = value => String(value ?? '').trim();
-const CODE = /\b(?:code|coding|program|programming|debug|debugging|refactor|repository|repo|pull request|branch|commit|function|class|bug|stack trace|compile|test suite|unit test|typescript|javascript|python|rust|golang|java|sql|api|backend|frontend|software|app|application|website|web app|github)\b|\b[\w-]+\.(?:py|js|mjs|cjs|ts|tsx|jsx|go|rs|java|kt|c|cc|cpp|h|hpp|cs|rb|php|swift|sql|sh|html|css|json)\b/i;
+const CODE = /\b(?:code|coding|program|programming|debug|debugging|refactor|repository|repo|pull request|branch|commit|function|class|bug|stack trace|compile|test suite|unit test|typescript|javascript|python|rust|golang|java|sql|api|backend|frontend|software|app|application|website|web app|github|simulation|simulate|simulating|computational model|numerical model)\b|\b[\w-]+\.(?:py|js|mjs|cjs|ts|tsx|jsx|go|rs|java|kt|c|cc|cpp|h|hpp|cs|rb|php|swift|sql|sh|html|css|json)\b/i;
 const RESEARCH_DEEP = /\b(?:research|deep research|investigate|literature review|systematic review|academic papers?|sources?|citations?|references?|evidence|state of the art|comprehensive(?:ly)?|in[- ]depth|fact[- ]check|latest|current|search the web|web search|browse|compare .*sources)\b/i;
 const CURRENT_FACTS = /\b(?:latest|today|current|currently|right now|this week|live|recent|news|price|prices|rate|rates|weather|scores?)\b/i;
 const CODE_PROJECT_SCOPE = /\b(?:repository|repo|codebase|project|code workspace|github|pull request|branch|commit|multi[- ]file|multiple files|whole app|whole application|service|backend|frontend|api|deployment|deploy)\b/i;
