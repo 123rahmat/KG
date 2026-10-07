@@ -472,9 +472,19 @@ function codeWorkspaceProject(data) {
         element('strong', { text: repo }),
         element('span', { class: 'muted small', text: 'Revision · ' + revision })
       ]),
-      element('div', { class: 'deep-workspace-state' }, [
+      element('div', {
+        class: 'deep-workspace-state',
+        role: 'status',
+        'aria-live': 'polite',
+        'data-state': run?.state || 'ready'
+      }, [
         element('i', { 'aria-hidden': 'true' }),
-        element('span', { text: run?.state === 'complete' ? 'verified' : run ? 'active' : 'ready' })
+        element('span', {
+          text: run?.state === 'complete' ? 'verified'
+            : run?.state === 'waiting' ? 'waiting'
+              : run?.state === 'blocked' ? 'blocked'
+                : run ? 'active' : 'ready'
+        })
       ])
     ]),
     element('nav', { class: 'deep-workspace-nav', 'aria-label': 'Code project areas' }, [
@@ -565,9 +575,19 @@ function researchWorkspaceProject(data) {
         element('strong', { text: research.activeQuestion || run?.goal || 'Research dossier' }),
         element('span', { class: 'muted small', text: workspaceValue(research.status, 'evidence-first investigation') })
       ]),
-      element('div', { class: 'deep-workspace-state' }, [
+      element('div', {
+        class: 'deep-workspace-state',
+        role: 'status',
+        'aria-live': 'polite',
+        'data-state': run?.state || 'ready'
+      }, [
         element('i', { 'aria-hidden': 'true' }),
-        element('span', { text: run?.state === 'complete' ? 'synthesized' : run ? 'investigating' : 'ready' })
+        element('span', {
+          text: run?.state === 'complete' ? 'synthesized'
+            : run?.state === 'waiting' ? 'waiting'
+              : run?.state === 'blocked' ? 'blocked'
+                : run ? 'investigating' : 'ready'
+        })
       ])
     ]),
     element('nav', { class: 'deep-workspace-nav', 'aria-label': 'Research project areas' }, [
@@ -695,7 +715,9 @@ function renderCapabilityDock() {
     return;
   }
   title.textContent = data.workspace === 'code' ? 'Code Workspace' : 'Research Workspace';
-  hint.textContent = 'Adaptive tools for this work';
+  hint.textContent = data.workspace === 'code'
+    ? 'Project tools appear only when the current change needs them'
+    : 'Research tools appear only when the current investigation needs them';
   list.replaceChildren(...capabilityItems(data).map(item => {
     const control = document.createElement('button');
     control.type = 'button';
@@ -727,7 +749,7 @@ export function renderAdaptiveWorkspace(host, mode = 'chat') {
       element('div', { class: 'adaptive-workspace-copy' }, [
         element('span', { class: 'adaptive-workspace-kicker', text: workspaceLabel }),
         element('strong', { class: 'truncate', text: data.focus }),
-        element('span', { class: 'muted small truncate', text: data.status })
+        element('span', { class: 'muted small truncate', text: data.status, role: 'status', 'aria-live': 'polite' })
       ])
     ]),
     element('div', { class: 'adaptive-workspace-surfaces', role: 'toolbar', 'aria-label': 'Adaptive workspace surfaces' },
@@ -735,6 +757,8 @@ export function renderAdaptiveWorkspace(host, mode = 'chat') {
   );
   host.dataset.surfaceCount = String(surfaces.length);
   host.dataset.mode = mode;
+  host.dataset.workspace = data.workspace;
+  host.setAttribute('aria-label', workspaceLabel + ' · ' + data.status);
 }
 
 export function syncAdaptiveWorkspace() {
