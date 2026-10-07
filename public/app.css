@@ -2571,86 +2571,6 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
 /* What a step adapted (fixed after a failing test, not run here). */
 .steps .step-note { color: var(--muted); font-size: .85em; }
 
-/* ------------------------------------------------ adaptive workspace surfaces */
-.adaptive-workspace-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 54px;
-  padding: 8px 16px;
-  margin: 0 auto;
-  width: min(var(--read), calc(100% - 24px));
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  box-shadow: var(--shadow-sm);
-}
-.adaptive-workspace-main {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-width: 0;
-  flex: 1;
-}
-.adaptive-workspace-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: none;
-  background: var(--accent);
-  box-shadow: 0 0 0 4px var(--accent-soft);
-}
-.adaptive-workspace-copy {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  min-width: 0;
-  line-height: 1.25;
-}
-.adaptive-workspace-copy strong,
-.adaptive-workspace-copy .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.adaptive-workspace-kicker {
-  font-size: .68rem;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  color: var(--muted);
-  font-weight: 700;
-}
-.adaptive-workspace-surfaces {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-.adaptive-workspace-surfaces button {
-  white-space: nowrap;
-}
-.adaptive-workspace-surfaces button.adaptive-active {
-  background: var(--accent-soft);
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
-  color: var(--accent);
-}
-#tabs [data-adaptive-needed="true"] {
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-
-@media (max-width: 700px) {
-  .adaptive-workspace-bar {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 8px;
-    width: calc(100% - 16px);
-  }
-  .adaptive-workspace-surfaces {
-    width: 100%;
-    justify-content: flex-start;
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    padding-bottom: 1px;
-  }
-  .adaptive-workspace-surfaces button { flex: none; }
-}
-
 /* A build plan to agree before anything is built. */
 .build-plan { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--softer, var(--soft)); }
 .build-plan-summary { margin: 0 0 4px; font-size: .98rem; color: var(--ink); }
@@ -3016,7 +2936,7 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
   overflow:hidden;
 }
 .work-status-card.ok{border-color:color-mix(in srgb,var(--ok) 30%,var(--line))}
-.work-status-card.bad{border-color:color-mix(in srgb,var(--danger) 34%,var(--line))}
+.work-status-card.bad{border-color:color-mix(in srgb,var(--bad) 34%,var(--line))}
 .work-status-card.warn{border-color:color-mix(in srgb,var(--warn) 34%,var(--line))}
 .work-status-card>summary{list-style:none;cursor:pointer}
 .work-status-card>summary::-webkit-details-marker{display:none}
@@ -3033,7 +2953,7 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
   box-shadow:0 0 0 4px var(--accent-soft);
 }
 .work-status-card.ok .work-status-mark{background:var(--ok);box-shadow:0 0 0 4px var(--ok-soft)}
-.work-status-card.bad .work-status-mark{background:var(--danger);box-shadow:0 0 0 4px var(--bad-soft)}
+.work-status-card.bad .work-status-mark{background:var(--bad);box-shadow:0 0 0 4px var(--bad-soft)}
 .work-status-card.warn .work-status-mark{background:var(--warn);box-shadow:0 0 0 4px var(--warn-soft)}
 .work-status-head{display:grid;gap:1px;min-width:0}
 .work-status-head strong{font-size:.83rem}
@@ -3063,7 +2983,7 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
   transition:background .18s var(--ease),transform .18s var(--ease),opacity .18s var(--ease);
 }
 .work-progress-segment.ok{background:var(--ok)}
-.work-progress-segment.bad{background:var(--danger)}
+.work-progress-segment.bad{background:var(--bad)}
 .work-progress-segment.warn{background:var(--warn)}
 .work-progress-segment.active,
 .work-progress-segment.current{
@@ -3153,11 +3073,11 @@ dialog.settings::backdrop{background:var(--scrim);backdrop-filter:blur(5px)}
 }
 .work-timeline-item.active .work-timeline-dot{background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 .work-timeline-item.ok .work-timeline-dot{background:var(--ok);box-shadow:none}
-.work-timeline-item.bad .work-timeline-dot{background:var(--danger);box-shadow:none}
+.work-timeline-item.bad .work-timeline-dot{background:var(--bad);box-shadow:none}
 .work-timeline-item.warn .work-timeline-dot{background:var(--warn);box-shadow:none}
 .work-timeline-copy{display:grid;gap:1px;min-width:0}
 .work-timeline-copy strong,.work-timeline-copy span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.work-timeline-flag{color:var(--danger)}
+.work-timeline-flag{color:var(--bad)}
 
 .work-timeline.is-disconnected{
   background:color-mix(in srgb,var(--warn-soft) 34%,var(--panel));
@@ -3932,8 +3852,10 @@ body[data-adaptive-workspace="research"] .deep-workspace-shell {
 .adaptive-workspace-kicker { color:var(--muted); font:700 .57rem/1 var(--mono); letter-spacing:.08em; text-transform:uppercase; }
 .adaptive-workspace-surfaces { display:flex; align-items:center; justify-content:flex-end; gap:5px; flex-wrap:wrap; }
 .adaptive-workspace-surfaces .adaptive-active { border-color:color-mix(in srgb,var(--accent) 30%,var(--line)); background:var(--accent-soft); color:var(--accent); }
+#tabs [data-adaptive-needed="true"]{box-shadow:inset 2px 0 0 var(--accent)}
 
-/* Design/visual work should feel like a lightweight studio, not a second app. */
+
+/* Visual results stay lightweight inside NormalChat; they are not a separate workspace. */
 .design-result,
 .visual-result,
 .canvas-result {
@@ -4023,253 +3945,42 @@ body[data-adaptive-workspace="research"] .deep-workspace-shell {
   .artifact-chip { max-width:100%; }
 }
 
-/* ----------------------------------------------------- adaptive design studio */
-.deep-workspace-shell[data-workspace="design"] {
-  width: min(1500px, 100%);
-}
-.deep-workspace-head.design .deep-workspace-kicker { letter-spacing: .12em; }
-.design-studio-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  padding: 8px 0;
-}
-.design-studio-layout {
-  display: grid;
-  grid-template-columns: 190px minmax(0, 1fr) 220px;
-  min-height: 560px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  background: var(--softer);
-}
-.design-assets-panel,
-.design-inspector,
-.design-canvas-panel {
-  min-width: 0;
-}
-.design-assets-panel,
-.design-inspector {
-  padding: 12px;
-  background: var(--panel);
-}
-.design-assets-panel { border-right: 1px solid var(--line); }
-.design-inspector { border-left: 1px solid var(--line); }
-.design-panel-head,
-.design-canvas-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 10px;
-}
-.design-panel-empty {
-  padding: 14px 10px;
-  border: 1px dashed var(--line-strong);
-  border-radius: 10px;
-  color: var(--muted);
-  font-size: .82rem;
-  text-align: center;
-}
-.design-asset-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
-}
-.design-asset-tile {
-  min-width: 0;
-  display: grid;
-  gap: 5px;
-}
-.design-asset-tile img {
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--soft);
-}
-.design-canvas-panel {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  min-width: 0;
-  background: var(--soft);
-}
-.design-canvas-head {
-  margin: 0;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line);
-}
-.design-canvas {
-  position: relative;
-  min-height: 520px;
-  overflow: auto;
-  isolation: isolate;
-  background: var(--panel);
-}
-.design-canvas-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(to right, var(--line) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--line) 1px, transparent 1px);
-  background-size: var(--design-grid-size, 24px) var(--design-grid-size, 24px);
-  opacity: .42;
-  pointer-events: none;
-}
-.design-canvas[data-grid="off"] .design-canvas-grid { display: none; }
-.design-canvas-object { touch-action: none; user-select: none; }
-.design-canvas-object:disabled { cursor: not-allowed; }
-.design-layer-section { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
-.design-layer-list { display: grid; gap: 4px; max-height: 340px; overflow: auto; }
-.design-layer-row {
-  display: grid; grid-template-columns: 42px minmax(0,1fr) auto; gap: 6px;
-  width: 100%; padding: 7px 8px; border: 1px solid transparent; border-radius: 8px;
-  background: transparent; text-align: left; font-size: .78rem;
-}
-.design-layer-row:hover { background: var(--soft); }
-.design-layer-row.selected { border-color: var(--accent); background: var(--accent-soft); }
-.design-layer-kind { color: var(--muted); font-family: var(--mono); text-transform: uppercase; font-size: .66rem; }
-.design-layer-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.design-layer-state { color: var(--muted); font-size: .66rem; }
-.design-inspector-check { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-.design-inspector-check input { width:auto; }
-.design-align-tools { display:flex; flex-wrap:wrap; gap:5px; margin: 0 0 12px; }
-.design-inspector-rule { border:0; border-top:1px solid var(--line); margin:12px 0; }
-.design-canvas-object {
-  position: absolute;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px;
-  overflow: hidden;
-  border: 1px solid var(--line-strong);
-  border-radius: 10px;
-  background: var(--panel);
-  color: var(--ink);
-  box-shadow: var(--shadow-sm);
-  text-align: center;
-  white-space: normal;
-}
-.design-canvas-object:hover,
-.design-canvas-object.selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--ring), var(--shadow-sm);
-}
-.design-canvas-object.rect {
-  background: var(--soft);
-}
-.design-canvas-object.circle {
-  border-radius: 50%;
-  background: var(--accent-soft);
-}
-.design-canvas-object.text {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-  font-weight: 700;
-  justify-content: flex-start;
-  text-align: left;
-}
-.design-inspector-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.design-inspector-field {
-  display: grid;
-  gap: 4px;
-}
-.design-inspector-field input {
-  padding: 7px 8px;
-  font-size: .82rem;
-}
+/* ----------------------------------------------------- deep workspace details */
 .deep-workspace-section-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 12px;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+  margin-top:12px;
 }
-.deep-workspace-section-grid .detail-card { min-width: 0; }
-.workspace-detail-list {
-  display: grid;
-  gap: 5px;
-  max-height: 210px;
-  overflow: auto;
+.deep-workspace-section-grid .detail-card{min-width:0}
+.workspace-detail-list{
+  display:grid;
+  gap:5px;
+  max-height:210px;
+  overflow:auto;
+  scrollbar-gutter:stable;
 }
-.workspace-detail-row {
-  display: grid;
-  gap: 3px;
-  padding: 7px 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--soft);
-  font-size: .78rem;
-  line-height: 1.35;
+.workspace-detail-row{
+  display:grid;
+  gap:3px;
+  padding:8px 9px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:var(--soft);
+  font-size:.78rem;
+  line-height:1.4;
 }
-a.workspace-detail-row {
-  color: inherit;
-  text-decoration: none;
+a.workspace-detail-row{color:inherit;text-decoration:none}
+a.workspace-detail-row:hover,
+a.workspace-detail-row:focus-visible{
+  border-color:color-mix(in srgb,var(--accent) 35%,var(--line));
+  background:var(--panel);
 }
-a.workspace-detail-row:hover { border-color: var(--line-strong); }
 .workspace-detail-row code,
-.workspace-detail-row strong { min-width: 0; overflow-wrap: anywhere; }
-.deep-workspace-actions.design {
-  align-items: center;
+.workspace-detail-row strong{min-width:0;overflow-wrap:anywhere}
+@media (max-width:760px){
+  .deep-workspace-section-grid{grid-template-columns:1fr}
 }
-@media (max-width: 1050px) {
-  .design-studio-layout {
-    grid-template-columns: 170px minmax(0, 1fr);
-  }
-  .design-inspector {
-    grid-column: 1 / -1;
-    border-left: 0;
-    border-top: 1px solid var(--line);
-  }
-  .design-inspector-fields {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-}
-@media (max-width: 760px) {
-  .design-studio-layout {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-  .design-assets-panel,
-  .design-inspector {
-    border: 0;
-    border-bottom: 1px solid var(--line);
-  }
-  .design-assets-panel { order: 0; }
-  .design-canvas-panel { order: 1; }
-  .design-inspector { order: 2; }
-  .design-asset-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-  .design-canvas {
-    min-height: 440px;
-  }
-  .design-inspector-fields {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-/* Design preview: focus on the composition without removing the exit control. */
-.deep-workspace-shell[data-workspace="design"][data-previewing="true"] .design-studio-layout {
-  grid-template-columns: minmax(0, 1fr);
-}
-.deep-workspace-shell[data-workspace="design"][data-previewing="true"] .design-assets-panel,
-.deep-workspace-shell[data-workspace="design"][data-previewing="true"] .design-inspector {
-  display: none;
-}
-.deep-workspace-shell[data-workspace="design"][data-previewing="true"] .design-canvas {
-  min-height: min(72vh, 760px);
-}
-
 
 /* --------------------------------------------------------- project hub */
 
