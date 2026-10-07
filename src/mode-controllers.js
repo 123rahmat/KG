@@ -59,10 +59,11 @@ export function workspaceComputePolicy({
   const independent = clamp01(independentWork);
   const conserve = budget < 0.25 && pressure < 0.8 && !previousFailure;
 
-  let recommendedAgents = 1;
-  if (key === 'normal-chat') recommendedAgents = pressure >= 0.78 ? 3 : pressure >= 0.52 ? 2 : 1;
-  else if (key === 'code') recommendedAgents = pressure >= 0.78 ? 4 : pressure >= 0.48 ? 3 : 1;
-  else recommendedAgents = pressure >= 0.72 ? 4 : pressure >= 0.42 ? 3 : 1;
+  let recommendedAgents = key === 'normal-chat'
+    ? (pressure >= 0.78 ? 3 : pressure >= 0.52 ? 2 : 1)
+    : key === 'code'
+      ? (pressure >= 0.78 ? 4 : pressure >= 0.48 ? 3 : 1)
+      : (pressure >= 0.72 ? 4 : pressure >= 0.42 ? 3 : 1);
 
   if (conserve) recommendedAgents = Math.max(1, recommendedAgents - 1);
   recommendedAgents = Math.min(profile.agentCeiling, recommendedAgents);
