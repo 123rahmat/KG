@@ -4,7 +4,7 @@ This file is the single product-architecture source of truth.
 
 Kindgleam is **one adaptive intelligence system with exactly three user-facing workspaces**:
 
-1. **NormalChat**
+1. **Normal Chat**
 2. **Code Workspace**
 3. **Research Workspace**
 
@@ -20,7 +20,7 @@ Situation + intent understanding
   |
   +-------------------+-------------------+
   |                   |                   |
-NormalChat        Code Workspace      Research Workspace
+Normal Chat        Code Workspace      Research Workspace
   |                   |                   |
   +-------------------+-------------------+
                       |
@@ -57,9 +57,9 @@ The adaptive controller may choose between approved Gemini models according to t
 
 Model choice never grants permissions, changes server policy, or proves that an external action happened.
 
-## 3. NormalChat
+## 3. Normal Chat
 
-NormalChat is the default and should remain the simplest surface.
+Normal Chat is the default and should remain the simplest surface.
 
 It handles:
 
@@ -71,9 +71,9 @@ It handles:
 - small tool-assisted tasks;
 - adaptive specialist help when it materially improves quality.
 
-NormalChat uses the **minimum sufficient machinery**. One model call is preferred when one call can solve the request reliably. Tools, verification, specialists, and extra reasoning are added only when justified.
+Normal Chat uses the **minimum sufficient machinery**. One model call is preferred when one call can solve the request reliably. Tools, verification, specialists, and extra reasoning are added only when justified.
 
-NormalChat may suggest switching to Code or Research when durable specialized state would materially improve the result.
+Normal Chat may suggest switching to Code or Research when durable specialized state would materially improve the result.
 
 ## 4. Code Workspace
 
@@ -176,7 +176,7 @@ The tool system is also core and must remain.
 
 Tools are discovered and invoked just in time from a governed registry. The system should choose the **smallest sufficient tool set**, not preload every tool.
 
-**Model Context Protocol (MCP)** is shared tool infrastructure, not another workspace. Configured remote MCP servers can expose external tools to NormalChat, Code, or Research when the active task justifies them. MCP discovery is cached, concurrency is bounded, calls have timeouts and circuit breaking, and actual remote tool calls are approval-gated. Read-only discovery may retry; tool calls are never automatically retried because an ambiguous network failure must not duplicate a side effect.
+**Model Context Protocol (MCP)** is shared tool infrastructure, not another workspace. Configured remote MCP servers can expose external tools to Normal Chat, Code, or Research when the active task justifies them. MCP discovery is cached, concurrency is bounded, calls have timeouts and circuit breaking, and actual remote tool calls are approval-gated. Read-only discovery may retry; tool calls are never automatically retried because an ambiguous network failure must not duplicate a side effect.
 
 Tool forging may define or register a missing capability only through the existing governed lifecycle:
 
@@ -197,7 +197,7 @@ Discovery is never execution. A model cannot invent a working tool, connector, r
 
 Files are shared infrastructure, never a fourth workspace.
 
-- **NormalChat:** lightweight attachments and generated artifacts.
+- **Normal Chat:** lightweight attachments and generated artifacts.
 - **Code:** repository files, working set, diffs, tests, build outputs.
 - **Research:** papers, documents, sources, evidence, drafts.
 
@@ -223,7 +223,7 @@ Can one Gemini call solve this reliably?
   -> no: add the minimum necessary specialist/tool
 ```
 
-NormalChat uses specialists sparingly.
+Normal Chat uses specialists sparingly.
 
 Code may recruit roles such as architecture, implementation, testing, debugging, security review, performance review, and critique when justified.
 
@@ -275,7 +275,7 @@ The UI may display permission state, but the backend is the authority. A model c
 
 Verification is evidence-driven and proportional to the work.
 
-NormalChat verifies when factual uncertainty, tools, transformations, or stakes justify it.
+Normal Chat verifies when factual uncertainty, tools, transformations, or stakes justify it.
 
 Code verifies with the most relevant combination of diff review, tests, builds, runtime output, static checks, and repository state.
 
@@ -295,7 +295,7 @@ Credentials, secrets, payment data, and protected sensitive data do not enter pr
 
 The primary product navigation exposes only:
 
-- **NormalChat**
+- **Normal Chat**
 - **Code**
 - **Research**
 
@@ -303,7 +303,7 @@ Project/file/history/settings controls may exist around those workspaces, but th
 
 The UI should progressively disclose complexity:
 
-- NormalChat stays calm and conversation-first.
+- Normal Chat stays calm and conversation-first.
 - Code exposes project tree, working set, diff, terminal/tests, progress, and write controls.
 - Research exposes sources, evidence, citations, conflicts, progress, and research artifacts.
 
@@ -319,11 +319,11 @@ The following are not product workspaces or architecture modes:
 - Presentation Workspace
 - provider/model-family selection UI
 
-Visual work remains a NormalChat capability. Simulation requests, when relevant, are handled as ordinary Code/tool work. Learning exists inside the skill/memory/evaluation systems, not as a workspace.
+Visual work remains a Normal Chat capability. Simulation requests, when relevant, are handled as ordinary Code/tool work. Learning exists inside the skill/memory/evaluation systems, not as a workspace.
 
 ## 17. Non-negotiable invariants
 
-1. Exactly three user-facing AI workspaces: NormalChat, Code, Research.
+1. Exactly three user-facing AI workspaces: Normal Chat, Code, Research.
 2. One shared adaptive intelligence core.
 3. Gemini family only in the production model layer.
 4. Skills, tools, MCP, files, memory, multi-agent, parallel execution, progress, permissions, and verification are shared infrastructure.
