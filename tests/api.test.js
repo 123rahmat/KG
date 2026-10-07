@@ -692,7 +692,13 @@ test('finishing without a replan completes the run', () =>
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const { body: run } = await call('POST', '/api/runs', { ...auth, body: { goal: 'Write a short report on recursion.' } });
-    const checking = await advanceTo(call, auth, run.id, { until: 'verify' });
+    const responded = await call('POST', `/api/runs/${run.id}/advance`, {
+      ...auth,
+      body: { taskId: run.next, summary: 'Drafted.', evidence: { text: 'Recursion is self-reference.' } }
+    });
+    assert.equal(responded.status, 200);
+    const checking = responded.body;
+    assert.equal(checking.tasks.find(task => task.id === checking.next)?.type, 'verify');
     const verified = await call('POST', `/api/runs/${run.id}/advance`, { ...auth, body: { taskId: checking.next, evidence: await passingVerdict(call, auth, run.id) } });
     assert.equal(verified.status, 200);
     const done = verified.body.state === 'complete'
