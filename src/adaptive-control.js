@@ -448,10 +448,10 @@ export function toolsForTask(task = {}, { selectedTools = [], artifacts = [], ne
 
 function surfaceForRequirement(id) {
   if (id === 'evidence-retrieval' || id === 'external-data-routing') return 'research';
-  if (id === 'file-analysis') return 'workspace';
+  if (id === 'file-analysis') return 'chat';
   if (id === 'code-generation' || id === 'code-execution') return 'code';
-  if (id === 'design') return 'design';
-  if (['invention', 'hypothesis-generation', 'concept-evaluation', 'experiment-design'].includes(id)) return 'creation';
+  if (id === 'design') return 'chat';
+  if (['invention', 'hypothesis-generation', 'concept-evaluation', 'experiment-design'].includes(id)) return 'chat';
   return null;
 }
 
@@ -511,14 +511,13 @@ export function planAdaptiveResources({
   };
   requirementSelection = narrowToPrimary(requirementSelection);
 
-  const orderedSurfaces = ['chat', 'research', 'code', 'creation', 'workspace', 'adaptive'];
+  const orderedSurfaces = ['chat', 'research', 'code'];
   const chooseSurfaces = selected => {
     const neededSurfaces = new Set(['chat']);
     for (const item of selected) {
       const surface = surfaceForRequirement(item.id);
       if (surface) neededSurfaces.add(surface);
     }
-    if (selected.some(item => item.dynamic || item.id === 'capability-discovery')) neededSurfaces.add('adaptive');
     const primaryIsJustified = selected.some(item => surfaceForRequirement(item.id) === primarySurface);
     if (primarySurface === 'chat' || primaryIsJustified) neededSurfaces.add(primarySurface);
     const picked = [...new Set(surfaces)].filter(surface => neededSurfaces.has(surface));
