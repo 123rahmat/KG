@@ -252,7 +252,7 @@ test('a project attached as a zip is changed by the files the AI returns, and th
     });
     assert.equal(run.adaptation.attachments[0].readable, true);
     assert.notEqual(run.adaptation.scale, 'small', 'a change to an attached project is not a small task');
-    await advanceTo(call, auth, run.id, { until: 'code' });
+    await advanceTo(call, auth, run.id, { until: 'build-code', approve: true });
     const built = await call('POST', `/api/runs/${run.id}/execute`, { ...auth, body: {} });
     assert.equal(built.status, 200, JSON.stringify(built.body).slice(0, 300));
     // The code step saw the project it changes.
@@ -340,14 +340,9 @@ test('code in a language the sandbox cannot run goes on untested, says why, and 
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const { body: run } = await call('POST', '/api/runs', { ...auth, body: { goal: 'Write a Go program main.go that prints the 10th Fibonacci number, with tests.', privacyConsent: { modelProvider: true } } });
-    for (const taskId of await stepsIn(call, auth, run.id, ['understand', 'discover-capabilities', 'adapt', 'plan'])) {
-      await call('POST', `/api/runs/${run.id}/advance`, { ...auth, body: { taskId, summary: taskId } });
-    }
-    await call('POST', `/api/runs/${run.id}/advance`, { ...auth, body: { taskId: 'approval', approved: true } });
+    await advanceTo(call, auth, run.id, { until: 'build-code', approve: true });
     await call('POST', `/api/runs/${run.id}/execute`, { ...auth, body: {} });
-    for (const taskId of await stepsIn(call, auth, run.id, ['observe-build-code', 'reassess-build-code'])) {
-      await call('POST', `/api/runs/${run.id}/advance`, { ...auth, body: { taskId, evidence: { recorded: true } } });
-    }
+    await advanceTo(call, auth, run.id, { until: 'test-code', approve: true });
     const tested = await call('POST', `/api/runs/${run.id}/execute`, { ...auth, body: { approved: true } });
     assert.equal(tested.status, 200);
     assert.equal(tested.body.execution.status, 'language-unavailable');
@@ -445,12 +440,14 @@ test('a fixed version of the code is really run again, not replayed from the fir
     const { token, workspace } = await seed();
     const auth = { token, workspace };
     const { body: run } = await call('POST', '/api/runs', { ...auth, body: { goal: 'Write a Python function is_prime(n) with unit tests, and run the tests.', privacyConsent: { modelProvider: true } } });
-    for (const taskId of await stepsIn(call, auth, run.id, ['understand', 'discover-capabilities', 'adapt', 'plan'])) await call('POST', `/api/runs/${run.id}/advance`, { ...auth, body: { taskId, summary: taskId } });
-    await call('POST', `/api/runs/${run.id}/advance`, { ...auth, body: { taskId: 'approval', approved: true } });
+    await advanceTo(call, auth, run.id, { until: 'build-code', approve: true });
     await call('POST', `/api/runs/${run.id}/execute`, { ...auth, body: {} });
+    await advanceTo(call, auth, run.id, { until: 'test-code', approve: true });
     const first = await call('POST', `/api/runs/${run.id}/execute`, { ...auth, body: { approved: true } });
     assert.equal(first.body.execution.status, 'repairing');
+    await advanceTo(call, auth, run.id, { until: 'build-code', approve: true });
     await call('POST', `/api/runs/${run.id}/execute`, { ...auth, body: {} });
+    await advanceTo(call, auth, run.id, { until: 'test-code', approve: true });
     const second = await call('POST', `/api/runs/${run.id}/execute`, { ...auth, body: { approved: true } });
     assert.notEqual(second.body.execution.status, 'repairing');
     assert.equal(second.body.run.tasks.find(task => task.id === 'test-code').status, 'complete', 'the fixed code passed');
@@ -551,7 +548,7 @@ test('a follow-up in the same chat continues the project from the version the la
     });
     const turn = async (goal, attachments) => {
       const { body: run } = await call('POST', '/api/runs', { ...auth, body: { goal, conversationId, attachments, privacyConsent: { modelProvider: true } } });
-      await advanceTo(call, auth, run.id, { until: 'code' });
+      await advanceTo(call, auth, run.id, { until: 'build-code', approve: true });
       await call('POST', `/api/runs/${run.id}/execute`, { ...auth, body: {} });
       await call('POST', `/api/runs/${run.id}/execute`, { ...auth, body: { approved: true } });
       return (await call('GET', `/api/runs/${run.id}`, auth)).body;
@@ -621,7 +618,7 @@ test('fixing an attached project goes to code even when understanding asks to in
       ...auth, body: { taskId: 'understand', summary: 'Find the bug.', evidence: { structured: { needsInvestigation: true } } }
     });
     assert.equal(understood.status, 200);
-    const after = await advanceTo(call, auth, run.id, { until: 'code' });
+    const after = await advanceTo(call, auth, run.id, { until: 'build-code', approve: true });
     assert.equal(after.tasks.some(task => task.type === 'investigate'), false, 'no web research for the person\'s own code');
     assert.equal(after.tasks.find(task => task.id === after.next)?.type, 'code');
   }));
