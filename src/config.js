@@ -210,6 +210,10 @@ export function loadConfig(env = process.env) {
   const parallelMode = (text(env.AGENTS_PARALLEL_MODE) || 'auto').toLowerCase();
   if (!['auto', 'always', 'off'].includes(parallelMode)) errors.push(`AGENTS_PARALLEL_MODE must be auto, always or off (got "${parallelMode}")`);
   const multiAgentMax = integer(env.MULTI_AGENT_MAX_AGENTS, 11, { min: 1, max: 11, name: 'MULTI_AGENT_MAX_AGENTS', errors });
+  const fleetPartitions = integer(env.FLEET_PARTITIONS, 1, { min: 1, max: 256, name: 'FLEET_PARTITIONS', errors });
+  const fleetPartition = text(env.FLEET_PARTITION)
+    ? integer(env.FLEET_PARTITION, 0, { min: 0, max: 255, name: 'FLEET_PARTITION', errors })
+    : null;
 
   // PostgreSQL is the only datastore. Object content lives in it too, so
   // there is no filesystem state to back up, mount, or keep in sync.
@@ -475,6 +479,13 @@ export function loadConfig(env = process.env) {
       queueTimeoutMs: integer(env.AI_CONCURRENCY_QUEUE_TIMEOUT_MS, 5_000, { min: 100, max: 60_000, name: 'AI_CONCURRENCY_QUEUE_TIMEOUT_MS', errors })
     },
 
+    fleet: {
+      batchSize: integer(env.FLEET_BATCH_SIZE, 8, { min: 1, max: 32, name: 'FLEET_BATCH_SIZE', errors }),
+      maxConcurrency: integer(env.FLEET_MAX_CONCURRENCY, 4, { min: 1, max: 16, name: 'FLEET_MAX_CONCURRENCY', errors }),
+      partition: fleetPartition,
+      partitions: fleetPartitions
+    },
+
     usage: {
       // AI tokens per person in a rolling 4-hour window and a rolling week.
       // 0 means no limit. The context size overrides the provider's usual one.
@@ -569,6 +580,10 @@ export function loadConfig(env = process.env) {
 
   if (config.providerConcurrency.min > config.providerConcurrency.max) {
     errors.push('AI_MIN_CONCURRENCY cannot exceed AI_MAX_CONCURRENCY');
+  }
+
+  if (config.fleet.partition !== null && config.fleet.partition >= config.fleet.partitions) {
+    errors.push('FLEET_PARTITION must be lower than FLEET_PARTITIONS');
   }
 
   if (production && !config.database.backupUrl) {

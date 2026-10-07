@@ -60,10 +60,10 @@ export function build({ config, logger, metrics, fetchImpl }) {
   const worker = createJobWorker({ jobs, identity, runs, logger, metrics, executeNext: app.locals.executeNext });
   const fleetWorker = createFleetWorker({
     fleet, identity, runs, logger, metrics, executeNext: app.locals.executeNext,
-    batchSize: Math.max(1, Math.min(32, Number(process.env.FLEET_BATCH_SIZE) || 8)),
-    maxConcurrency: Math.max(1, Math.min(16, Number(process.env.FLEET_MAX_CONCURRENCY) || 4)),
-    partition: process.env.FLEET_PARTITION === undefined ? null : Number(process.env.FLEET_PARTITION) || 0,
-    partitions: Math.max(1, Number(process.env.FLEET_PARTITIONS) || 1)
+    batchSize: config.fleet.batchSize,
+    maxConcurrency: config.fleet.maxConcurrency,
+    partition: config.fleet.partition,
+    partitions: config.fleet.partitions
   });
   return { pool, audit, governance, capabilities, identity, objects, runs, jobs, scheduler, worker, fleet, fleetWorker, app };
 }

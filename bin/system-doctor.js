@@ -76,6 +76,13 @@ const billingAccount = await read('src/routes/account.js');
 const billingRoutes = await read('src/routes/stripe.js');
 const billingProtection = await read('src/data-protection.js');
 const billingDb = await read('src/db.js');
+const serverSource = await read('server.js');
+const configSource = await read('src/config.js');
+
+check('centralized-runtime-configuration',
+  !/process\.env\.FLEET_/.test(serverSource)
+    && /fleet:\s*\{[\s\S]*FLEET_BATCH_SIZE[\s\S]*FLEET_MAX_CONCURRENCY[\s\S]*FLEET_PARTITION/.test(configSource),
+  'fleet runtime tuning is validated once by loadConfig instead of bypassing the configuration boundary');
 
 check('server-owned-workflow', /SELECT[\s\S]*FOR UPDATE/.test(runs), 'run state is expected to be re-read under a row lock');
 check('execution-claim-integrity', /executed\s*[:=]/.test(core + runs), 'execution state is represented explicitly');

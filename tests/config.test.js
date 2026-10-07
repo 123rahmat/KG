@@ -344,3 +344,31 @@ test('Gemini-only configuration keeps adaptive fallback inside the Vertex family
   assert.deepEqual(config.ai.fallbackModels, ['gemini-3.5-flash-lite']);
   assert.throws(() => loadConfig({ ...env, AI_PROVIDER: 'unsupported' }), /AI_PROVIDER must be google/);
 });
+
+
+test('fleet worker configuration is centralized, bounded, and shard-safe', () => {
+  const base = { DATABASE_URL: 'postgres://u:p@localhost:5432/kindgleam' };
+  const defaults = loadConfig(base);
+  assert.deepEqual(defaults.fleet, {
+    batchSize: 8,
+    maxConcurrency: 4,
+    partition: null,
+    partitions: 1
+  });
+
+  const configured = loadConfig({
+    ...base,
+    FLEET_BATCH_SIZE: '16',
+    FLEET_MAX_CONCURRENCY: '8',
+    FLEET_PARTITIONS: '4',
+    FLEET_PARTITION: '2'
+  });
+  assert.equal(configured.fleet.batchSize, 16);
+  assert.equal(configured.fleet.maxConcurrency, 8);
+  assert.equal(configured.fleet.partitions, 4);
+  assert.equal(configured.fleet.partition, 2);
+
+  assert.throws(() => loadConfig({ ...base, FLEET_BATCH_SIZE: '33' }), /FLEET_BATCH_SIZE/);
+  assert.throws(() => loadConfig({ ...base, FLEET_MAX_CONCURRENCY: '17' }), /FLEET_MAX_CONCURRENCY/);
+  assert.throws(() => loadConfig({ ...base, FLEET_PARTITIONS: '2', FLEET_PARTITION: '2' }), /FLEET_PARTITION must be lower/);
+});
