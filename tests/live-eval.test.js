@@ -47,7 +47,10 @@ const fetchImpl = async (url, options) => {
   if (type === 'understand') return reply(JSON.stringify({ successCriteria: ['answers it'], outputs: ['the answer the person asked for'] }));
   if (request.task?.id === 'build-code' && /LTspice/.test(request.goal)) return reply(JSON.stringify({ language: 'spice', source: '* RC low-pass\nV1 in 0 AC 1\nR1 in out 1k\nC1 out 0 100n\n.ac dec 100 10 1Meg\n.end\n', tests: '', packages: [], notes: 'Cutoff: fc = 1/(2πRC) ≈ 1.59 kHz.' }));
   if (request.task?.id === 'build-code') return reply(JSON.stringify({ language: 'python', source: 'def is_palindrome(s):\n    t = s.replace(" ", "").lower()\n    return t == t[::-1]\n', tests: '', packages: [], notes: 'ok' }));
-  if (!['respond', 'deliver', 'prototype', 'tool', 'investigate'].includes(type)) return reply('ok');
+  // The current adaptive workflow may perform exact deterministic work on a
+  // reason step before delivery, so the capable-model stand-in must be allowed
+  // to request a scoped tool there as production Gemini can.
+  if (!['respond', 'reason', 'deliver', 'prototype', 'tool', 'investigate'].includes(type)) return reply('ok');
   // The invention method reaches the model on the prototype step, and only then
   // does this stand-in invent like an engineer.
   if (request.task?.method === 'invention') inventionMethodSeen = true;
