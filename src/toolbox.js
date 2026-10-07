@@ -648,6 +648,40 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
     };
   };
 
+  // Some exact, read-only tools are selected by server policy because using
+  // model arithmetic would be slower, costlier, or less reliable. Execute the
+  // selected tool once and synthesize from its evidence. Side-effect tools are
+  // never eligible for this path because useTool still enforces their proposal
+  // boundary.
+  if (ctx?.requiredTool?.tool) {
+    const required = ctx.requiredTool;
+    const result = await useTool(required.tool, required.input ?? {}, toolCtx);
+    const { showImage, ...shown } = result ?? {};
+    if (!result?.error) reach.learn(result);
+    for (const source of [
+      ...(Array.isArray(result?.sources) ? result.sources : []),
+      ...(Array.isArray(result?.citations) ? result.citations : [])
+    ]) {
+      const url = text(source?.url || source?.uri);
+      if (url) sources.set(url, { ...source, url });
+    }
+    if (result?.url && !result.error) sources.set(result.url, { url: result.url, title: result.title || result.name || '' });
+    toolLog.push({
+      round: 0,
+      tool: required.tool,
+      why: text(required.why),
+      outcome: result?.error ? 'error' : result?.notReady ? 'not-ready' : result?.proposed ? 'proposed' : 'ok',
+      ...(result?.error ? { error: result.error } : {}),
+      ...(result?.needs ? { needs: result.needs } : {}),
+      ...(result?.actionId ? { actionId: result.actionId } : {})
+    });
+    conversation.push(
+      { role: 'assistant', content: JSON.stringify({ tool: required.tool, input: required.input ?? {}, why: text(required.why) }) },
+      { role: 'user', content: `Tool result for ${required.tool}:\n${clip(shown)}`, ...(showImage ? { images: [showImage] } : {}) }
+    );
+    return finalSynthesis();
+  }
+
   for (let round = 0; ; round += 1) {
     if (round > 0 && round >= effectiveMaxRounds) return finalSynthesis();
     // Once a tool has run, the next model turn is synthesis. Do not re-open
