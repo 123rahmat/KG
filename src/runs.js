@@ -1064,6 +1064,74 @@ export class RunStore {
             }
           : result.evidence ?? null;
 
+      if (status === 'complete' && target.type === 'verify') {
+        const contract = target.metadata?.verification ?? {};
+        const submitted = evidence && typeof evidence.verification === 'object'
+          ? evidence.verification
+          : {};
+        const verdict = evidence && typeof evidence.verdict === 'object'
+          ? evidence.verdict
+          : {};
+        const plannedCriteria = gradedCriteria(run.requirements, run.situation);
+        if (verdict.verdict !== 'pass') {
+          throw new RunError(
+            'Verification must return an explicit passing verdict before the run can be delivered.',
+            { status: 422, code: 'verification-not-passed' }
+          );
+        }
+        const checkedCriteria = Array.isArray(verdict.criteria)
+          ? verdict.criteria.filter(item => item && typeof item === 'object')
+          : [];
+        const normalizeCriterion = value => text(value).replace(/\s+/g, ' ').toLowerCase();
+        const plannedNormalized = plannedCriteria.map(normalizeCriterion);
+        const checkedNormalized = checkedCriteria.map(item => normalizeCriterion(item.criterion));
+        const uniqueChecked = new Set(checkedNormalized.filter(Boolean));
+        const criteriaComplete = plannedNormalized.length === checkedCriteria.length
+          && uniqueChecked.size === plannedNormalized.length
+          && plannedNormalized.every(criterion => uniqueChecked.has(criterion))
+          && checkedCriteria.every(item => item.met === true);
+        if (!criteriaComplete) {
+          throw new RunError(
+            'Every planned success criterion must be explicitly checked exactly once and met before verification can pass.',
+            {
+              status: 422,
+              code: 'verification-criteria-incomplete',
+              detail: {
+                plannedCriteria,
+                checkedCriteria
+              }
+            }
+          );
+        }
+        const humanRequired = contract.humanReviewRequired === true;
+        if (humanRequired && (
+          submitted.humanReviewed !== true
+          || submitted.level !== 'human-certified'
+        )) {
+          await this.audit?.record({
+            principalId: principal.id,
+            workspaceId: scope.workspaceId,
+            action: 'run.advance',
+            target: `${run.id}:${target.id}`,
+            outcome: 'denied',
+            detail: { reason: 'human-verification-required' },
+            requestId
+          });
+          throw new RunError(
+            'This verification requires an authorized human review before it can be completed.',
+            { status: 422, code: 'human-verification-required' }
+          );
+        }
+        evidence = {
+          ...(evidence ?? {}),
+          verification: {
+            level: submitted.level === 'human-certified' ? 'human-certified' : 'evidence-backed',
+            method: text(submitted.method) || contract.rule || 'Evidence checked against the planned criteria.',
+            humanReviewed: submitted.humanReviewed === true
+          }
+        };
+      }
+
       // Completion is decided from the unified workflow contract, never from a model/status claim alone.
       if (status === 'complete') {
         const priorUnified = run.adaptation?.unifiedAdaptiveWorkflow ?? {};
@@ -1152,73 +1220,6 @@ export class RunStore {
         }
       }
 
-      if (status === 'complete' && target.type === 'verify') {
-        const contract = target.metadata?.verification ?? {};
-        const submitted = evidence && typeof evidence.verification === 'object'
-          ? evidence.verification
-          : {};
-        const verdict = evidence && typeof evidence.verdict === 'object'
-          ? evidence.verdict
-          : {};
-        const plannedCriteria = gradedCriteria(run.requirements, run.situation);
-        if (verdict.verdict !== 'pass') {
-          throw new RunError(
-            'Verification must return an explicit passing verdict before the run can be delivered.',
-            { status: 422, code: 'verification-not-passed' }
-          );
-        }
-        const checkedCriteria = Array.isArray(verdict.criteria)
-          ? verdict.criteria.filter(item => item && typeof item === 'object')
-          : [];
-        const normalizeCriterion = value => text(value).replace(/\s+/g, ' ').toLowerCase();
-        const plannedNormalized = plannedCriteria.map(normalizeCriterion);
-        const checkedNormalized = checkedCriteria.map(item => normalizeCriterion(item.criterion));
-        const uniqueChecked = new Set(checkedNormalized.filter(Boolean));
-        const criteriaComplete = plannedNormalized.length === checkedCriteria.length
-          && uniqueChecked.size === plannedNormalized.length
-          && plannedNormalized.every(criterion => uniqueChecked.has(criterion))
-          && checkedCriteria.every(item => item.met === true);
-        if (!criteriaComplete) {
-          throw new RunError(
-            'Every planned success criterion must be explicitly checked exactly once and met before verification can pass.',
-            {
-              status: 422,
-              code: 'verification-criteria-incomplete',
-              detail: {
-                plannedCriteria,
-                checkedCriteria
-              }
-            }
-          );
-        }
-        const humanRequired = contract.humanReviewRequired === true;
-        if (humanRequired && (
-          submitted.humanReviewed !== true
-          || submitted.level !== 'human-certified'
-        )) {
-          await this.audit?.record({
-            principalId: principal.id,
-            workspaceId: scope.workspaceId,
-            action: 'run.advance',
-            target: `${run.id}:${target.id}`,
-            outcome: 'denied',
-            detail: { reason: 'human-verification-required' },
-            requestId
-          });
-          throw new RunError(
-            'This verification requires an authorized human review before it can be completed.',
-            { status: 422, code: 'human-verification-required' }
-          );
-        }
-        evidence = {
-          ...(evidence ?? {}),
-          verification: {
-            level: submitted.level === 'human-certified' ? 'human-certified' : 'evidence-backed',
-            method: text(submitted.method) || contract.rule || 'Evidence checked against the planned criteria.',
-            humanReviewed: submitted.humanReviewed === true
-          }
-        };
-      }
       if (status === 'complete' && EVIDENCE_REQUIRED.has(target.type) && isEmpty(evidence)) {
         // Recorded outside the transaction, for the same reason as above.
         await this.audit?.record({
