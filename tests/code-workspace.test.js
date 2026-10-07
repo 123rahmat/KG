@@ -138,9 +138,18 @@ test('combined Code Workspace inputs keep GitHub, ZIP-project and single-file so
 test('combined Code Workspace file collisions are never silently overwritten', async () => {
   const { projectFiles } = await import('../src/attachments.js');
   const objects = {
-    get: async (_scope, id) => ({ id, name: id, contentType: 'text/plain', size: 10, content: id })
+    read: async (_scope, id) => ({
+      metadata: {
+        id,
+        name: 'a.js',
+        contentType: 'text/plain',
+        size: 1,
+        digest: 'digest-' + id
+      },
+      content: Buffer.from(id)
+    })
   };
-  const result = await projectFiles(objects, {}, [
+  const result = await projectFiles(objects, { workspaceId: 'ws' }, [
     { id: 'a', name: 'a.js', format: 'text', readable: true },
     { id: 'b', name: 'a.js', format: 'text', readable: true }
   ]).catch(error => error);
