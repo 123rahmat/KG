@@ -1683,8 +1683,16 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         content: JSON.stringify(payload)
       }
     ];
-    let answer = (managedTarget || TOOL_TASKS.has(task.type)) && !task.metadata?.declined && !task.metadata?.conversational
-      ? await answerWithTools(messages, await toolContext(run, task, scope), {
+    const maybeToolContext = (managedTarget || TOOL_TASKS.has(task.type) || task.type === 'reason')
+      ? await toolContext(run, task, scope)
+      : null;
+    const reasonHasScopedTool = task.type === 'reason'
+      && maybeToolContext?.allowedTools?.some(name => !PERSONAL_TOOLS.includes(name));
+    const useToolLoop = (managedTarget || TOOL_TASKS.has(task.type) || reasonHasScopedTool)
+      && !task.metadata?.declined
+      && !task.metadata?.conversational;
+    let answer = useToolLoop
+      ? await answerWithTools(messages, maybeToolContext, {
           config, fetchImpl, modelId: effectiveModelId, allowBackup, effort,
           usageGate,
           usageSource: 'chat',
