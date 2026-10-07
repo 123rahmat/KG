@@ -481,8 +481,8 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
         if (parsed?.task || parsed?.goal) {
           return JSON.stringify({
             goal: parsed.goal ?? null,
-            task: parsed.task ?? null,
-            purpose: parsed.purpose ?? null
+            step: parsed.task?.id ?? null,
+            purpose: parsed.task?.purpose ?? parsed.purpose ?? null
           });
         }
         return content;
