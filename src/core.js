@@ -672,7 +672,9 @@ export function planGoal(goal, {
   // question about it is checked against its evidence like any answer.
   const verification = verificationContract({
     physical: analysis.flags?.physical === true && !noPhysicalAction,
-    highImpact: analysis.flags?.highImpact === true,
+    // High-impact information is verified more carefully, but human
+    // certification is reserved for work that actually acts/commits.
+    highImpact: analysis.flags?.highImpact === true && !noPhysicalAction,
     capabilitySpecs: capabilityRequirements.filter(item => item.dynamic)
   });
   const situation = analysis.situation ?? {};
