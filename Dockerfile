@@ -11,6 +11,13 @@ FROM node:24-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd
 WORKDIR /app
 ENV NODE_ENV=production
 
+# Keep the immutable Node base pin, then apply current Alpine security fixes.
+# npm/npx are build-time tooling only; the production process launches with
+# node directly, so remove npm's global dependency tree from the runtime image.
+RUN apk upgrade --no-cache \
+  && rm -rf /usr/local/lib/node_modules/npm \
+  && rm -f /usr/local/bin/npm /usr/local/bin/npx
+
 # Run as a non-root user. The base image ships one; use it rather than
 # creating another.
 COPY --from=deps --chown=node:node /app/node_modules ./node_modules
