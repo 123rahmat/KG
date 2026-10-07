@@ -5,7 +5,7 @@
 
 import crypto from 'node:crypto';
 import { parseJsonObject } from '../structured.js';
-import { callModel, callRunner, SANDBOX_TIMEOUT_MS } from '../runtime.js';
+import { callModel, callRunner, withRunControl, SANDBOX_TIMEOUT_MS } from '../runtime.js';
 import { chooseExecutionTarget, codeActionDecision, executionTargetsFor, verifyExecutionReceipt, signExecutionChallenge, executionPayloadDigest, executionSucceeded, executionIdFor, RECEIPT_ALGORITHM } from '../execution.js';
 import { text } from '../http/context.js';
 import { configuredExecutionTargets, runnerForTarget, planPolicyAllows, dataPolicyAllows, dataPolicyDecision, modelPolicyAllows } from '../http/policy.js';
@@ -196,7 +196,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     };
   }
 
-  async function toolContext(run, task, scope) {
+  async function toolContext(run, task, scope, signal) {
     const workScope = scope ?? currentDbScope();
     const selectedTools = Array.isArray(run.adaptation?.resourcePlan?.selected?.tools)
       ? run.adaptation.resourcePlan.selected.tools
@@ -225,7 +225,11 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       ...approvedTools.map(tool => tool.name)
     ])];
     return {
-      config, fetchImpl, objects, scope: workScope, pool, run, task, scheduler,
+      config, signal, objects, scope: workScope, pool, run, task, scheduler,
+      fetchImpl: signal ? (url, options = {}) => {
+        signal.throwIfAborted();
+        return fetchImpl(url, { ...options, signal: AbortSignal.any([signal, ...(options.signal ? [options.signal] : [])]) });
+      } : fetchImpl,
       // Workflow, file system and code all resolve through the same
       // situation-owned context. Tools cannot silently switch to a second
       // project state.
@@ -715,7 +719,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
             round: repairsThisAttempt(run).length
           })
         : null;
-      const execution = runnerKey && runnerUrl
+      const execution = await withRunControl(async signal => runnerKey && runnerUrl
         ? await callRunner(runnerUrl, {
             runId: run.id,
             goal: run.goal,
@@ -736,6 +740,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
           }, {
             config,
             fetchImpl,
+            signal,
             token: runnerKey === 'sandbox' ? config.runners.sandboxToken : config.runners.toolToken,
             ...(executionDecision?.target === 'general-ai-sandbox' ? { timeoutMs: SANDBOX_TIMEOUT_MS } : {})
           })
@@ -744,13 +749,16 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
               managedTarget: BUILTIN_TOOL_TARGETS.has(executionDecision?.target) ? executionDecision.target : null,
               executionId: managedExecutionId,
               scope: req.scope,
+              signal,
               // Approving built-in research or tools is explicit consent for
               // them, and a person may consent for this step when asked
               // (policy denials still apply; consent only satisfies the consent rule).
               explicitConsent: (BUILTIN_TOOL_TARGETS.has(executionDecision?.target) && req.body?.approved === true)
                 || req.body?.modelConsent === true
             })
-          : { configured: false, executed: false, status: 'unsupported-task', message: `No executor for task type "${task.type}"`, codeAction };
+          : { configured: false, executed: false, status: 'unsupported-task', message: `No executor for task type "${task.type}"`, codeAction }, {
+            readRun: () => runs.get(req.scope, run.id), taskId: task.id, attempt: run.attempt
+          });
 
       // Code in a language this sandbox cannot run goes on untested, and says
       // why, rather than waiting for a run that cannot happen.
@@ -1181,10 +1189,10 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
    * Text of the files attached to a run, read under the requester's own
    * scope, capped so a large file cannot flood the prompt.
    */
-  async function attachmentTexts(scope, run, task, { maxChars = null, focus = '' } = {}) {
+  async function attachmentTexts(scope, run, task, { maxChars = null, focus = '', signal } = {}) {
     const selectedBudget = run.adaptation?.resourcePlan?.budget?.maxAttachmentChars;
     const limit = Number.isFinite(Number(selectedBudget)) ? Number(selectedBudget) : (maxChars ?? 60_000);
-    return attachmentContext(objects, scope, scopedAttachments(run, task), { maxChars: limit, focus, overlay: run.adaptation?.projectOverlay });
+    return attachmentContext(objects, scope, scopedAttachments(run, task), { maxChars: limit, focus, overlay: run.adaptation?.projectOverlay, signal });
   }
 
   /**
@@ -1360,7 +1368,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     return gradedCriteria(run.requirements, run.situation);
   }
 
-  async function reason(run, task, { managedTarget = null, explicitConsent = false, executionId = null, scope = null } = {}) {
+  async function reason(run, task, { managedTarget = null, explicitConsent = false, executionId = null, scope = null, signal } = {}) {
     let ragResults = [];
     // RAG is evidence retrieval, not a mandatory prelude to every answer.
     // Routine turns avoid retrieval cost and unrelated prior-work context.
@@ -1452,7 +1460,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         })
       : null;
     const verificationContext = grounding ? verificationBrief(run, grounding) : null;
-    const attached = await attachmentTexts(scope, run, task, { focus: stepFocus(run, task) });
+    const attached = await attachmentTexts(scope, run, task, { focus: stepFocus(run, task), signal });
     let codeIntelligenceResult = null;
     try {
       codeIntelligenceResult = await codeIntelligenceForStep(run, task, scope);
@@ -1642,22 +1650,26 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       primaryModelId: effectiveModelId,
       config,
       fetchImpl,
+      modelCaller: (messages, options) => callModel(messages, { ...options, signal }),
+      signal,
       subsystemPlan,
       allowBackup,
       allowsModel: id => modelPolicyAllows(run, id, 'medium'),
       dataAllowed,
       usageGate,
-      canSpend: async () => !(await usageBlock(scope)),
+      canSpend: async () => { signal?.throwIfAborted(); return !(await usageBlock(scope)); },
       recordUsage: async (usage, provider, model) => {
         await runs.addTokens(run.id, { ...usage, provider, model }, { source: 'multi-agent' });
       },
       recordWave: async ({ run: currentRun, task: currentTask, wave }) => {
+        signal?.throwIfAborted();
         await pool.query(
           'INSERT INTO run_waves (id, run_id, wave_index, state, agent_count, started_at, completed_at, metadata) VALUES (gen_random_uuid()::text, $1, $2, $3, $4, now(), now(), $5::jsonb) ON CONFLICT (run_id, wave_index) DO UPDATE SET state = EXCLUDED.state, agent_count = EXCLUDED.agent_count, completed_at = now(), metadata = EXCLUDED.metadata',
           [currentRun.id, wave.index, wave.failed?.length ? 'completed-with-failures' : 'completed', wave.roles.length, JSON.stringify(wave)]
         );
       },
       recordAgent: async ({ run: currentRun, task: currentTask, waveIndex, role, modelId, state: agentState, finding, errorCode }) => {
+        signal?.throwIfAborted();
         await pool.query(
           'INSERT INTO run_agents (id, run_id, task_id, role, model_id, state, wave_index, finding, error_code, started_at, completed_at) VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7::jsonb, $8, now(), now()) ON CONFLICT (run_id, role, wave_index) DO UPDATE SET model_id = EXCLUDED.model_id, state = EXCLUDED.state, finding = EXCLUDED.finding, error_code = EXCLUDED.error_code, completed_at = now()',
           [currentRun.id, currentTask.id, role, modelId || null, agentState, JSON.stringify(finding ?? {}), errorCode || null, waveIndex]
@@ -1667,6 +1679,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         ? blackboard.load(scope, run.id).catch(() => null)
         : null,
       recordBlackboard: async ({ run: currentRun, blackboard: currentBoard }) => {
+        signal?.throwIfAborted();
         if (!blackboard || !scope || !currentBoard) return;
         const contribution = {
           objective: currentBoard.objective,
@@ -1685,6 +1698,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         } catch (error) {
           if (error?.code !== 'blackboard-conflict') throw error;
           const latest = await blackboard.load(scope, currentRun.id);
+          signal?.throwIfAborted();
           await blackboard.merge(scope, currentRun.id, contribution, latest.version);
         }
       }
@@ -1700,7 +1714,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       }
     ];
     const maybeToolContext = (managedTarget || TOOL_TASKS.has(task.type) || task.type === 'reason')
-      ? await toolContext(run, task, scope)
+      ? await toolContext(run, task, scope, signal)
       : null;
     const reasonHasScopedTool = task.type === 'reason'
       && maybeToolContext?.allowedTools?.some(name => !PERSONAL_TOOLS.includes(name));
@@ -1709,7 +1723,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       && !task.metadata?.conversational;
     let answer = useToolLoop
       ? await answerWithTools(messages, maybeToolContext, {
-          config, fetchImpl, modelId: effectiveModelId, allowBackup, effort,
+          config, fetchImpl, modelId: effectiveModelId, allowBackup, effort, signal,
           usageGate,
           usageSource: 'chat',
           maxRounds: Math.min(
@@ -1720,6 +1734,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       : await callModel(messages, {
           config,
           fetchImpl,
+          signal,
           modelId: effectiveModelId,
           allowBackup,
           webSearch: grounding?.grounded === true,
@@ -1789,6 +1804,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       ], {
         config,
         fetchImpl,
+        signal,
         modelId: effectiveModelId,
         allowBackup,
         effort,
@@ -1854,6 +1870,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
           reviewed = await callModel(reviewMessages(run, { criteria: plannedCriteria, verdict }), {
             config,
             fetchImpl,
+            signal,
             modelId: reviewerId,
             allowBackup,
             effort: 'medium',

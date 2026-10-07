@@ -1356,7 +1356,8 @@ async function runCodeWorkspaceAgentPanels({
   recordAgent,
   loadBlackboard,
   recordBlackboard,
-  singlePanel = false
+  singlePanel = false,
+  signal
 } = {}) {
   const mode = config?.agents?.multiAgent ?? 'auto';
   const maxAgents = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(config?.agents?.maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
@@ -1705,7 +1706,7 @@ async function runCodeWorkspaceAgentPanels({
           maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
           usageGate,
           usageSource: 'multi-agent'
-        }).catch(() => null);
+        }).catch(error => { if (signal?.aborted) throw signal.reason; if (error?.name === 'AbortError') throw error; return null; });
 
         if (result?.usage) {
           tokensSpent += Number(result.usage.inputTokens ?? 0) + Number(result.usage.outputTokens ?? 0);
@@ -2024,7 +2025,7 @@ async function runCodeWorkspaceAgentPanels({
       maxOutputTokens: ARBITER_MAX_OUTPUT_TOKENS,
       usageGate,
       usageSource: 'multi-agent'
-    }).catch(() => null);
+    }).catch(error => { if (signal?.aborted) throw signal.reason; if (error?.name === 'AbortError') throw error; return null; });
     const parsed = result && !result.incomplete
       ? normalizedRoleFinding(parseJsonObject(result.text), 'integration-arbiter')
       : null;
@@ -2146,8 +2147,10 @@ export async function runAdaptiveAgentPanel({
   recordWave = async () => {},
   recordAgent = async () => {},
   loadBlackboard = async () => null,
-  recordBlackboard = async () => {}
+  recordBlackboard = async () => {},
+  signal
 } = {}) {
+  signal?.throwIfAborted();
   const mode = config?.agents?.multiAgent ?? 'auto';
   const maxAgents = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(config?.agents?.maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
   const providerParallelCap = Math.max(
@@ -2177,7 +2180,8 @@ export async function runAdaptiveAgentPanel({
       recordAgent,
       loadBlackboard,
       recordBlackboard,
-      singlePanel: singleNormalChatZipPanel
+      singlePanel: singleNormalChatZipPanel,
+      signal
     });
   }
   let allocationResult = rolesFor(run, task, { maxAgents, mode });
@@ -2420,7 +2424,7 @@ export async function runAdaptiveAgentPanel({
         maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
         usageGate,
         usageSource: 'multi-agent'
-      }).catch(() => null);
+      }).catch(error => { if (signal?.aborted) throw signal.reason; if (error?.name === 'AbortError') throw error; return null; });
       if (result?.usage) {
         tokensSpent += Number(result.usage.inputTokens ?? 0) + Number(result.usage.outputTokens ?? 0);
         if (!result.usageRecorded) await recordUsage(result.usage, result.provider, result.model);
@@ -2567,7 +2571,7 @@ export async function runAdaptiveAgentPanel({
       maxOutputTokens: ARBITER_MAX_OUTPUT_TOKENS,
       usageGate,
       usageSource: 'multi-agent'
-    }).catch(() => null);
+    }).catch(error => { if (signal?.aborted) throw signal.reason; if (error?.name === 'AbortError') throw error; return null; });
     if (result?.usage && !result.usageRecorded) await recordUsage(result.usage, result.provider, result.model);
     const parsed = result && !result.incomplete
       ? normalizedRoleFinding(parseJsonObject(result.text), 'arbiter')

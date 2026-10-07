@@ -38,6 +38,20 @@ const finding = (recommendation, summary, extra = {}) => ({
   ...extra
 });
 
+test('cancelled specialist calls cannot publish failed waves or stale blackboard findings', async () => {
+  const controller = new AbortController(); let waveWrites = 0; let agentWrites = 0; let boardWrites = 0;
+  await assert.rejects(runAdaptiveAgentPanel({
+    run: run({ adaptation: { scale: 'complex' }, maxTokens: 100000 }),
+    task: { id: 'plan', type: 'plan' }, basePayload: { goal: 'Plan a project', task: { id: 'plan', type: 'plan' } },
+    selection, primaryModelId: 'google:gemini-3.8-flash',
+    config: { agents: { multiAgent: 'always', maxAgents: 2 } }, signal: controller.signal,
+    modelCaller: async () => { controller.abort(); throw controller.signal.reason; },
+    recordWave: async () => { waveWrites++; }, recordAgent: async () => { agentWrites++; },
+    recordBlackboard: async () => { boardWrites++; }
+  }), { name: 'AbortError' });
+  assert.equal(waveWrites, 0); assert.equal(agentWrites, 0); assert.equal(boardWrites, 0);
+});
+
 test('auto mode stays single-agent for simple work and expands for material complexity', () => {
   assert.equal(multiAgentDecision(run(), { id: 'respond', type: 'respond' }).enabled, false);
   const complex = multiAgentDecision(run({ adaptation: { scale: 'complex' } }), { id: 'plan', type: 'plan' });

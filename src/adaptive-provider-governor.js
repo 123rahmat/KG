@@ -82,19 +82,37 @@ export class AdaptiveProviderGovernor {
     }));
   }
 
-  async acquire(key) {
+  releaseOnce(state) {
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.release(state);
+    };
+  }
+
+  async acquire(key, { signal } = {}) {
+    signal?.throwIfAborted();
     const state = this.state(key);
     if (state.active < state.concurrency) {
       state.active += 1;
-      return () => this.release(state);
+      return this.releaseOnce(state);
     }
 
     return new Promise((resolve, reject) => {
       const entry = { resolve, reject, expiresAt: this.now() + state.queueTimeoutMs };
-      state.queued.push(entry);
-      entry.timer = setTimeout(() => {
+      const remove = () => {
+        clearTimeout(entry.timer);
+        signal?.removeEventListener('abort', abort);
         const index = state.queued.indexOf(entry);
         if (index >= 0) state.queued.splice(index, 1);
+      };
+      const abort = () => { remove(); reject(signal.reason); };
+      entry.cleanup = remove;
+      state.queued.push(entry);
+      signal?.addEventListener('abort', abort, { once: true });
+      entry.timer = setTimeout(() => {
+        remove();
         reject(new ProviderConcurrencyError(state.key));
       }, state.queueTimeoutMs);
       // Do not unref the queue timeout. A queued request is an active
@@ -107,9 +125,9 @@ export class AdaptiveProviderGovernor {
   drain(state) {
     while (state.queued.length && state.active < state.concurrency) {
       const next = state.queued.shift();
-      clearTimeout(next.timer);
+      next.cleanup();
       state.active += 1;
-      next.resolve(() => this.release(state));
+      next.resolve(this.releaseOnce(state));
     }
   }
 
@@ -153,14 +171,16 @@ export class AdaptiveProviderGovernor {
     return this.stats(state.key)[0];
   }
 
-  async run(key, fn) {
-    const release = await this.acquire(key);
+  async run(key, fn, { signal } = {}) {
+    const release = await this.acquire(key, { signal });
     const started = this.now();
     try {
+      signal?.throwIfAborted();
       const value = await fn();
       this.adapt(key, { ok: true, latencyMs: this.now() - started });
       return value;
     } catch (error) {
+      if (signal?.aborted) throw error;
       const code = error?.code === 'model-rate-limited' ? 'model-rate-limited'
         : error?.code === 'model-unavailable' ? 'model-unavailable'
           : error?.name === 'AbortError' || error?.name === 'TimeoutError' ? 'timeout'
@@ -175,7 +195,7 @@ export class AdaptiveProviderGovernor {
   reset() {
     for (const state of this.states.values()) {
       for (const item of state.queued.splice(0)) {
-        clearTimeout(item.timer);
+        item.cleanup();
         item.reject(new ProviderConcurrencyError(state.key));
       }
     }

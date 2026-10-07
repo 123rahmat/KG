@@ -30,6 +30,10 @@ Each conversation is an independent concurrency lane. Multiple code workspace se
 
 The orchestrator is feedback-controlled. Each specialist wave measures latency and failures and can narrow or widen the next wave within hard concurrency and risk limits. High-risk work is kept conservative even when parallelism is available.
 
+Provider scheduling also reacts to each HTTP attempt. Rate limits and unavailable-service responses reduce concurrency; healthy calls restore it gradually. Retry waits release the provider slot, honor numeric and date-form Retry-After headers within the bounded wait allowance, and preserve requested web grounding. Authentication errors are not retried. An exhausted retry allowance never triggers another ungrounded request.
+
+During execution, workers check the persisted run state every second and before accepting a result. Stop, a changed task, or a changed attempt aborts supported provider and runner requests, removes queued provider work, closes guarded web requests, and terminates document readers. Cancelled specialist calls propagate cancellation rather than publishing failed waves or blackboard findings. Tool proposals check cancellation before being created. A disconnected browser does not stop a run; the user's saved Stop state does. Remote services can still charge for work already accepted, and aborting a runner connection does not establish whether an external side effect finished.
+
 ## Blackboard
 
 The Run has one encrypted, versioned Blackboard for shared working state. Agents contribute findings; optimistic concurrency prevents silent overwrites. The Blackboard is not durable personal memory and never grants authority.

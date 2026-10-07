@@ -13,6 +13,48 @@ export const MODEL_CASCADE_MS = 120_000;
 export const RUNNER_TIMEOUT_MS = 60_000;
 export const SANDBOX_TIMEOUT_MS = 330_000;
 
+/** Observe the durable run state so Stop also reaches calls in other workers. */
+export async function withRunControl(operation, { readRun, taskId, attempt, pollMs = 1000 } = {}) {
+  const controller = new AbortController();
+  let closed = false;
+  let timer;
+  const abort = (code, message) => {
+    const reason = Object.assign(new Error(message), { name: 'AbortError', code, status: 409, expose: true });
+    controller.abort(reason);
+  };
+  const check = async () => {
+    try {
+      const run = await readRun();
+      if (closed) return;
+      if (!run || ['failed', 'complete', 'blocked', 'exhausted'].includes(run.state)) {
+        abort('run-stopped', 'This run has stopped.');
+      } else if (run.next !== taskId || Number(run.attempt) !== Number(attempt)) {
+        abort('stale-execution', 'This execution belongs to an earlier task or attempt.');
+      }
+    } catch (error) {
+      if (!closed) controller.abort(Object.assign(new Error('The run control state could not be checked.'), {
+        name: 'AbortError', code: 'run-control-unavailable', status: 503, expose: true, cause: error
+      }));
+    }
+  };
+  const poll = async () => {
+    await check();
+    if (!closed && !controller.signal.aborted) timer = setTimeout(poll, Math.max(10, Number(pollMs) || 1000));
+  };
+  try {
+    await check();
+    controller.signal.throwIfAborted();
+    timer = setTimeout(poll, Math.max(10, Number(pollMs) || 1000));
+    const result = await operation(controller.signal);
+    await check();
+    controller.signal.throwIfAborted();
+    return result;
+  } finally {
+    closed = true;
+    clearTimeout(timer);
+  }
+}
+
 const RETRY_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 const imagesOf = message => Array.isArray(message?.images)
   ? message.images.filter(image => image?.data && image?.mediaType)
@@ -129,32 +171,42 @@ async function readBounded(response, maxBytes) {
   return raw;
 }
 
-const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+const wait = (ms, signal) => new Promise((resolve, reject) => {
+  signal?.throwIfAborted();
+  const cleanup = () => signal?.removeEventListener('abort', abort);
+  const timer = setTimeout(() => { cleanup(); resolve(); }, ms);
+  const abort = () => { clearTimeout(timer); cleanup(); reject(signal.reason); };
+  signal?.addEventListener('abort', abort, { once: true });
+});
 
-async function withRetry(attempt, { retries = 1, backoffMs = 500, maxWaitMs = 8000, sleep = wait } = {}) {
+async function withRetry(attempt, { retries = 1, backoffMs = 500, maxWaitMs = 8000, sleep = wait, signal } = {}) {
   let last;
   for (let index = 0; index <= retries; index += 1) {
+    signal?.throwIfAborted();
     try {
       const result = await attempt();
       if (!result.retryable || index === retries) return result;
       last = result;
     } catch (error) {
-      if (index === retries || error.code === 'ERESPONSETOOLARGE') throw error;
+      if (signal?.aborted || index === retries || error?.code === 'ERESPONSETOOLARGE'
+          || (error?.upstreamStatus && !RETRY_STATUS.has(error.upstreamStatus))) throw error;
       last = error;
     }
-    const delay = backoffMs * 2 ** index * (0.8 + Math.random() * 0.4);
+    const delay = Math.max(Number(last?.retryAfterMs) || 0, backoffMs * 2 ** index * (0.8 + Math.random() * 0.4));
     if (delay > maxWaitMs) break;
-    await sleep(delay);
+    await sleep(delay, signal);
   }
   if (last instanceof Error) throw last;
   return last;
 }
 
-export function retryAfterMs(headers) {
+export function retryAfterMs(headers, now = Date.now()) {
   const value = typeof headers?.get === 'function' ? headers.get('retry-after') : null;
   if (!value) return null;
   const seconds = Number(value);
-  return Number.isFinite(seconds) ? seconds * 1000 : null;
+  if (Number.isFinite(seconds)) return seconds >= 0 ? seconds * 1000 : null;
+  const date = Date.parse(value);
+  return Number.isFinite(date) ? Math.max(0, date - now) : null;
 }
 
 const MODEL_ERRORS = {
@@ -178,6 +230,7 @@ export class ModelProviderError extends Error {
     this.code = code;
     this.upstreamStatus = status;
     this.status = code === 'model-request-rejected' ? 502 : 503;
+    this.retryAfterMs = after;
     this.retryAfterSeconds = after ? Math.ceil(after / 1000) : null;
     this.expose = code !== 'model-request-rejected';
   }
@@ -195,14 +248,14 @@ export function effectiveEffort(requested, ceiling) {
 }
 
 const tokenCache = new Map();
-async function vertexAccessToken(selected, fetchImpl, timeoutMs) {
+async function vertexAccessToken(selected, fetchImpl, timeoutMs, signal) {
   if (text(selected?.accessToken)) return text(selected.accessToken);
   const cacheKey = `${selected.project}:${selected.location || 'global'}`;
   const cached = tokenCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now() + 60_000) return cached.token;
   const response = await fetchImpl(
     'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token',
-    { headers: { 'Metadata-Flavor': 'Google' }, signal: AbortSignal.timeout(Math.min(timeoutMs, 5000)) }
+    { headers: { 'Metadata-Flavor': 'Google' }, signal: AbortSignal.any([AbortSignal.timeout(Math.min(timeoutMs, 5000)), ...(signal ? [signal] : [])]) }
   );
   if (!response.ok) throw new ModelProviderError('google', response.status);
   const data = await response.json();
@@ -232,8 +285,10 @@ export async function callModel(messages, {
   searchBudget = null,
   allowedDomains = [],
   excludedDomains = [],
-  adaptiveContext = {}
+  adaptiveContext = {},
+  signal
 } = {}) {
+  signal?.throwIfAborted();
   if (!config?.ai) return null;
 
   const requested = resolveConfiguredModel(config, modelId || config.ai.modelId || null);
@@ -250,7 +305,8 @@ export async function callModel(messages, {
 
   const modelKey = `google:${selected.model}`;
   providerGovernor.configure(modelKey, config.providerConcurrency ?? {});
-  const accessToken = await vertexAccessToken(selected, fetchImpl, timeoutMs);
+  const accessToken = await vertexAccessToken(selected, fetchImpl, timeoutMs, signal);
+  signal?.throwIfAborted();
 
   let reservation = null;
   let admittedMaxOutputTokens = Math.max(1, Math.floor(Number(maxOutputTokens) || 4096));
@@ -293,7 +349,7 @@ export async function callModel(messages, {
   // allow-list is required, do not bypass it with integrated grounding.
   const shouldSearch = webPolicy.shouldSearch && !(Array.isArray(allowedDomains) && allowedDomains.length);
 
-  const doRequest = async search => providerGovernor.run(modelKey, () => withRetry(async () => {
+  const doRequest = async search => withRetry(async () => providerGovernor.run(modelKey, async () => {
     const req = vertexBuild(selected, messages, {
       webSearch: search,
       maxOutputTokens: admittedMaxOutputTokens,
@@ -305,8 +361,13 @@ export async function callModel(messages, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
       body: JSON.stringify(req.body),
-      signal: AbortSignal.timeout(timeoutMs)
+      signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])])
     });
+    // The governor must observe HTTP failures before retry policy handles them.
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {});
+      throw new ModelProviderError('google', response.status, { retryAfterMs: retryAfterMs(response.headers) });
+    }
     const raw = await readBounded(response, config.limits.responseBytes);
     return {
       retryable: !response.ok && RETRY_STATUS.has(response.status),
@@ -314,18 +375,14 @@ export async function callModel(messages, {
       raw,
       retryAfterMs: retryAfterMs(response.headers)
     };
-  }, { sleep, retries, backoffMs: 500, maxWaitMs: 8000 }));
+  }, { signal }), { sleep, retries, backoffMs: 500, maxWaitMs: 8000, signal });
 
   let outcome;
-  let searchUnavailable = false;
   try {
     outcome = await doRequest(shouldSearch);
-    if (shouldSearch && [400, 429].includes(outcome.status)) {
-      outcome = await doRequest(false);
-      searchUnavailable = true;
-    }
   } catch (error) {
     if (reservation) await usageGate?.release(reservation).catch(() => {});
+    if (signal?.aborted) throw signal.reason;
     if (error?.name === 'TimeoutError' || error?.name === 'AbortError' || error instanceof TypeError) {
       throw new ModelProviderError('google', 408);
     }
@@ -374,11 +431,12 @@ export async function callModel(messages, {
     incomplete: segment.incomplete,
     usageRecorded: Boolean(!reservation),
     webSearchPolicy: webPolicy,
-    ...(searchUnavailable || (webPolicy.shouldSearch && !shouldSearch) ? { webSearchUnavailable: true } : {})
+    ...(webPolicy.shouldSearch && !shouldSearch ? { webSearchUnavailable: true } : {})
   };
 }
 
-export async function callRunner(url, payload, { config, fetchImpl = fetch, sleep = wait, timeoutMs = RUNNER_TIMEOUT_MS, token = null } = {}) {
+export async function callRunner(url, payload, { config, fetchImpl = fetch, sleep = wait, timeoutMs = RUNNER_TIMEOUT_MS, token = null, signal } = {}) {
+  signal?.throwIfAborted();
   const endpoint = text(url);
   if (!endpoint) {
     return {
@@ -403,7 +461,7 @@ export async function callRunner(url, payload, { config, fetchImpl = fetch, slee
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(timeoutMs)
+        signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])])
       });
       const raw = await readBounded(response, config.limits.responseBytes);
       return { retryable: RETRY_STATUS.has(response.status), status: response.status, raw };
@@ -411,7 +469,8 @@ export async function callRunner(url, payload, { config, fetchImpl = fetch, slee
       sleep,
       // Runner calls can have side effects. Never retry an ambiguous POST here:
       // a timeout or dropped connection does not prove the runner did nothing.
-      retries: 0
+      retries: 0,
+      signal
     });
 
     let result;

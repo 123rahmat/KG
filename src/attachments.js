@@ -22,8 +22,10 @@ function remember(key, value) {
  * One attached file, read for the AI. Returns
  * { name, format, text?, tables?, image?, pages?, truncated?, error? }.
  */
-export async function readAttachment(objects, scope, file) {
+export async function readAttachment(objects, scope, file, { signal } = {}) {
+  signal?.throwIfAborted();
   const object = scope ? await objects.read(scope, file.id).catch(() => null) : null;
+  signal?.throwIfAborted();
   if (!object) return { name: file.name, format: file.format, error: 'The file is no longer available.' };
   const { metadata, content } = object;
   const key = `${scope.workspaceId}:${metadata.digest}:${metadata.name}`;
@@ -34,9 +36,11 @@ export async function readAttachment(objects, scope, file) {
   }
   let result;
   try {
-    const read = await readDocumentIsolated(Buffer.from(content), { name: metadata.name, contentType: metadata.contentType });
+    const read = await readDocumentIsolated(Buffer.from(content), { name: metadata.name, contentType: metadata.contentType }, { signal });
+    signal?.throwIfAborted();
     result = { name: metadata.name, ...read };
   } catch (error) {
+    if (signal?.aborted) throw signal.reason;
     result = { name: metadata.name, format: file.format, error: error.message };
   }
   remember(key, result);
@@ -86,7 +90,8 @@ function attachmentPriority(file, focus = '') {
   return score;
 }
 
-export async function attachmentContext(objects, scope, attachments, { maxChars = 60_000, maxImages = 6, focus = '', overlay = null } = {}) {
+export async function attachmentContext(objects, scope, attachments, { maxChars = 60_000, maxImages = 6, focus = '', overlay = null, signal } = {}) {
+  signal?.throwIfAborted();
   const visualFocus = /\b(?:image|images|diagram|visual|design|canvas|figure|photo|photos|screenshot|presentation|slide|slides)\b/i.test(String(focus ?? ''));
   const imageLimit = Math.max(1, Math.min(Number(maxImages) || 6, visualFocus ? 6 : 4));
   let overlaid = false;
@@ -101,7 +106,7 @@ export async function attachmentContext(objects, scope, attachments, { maxChars 
       files.push({ name: file.name, readable: false, note: 'This file type cannot be read; ask the person what it contains, or use a tool that can.' });
       continue;
     }
-    const read = await readAttachment(objects, scope, file);
+    const read = await readAttachment(objects, scope, file, { signal });
     if (read.error) { files.push({ name: file.name, readable: false, note: read.error }); continue; }
     if (isSensitiveWorkspacePath(file.name)) {
       files.push({ name: file.name, readable: false, note: 'Sensitive credential-bearing files are never sent to the AI model.' });

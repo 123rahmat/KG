@@ -14,6 +14,45 @@ const directRun = (call, token, workspace) => call('POST', '/api/runs', {
   token, workspace, body: { goal: 'Explain recursion.', privacyConsent: { modelProvider: true } }
 });
 
+test('Stop reaches a running background provider request without advancing the task', { timeout: 15000 }, async () => {
+  let started;
+  const providerStarted = new Promise(resolve => { started = resolve; });
+  let aborted = false;
+  await withServer(async ({ call, seed, worker }) => {
+    const { token, workspace } = await seed();
+    const { body: run } = await directRun(call, token, workspace);
+    const queued = await call('POST', `/api/runs/${run.id}/execute`, { token, workspace, body: { background: true } });
+    assert.equal(queued.status, 202);
+    const working = worker.runOnce();
+    await providerStarted;
+    const stopped = await call('POST', `/api/runs/${run.id}/fail`, { token, workspace, body: { reason: 'stopped by user' } });
+    assert.equal(stopped.status, 200);
+    await working;
+    assert.equal(aborted, true);
+    const result = await call('GET', `/api/runs/${run.id}`, { token, workspace });
+    assert.equal(result.body.state, 'failed');
+    assert.notEqual(result.body.tasks.find(task => task.id === 'respond').status, 'complete');
+    const job = await call('GET', `/api/runs/${run.id}/jobs/${queued.body.job.id}`, { token, workspace });
+    assert.equal(job.body.outcome.code, 'run-stopped');
+  }, {
+    env: { ...ANTHROPIC, MULTI_AGENT_MODE: 'off', AGENTS_REVIEW: 'off' },
+    fetchImpl: async (_url, request) => {
+      const payload = JSON.parse(request.body);
+      const step = (payload.input ?? []).some(message => {
+        try { return JSON.parse(message.content).task?.id === 'respond'; } catch { return false; }
+      });
+      if (!step) return answer('A function that calls itself.');
+      started();
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => resolve(answer('Late answer.')), 5000);
+        request.signal.addEventListener('abort', () => {
+          clearTimeout(timer); aborted = true; reject(request.signal.reason);
+        }, { once: true });
+      });
+    }
+  });
+});
+
 test('a queued execution returns at once and the worker records the same result', () =>
   withServer(async ({ call, seed, worker, pool }) => {
     const { token, workspace } = await seed();

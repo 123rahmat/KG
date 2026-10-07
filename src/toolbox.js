@@ -215,7 +215,7 @@ const BUILT_IN = [
       const file = findAttachment(ctx, input.file);
       if (!file) return { error: `No attached file matches "${text(input.file)}". Attached: ${(ctx.attachments ?? []).map(item => item.name).join(', ') || 'none'}.` };
       if (isSensitiveWorkspacePath(file.name)) return { error: 'Credential-bearing files cannot be exposed to the AI through the file tool.', code: 'sensitive-file-blocked' };
-      const read = await readAttachment(ctx.objects, ctx.scope, file);
+      const read = await readAttachment(ctx.objects, ctx.scope, file, { signal: ctx.signal });
       if (read.error) return { error: read.error };
       if (read.kind === 'image') return { file: read.name, kind: 'image', note: 'This image is shown to you with the next message.', showImage: read.image };
       const offset = Math.max(0, Math.floor(Number(input.offset) || 0));
@@ -243,7 +243,7 @@ const BUILT_IN = [
       const file = findAttachment(ctx, input.file);
       if (!file) return { error: `No attached file matches "${text(input.file)}".` };
       if (isSensitiveWorkspacePath(file.name)) return { error: 'Credential-bearing files cannot be exposed to the AI through the file tool.', code: 'sensitive-file-blocked' };
-      const read = await readAttachment(ctx.objects, ctx.scope, file);
+      const read = await readAttachment(ctx.objects, ctx.scope, file, { signal: ctx.signal });
       if (read.error) return { error: read.error };
       if (!read.tables?.length) return { error: `${read.name} is not a table.` };
       const table = read.tables.find(item => text(item.name).toLowerCase() === text(input.sheet).toLowerCase()) ?? read.tables[0];
@@ -258,7 +258,7 @@ const BUILT_IN = [
     network: true,
     ready: ctx => (ctx.config?.tools?.webAccess === false ? { ready: false, needs: 'admin', reason: 'Web access is turned off on this site (TOOLS_WEB_ACCESS).' } : { ready: true }),
     async run(input, ctx) {
-      const result = await webFetch(input, { fetchImpl: ctx.fetchImpl, ...(ctx.webOptions ?? {}) });
+      const result = await webFetch(input, { ...(ctx.webOptions ?? {}), signal: ctx.signal });
       return { title: result.output.title, url: result.provenance.finalUrl, content: result.output.content, retrievedAt: result.provenance.retrievedAt, sha256: result.provenance.sha256 };
     }
   },
@@ -280,6 +280,7 @@ const BUILT_IN = [
       ], {
         config: ctx.config,
         fetchImpl: ctx.fetchImpl,
+        signal: ctx.signal,
         webSearch: true,
         retries: 0,
         modelId: ctx.modelId || null,
@@ -309,8 +310,10 @@ const BUILT_IN = [
     network: true,
     ready: ctx => (ctx.config?.tools?.webAccess === false ? { ready: false, needs: 'admin', reason: 'Web access is turned off on this site (TOOLS_WEB_ACCESS).' } : { ready: true }),
     async run(input, ctx) {
-      const file = await webDownload({ url: input.url }, { ...(ctx.webOptions ?? {}) });
-      const read = await readDocumentIsolated(file.body, { name: file.name, contentType: file.contentType });
+      const file = await webDownload({ url: input.url }, { ...(ctx.webOptions ?? {}), signal: ctx.signal });
+      ctx.signal?.throwIfAborted();
+      const read = await readDocumentIsolated(file.body, { name: file.name, contentType: file.contentType }, { signal: ctx.signal });
+      ctx.signal?.throwIfAborted();
       const offset = Math.max(0, Math.floor(Number(input.offset) || 0));
       const full = read.text ?? '';
       return {
@@ -425,6 +428,7 @@ export function toolNamed(name, ctx = {}) {
  * so the AI can adapt.
  */
 export async function useTool(name, input, ctx) {
+  ctx?.signal?.throwIfAborted();
   const wanted = text(name);
   const allowed = allowedToolSet(ctx);
   if (allowed && !allowed.has(wanted)) return { error: `That tool is outside the current adaptive scope: "${wanted}".`, code: 'tool-out-of-scope' };
@@ -444,12 +448,15 @@ export async function useTool(name, input, ctx) {
     const summary = text(await tool.summarize?.(safeInput, ctx) ?? `${tool.title}`).slice(0, 300);
     const check = await tool.validate?.(safeInput, ctx);
     if (check?.error) return { error: check.error };
+    ctx?.signal?.throwIfAborted();
     const action = await ctx.propose({ tool: tool.name, input: safeInput, summary });
     return { proposed: true, actionId: action.id, summary, note: 'This waits for the person to approve it. Tell them what you proposed; do not say it is done.' };
   }
   try {
+    ctx?.signal?.throwIfAborted();
     return await tool.run(safeInput, ctx);
   } catch (error) {
+    if (ctx?.signal?.aborted) throw ctx.signal.reason;
     return { error: text(error?.message) || 'The tool failed.' };
   }
 }
@@ -571,7 +578,7 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
   const reach = createReach(messages);
   const usage = { inputTokens: 0, outputTokens: 0 };
   // Tools that call the model themselves (web.search) add to this step's usage.
-  const toolCtx = { ...ctx, usageGate: ctx.usageGate, onUsage: (used, source) => {
+  const toolCtx = { ...ctx, signal: options.signal ?? ctx.signal, usageGate: ctx.usageGate, onUsage: (used, source) => {
     usage.inputTokens += used?.inputTokens ?? 0;
     usage.outputTokens += used?.outputTokens ?? 0;
     ctx.onUsage?.(used, source);

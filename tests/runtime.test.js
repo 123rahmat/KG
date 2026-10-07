@@ -49,9 +49,9 @@ test('adaptive reasoning clamps xhigh to Vertex HIGH', () => {
   assert.equal(effectiveEffort(null, null), 'high');
 });
 
-test('web search uses Vertex Google Search and can fall back to plain inference', async () => {
+test('web search throttling never silently falls back to ungrounded inference', async () => {
   const searched = [];
-  const answer = await callModel([{ role: 'user', content: 'latest facts' }], {
+  await assert.rejects(callModel([{ role: 'user', content: 'latest facts' }], {
     config: base,
     modelId: 'google:gemini-3.8-flash',
     webSearch: true,
@@ -63,10 +63,8 @@ test('web search uses Vertex Google Search and can fall back to plain inference'
         ? new Response(JSON.stringify({ error: 'quota' }), { status: 429 })
         : response('fallback answer');
     }
-  });
-  assert.deepEqual(searched, [true, false]);
-  assert.equal(answer.text, 'fallback answer');
-  assert.equal(answer.webSearchUnavailable, true);
+  }), { code: 'model-rate-limited' });
+  assert.deepEqual(searched, [true]);
 });
 
 test('upstream auth and malformed responses remain explicit failures', async () => {

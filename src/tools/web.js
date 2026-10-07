@@ -16,12 +16,13 @@ const DEFAULT_MAX_BYTES = 2 * 1024 * 1024;
 const TEXTUAL = /^(text\/|application\/(json|xml|xhtml\+xml|ld\+json|rss\+xml|atom\+xml))/i;
 
 /** One guarded request, no redirect handling. Resolves with status, headers and body. */
-function requestOnce(url, address, { method, timeoutMs, maxBytes, readBody }) {
+function requestOnce(url, address, { method, timeoutMs, maxBytes, readBody, signal }) {
   const transport = url.protocol === 'https:' ? https : http;
   return new Promise((resolve, reject) => {
     const request = transport.request(url, {
       method,
       timeout: timeoutMs,
+      signal,
       headers: { 'user-agent': 'Kindgleam-Fetcher/1.0 (+reads public pages for its users)', accept: 'text/html,application/json,text/plain;q=0.9,*/*;q=0.1' },
       // Pin the connection to the vetted address; SNI and Host keep the name.
       lookup: (_hostname, options, callback) => options?.all
@@ -55,13 +56,17 @@ function requestOnce(url, address, { method, timeoutMs, maxBytes, readBody }) {
   });
 }
 
-async function guardedRequest(rawUrl, { method = 'GET', readBody = true, timeoutMs = DEFAULT_TIMEOUT_MS, maxBytes = DEFAULT_MAX_BYTES, resolve, isAllowed, ports } = {}) {
+async function guardedRequest(rawUrl, { method = 'GET', readBody = true, timeoutMs = DEFAULT_TIMEOUT_MS, maxBytes = DEFAULT_MAX_BYTES, resolve, isAllowed, ports, signal } = {}) {
+  signal?.throwIfAborted();
   const hops = [];
   let url = checkUrl(rawUrl, { ports });
   const started = Date.now();
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+    signal?.throwIfAborted();
     const address = await resolvePublic(url.hostname, { resolve, isAllowed });
-    const response = await requestOnce(url, address, { method, timeoutMs, maxBytes, readBody });
+    signal?.throwIfAborted();
+    const response = await requestOnce(url, address, { method, timeoutMs, maxBytes, readBody, signal });
+    signal?.throwIfAborted();
     hops.push({ url: url.href, status: response.status, address: address.address });
     if (response.status >= 300 && response.status < 400 && response.headers.location) {
       if (hop === MAX_REDIRECTS) throw new GuardError('Too many redirects', 'too-many-redirects');
