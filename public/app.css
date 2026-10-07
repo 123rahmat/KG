@@ -1817,12 +1817,41 @@ pre.out {
 }
 .connection-pill,
 .draft-status,
-.voice-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
+.voice-status,
+.composer-work-status {
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  white-space:nowrap;
 }
+.composer-work-status {
+  max-width:min(260px,46vw);
+  min-height:24px;
+  padding:3px 8px;
+  border:1px solid color-mix(in srgb,var(--accent) 20%,var(--line));
+  border-radius:999px;
+  background:var(--accent-soft);
+  color:var(--accent);
+  font-weight:650;
+}
+.composer-work-status .status-dot {
+  background:var(--accent);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent);
+}
+.composer-work-status .composer-work-label {
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.composer-work-status.stopping {
+  color:var(--warn);
+  background:var(--warn-soft);
+  border-color:color-mix(in srgb,var(--warn) 24%,var(--line));
+}
+.composer-work-status.stopping .status-dot { background:var(--warn); }
+.composer-work-status.sending { color:var(--muted); background:var(--soft); border-color:var(--line); }
+.composer-work-status.sending .status-dot { background:var(--muted); }
 .connection-pill {
   padding: 3px 8px;
   border: 1px solid var(--line);
@@ -2009,9 +2038,8 @@ dialog.settings {
     padding-left: 11px;
     border-radius: 20px;
   }
-  .composer-status {
-    max-width: 65%;
-  }
+  .composer-status { max-width:72%; }
+  .composer-work-status { max-width:56vw; }
   .share-toggle { font-size: .75rem; }
   dialog.settings {
     width: calc(100% - 12px);
