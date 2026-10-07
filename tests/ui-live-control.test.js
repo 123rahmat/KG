@@ -34,9 +34,12 @@ test('adaptive progress remains visible and honest during live work', () => {
   assert.match(css, /\.work-progress-segments/);
   assert.match(css, /\.work-background-strip/);
   assert.match(css, /\.work-permission-strip/);
+  assert.match(css, /\.composer-work-status/);
   assert.doesNotMatch(css, /work-progress-meter::after/);
   assert.match(css, /send\[data-mode="stop"\]/);
   assert.match(css, /is-stopping/);
+  const html = read('index.html');
+  assert.match(html, /id="workMiniStatus"/);
 });
 
 test('browser-rendered text uses DOM text APIs rather than unsafe HTML interpolation', () => {
