@@ -68,13 +68,33 @@ export function geminiFromStandIn(standIn) {
     const tools = Array.isArray(body.tools) && body.tools.length
       ? body.tools.map(tool => tool?.googleSearch ? { type: 'web_search' } : tool)
       : [];
-    const messages = input.map(item => ({
+    const legacyInput = input.map(item => ({
       role: item.role,
       content: item.content.map(part => part.text).join('\n')
     }));
+    const messages = (Array.isArray(body.contents) ? body.contents : []).map(item => {
+      const blocks = (item.parts ?? []).flatMap(part => {
+        if (typeof part?.text === 'string') return [{ type: 'text', text: part.text }];
+        if (part?.inlineData?.data) {
+          return [{
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: part.inlineData.mimeType || 'image/png',
+              data: part.inlineData.data
+            }
+          }];
+        }
+        return [];
+      });
+      return {
+        role: item.role === 'model' ? 'assistant' : 'user',
+        content: blocks.length === 1 && blocks[0].type === 'text' ? blocks[0].text : blocks
+      };
+    });
     const legacy = {
       model: vertexModelFromUrl(url),
-      input: messages,
+      input: legacyInput,
       inputParts: input,
       messages,
       system: systemText || '',
