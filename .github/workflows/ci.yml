@@ -247,10 +247,12 @@ jobs:
       PGSSLMODE: disable
       COOKIE_SECURE: true
       RATE_LIMIT_STORE: postgres
-      AI_PROVIDER: xai
-      XAI_API_KEY: ci-dummy-key
-      XAI_MODEL: grok-4.7
-      AI_MODEL: grok-4.7
+      AI_PROVIDER: google
+      GOOGLE_CLOUD_PROJECT: ci-test-project
+      GOOGLE_CLOUD_LOCATION: global
+      VERTEX_ACCESS_TOKEN: ci-dummy-token
+      VERTEX_MODEL: gemini-3.8-flash
+      AI_MODEL: gemini-3.8-flash
       OBJECT_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       RUNNER_TOKEN: ci-dummy-runner-token-32-characters-min
       MAX_REQUEST_BYTES: 8388608
