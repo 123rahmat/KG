@@ -72,9 +72,8 @@ const fetchImpl = async (url, options) => {
     // requirement that the finance tool runs first, then return the final
     // business answer from the model stand-in.
     const promptText = JSON.stringify(body);
-    const hasPriorAssistantTurn = Array.isArray(body.messages) && body.messages.some(message => message.role === 'assistant');
     const hasFinanceContext = /finance\.project|upfrontCost|newCustomersPerMonth|break-even/i.test(promptText);
-    if (hasPriorAssistantTurn && hasFinanceContext) {
+    if (hasFinanceContext) {
       return reply('An estimate: break-even in month 4.');
     }
     return reply('not json');
