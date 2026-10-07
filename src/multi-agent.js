@@ -393,18 +393,18 @@ export function multiAgentDecision(run, task, { mode = 'auto', progress = {} } =
     return { enabled: false, reason: 'crisis-or-safety-adaptive', pressure: Math.max(pressure, authorityPressure), maturity, adaptiveAuthority };
   }
   if (task?.metadata?.declined === true || task?.metadata?.conversational === true) {
-    return { enabled: false, reason: 'declined-or-conversational', pressure, maturity };
+    return { enabled: false, reason: 'declined-or-conversational', pressure, maturity, adaptiveAuthority };
   }
-  if (task?.type === 'verify') return { enabled: false, reason: 'dedicated-verification-review', pressure, maturity };
-  if (normalizedMode === 'always') return { enabled: true, reason: 'always', pressure, maturity };
+  if (task?.type === 'verify') return { enabled: false, reason: 'dedicated-verification-review', pressure, maturity, adaptiveAuthority };
+  if (normalizedMode === 'always') return { enabled: true, reason: 'always', pressure, maturity, adaptiveAuthority };
   if (controller.mode === 'normal-chat' && controllerForSurface('normal-chat') && buildControllerShouldRecruit(controller, pressure, run)) {
-    return { enabled: true, reason: 'normal-chat-specialist-justified', pressure, maturity };
+    return { enabled: true, reason: 'normal-chat-specialist-justified', pressure, maturity, adaptiveAuthority };
   }
   if (maturity?.independentVerificationRequired && maturityPressure >= 0.65 && task?.type !== 'deliver') {
     return { enabled: true, adaptiveAuthority, reason: 'real-world-maturity-justified', pressure, maturity };
   }
-  if (pressure >= AUTO_PANEL_THRESHOLD) return { enabled: true, reason: 'adaptive-value-justified', pressure, maturity };
-  return { enabled: false, reason: 'single-agent-sufficient', pressure, maturity };
+  if (pressure >= AUTO_PANEL_THRESHOLD) return { enabled: true, reason: 'adaptive-value-justified', pressure, maturity, adaptiveAuthority };
+  return { enabled: false, reason: 'single-agent-sufficient', pressure, maturity, adaptiveAuthority };
 }
 
 function buildControllerShouldRecruit(controller, pressure, run) {
