@@ -13,11 +13,12 @@ test('an ordinary question stays a lightweight chat workflow', () => {
   const plan = planGoal('Explain how a transformer works.');
   assert.equal(plan.contract, CONTRACT);
   assert.equal(plan.intent.kind, 'chat');
-  // Nothing to execute, nothing risky: answer, then verify the answer.
+  // Nothing to execute, nothing risky: materialize only the response now.
+  // Verification is created after the response if the current evidence says it is needed.
   assert.equal(plan.workflow, 'direct');
   assert.equal(plan.state, 'respond');
-  assert.deepEqual(ids(plan), ['respond', 'verify']);
-  assert.deepEqual(plan.tasks.find(task => task.id === 'verify').dependsOn, ['respond']);
+  assert.deepEqual(ids(plan), ['respond']);
+  assert.equal(plan.tasks[0].metadata.verificationPending, true);
 });
 
 test('work, risk or novelty keeps the full workflow', () => {

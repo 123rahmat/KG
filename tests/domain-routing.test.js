@@ -76,7 +76,7 @@ test('a question about physical things is answered with care but needs no approv
   const physical = actions => normalizeClassification({ actions, signals: s({ physical: true }), unknownSituation: false, confidence: 0.9, need: { deliverable: 'x', form: 'number' } });
   const question = planGoal('How many amps does a 2 kW kettle draw on 230 V?', { classifierHints: physical(['answer']) });
   assert.equal(question.workflow, 'direct');
-  const check = question.tasks.find(task => task.id === 'verify').metadata.verification;
+  const check = question.adaptation.verification;
   assert.equal(check.humanReviewRequired, false, 'an answer is checked against its evidence, not held for a person');
   const acting = planGoal('Wire a 2 kW heater to my panel.', { classifierHints: physical(['execute']) });
   assert.equal(acting.workflow, 'full');
