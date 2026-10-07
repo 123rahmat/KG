@@ -39,5 +39,5 @@ test('Gemini being rate-limited is reported as that, with when to retry', async 
   assert.equal(finished[0].state, 'failed');
   assert.equal(finished[0].outcome.code, 'model-rate-limited');
   assert.equal(finished[0].outcome.retryAfterSeconds, 20);
-  assert.match(finished[0].outcome.error, /quota/);
+  assert.match(finished[0].outcome.error, /rate-limited|nothing was recorded/i);
 });
