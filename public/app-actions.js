@@ -4,12 +4,12 @@
  */
 
 import { renderMarkdown } from './markdown.js';
+import { keepView } from './thread-view.js';
 import { state, $, element, button, api, notify, guard, capabilities, canEdit } from './ui-core.js';
 import { growComposer, loadRuns, newChat, personalContext, renderThread, stopRun } from './app-attachments.js';
 import { TERMINAL_STATES, autoDrive, copyText, governanceCard, isAutomatic, renderNextStep, resultText, runStatus, saveAnswer, stepsList, svgIcon, timeAgo, toolLabel } from './app.js';
 import { selectTab } from './app-account.js';
-import { applyLocalWorkspaceChanges } from './workspace-sources.js';
-import { renderWorkStatus } from './adaptive-workspace.js';
+import { renderWorkStatus, workPresentation } from './adaptive-workspace.js';
 import { artifactChip } from './artifact-preview.js';
 
 const actionsLoading = new Set();
@@ -88,10 +88,6 @@ async function applyCodeWorkspace(run, structured, reviewDigest = null) {
   const changes = codeWorkspaceChanges(structured);
   if (!sourceId || !source || !changes.length) return;
   await guard(async () => {
-    if (source.kind === 'local-folder') {
-      await applyLocalWorkspaceChanges(changes, { reviewDigest });
-      return;
-    }
     if (source.kind !== 'github') throw new Error('This project source cannot receive code changes.');
     if (source.permissions?.write !== true) throw new Error('This GitHub source is read-only. Reconnect with explicit write-back permission first.');
     const result = await api('POST', `/api/workspace/sources/${encodeURIComponent(sourceId)}/apply`, {
@@ -155,7 +151,7 @@ function workspaceApplyCard(run, structured) {
   if (!source || !structured || typeof structured !== 'object') return null;
   const changes = codeWorkspaceChanges(structured);
   if (!changes.length) return null;
-  const writable = source.kind === 'local-folder' || source.permissions?.write === true;
+  const writable = source.kind === 'github' && source.permissions?.write === true;
   if (!writable) {
     return element('div', { class: 'row wrap workspace-apply-actions' }, [
       element('span', { class: 'muted small', text: 'GitHub source is read-only' }),
@@ -163,7 +159,7 @@ function workspaceApplyCard(run, structured) {
     ]);
   }
 
-  const holder = element('div', { class: 'stack workspace-apply-card' });
+  const holder = keepView(element('div', { class: 'stack workspace-apply-card' }), JSON.stringify(['apply', run.id, source.id, source.metadata, changes]));
   const confirmation = element('div', { class: 'workspace-apply-confirm stack small', hidden: true });
   const reviewHolder = element('div', { class: 'stack workspace-review-list', hidden: true });
   const reviewStatus = element('span', { class: 'muted small', 'aria-live': 'polite' });
@@ -400,7 +396,7 @@ function foldCodeBlocks(root) {
 function answerBlock(text) {
   const body = element('div', { class: 'answer' }, [renderMarkdown(text, { codeActions: codeBlockActions })]);
   foldCodeBlocks(body);
-  return element('div', { class: 'stack answer-wrap' }, [body]);
+  return keepView(element('div', { class: 'stack answer-wrap' }, [body]), 'answer:' + text);
 }
 
 /** Code a step wrote, as the Markdown an answer shows. */
@@ -611,7 +607,7 @@ function section(run, key, { className, summary, open: openByDefault, label }, b
   state.openSections ??= new Map();
   const id = `${run.id}:${key}`;
   const open = state.openSections.has(id) ? state.openSections.get(id) : openByDefault;
-  const details = element('details', { class: `fold ${className}`, ...(open ? { open: true } : {}) }, [
+  const details = element('details', { class: `fold ${className}`, 'data-section': id, ...(open ? { open: true } : {}) }, [
     element('summary', { class: 'fold-head', 'aria-label': label }, [
       ...[].concat(summary),
       svgIcon('chevron', 'i fold-chevron')
@@ -645,12 +641,12 @@ function requirementsCard(run) {
   if (!items.length) return null;
   const visible = items.filter(item => item.status !== 'superseded').slice(0, 10);
   const currentId = model.nextRequirementId;
-  const progressValue = Number(model.overallProgress);
-  const progress = Number.isFinite(progressValue) ? Math.max(0, Math.min(100, progressValue)) : 0;
+  const progressValue = workPresentation(run).percent;
+  const progress = progressValue !== null ? progressValue : 0;
   return section(run, 'requirements', {
     className: 'requirements-card', label: `Requirements, ${progress}% done`,
     // Open while the work runs; folded once it has finished.
-    open: !TERMINAL_STATES.includes(run.state),
+    open: false,
     summary: element('div', { class: 'requirements-head' }, [
       element('div', {}, [
         element('strong', { text: 'Requirements' }),
@@ -714,7 +710,7 @@ function workDetailsCard(run) {
     source ? ['Workspace', [source.name, source.repoRef || source.repoName].filter(Boolean).join(' · ') || source.kind] : null,
     source?.metadata?.commitSha ? ['Revision', String(source.metadata.commitSha).slice(0, 12)] : null,
     agentStates.length ? ['Specialists', agentStates.map(item => String(item.role || '') + (item.confidence != null ? ' · ' + Number(item.confidence).toFixed(2) : '')).filter(Boolean).join(' · ')] : null,
-    verificationTask ? ['Verification', verificationTask.status === 'complete' ? 'Completed' : String(verificationTask.status || 'pending')] : null,
+    verificationTask ? ['Verification', workPresentation(run).verified ? 'Passed' : verificationTask.status === 'complete' ? 'Checked; passing verification not recorded' : String(verificationTask.status || 'pending')] : null,
     changed.size ? ['Changes', [...changed].slice(0, 12).join(' · ') + (changed.size > 12 ? ' · +' + (changed.size - 12) + ' more' : '')] : null
   ].filter(Boolean);
   if (!rows.length) return null;
@@ -735,66 +731,14 @@ function workDetailsCard(run) {
   ].filter(Boolean));
 }
 
-export function workStatusCard(run) {
-  const tasks = Array.isArray(run?.tasks) ? run.tasks : [];
-  const failed = tasks.filter(task => task.status === 'failed').length;
-  const waiting = tasks.some(task => ['waiting', 'approval'].includes(task.status));
-  const next = tasks.find(task => task.id === run.next)
-    ?? tasks.find(task => !['complete', 'skipped'].includes(task.status))
-    ?? null;
-  const current = next?.metadata?.title || next?.purpose || next?.id
-    || (run.state === 'complete' ? 'Verified result' : 'Adapting the workflow');
-  const workspace = run?.surface === 'code'
-    ? 'Code'
-    : run?.surface === 'research'
-      ? 'Research'
-      : 'NormalChat';
-  const verificationTask = [...tasks].reverse().find(task => task.type === 'verify');
-  const verificationPassed = verificationTask?.status === 'complete'
-    && (verificationTask?.evidence?.verdict?.verdict === 'pass' || verificationTask?.evidence?.verdict?.status === 'pass');
-  const status = run.state === 'complete'
-    ? (verificationPassed ? 'Verified' : 'Complete')
-    : run.state === 'blocked'
-      ? 'Blocked'
-      : run.state === 'waiting'
-        ? 'Waiting for you'
-        : run.state === 'iterate'
-          ? 'Ready to refine'
-          : 'Live';
-  const tone = run.state === 'blocked' || failed
-    ? 'bad'
-    : waiting || run.state === 'waiting'
-      ? 'warn'
-      : run.state === 'complete'
-        ? 'ok'
-        : '';
-
-  return element('details', {
-    class: 'work-status-card ' + tone,
-    open: run.state !== 'complete'
-  }, [
-    element('summary', {
-      class: 'work-status-summary',
-      'aria-label': 'Live work status'
-    }, [
-      element('span', { class: 'work-status-mark', 'aria-hidden': 'true' }),
-      element('div', { class: 'work-status-head' }, [
-        element('strong', { text: 'Live work' }),
-        element('span', { class: 'small muted', text: workspace + ' · ' + status })
-      ]),
-      element('div', { class: 'work-status-now' }, [
-        element('span', { class: 'work-status-now-label small muted', text: 'Now' }),
-        element('strong', { class: 'small', text: current })
-      ])
-    ]),
-    renderWorkStatus(run),
-    workDetailsCard(run),
-    failed
-      ? element('p', {
-          class: 'work-status-warning small',
-          text: failed + ' step' + (failed === 1 ? '' : 's') + ' needs repair or replanning. The failure evidence is preserved.'
-        })
-      : null
+export function workStatusCard(run, context = []) {
+  const view = workPresentation(run);
+  const activity = context.length ? section(run, 'activity', {
+    className: 'work-activity-details', open: false, label: 'Show activity and evidence',
+    summary: element('span', { class: 'small', text: 'Activity and evidence' })
+  }, context) : null;
+  return element('section', { class: 'work-status-card ' + view.tone, 'data-work-state': run.state }, [
+    renderWorkStatus(run), activity, workDetailsCard(run)
   ].filter(Boolean));
 }
 
@@ -811,7 +755,7 @@ function brainstormCard(run) {
   const selected = String(brainstorm.selectedInitial ?? '');
   return section(run, 'approach', {
     className: 'brainstorm-card',
-    open: !TERMINAL_STATES.includes(run.state),
+    open: false,
     label: 'Approach options grounded in the current situation',
     summary: element('div', { class: 'brainstorm-head' }, [
       element('div', {}, [
@@ -891,7 +835,8 @@ export function assistantMessage(run, active) {
   if (notHere.length) {
     parts.push(element('p', { class: 'limit-note', text: 'Running code is not set up here, so you will get the code and steps to run it yourself.' }));
   }
-  parts.push(workStatusCard(run));
+  const context = parts.splice(0);
+  if (run.workflow !== 'direct' || !text || run.state !== 'complete') parts.push(workStatusCard(run, context));
   if (text) parts.push(answerBlock(text));
   const trail = toolTrail(run, text);
   if (trail) parts.push(trail);

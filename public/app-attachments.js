@@ -4,6 +4,8 @@
  */
 
 import { renderMarkdown } from './markdown.js';
+import { syncThread } from './thread-view.js';
+import { workPresentation } from './adaptive-workspace.js';
 import { state, $, element, button, api, notify, guard, aiConnected, clearNotice, updateConnectionUI } from './ui-core.js';
 import { autoDrive, browserAdaptationContext, bytes, heading, runStatus, svgIcon, timeAgo } from './app.js';
 import { assistantMessage, userMessage, welcome } from './app-actions.js';
@@ -107,32 +109,72 @@ export function renderThread() {
   const thread = $('thread');
   const runs = state.chat.runs;
   if (!state.run || !runs.some(run => run.id === state.run.id)) state.run = runs.at(-1) ?? null;
-  const children = [];
-  if (!runs.length && !state.chat.pending) children.push(welcome());
+  const entries = [];
+  if (!runs.length && !state.chat.pending) entries.push({ key: 'welcome', signature: JSON.stringify([state.executionConfig, state.activeSurface]), render: welcome });
   for (const run of runs) {
-    children.push(userMessage(run.goal, run.adaptation?.attachments ?? []));
-    children.push(assistantMessage(run, run.id === state.run?.id));
+    entries.push({
+      key: run.id + ':user', signature: JSON.stringify([run.goal, run.adaptation?.attachments]),
+      render: () => userMessage(run.goal, run.adaptation?.attachments ?? [])
+    });
+    const signature = JSON.stringify([
+      run, run.id === state.run?.id, state.driving === run.id, state.drivingRuns?.has(run.id), state.busyRuns?.has(run.id),
+      state.consentNeeded.has(run.id), state.manualOpen.has(run.id), state.actions?.get(run.id), state.feedbackByRun?.get(run.id),
+      state.role, state.executionConfig, state.workspaceSource, state.activeSurface,
+      state.network.online, state.network.reachable, run.id === state.run?.id && !['complete', 'failed', 'blocked', 'exhausted', 'iterate'].includes(run.state) ? Math.floor(Date.now() / 60_000) : 0
+    ]);
+    entries.push({ key: run.id + ':assistant', signature, render: () => assistantMessage(run, run.id === state.run?.id) });
   }
   if (state.chat.pending) {
-    children.push(userMessage(state.chat.pending.goal, state.chat.pending.files ?? []));
-    children.push(element('div', { class: 'msg assistant' }, [
+    entries.push({ key: 'pending:user', signature: JSON.stringify(state.chat.pending), render: () => userMessage(state.chat.pending.goal, state.chat.pending.files ?? []) });
+    entries.push({ key: 'pending:assistant', signature: JSON.stringify(state.chat.pending), render: () => element('div', { class: 'msg assistant' }, [
       svgIcon('logo', 'avatar'),
       element('div', { class: 'bubble stack' }, state.chat.pending.askConsent
         ? consentCard(state.chat.pending.goal)
         : state.chat.pending.reply
           ? element('div', { class: `answer${state.chat.pending.declined ? ' declined' : ''}` }, [renderMarkdown(state.chat.pending.reply)])
           : element('div', { class: 'thinking' }, [element('span', { class: 'pulse' }), element('span', { text: 'Reading your message…' })]))
-    ]));
+    ]) });
   }
-  thread.replaceChildren(...children);
+  syncThread(thread, entries, state.chat.id ?? 'new:' + (state.activeProjectId ?? ''));
+  announceWork();
   renderChatHead();
   highlightActiveChat();
   // The workspace bar shows what this chat's situation needs now.
   syncAdaptiveWorkspace();
-  const composer = $('composer');
-  if (composer.getBoundingClientRect().top > window.innerHeight - 40) composer.scrollIntoView({ block: 'end' });
+  updateThreadJump();
   document.dispatchEvent(new Event('kindgleam:composer-state'));
 }
+
+function announceWork() {
+  const node = $('workAnnouncer');
+  const run = state.run;
+  if (!node) return;
+  const message = state.chat.pending && !state.chat.pending.reply ? 'Reading your message' : run ? workPresentation(run, {
+    driving: state.driving === run.id || state.drivingRuns?.has(run.id) || state.busyRuns?.has(run.id),
+    online: state.network.online && state.network.reachable,
+    consent: state.consentNeeded.has(run.id), manual: state.manualOpen.has(run.id)
+  }).label : '';
+  if (node.textContent !== message) node.textContent = message;
+}
+
+function updateThreadJump() {
+  const jump = $('threadJump');
+  const thread = $('thread');
+  if (jump && thread) jump.hidden = $('tab-runs').hidden || !state.chat.runs.length
+    || thread.getBoundingClientRect().bottom < window.innerHeight - 110;
+}
+
+let scrollFrame = 0;
+window.addEventListener('scroll', () => {
+  if (scrollFrame) return;
+  scrollFrame = requestAnimationFrame(() => { scrollFrame = 0; updateThreadJump(); });
+}, { passive: true });
+window.addEventListener('resize', updateThreadJump);
+document.addEventListener('kindgleam:connection-state', () => { if (state.principal) renderThread(); });
+$('threadJump')?.addEventListener('click', () => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: document.scrollingElement.scrollHeight, behavior: reduce ? 'instant' : 'smooth' });
+  });
 
 /** Called with every fresh copy of a run from the server. */
 export function renderRun(run) {

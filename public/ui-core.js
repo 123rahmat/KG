@@ -53,6 +53,7 @@ export const state = {
 };
 
 export function updateConnectionUI() {
+  const previouslyOnline = state.network.online;
   const deviceOnline = navigator.onLine !== false;
   // The device can report a network while the server is out of reach (a
   // dead Wi-Fi, a deploy, a captive portal); the last request decides that.
@@ -68,6 +69,7 @@ export function updateConnectionUI() {
       element('span', { text: online ? 'Online' : deviceOnline ? 'Reconnecting…' : 'Offline' })
     );
   }
+  if (previouslyOnline !== online) queueMicrotask(() => document.dispatchEvent(new Event('kindgleam:connection-state')));
   const queued = state.network.queue.length;
   const draft = $('draftStatus');
   if (draft) {

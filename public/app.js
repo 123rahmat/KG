@@ -313,6 +313,12 @@ async function waitForJob(runId, jobId, button) {
     let job;
     try {
       ({ job } = await api('GET', `/api/runs/${runId}/jobs/${jobId}`));
+      // Background transitions are visible while the job runs, not just at its end.
+      // Keep both reads inside the reconnect boundary so the watcher survives a drop.
+      if (['queued', 'running'].includes(job.state) && polls % 3 === 0) {
+        const fresh = await api('GET', `/api/runs/${runId}`);
+        renderRun(fresh);
+      }
     } catch (error) {
       if (error.code === 'offline' || error.transient) {
         if (button) button.textContent = 'Waiting for connection…';
@@ -879,7 +885,7 @@ export function renderNextStep(run) {
     else if (task.type === 'code' && task.metadata?.modelGenerated !== true) parts = executionCard(run, task);
     else parts = reasoningCard(run, task);
   }
-  return element('div', { class: 'step-card stack' }, parts.filter(Boolean));
+  return element('div', { class: 'step-card stack', 'data-input-context': [run.id, run.next, run.attempt].join(':') }, parts.filter(Boolean));
 }
 
 /* -------------------------------------------------------------------- chat */
@@ -934,7 +940,12 @@ export async function autoDrive(run) {
     const deadline = Date.now() + 30 * 60_000;
     while (Date.now() < deadline && isAutomatic(current) && !state.cancelledRuns?.has(run.id) && state.stoppingRun !== run.id) {
       await new Promise(resolve => setTimeout(resolve, 1500));
-      await refresh();
+      try { await refresh(); }
+      catch (error) {
+        if (error.code !== 'offline' && !error.transient) throw error;
+        renderThread();
+        await waitForConnection();
+      }
     }
     return current;
   };

@@ -8,8 +8,25 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 globalThis.window = new EventTarget();
-globalThis.document = { getElementById: () => null };
-const { api, state, waitForConnection } = await import('../public/ui-core.js');
+globalThis.document = Object.assign(new EventTarget(), { getElementById: () => null });
+const { api, state, waitForConnection, updateConnectionUI } = await import('../public/ui-core.js');
+
+test('the live view is notified only when connection status changes', async () => {
+  state.network.online = true;
+  state.network.reachable = false;
+  const seen = [];
+  const listener = () => seen.push(state.network.online);
+  globalThis.document.addEventListener('kindgleam:connection-state', listener);
+  try {
+    updateConnectionUI();
+    updateConnectionUI();
+    await Promise.resolve();
+    state.network.reachable = true;
+    updateConnectionUI();
+    await Promise.resolve();
+    assert.deepEqual(seen, [false, true]);
+  } finally { globalThis.document.removeEventListener('kindgleam:connection-state', listener); }
+});
 
 const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
 function serve(t, replies) {
