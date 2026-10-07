@@ -92,6 +92,9 @@ function vertexParse(data) {
   const outputTokens = Number(usage?.candidatesTokenCount ?? 0);
   const reasoningTokens = Number(usage?.thoughtsTokenCount ?? 0);
   const finishReason = text(candidates[0]?.finishReason).toUpperCase();
+  const promptBlockReason = text(data?.promptFeedback?.blockReason).toUpperCase();
+  const providerRefusal = Boolean(promptBlockReason)
+    || ['SAFETY', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII'].includes(finishReason);
   return {
     text: answer,
     citations: [...new Map(citations.map(item => [item.url, item])).values()],
@@ -102,7 +105,11 @@ function vertexParse(data) {
       outputTokens,
       ...(reasoningTokens ? { reasoningTokens } : {})
     } : null,
-    incomplete: ['MAX_TOKENS', 'SAFETY', 'RECITATION', 'BLOCKLIST'].includes(finishReason) ? finishReason.toLowerCase() : null
+    incomplete: providerRefusal
+      ? 'refusal'
+      : ['MAX_TOKENS', 'RECITATION'].includes(finishReason)
+        ? finishReason.toLowerCase()
+        : null
   };
 }
 
