@@ -26,7 +26,7 @@ const list = value => {
 
 const OBJECTIVE_WORDS = /\b(?:need to|have to|must|should|want to|plan to|trying to|i'll|i will|we need|we have to|submit|send|call|meet|attend|buy|book|pay|renew|apply|travel|visit|pick up|deliver|install|fix|prepare|schedule|organize|finish|complete)\b/i;
 const DECISION_WORDS = /\b(?:choose|decide|decision|which one|should i|should we|compare|trade[- ]?off|prioriti[sz]e|approve|reject)\b/i;
-const COORDINATION_WORDS = /\b(?:team|together|with my|with our|client|customer|teacher|student|manager|boss|colleague|family|doctor|lawyer|vendor|supplier|meeting|appointment|handoff|coordinate|schedule with)\b/i;
+const COORDINATION_WORDS = /\b(?:coordinate|coordination|handoff|meeting|appointment|schedule with|work with|collaborate with|follow up with|with my|with our|(?:meet|discuss|review|plan|schedule|coordinate|handoff)\s+(?:with\s+)?(?:the\s+)?(?:team|client|customer|teacher|student|manager|boss|colleague|family|doctor|lawyer|vendor|supplier))\b/i;
 const MONITOR_WORDS = /\b(?:monitor|watch|track|check whether|let me know|notify me when|keep an eye|follow up|status of)\b/i;
 const ROUTINE_WORDS = /\b(?:every day|daily|weekly|monthly|each week|each month|every morning|every evening|routine|habit|regularly|weekday)\b/i;
 const TIME_WORDS = /\b(?:today|tonight|tomorrow|morning|afternoon|evening|this week|next week|before|after|by [^.!?]{1,40}|deadline|due|urgent|asap|soon|appointment|meeting)\b/i;
