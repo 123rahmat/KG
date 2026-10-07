@@ -110,7 +110,7 @@ test('the live evaluation drives every situation end to end and judges it', { ti
     assert.equal(byIdOk(report, 'invention'), true, 'a novel goal is discovered, researched and prototyped end to end');
     const byId = Object.fromEntries(report.results.map(item => [item.id, item]));
     assert.ok(byId.reminder.tools.includes('schedule.create:proposed'));
-    assert.equal(byId.standard.awaitingPersonCheck, true, 'electrical work waits for a person to certify it');
+    assert.notEqual(byId.standard.awaitingPersonCheck, true, 'informational electrical research is evidence-verified and does not require human certification');
   }, { env: {
     AI_PROVIDER: 'google',
     GOOGLE_CLOUD_PROJECT: 'test-project',
