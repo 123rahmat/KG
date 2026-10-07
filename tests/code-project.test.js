@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { withServer, jsonResponse, stepsIn, advanceTo, codeWritten } from './helpers.js';
+import { withServer, jsonResponse, advanceTo, codeWritten } from './helpers.js';
 import { zip } from './document-fixtures.js';
 import { codeFiles, missingTests, sandboxPayload, mergeFix, builtCode, repairContext, hasCode, normalizePackage, repairDecision, materializeCodePackage } from '../src/code-workflow.js';
 import { workspaceContentHash } from '../src/code-workspace.js';
