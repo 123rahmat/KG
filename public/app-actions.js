@@ -749,8 +749,11 @@ export function workStatusCard(run) {
     : run?.surface === 'research'
       ? 'Research'
       : 'NormalChat';
+  const verificationTask = [...tasks].reverse().find(task => task.type === 'verify');
+  const verificationPassed = verificationTask?.status === 'complete'
+    && (verificationTask?.evidence?.verdict?.verdict === 'pass' || verificationTask?.evidence?.verdict?.status === 'pass');
   const status = run.state === 'complete'
-    ? 'Verified'
+    ? (verificationPassed ? 'Verified' : 'Complete')
     : run.state === 'blocked'
       ? 'Blocked'
       : run.state === 'waiting'
