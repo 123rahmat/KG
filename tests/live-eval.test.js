@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { withServer, jsonResponse, geminiFromStandIn } from './helpers.js';
+import { withServer, jsonResponse } from './helpers.js';
 import { runLiveEval, judge, SCENARIOS } from '../src/live-eval.js';
 
 // A stand-in that answers the way a capable model would, so this checks the
@@ -79,7 +79,7 @@ test('the live evaluation drives every situation end to end and judges it', { ti
     VERTEX_ACCESS_TOKEN: 'test-token',
     AI_MODEL: 'gemini-3.8-flash',
     TOOLS_WEB_ACCESS: 'true'
-  }, fetchImpl: geminiFromStandIn(fetchImpl) }));
+  }, fetchImpl }));
 
 const byIdOk = (report, id) => report.results.find(item => item.id === id)?.ok === true;
 
