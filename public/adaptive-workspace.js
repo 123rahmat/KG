@@ -125,7 +125,11 @@ function progressSnapshot(run) {
   const images = attachments.filter(file => /^image\//i.test(String(file?.contentType ?? file?.type ?? ''))).length;
   const research = run?.adaptation?.researchWorkspace ?? {};
   const testCount = tasks.filter(task => task?.id === 'test-code' || /test|verif/i.test(String(task?.id) + ' ' + String(task?.type))).length;
-  const verified = tasks.filter(task => task?.type === 'verify' && task?.status === 'complete').length;
+  const verified = tasks.filter(task => {
+    if (task?.type !== 'verify' || task?.status !== 'complete') return false;
+    const verdict = task?.evidence?.verdict;
+    return verdict?.verdict === 'pass' || verdict?.status === 'pass';
+  }).length;
   return {
     completed, failed, active, pending,
     files, images,
