@@ -2140,6 +2140,27 @@ export class RunStore {
         };
       }
     }
+    // Delivery is never allowed to skip a required verification boundary.
+    // Some deterministic tool/result paths can otherwise select a planned
+    // deliver stage directly even though the run-level acceptance contract
+    // still requires verification. Enforce the invariant from server-owned
+    // persisted state rather than trusting the candidate transition.
+    const verificationRequiredForDelivery = run.adaptation?.acceptanceContract?.verificationRequired === true
+      || run.adaptation?.unifiedAdaptiveWorkflow?.acceptance?.verificationRequired === true;
+    const passingVerificationRecorded = run.adaptation?.acceptanceContract?.verificationSatisfied === true
+      || run.adaptation?.unifiedAdaptiveWorkflow?.acceptance?.verificationSatisfied === true
+      || tasks.some(item => item.type === 'verify'
+        && item.status === 'complete'
+        && (item.evidence?.verdict?.verdict === 'pass' || item.evidence?.verification?.verdict === 'pass'));
+    if (candidate?.type === 'deliver' && verificationRequiredForDelivery && !passingVerificationRecorded) {
+      candidate = {
+        type: 'verify',
+        title: 'Verify the result',
+        purpose: 'Check the current result against the success criteria and the evidence actually produced.',
+        requires: ['verification']
+      };
+    }
+
     if (!candidate) return;
     // Executed work is reassessed before it is verified: the evidence may call
     // for a new capability or a changed plan. Clean evidence is recorded by
