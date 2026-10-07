@@ -70,7 +70,10 @@ const fetchImpl = async (url, options) => {
     // plus the goal context rather than a fresh task envelope. Preserve the
     // requirement that the finance tool runs first, then return the final
     // business answer from the model stand-in.
-    if (/bakery/i.test(request.goal) && body.messages.some(message => message.role === 'assistant')) {
+    const promptText = JSON.stringify(body);
+    const hasPriorAssistantTurn = Array.isArray(body.messages) && body.messages.some(message => message.role === 'assistant');
+    const hasFinanceContext = /finance\.project|upfrontCost|newCustomersPerMonth|break-even/i.test(promptText);
+    if (hasPriorAssistantTurn && hasFinanceContext) {
       return reply('An estimate: break-even in month 4.');
     }
     return reply('not json');
