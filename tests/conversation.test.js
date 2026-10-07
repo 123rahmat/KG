@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { withServer, jsonResponse } from './helpers.js';
 
-const ANTHROPIC = { AI_PROVIDER: 'anthropic', AI_API_KEY: 'test-key', AI_MODEL: 'claude-opus-5-5' };
+const MODEL_FIXTURE = { AI_PROVIDER: 'fixture', AI_MODEL: 'fixture-model' };
 const reply = text => jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text }], usage: { input_tokens: 2, output_tokens: 2 } });
-// The task request is the first user message of the Claude request.
+// The task request is the first user message of the the model request.
 const requestOf = options => {
   try { return JSON.parse(JSON.parse(options.body).messages?.[0]?.content ?? '{}'); } catch { return {}; }
 };
@@ -38,7 +38,7 @@ test('a follow-up in a chat is planned and answered with the earlier turns', () 
     const inChat = await call('POST', '/api/runs', { ...auth, body: { goal: 'Help.', conversationId: 'chat-12345678' } });
     assert.equal(inChat.status, 201);
   }, {
-    env: ANTHROPIC,
+    env: MODEL_FIXTURE,
     fetchImpl: async (_url, options) => {
       const request = requestOf(options);
       seen.push(request);
@@ -117,7 +117,7 @@ test('a person deletes their own chat, with its steps and actions; nobody else c
     assert.equal(left.n, 0, 'its steps are gone too');
     assert.equal((await call('GET', '/api/memories', auth)).body.memories.length, 1, 'memories are managed separately');
     assert.equal((await call('DELETE', '/api/conversations/chat-deleteme1', auth)).status, 404);
-  }, { env: ANTHROPIC, fetchImpl: async () => reply('Paris.') }));
+  }, { env: MODEL_FIXTURE, fetchImpl: async () => reply('Paris.') }));
 
 test('a chat long enough to fill the recent window still lists every newest chat', () =>
   withServer(async ({ call, seed, pool }) => {
