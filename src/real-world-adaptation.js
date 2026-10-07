@@ -47,6 +47,7 @@ function classifyRealWorldIntent(goal, context = {}) {
   if (ROUTINE_WORDS.test(value)) return 'routine';
   if (MONITOR_WORDS.test(value)) return 'monitoring';
   if (DECISION_WORDS.test(value)) return 'decision';
+  if (EXTERNAL_ACTION_WORDS.test(value)) return 'action';
   if (COORDINATION_WORDS.test(value)) return 'coordination';
   if (OBJECTIVE_WORDS.test(value)) return 'action';
   return 'information';
