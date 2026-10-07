@@ -385,7 +385,10 @@ export function completionGate({
   const outcomeContract = workflow.outcomeContract ?? {};
   const evidenceList = Array.isArray(evidence) ? evidence : [];
   const summary = summarizeEvidence(evidenceList);
-  const hasVerifiedEvidence = summary.counts.verified > 0 || Boolean(verification?.verdict === 'pass');
+  const verificationPassed = verification?.verdict === 'pass'
+    || verification?.verification?.verdict === 'pass'
+    || acceptance.verificationSatisfied === true;
+  const hasVerifiedEvidence = summary.counts.verified > 0 || verificationPassed;
   // Independent verification is a completion requirement for the
   // verification/finalization boundary, not for every intermediate step. A
   // high-uncertainty run may therefore gather, reason, build or observe before
@@ -398,9 +401,6 @@ export function completionGate({
     workflow.authority?.controls?.independentVerificationRequired === true
       || acceptance.verificationRequired === true
   );
-  const verificationPassed = verification?.verdict === 'pass'
-    || verification?.verification?.verdict === 'pass'
-    || acceptance.verificationSatisfied === true;
   const acceptanceHasExplicitGate = Boolean(
     (Array.isArray(acceptance.criteria) && acceptance.criteria.length)
     || (Array.isArray(acceptance.evidenceRequired) && acceptance.evidenceRequired.length)
@@ -414,11 +414,20 @@ export function completionGate({
     outcomeContract.controls?.observationRequired === true
     || outcomeContract.controls?.verificationRequired === true
   );
-    const gaps = [
-    ...(finalizationGate && acceptanceHasExplicitGate ? (Array.isArray(acceptance.gaps) ? acceptance.gaps : []) : []),
+  // A verify verdict is already normalized against every required success
+  // criterion before it reaches this gate. Do not reject that same verified
+  // pass again because the pre-verification acceptance projection has not yet
+  // been persisted as satisfied. Deliver/finalization still uses the persisted
+  // acceptance contract.
+  const verifiedBoundarySatisfied = taskType === 'verify' && verificationPassed;
+  const gaps = [
+    ...(finalizationGate && acceptanceHasExplicitGate && !verifiedBoundarySatisfied
+      ? (Array.isArray(acceptance.gaps) ? acceptance.gaps : [])
+      : []),
     ...(finalizationGate && !authorizationSatisfied ? ['authorization-missing'] : []),
     ...(verificationRequired && !verificationPassed ? ['verification-missing'] : []),
-    ...(status === 'complete' && finalizationGate && acceptanceHasExplicitGate && !acceptance.satisfied ? ['acceptance-unsatisfied'] : []),
+    ...(status === 'complete' && finalizationGate && acceptanceHasExplicitGate
+      && !verifiedBoundarySatisfied && !acceptance.satisfied ? ['acceptance-unsatisfied'] : []),
     ...(status === 'complete' && !hasVerifiedEvidence && taskType !== 'respond' && verificationRequired ? ['evidence-insufficient'] : []),
     ...(status === 'complete' && outcomeGate && outcomeContract.completion?.eligible !== true ? (outcomeContract.gaps ?? ['outcome-evidence-required']) : [])
   ];
@@ -479,7 +488,7 @@ export function subsystemCanAct(workflow = {}, subsystem = '', {
 }
 
 function modeControllerCatalogSafe() {
-  return ['normal-chat', 'code', 'research', 'design'].map(mode => {
+  return ['normal-chat', 'code', 'research'].map(mode => {
     const c = controllerForSurface(mode);
     return { id: c.id, mode: c.mode, objective: c.objective, roles: [...c.roles] };
   });
