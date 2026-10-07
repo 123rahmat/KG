@@ -33,10 +33,13 @@ function vertexContents(messages) {
     .map(message => String(message.content)).join('\n\n');
   const contents = source.filter(message => message?.role !== 'system').flatMap(message => {
     const parts = [];
-    if (text(message?.content)) parts.push({ text: String(message.content) });
+    // Put visual evidence before the instruction text it belongs to. This
+    // preserves the attachment contract used throughout the app and avoids
+    // text-only fallbacks in multimodal fixtures/clients.
     for (const image of imagesOf(message)) {
       parts.push({ inlineData: { mimeType: image.mediaType, data: image.data } });
     }
+    if (text(message?.content)) parts.push({ text: String(message.content) });
     if (!parts.length) return [];
     return [{ role: message?.role === 'assistant' ? 'model' : 'user', parts }];
   });
