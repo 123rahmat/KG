@@ -1206,7 +1206,7 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 main > #notice { margin: 14px auto 0; width: min(var(--read), calc(100% - 32px)); }
 
 .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 1.02rem; letter-spacing: -.015em; }
-/* The logo is one transparent image, /kindgleam.png, used as-is everywhere. */
+/* Brand marks inherit the current theme colour; raster files remain PWA icons. */
 .brand .logo { width: 26px; height: 26px; flex: none; display: block; color: var(--brand-mark, var(--accent)); }
 .brand.big { font-size: 1.35rem; justify-content: center; }
 .brand.big .logo { width: 34px; height: 34px; }
