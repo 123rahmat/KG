@@ -910,17 +910,14 @@ export function assistantMessage(run, active) {
     if (applyCard) parts.push(applyCard);
   }
   if (actionText) parts.push(answerActions(run, actionText));
-  if (driving) {
-    // The live-work panel above is the single progress surface. Avoid a second
-    // spinner/narration line that would duplicate server-confirmed status.
-  } else if (run.state === 'complete') {
+  if (!driving && run.state === 'complete') {
     if (!text) parts.push(element('p', { class: 'muted small', text: 'Finished.' }));
-  } else if (TERMINAL_STATES.includes(run.state)) {
+  } else if (!driving && TERMINAL_STATES.includes(run.state)) {
     const [status] = runStatus(run);
     parts.push(element('p', { class: 'muted small', text: run.state === 'blocked'
       ? `Not allowed by your organisation’s policy: ${run.capabilities.blocked.join(', ')}.`
       : `${status}.` }));
-  } else if (active) {
+  } else if (!driving && active) {
     if (isAutomatic(run)) {
       parts.push(button('Continue', () => autoDrive(run), 'primary'));
     } else {
@@ -932,7 +929,7 @@ export function assistantMessage(run, active) {
         button('Stop this', () => { if (confirm('Stop this work? This cannot be undone.')) stopRun('stopped by user'); }, 'ghost small danger-text')
       ]));
     }
-  } else {
+  } else if (!driving) {
     const delivered = run.state === 'iterate' && !run.tasks.some(task => task.status === 'failed');
     parts.push(element('div', { class: 'row wrap' }, [
       element('span', { class: 'muted small', text: delivered ? 'Result delivered.' : 'Left unfinished.' }),
