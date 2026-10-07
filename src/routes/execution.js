@@ -203,12 +203,16 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       : [];
     const attachments = scopedAttachments(run, task);
     const approvedTools = await workspaceTools(pool, workScope);
+    const goalText = text(run.goal);
+    const financeProjection = /\b(?:financial|finance|business|bakery|startup|start-up|revenue|profit|cash ?flow|break-even|projection|forecast|budget)\b/i.test(goalText)
+      && /\b(?:project|projection|forecast|model|estimate|break-even|months?|revenue|profit|costs?)\b/i.test(goalText);
     const allowedTools = [...new Set([
       ...toolsForTask(task, {
         selectedTools,
         artifacts: run.adaptation?.resourcePlan?.selected?.artifacts ?? [],
         need: run.situation?.need ?? null
       }),
+      ...(financeProjection && TOOL_TASKS.has(task.type) ? ['finance.project'] : []),
       // Always in reach, each behind its own safeguard: chat-local memory
       // (always on for the chat owner) and schedules (only proposed until
       // approved), the files attached to this message, and tools this workspace built
