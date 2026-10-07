@@ -633,7 +633,7 @@ export function planGoal(goal, {
     && !attachments.length && !files.length
     && analysis.flags?.code !== true
     && analysis.flags?.highImpact !== true
-    && capabilityRequirements.every(item => BUILT_IN.includes(item.id) || item.id === 'design');
+    && analysis.flags?.externalAction !== true;
   // A letter or post about physical work is still only writing.
   const writingDocument = writing;
   // A question about physical things ("how many amps does a kettle draw")
@@ -670,8 +670,12 @@ export function planGoal(goal, {
   const normalChatBounded = surfaceBoundary.surface === 'normal-chat'
     && !surfaceBoundary.redirect
     && analysis.flags?.highImpact !== true
+    && analysis.unknownSituation !== true
+    && analysis.investigationNeeded !== true
     && analysis.situation?.clarificationRequired !== true
     && analysis.situation?.externalData?.hasExternalDataNeed !== true
+    && governance.constraints.requireHumanApproval !== true
+    && governanceReasons.length === 0
     && (analysis.flags?.physical !== true || noPhysicalAction);
   // Normal Chat is the universal surface, not a bypass around the adaptive
   // workflow. Creation, investigation, execution, modeling, invention,
