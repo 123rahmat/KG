@@ -30,6 +30,7 @@ const fetchImpl = async (url, options) => {
   const body = JSON.parse(options.body);
   const userJson = () => {
     const users = (Array.isArray(body.messages) ? body.messages : []).filter(message => message.role === 'user').reverse();
+    let goalFallback = {};
     let fallback = {};
     for (const message of users) {
       const rawTexts = typeof message.content === 'string'
@@ -41,14 +42,15 @@ const fetchImpl = async (url, options) => {
         try {
           const parsed = JSON.parse(raw);
           if (!parsed || typeof parsed !== 'object') continue;
-          // Tool results can also be JSON user messages. The execution task
-          // envelope is the authoritative request and always carries task/goal.
-          if (parsed.task || parsed.goal) return parsed;
+          // A task envelope is authoritative. Tool/context JSON may also carry
+          // a goal, so never let a goal-only block shadow the actual task.
+          if (parsed.task) return parsed;
+          if (parsed.goal && !Object.keys(goalFallback).length) goalFallback = parsed;
           if (!Object.keys(fallback).length) fallback = parsed;
         } catch {}
       }
     }
-    return fallback;
+    return Object.keys(goalFallback).length ? goalFallback : fallback;
   };
   const request = userJson();
   const reply = t => jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text: t }], usage: { input_tokens: 50, output_tokens: 20 } });
