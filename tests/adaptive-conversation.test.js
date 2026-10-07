@@ -126,7 +126,7 @@ test('workspace switching preserves chat history while visual work stays in Norm
         goal: 'Create a product launch visual with a simple layout.'
       }
     })).body;
-    assert.equal(visual.surface, 'normal-chat');
+    assert.equal(visual.surface, 'chat');
     assert.equal(visual.adaptation?.designWorkspace, undefined);
 
     const code = await call('POST', '/api/runs', {
