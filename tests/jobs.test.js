@@ -33,7 +33,9 @@ test('Stop reaches a running background provider request without advancing the t
     assert.equal(result.body.state, 'failed');
     assert.notEqual(result.body.tasks.find(task => task.id === 'respond').status, 'complete');
     const job = await call('GET', `/api/runs/${run.id}/jobs/${queued.body.job.id}`, { token, workspace });
-    assert.equal(job.body.outcome.code, 'run-stopped');
+    assert.equal(job.status, 200);
+    assert.equal(job.body.job.state, 'refused');
+    assert.equal(job.body.job.outcome.code, 'run-stopped');
   }, {
     env: { ...ANTHROPIC, MULTI_AGENT_MODE: 'off', AGENTS_REVIEW: 'off' },
     fetchImpl: async (_url, request) => {
