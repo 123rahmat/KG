@@ -564,7 +564,7 @@ export async function sendMessage(text) {
   const chatSourceId = state.chat.workspaceSourceId ?? state.workspaceSourceId ?? null;
   if (navigator.onLine !== false && chatSourceId) {
     state.workspaceSourceId = chatSourceId;
-    await syncActiveWorkspaceSource().catch(error => notify('runNotice', 'warn', error.message || 'Workspace source synchronization failed.'));
+    await syncActiveWorkspaceSource().catch(error => notify('runNotice', 'warn', error.message || 'Couldn’t refresh the connected project source.'));
   }
 
   if (navigator.onLine === false && state.settings.offlineQueue) {

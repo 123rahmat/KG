@@ -92,7 +92,7 @@ async function applyCapturedChanges() {
     capturedChanges = [];
     updateApplyButton();
   } catch (error) {
-    setChangeStatus(error.message || 'GitHub changes could not be applied.');
+    setChangeStatus(error.message || 'Couldn’t apply the GitHub changes. Review the connection and try again.');
   }
 }
 
@@ -196,10 +196,10 @@ async function openTerminal() {
     });
     socket.addEventListener('error', () => {
       setStatus('Terminal connection failed');
-      setChangeStatus('The secure terminal could not be reached.');
+      setChangeStatus('Couldn’t reach the secure terminal. Check the connection and try again.');
     });
   } catch (error) {
-    notify('runNotice', 'bad', error.message || 'Interactive terminal could not be opened.');
+    notify('runNotice', 'bad', error.message || 'Couldn’t open the interactive terminal. Try again in a moment.');
   }
 }
 

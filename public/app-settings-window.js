@@ -27,7 +27,7 @@ async function renderSkillLearning() {
   const result = await api('GET', '/api/skills/profiles').catch(() => null);
   const profiles = Array.isArray(result?.profiles) ? result.profiles : [];
   if (!result) {
-    list.replaceChildren(element('li', { class: 'muted small', text: 'Learned patterns could not be loaded.' }));
+    list.replaceChildren(element('li', { class: 'muted small', text: 'Couldn’t load learned work patterns right now.' }));
     return;
   }
   if (!profiles.length) {

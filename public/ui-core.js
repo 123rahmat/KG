@@ -169,7 +169,7 @@ export async function api(method, path, body, { workspace = true, idempotencyKey
     }
     if (response.status === 204) return null;
     if (!response.ok) {
-      const error = new Error(payload.error || (transient ? 'The server is briefly unavailable. Please try again in a moment.' : `Request failed (${response.status})`));
+      const error = new Error(payload.error || (transient ? 'Kindgleam is briefly unavailable. Please try again in a moment.' : `Request failed (${response.status})`));
       error.status = response.status;
       error.code = payload.code || (transient ? 'server-unavailable' : undefined);
       error.transient = transient;

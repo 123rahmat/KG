@@ -177,7 +177,7 @@ function workspaceApplyCard(run, structured) {
       reviewStatus.textContent = 'Reviewed against the current stored snapshot. Applying will re-check it again.';
       apply.focus({ preventScroll: true });
     } catch (error) {
-      reviewStatus.textContent = error.message || 'The review could not be completed. Refresh the project source and try again.';
+      reviewStatus.textContent = error.message || 'Couldn’t complete the review. Refresh the project source and try again.';
     } finally {
       event.currentTarget.disabled = false;
     }
@@ -568,7 +568,7 @@ function openReport(run, actions) {
 export async function renderReports() {
   const result = await api('GET', '/api/reports').catch(() => null);
   const list = $('reportList');
-  if (!result) { list.replaceChildren(element('li', { class: 'muted small', text: 'Reports could not be loaded.' })); return; }
+  if (!result) { list.replaceChildren(element('li', { class: 'muted small', text: 'Couldn’t load reports right now.' })); return; }
   const summary = $('declinedSummary');
   summary.hidden = !result.canReview;
   if (result.canReview) {

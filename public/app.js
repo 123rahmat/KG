@@ -743,7 +743,7 @@ function iterateCard(run) {
   const stop = () => advance({ taskId: 'iterate', replan: false });
   if (failed.length) {
     return [
-      ...heading('Something did not work', failed.map(task => task.summary || taskLabel(task)).join(' · ')),
+      ...heading('This step needs attention', failed.map(task => task.summary || taskLabel(task)).join(' · ')),
       attemptsLeft > 0 ? field('What should change?', note) : null,
       element('div', { class: 'row wrap' }, [
         attemptsLeft > 0 ? button(`Try again (${attemptsLeft} left)`, retry, 'primary') : null,

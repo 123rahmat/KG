@@ -295,7 +295,7 @@ function usageMeter(window) {
 
 export function renderUsageSection() {
   const usage = state.usage;
-  if (!usage) { $('usageMeters').replaceChildren(element('p', { class: 'muted small', text: 'Usage could not be loaded.' })); return; }
+  if (!usage) { $('usageMeters').replaceChildren(element('p', { class: 'muted small', text: 'Couldn’t load usage right now. Try again in a moment.' })); return; }
   $('usageMeters').replaceChildren(...usage.windows.map(usageMeter));
   const max = Math.max(1, ...usage.days.map(day => day.tokens));
   $('usageDays').replaceChildren(...usage.days.map(day => {
@@ -378,7 +378,7 @@ function planCard(plan, billing) {
 
 export async function renderBillingSection() {
   const billing = await api('GET', '/api/billing').catch(() => null);
-  if (!billing) { $('billingPlan').replaceChildren(element('p', { class: 'muted small', text: 'Billing could not be loaded.' })); return null; }
+  if (!billing) { $('billingPlan').replaceChildren(element('p', { class: 'muted small', text: 'Couldn’t load billing right now. Try again in a moment.' })); return null; }
   const limits = [
     billing.limits.fourHourTokens ? `${formatTokens(billing.limits.fourHourTokens)} tokens per 4 hours` : null,
     billing.limits.weeklyTokens ? `${formatTokens(billing.limits.weeklyTokens)} tokens per week` : null
@@ -467,14 +467,14 @@ export async function renderSecuritySection() {
       ]),
       item.current ? element('span', { class: 'pill ok', text: 'Current' }) : null
     ].filter(Boolean)))
-    : [element('li', { class: 'muted small', text: result ? 'Signed in with an API key only; there are no browser sessions.' : 'Sessions could not be loaded.' })]));
+    : [element('li', { class: 'muted small', text: result ? 'Signed in with an API key only; there are no browser sessions.' : 'Couldn’t load your sessions right now.' })]));
   $('revokeSessions').disabled = sessions.filter(item => !item.current).length === 0;
 }
 
 export async function renderWorkspaceTools() {
   const result = await api('GET', '/api/workspace-tools').catch(() => null);
   const host = $('workspaceTools');
-  if (!result) { host.replaceChildren(element('li', { class: 'muted small', text: 'Tools could not be loaded.' })); return; }
+  if (!result) { host.replaceChildren(element('li', { class: 'muted small', text: 'Couldn’t load workspace tools right now.' })); return; }
   if (!result.tools.length) {
     host.replaceChildren(element('li', { class: 'muted small', text: result.sandbox
       ? 'None yet. They appear here when Kindgleam builds one and an admin approves it.'
@@ -568,7 +568,7 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export async function renderSchedules() {
   const result = await api('GET', '/api/schedules').catch(() => null);
   const list = $('scheduleList');
-  if (!result) { list.replaceChildren(element('li', { class: 'muted small', text: 'Schedules could not be loaded.' })); return; }
+  if (!result) { list.replaceChildren(element('li', { class: 'muted small', text: 'Couldn’t load schedules right now.' })); return; }
   const active = result.schedules.filter(item => item.active);
   if (!active.length) { list.replaceChildren(element('li', { class: 'muted small', text: 'No schedules yet.' })); return; }
   list.replaceChildren(...active.map(item => element('li', { class: 'schedule-item' }, [
@@ -605,7 +605,7 @@ export function syncScheduleForm() {
 export async function renderMemories() {
   const list = $('memoryList');
   const result = await api('GET', '/api/memories').catch(() => null);
-  if (!result) { list.replaceChildren(element('li', { class: 'muted small', text: 'Memory could not be loaded.' })); return; }
+  if (!result) { list.replaceChildren(element('li', { class: 'muted small', text: 'Couldn’t load memory right now.' })); return; }
   $('memoryClear').hidden = !result.memories.length;
   if (!result.memories.length) {
     list.replaceChildren(element('li', { class: 'muted small', text: result.crossChatMemory
