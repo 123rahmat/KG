@@ -446,11 +446,14 @@ export function planGoal(goal, {
   };
   const policyDecision = evaluatePolicy(policies);
   const analysis = inspectGoal(value, situationContext);
+  const governanceActions = analysis.goalModel?.actions ?? [];
+  const physicalExecution = analysis.flags?.physical === true
+    && governanceActions.includes('execute');
   const humanGovernance = buildHumanGovernanceContract({
     safety: analysis.safety,
     risk: analysis.flags?.highImpact === true ? 'high-impact' : analysis.flags?.physical === true ? 'physical' : 'ordinary',
     externalAction: analysis.flags?.externalAction === true,
-    physical: analysis.flags?.physical === true,
+    physical: physicalExecution,
     peopleDecision: analysis.flags?.peopleDecision === true,
     humanData: Boolean(privacyConsent?.humanData || analysis.flags?.humanData),
     imageWork: analysis.flags?.imageWork === true
