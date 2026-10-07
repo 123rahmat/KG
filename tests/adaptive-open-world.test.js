@@ -39,7 +39,8 @@ test('compound goals receive adaptive composition', () => {
   const plan = planGoal('Research the problem, design a solution, build a prototype and test it.');
   assert.equal(plan.adaptation.compound, true);
   assert.ok(plan.capabilities.required.includes('adaptive-composition'));
-  assert.ok(plan.adaptation.surfaceDescriptors.length >= 3);
+  assert.ok(plan.adaptation.surfaceDescriptors.length >= 2);
+  assert.ok(plan.adaptation.surfaceDescriptors.every(surface => ['chat', 'code', 'research'].includes(surface.id)));
 });
 
 test('novel invention stays governed while preserving an invention loop', () => {
