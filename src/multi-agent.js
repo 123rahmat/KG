@@ -513,6 +513,7 @@ export function rolesFor(run, task, {
   // generic high-utility role from crowding out the specialist that the task
   // actually needs.
   const requiredRoles = [];
+  if (signals.visualWork) requiredRoles.push('visual-designer');
   if (signals.securityFocus) requiredRoles.push('security-reviewer');
   if (signals.performanceFocus) requiredRoles.push('performance-reviewer');
   if (signals.executable && signals.successCriteria > 0) requiredRoles.push('test-engineer');
