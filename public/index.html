@@ -73,8 +73,9 @@
     <nav class="landing-nav-links" aria-label="Landing page">
       <a href="#system"><svg class="landing-nav-icon" aria-hidden="true"><use href="#i-adapt"/></svg>How it works</a>
       <a href="#workspaces"><svg class="landing-nav-icon" aria-hidden="true"><use href="#i-sparkle"/></svg>Workspaces</a>
-      <a href="#chat"><svg class="landing-nav-icon" aria-hidden="true"><use href="#i-chat"/></svg>Normal chat</a>
+      <a href="#chat"><svg class="landing-nav-icon" aria-hidden="true"><use href="#i-chat"/></svg>Chat</a>
       <a href="#code"><svg class="landing-nav-icon" aria-hidden="true"><use href="#i-code"/></svg>Code</a>
+      <a href="#research"><svg class="landing-nav-icon" aria-hidden="true"><use href="#i-research"/></svg>Research</a>
     </nav>
     <button class="landing-signin" id="landingSignIn" type="button">Sign in</button>
   </header>
@@ -82,17 +83,17 @@
   <main class="landing-main">
     <section class="landing-hero" aria-labelledby="landingTitle">
       <div class="landing-copy">
-        <p class="landing-kicker">Situation-adaptive intelligence</p>
-        <h1 id="landingTitle">Your goal.<br><em>The right next step.</em></h1>
-        <p class="landing-lead">Ask, build, or investigate. Kindgleam brings in the context and tools your request needs, shows what is happening, and helps you move from an idea to a checked result.</p>
+        <p class="landing-kicker">Adaptive AI for real work</p>
+        <h1 id="landingTitle">From a question<br><em>to a verified result.</em></h1>
+        <p class="landing-lead">Ask, build, or investigate. Kindgleam adapts the context, tools, and specialist help to the work in front of you—then keeps progress clear from first step to finished result.</p>
         <div class="landing-actions">
-          <button class="primary landing-cta" id="landingSignInPrimary" type="button">Start a conversation</button>
+          <button class="primary landing-cta" id="landingSignInPrimary" type="button">Start working</button>
           <a class="landing-text-link" href="#system">See how it works <span aria-hidden="true">↓</span></a>
         </div>
         <div class="landing-proof" aria-label="Working with Kindgleam">
           <span><i class="landing-status-dot"></i> Clear live progress</span>
-          <span>Tools when useful</span>
-          <span>Continue in one conversation</span>
+          <span>Tools and specialists when useful</span>
+          <span>Verification before completion</span>
         </div>
       </div>
 
@@ -100,9 +101,9 @@
         <div class="preview-top">
           <div>
             <span class="preview-eyebrow">EXAMPLE · CODE WORKSPACE</span>
-            <strong>From request to result</strong>
+            <strong>From request to verified change</strong>
           </div>
-          <span class="preview-live"><i></i> adapts to your task</span>
+          <span class="preview-live"><i></i> adapts as work changes</span>
         </div>
         <div class="preview-request">
           <span class="preview-label">USER REQUEST</span>
@@ -115,115 +116,106 @@
           </div>
           <span class="preview-arrow">→</span>
           <div class="preview-node active">
-            <span>Current focus</span>
-            <b>inspect the risk</b>
+            <span>Investigate</span>
+            <b>isolate the risk</b>
           </div>
           <span class="preview-arrow">→</span>
           <div class="preview-node">
-            <span>Check</span>
+            <span>Verify</span>
             <b>test the change</b>
           </div>
         </div>
         <div class="preview-footer">
-          <span>The next step adapts to what the work reveals.</span>
-          <span class="mono">example workflow</span>
+          <span>The next step changes with the evidence, not a fixed script.</span>
+          <span class="mono">illustrative workflow</span>
         </div>
       </div>
     </section>
 
-        <section class="landing-section workspace-showcase" id="workspaces" aria-labelledby="workspaceTitle">
+    <section class="landing-section workspace-showcase" id="workspaces" aria-labelledby="workspaceTitle">
       <div class="section-heading">
-        <p class="landing-kicker">Three operating environments</p>
-        <h2 id="workspaceTitle">Three ways to work. One place to continue.</h2>
-        <p>Keep everyday conversations simple. Open Code for projects or Research for a deeper investigation, with the same clear progress and context throughout.</p>
+        <p class="landing-kicker">Built for different kinds of work</p>
+        <h2 id="workspaceTitle">One intelligence. Three workspaces with a clear purpose.</h2>
+        <p>Use Normal Chat for everyday work, Code for software projects, and Research for evidence-driven investigation. Each workspace stays focused without making you relearn the product.</p>
       </div>
       <div class="workspace-grid">
         <article class="workspace-card featured">
           <div class="workspace-icon"><svg aria-hidden="true"><use href="#i-chat"/></svg></div>
-          <div class="workspace-card-copy"><span>01 · UNIVERSAL</span><h3>Normal Chat</h3><p>Write, learn, plan, and work with files. Get a direct answer, with more tools and depth when your request needs them.</p></div>
-          <div class="workspace-meta"><b>Direct first</b><small>Escalates only when justified</small></div>
+          <div class="workspace-card-copy"><span>01 · EVERYDAY WORK</span><h3>Normal Chat</h3><p>Write, learn, plan, analyze files, and solve everyday problems. Stay fast for simple requests and go deeper only when it improves the result.</p></div>
+          <div class="workspace-meta"><b>Fast by default</b><small>More depth only when it adds value</small></div>
         </article>
         <article class="workspace-card">
           <div class="workspace-icon"><svg aria-hidden="true"><use href="#i-code"/></svg></div>
-          <div class="workspace-card-copy"><span>02 · ENGINEERING</span><h3>Code</h3><p>Work with your GitHub project or attached code. Inspect changes, follow checks, and review the result before writing it back.</p></div>
-          <div class="workspace-meta"><b>GitHub + verification</b><small>Explicit write-back</small></div>
+          <div class="workspace-card-copy"><span>02 · SOFTWARE PROJECTS</span><h3>Code</h3><p>Understand the relevant project context, make focused changes, run checks, and review the evidence before anything is written back.</p></div>
+          <div class="workspace-meta"><b>Project-aware engineering</b><small>Tested changes · explicit write-back</small></div>
         </article>
         <article class="workspace-card">
           <div class="workspace-icon"><svg aria-hidden="true"><use href="#i-research"/></svg></div>
-          <div class="workspace-card-copy"><span>03 · EVIDENCE</span><h3>Research</h3><p>Investigate a question with sources and evidence. See what is supported, what conflicts, and what still needs an answer.</p></div>
-          <div class="workspace-meta"><b>Source first</b><small>Claims tied to evidence</small></div>
+          <div class="workspace-card-copy"><span>03 · EVIDENCE-DRIVEN RESEARCH</span><h3>Research</h3><p>Investigate across sources, compare competing claims, track uncertainty, and build conclusions you can trace back to the evidence.</p></div>
+          <div class="workspace-meta"><b>Evidence before conclusion</b><small>Sources, conflicts, gaps, and citations</small></div>
         </article>
       </div>
       <div class="workspace-principle">
         <svg class="i" aria-hidden="true"><use href="#i-shield"/></svg>
-        <span><strong>Shared intelligence, separate boundaries.</strong> Each workspace brings the context and tools your work needs. Your progress, decisions, and results stay easy to follow.</span>
+        <span><strong>Shared intelligence. Purpose-built workspaces.</strong> The experience stays familiar while each workspace brings the context, tools, checks, and progress view its work actually needs.</span>
       </div>
     </section>
 
     <section class="landing-demos" aria-labelledby="demoTitle">
       <div class="visual-heading demo-heading">
         <div>
-          <p class="landing-kicker">See the system work</p>
-          <h2 id="demoTitle">Two real workflows. One adaptive intelligence.</h2>
+          <p class="landing-kicker">See adaptive intelligence in action</p>
+          <h2 id="demoTitle">Three workflows. One system that changes with the work.</h2>
         </div>
-        <span class="demo-caption">Product animation · not prerecorded telemetry</span>
+        <span class="demo-caption">Illustrative product workflows</span>
       </div>
 
       <article class="workflow-demo" id="chat-demo" data-demo="chat" aria-labelledby="chatDemoTitle">
         <div class="demo-head">
           <div>
             <span class="demo-number">01 / NORMAL CHAT</span>
-            <h3 id="chatDemoTitle">Normal Chat adapts the amount of reasoning to the request.</h3>
-            <p>Simple requests stay lightweight. When evidence or tools are justified, the workflow expands, executes, observes, verifies, and continues in the same conversation.</p>
+            <h3 id="chatDemoTitle">Normal Chat stays simple until the work needs more.</h3>
+            <p>Everyday requests can stay direct. When files, fresh information, deeper analysis, or verification improve the answer, Kindgleam brings them in without turning the conversation into a control panel.</p>
           </div>
           <div class="demo-status"><i></i><span data-demo-status>running</span></div>
         </div>
-
         <div class="demo-screen chat-screen">
           <div class="demo-screen-bar">
             <span>Kindgleam · normal chat</span>
-            <span class="mono">shared-adaptive-agent-runtime</span>
+            <span class="mono">right-sized effort for each request</span>
           </div>
           <div class="demo-scene">
             <div class="chat-message user-message" data-chat-step="0">
               <span>USER</span>
               <strong>“What changed in this report, and what should I verify?”</strong>
             </div>
-
             <div class="scene-connector"><span></span></div>
-
             <div class="chat-core-row" data-chat-step="1">
               <div class="scene-core">
                 <svg aria-hidden="true"><use href="#i-logo"/></svg>
-                <b>Adaptive Runtime</b>
-                <small>reads the situation</small>
+                <b>Kindgleam</b>
+                <small>understands what the request needs</small>
               </div>
               <div class="scene-decision">
                 <span>DECISION</span>
-                <strong>Need evidence + a focused check</strong>
-                <small>Only the justified capabilities are recruited.</small>
+                <strong>Use evidence and one focused check</strong>
+                <small>Add only the capabilities that improve this answer.</small>
               </div>
             </div>
-
             <div class="scene-connector split"><span></span></div>
-
             <div class="chat-role-row" data-chat-step="2">
-              <div class="scene-role active"><i></i><b>Adaptive coordinator</b><small>chooses the next justified step</small></div>
-              <div class="scene-role active"><i></i><b>Focused specialists</b><small>added only when useful</small></div>
-              <div class="scene-role executor"><i></i><b>Primary executor</b><small>produce the result</small></div>
+              <div class="scene-role active"><i></i><b>Workflow lead</b><small>keeps the next step focused</small></div>
+              <div class="scene-role active"><i></i><b>Specialists</b><small>join only when they add value</small></div>
+              <div class="scene-role executor"><i></i><b>Primary worker</b><small>produces the result</small></div>
             </div>
-
             <div class="scene-connector"><span></span></div>
-
             <div class="chat-tools-row" data-chat-step="3">
-              <span class="tool-chip">web.search</span>
-              <span class="tool-chip">file.read</span>
-              <span class="tool-chip">data.analyze</span>
-              <span class="tool-chip muted-chip">only when needed</span>
+              <span class="tool-chip">web search</span>
+              <span class="tool-chip">file reading</span>
+              <span class="tool-chip">data analysis</span>
+              <span class="tool-chip muted-chip">only when useful</span>
             </div>
-
             <div class="scene-connector"><span></span></div>
-
             <div class="chat-result-row" data-chat-step="4">
               <div class="result-node"><span>OBSERVE</span><b>evidence collected</b></div>
               <div class="result-arrow">→</div>
@@ -237,8 +229,8 @@
           </div>
         </div>
         <div class="demo-footer">
-          <span><b>Adaptive behavior:</b> one next justified step, not a fixed chain.</span>
-          <span class="mono">agent roles selected by current situation</span>
+          <span><b>Adaptive behavior:</b> use the smallest useful amount of work, then deepen only when the result needs it.</span>
+          <span class="mono">clear progress · no fixed workflow</span>
         </div>
       </article>
 
@@ -246,57 +238,46 @@
         <div class="demo-head">
           <div>
             <span class="demo-number">02 / CODE WORKSPACE</span>
-            <h3 id="codeDemoTitle">Code Workspace turns the same adaptive core into a GitHub-bound engineering loop.</h3>
-            <p>The repository snapshot provides context. Coding intelligence narrows the change. Tests and execution produce evidence. Write-back is explicit and revision-bound.</p>
+            <h3 id="codeDemoTitle">Code Workspace works on the project, not just the prompt.</h3>
+            <p>Kindgleam reads the selected project state, narrows the change, runs the checks that matter, reviews the evidence, and keeps write-back explicit.</p>
           </div>
           <div class="demo-status"><i></i><span data-demo-status>running</span></div>
         </div>
-
         <div class="demo-screen code-screen">
           <div class="demo-screen-bar">
             <span>Kindgleam · code workspace</span>
-            <span class="mono">GitHub-only · revision-bound</span>
+            <span class="mono">project-aware · tested · reviewable</span>
           </div>
           <div class="code-scene">
             <div class="code-stage" data-code-step="0">
               <div class="github-badge"><svg aria-hidden="true"><use href="#i-files"/></svg></div>
-              <div><span>GITHUB REPOSITORY</span><b>Project snapshot + selected revision</b><small>source context is server-scoped</small></div>
+              <div><span>PROJECT STATE</span><b>GitHub project + selected revision</b><small>work stays tied to the project state you selected</small></div>
             </div>
-
             <div class="scene-connector"><span></span></div>
-
             <div class="code-stage" data-code-step="1">
               <div class="github-badge"><svg aria-hidden="true"><use href="#i-search"/></svg></div>
-              <div><span>CODE INTELLIGENCE</span><b>Project structure + affected files</b><small>dependencies · tests · change risk</small></div>
+              <div><span>UNDERSTAND THE CHANGE</span><b>Project structure + affected files</b><small>dependencies · tests · change risk</small></div>
             </div>
-
             <div class="scene-connector"><span></span></div>
-
             <div class="code-stage" data-code-step="2">
               <div class="github-badge"><svg aria-hidden="true"><use href="#i-sliders"/></svg></div>
-              <div><span>ADAPTIVE CODING STEP</span><b>Choose the smallest safe change</b><small>architect → implement → inspect as justified</small></div>
+              <div><span>MAKE THE CHANGE</span><b>Choose the smallest safe change</b><small>plan → implement → inspect as needed</small></div>
             </div>
-
             <div class="scene-connector"><span></span></div>
-
             <div class="code-stage code-execution" data-code-step="3">
               <div class="github-badge"><svg aria-hidden="true"><use href="#i-run"/></svg></div>
-              <div><span>EXECUTE + TEST</span><b>Patch → run → collect receipts</b><small>server-governed terminal and test execution</small></div>
-              <div class="code-mini-role"><span>ACTIVE ROLES</span><b>Architect · Implementer · Debugger · Test Engineer</b></div>
+              <div><span>RUN + TEST</span><b>Apply the patch and collect test evidence</b><small>execution stays controlled and observable</small></div>
+              <div class="code-mini-role"><span>SPECIALISTS WHEN USEFUL</span><b>Architecture · Implementation · Debugging · Testing</b></div>
             </div>
-
             <div class="scene-connector"><span></span></div>
-
             <div class="code-stage" data-code-step="4">
               <div class="github-badge"><svg aria-hidden="true"><use href="#i-shield"/></svg></div>
-              <div><span>VERIFY</span><b>Check evidence against the goal</b><small>independent review can join when justified</small></div>
+              <div><span>VERIFY</span><b>Check evidence against the goal</b><small>independent review can join when another perspective adds value</small></div>
             </div>
-
             <div class="scene-connector"><span></span></div>
-
             <div class="code-stage writeback" data-code-step="5">
               <div class="github-badge"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
-              <div><span>WRITE-BACK GATE</span><b>Explicit GitHub revision update</b><small>no local project-folder browser access</small></div>
+              <div><span>WRITE-BACK</span><b>Review before updating GitHub</b><small>the selected revision is checked again before the write</small></div>
             </div>
           </div>
           <div class="demo-timeline" aria-hidden="true">
@@ -304,74 +285,126 @@
           </div>
         </div>
         <div class="demo-footer">
-          <span><b>Engineering path:</b> GitHub → context → change → test → verify → explicit write-back.</span>
-          <span class="mono">same unified runtime underneath</span>
+          <span><b>Engineering path:</b> understand → change → test → verify → review → write back.</span>
+          <span class="mono">one adaptive intelligence across workspaces</span>
+        </div>
+      </article>
+
+      <article class="workflow-demo" id="research-demo" data-demo="research" aria-labelledby="researchDemoTitle">
+        <div class="demo-head">
+          <div>
+            <span class="demo-number">03 / RESEARCH WORKSPACE</span>
+            <h3 id="researchDemoTitle">Research Workspace shows what the evidence supports—and what it does not.</h3>
+            <p>Kindgleam starts from the question, gathers useful sources, connects claims to evidence, surfaces conflicts and gaps, and stops when more research is unlikely to change the conclusion.</p>
+          </div>
+          <div class="demo-status"><i></i><span data-demo-status>running</span></div>
+        </div>
+        <div class="demo-screen research-screen">
+          <div class="demo-screen-bar">
+            <span>Kindgleam · research workspace</span>
+            <span class="mono">sources · evidence · uncertainty · citations</span>
+          </div>
+          <div class="code-scene research-scene">
+            <div class="code-stage research-stage" data-research-step="0">
+              <div class="github-badge research-badge"><svg aria-hidden="true"><use href="#i-research"/></svg></div>
+              <div><span>FRAME THE QUESTION</span><b>Define what must be answered</b><small>scope · assumptions · what would change the conclusion</small></div>
+            </div>
+            <div class="scene-connector"><span></span></div>
+            <div class="code-stage research-stage" data-research-step="1">
+              <div class="github-badge research-badge"><svg aria-hidden="true"><use href="#i-search"/></svg></div>
+              <div><span>GATHER SOURCES</span><b>Search where more evidence adds value</b><small>avoid duplicate work and low-value source expansion</small></div>
+            </div>
+            <div class="scene-connector"><span></span></div>
+            <div class="code-stage research-stage" data-research-step="2">
+              <div class="github-badge research-badge"><svg aria-hidden="true"><use href="#i-files"/></svg></div>
+              <div><span>BUILD THE EVIDENCE</span><b>Connect findings to their supporting sources</b><small>track provenance, uncertainty, and competing claims</small></div>
+            </div>
+            <div class="scene-connector"><span></span></div>
+            <div class="code-stage research-stage" data-research-step="3">
+              <div class="github-badge research-badge"><svg aria-hidden="true"><use href="#i-verify"/></svg></div>
+              <div><span>CHALLENGE THE RESULT</span><b>Resolve conflicts and important gaps</b><small>review the strongest evidence before concluding</small></div>
+            </div>
+            <div class="scene-connector"><span></span></div>
+            <div class="code-stage research-stage writeback" data-research-step="4">
+              <div class="github-badge research-badge"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
+              <div><span>DELIVER</span><b>Present a traceable conclusion</b><small>supported claims · visible uncertainty · usable citations</small></div>
+            </div>
+          </div>
+          <div class="demo-timeline" aria-hidden="true">
+            <span data-research-progress="0"></span><span data-research-progress="1"></span><span data-research-progress="2"></span><span data-research-progress="3"></span><span data-research-progress="4"></span>
+          </div>
+        </div>
+        <div class="demo-footer">
+          <span><b>Research path:</b> question → sources → evidence → challenge → conclusion.</span>
+          <span class="mono">traceable claims · visible gaps</span>
         </div>
       </article>
     </section>
 
     <section class="landing-section" id="system" aria-labelledby="systemTitle">
       <div class="section-heading">
-        <p class="landing-kicker">The architecture</p>
-        <h2 id="systemTitle">The workflow is one loop, not a pile of features.</h2>
-        <p>Normal chat and coding enter the same adaptive runtime. The specialized path changes with the situation, while authority stays on the server.</p>
+        <p class="landing-kicker">How it works</p>
+        <h2 id="systemTitle">One adaptive loop. Different workspaces for different work.</h2>
+        <p>Kindgleam starts from your goal, chooses the smallest useful scope, works through the right workspace, checks the evidence, and either delivers or adapts again.</p>
       </div>
-
-      <div class="architecture-card" aria-label="Kindgleam unified architecture diagram">
+      <div class="architecture-card" aria-label="Kindgleam adaptive workflow">
         <div class="architecture-input">
           <span class="architecture-index">01</span>
           <div>
-            <strong>User request + context</strong>
-            <span>Conversation, files, constraints, and the current state of the work.</span>
+            <strong>Your request + context</strong>
+            <span>The goal, relevant files, project state, evidence, and constraints.</span>
           </div>
         </div>
-
         <div class="architecture-spine">
           <div class="architecture-step emphasis">
             <span>02</span>
-            <div><strong>Situation + need</strong><small>What is actually needed now?</small></div>
+            <div><strong>Understand what is needed</strong><small>What would make this result useful and trustworthy?</small></div>
           </div>
           <div class="architecture-connector"></div>
           <div class="architecture-step">
             <span>03</span>
-            <div><strong>Adaptive scope</strong><small>Select only required data, tools, and effort.</small></div>
+            <div><strong>Choose the right scope</strong><small>Use only the data, tools, specialists, and effort the work needs.</small></div>
           </div>
           <div class="architecture-connector"></div>
           <div class="architecture-split">
             <article class="architecture-branch">
               <span class="branch-tag">NORMAL CHAT</span>
-              <strong>Reason · search · inspect · answer</strong>
-              <small>Optional control agents advise; the server remains authoritative.</small>
+              <strong>Understand · answer · use tools when useful</strong>
+              <small>Keep everyday work direct, with deeper support only when it improves the result.</small>
             </article>
             <article class="architecture-branch code">
               <span class="branch-tag">CODE WORKSPACE</span>
-              <strong>GitHub snapshot · edit · test · verify</strong>
-              <small>GitHub only. Revision-bound context and explicit write-back.</small>
+              <strong>Project context · change · test · verify</strong>
+              <small>Work from the selected GitHub state and keep write-back explicit.</small>
+            </article>
+            <article class="architecture-branch research">
+              <span class="branch-tag">RESEARCH WORKSPACE</span>
+              <strong>Question · sources · evidence · conclusion</strong>
+              <small>Keep claims traceable while conflicts, gaps, and uncertainty stay visible.</small>
             </article>
           </div>
           <div class="architecture-connector"></div>
           <div class="architecture-step">
             <span>04</span>
-            <div><strong>Execute + observe</strong><small>Model calls, tools, files, runners, and receipts.</small></div>
+            <div><strong>Work + observe</strong><small>Use the context and tools the current step actually needs.</small></div>
           </div>
           <div class="architecture-connector"></div>
           <div class="architecture-step">
             <span>05</span>
-            <div><strong>Verify</strong><small>Check evidence and decide what is justified next.</small></div>
+            <div><strong>Verify</strong><small>Check the evidence before deciding whether the work is done.</small></div>
           </div>
           <div class="architecture-connector loop"></div>
         </div>
-
         <div class="architecture-output">
           <div class="output-card">
             <span>06</span>
             <strong>Deliver</strong>
-            <small>When the goal is satisfied.</small>
+            <small>When the goal is supported.</small>
           </div>
           <div class="output-card alt">
             <span>↻</span>
             <strong>Adapt again</strong>
-            <small>When more work is actually required.</small>
+            <small>When another step can materially improve the result.</small>
           </div>
         </div>
       </div>
@@ -379,31 +412,31 @@
 
     <section class="landing-section split-section" id="chat" aria-labelledby="chatTitle">
       <div class="section-heading compact">
-        <p class="landing-kicker">Normal chat</p>
-        <h2 id="chatTitle">Start with a question. The system decides what the question requires.</h2>
-        <p>Simple questions can stay simple. Research, files, data, web access, or verification appear only when they are justified by the situation.</p>
+        <p class="landing-kicker">Normal Chat</p>
+        <h2 id="chatTitle">Simple when you need an answer. Powerful when the task grows.</h2>
+        <p>Write, learn, plan, create, analyze files, and solve everyday problems. Deeper reasoning, fresh information, tools, or verification appear only when they improve the result.</p>
       </div>
       <div class="workflow-proof">
         <div class="proof-row">
           <span class="proof-num">A</span>
           <div><strong>Understand</strong><small>Goal, context, constraints</small></div>
           <span class="proof-line"></span>
-          <div><strong>Scope</strong><small>Tools + data actually needed</small></div>
+          <div><strong>Scope</strong><small>Only the tools and information needed</small></div>
         </div>
         <div class="proof-row">
           <span class="proof-num">B</span>
-          <div><strong>Execute</strong><small>Reason / tools / evidence</small></div>
+          <div><strong>Work</strong><small>Answer, analyze, create, or use tools</small></div>
           <span class="proof-line"></span>
-          <div><strong>Verify</strong><small>Answer or adapt</small></div>
+          <div><strong>Check</strong><small>Deliver or adapt when more is needed</small></div>
         </div>
       </div>
     </section>
 
     <section class="landing-section split-section" id="code" aria-labelledby="codeTitle">
       <div class="section-heading compact">
-        <p class="landing-kicker">Code workspace</p>
-        <h2 id="codeTitle">A real coding path inside the same adaptive system.</h2>
-        <p>Code work is specialized without becoming a separate brain: GitHub supplies the project snapshot, coding intelligence supplies context, and execution evidence drives the next decision.</p>
+        <p class="landing-kicker">Code Workspace</p>
+        <h2 id="codeTitle">Work on the project, not isolated snippets.</h2>
+        <p>Kindgleam understands the relevant project context, makes the smallest safe change it can justify, runs focused checks, and keeps every write-back reviewable.</p>
       </div>
       <div class="code-proof">
         <div class="code-path">
@@ -411,95 +444,105 @@
           <span class="path-arrow">→</span>
           <span class="path-node">Project context</span>
           <span class="path-arrow">→</span>
-          <span class="path-node active">Edit + test</span>
+          <span class="path-node active">Change + test</span>
           <span class="path-arrow">→</span>
           <span class="path-node">Verify</span>
         </div>
         <div class="code-note">
-          <strong>GitHub only</strong>
-          <span>No local project-folder browser access. Writes stay tied to the selected revision.</span>
+          <strong>Project state stays explicit</strong>
+          <span>Work is tied to the selected GitHub revision, and write-back is reviewed before the project is updated.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="landing-section split-section" id="research" aria-labelledby="researchTitle">
+      <div class="section-heading compact">
+        <p class="landing-kicker">Research Workspace</p>
+        <h2 id="researchTitle">Research that shows what the evidence actually supports.</h2>
+        <p>Investigate across sources, compare competing claims, track uncertainty, and build conclusions that remain connected to their evidence instead of hiding the gaps.</p>
+      </div>
+      <div class="code-proof research-proof">
+        <div class="code-path">
+          <span class="path-node">Question</span>
+          <span class="path-arrow">→</span>
+          <span class="path-node">Sources</span>
+          <span class="path-arrow">→</span>
+          <span class="path-node active">Evidence</span>
+          <span class="path-arrow">→</span>
+          <span class="path-node">Conclusion</span>
+        </div>
+        <div class="code-note">
+          <strong>Traceable by design</strong>
+          <span>Claims stay connected to sources while conflicts, unresolved questions, and uncertainty remain visible.</span>
         </div>
       </div>
     </section>
 
     <section class="landing-section agents-section" id="agents" aria-labelledby="agentsTitle">
       <div class="section-heading">
-        <p class="landing-kicker">Agentic roles</p>
-        <h2 id="agentsTitle">Specialists are recruited by the situation, not switched on by default.</h2>
-        <p>Kindgleam has a role catalog for strategy, evidence, analysis, architecture, implementation, critique, communication, diagnosis, debugging, testing, security, and performance. The runtime chooses the smallest useful team and can stay with one executor when that is enough.</p>
+        <p class="landing-kicker">Specialists on demand</p>
+        <h2 id="agentsTitle">Use the smallest team that can do the work well.</h2>
+        <p>Kindgleam can bring in focused help for strategy, research, analysis, architecture, implementation, critique, debugging, testing, security, and performance—but only when another perspective is likely to improve the result.</p>
       </div>
 
       <div class="agent-system-card">
         <div class="agent-authority">
-          <span class="agent-core-tag">CORE CONTROL</span>
-          <strong>Three logical roles shape a turn.</strong>
-          <small>The Step Manager and Resource &amp; Data Manager are advisory. The Main Executor produces the user-facing work. The server remains authoritative.</small>
+          <span class="agent-core-tag">FOCUSED ORCHESTRATION</span>
+          <strong>Plan the work, choose the right context, then execute.</strong>
+          <small>Coordination stays lightweight. Planning and context selection guide the work while one primary path remains accountable for the result.</small>
         </div>
-
         <div class="agent-core-grid">
           <article class="agent-card primary-agent">
             <span class="agent-role-number">01</span>
-            <div>
-              <strong>Step Manager</strong>
-              <p>Finds the smallest next justified step and keeps the adaptive workflow coherent.</p>
-            </div>
-            <span class="agent-mode">advisory control</span>
+            <div><strong>Workflow lead</strong><p>Chooses the smallest useful next step and keeps the work focused.</p></div>
+            <span class="agent-mode">coordination</span>
           </article>
           <article class="agent-card primary-agent">
             <span class="agent-role-number">02</span>
-            <div>
-              <strong>Resource &amp; Data Manager</strong>
-              <p>Scopes the tools, resources, dependencies, and data handling needed for the current turn.</p>
-            </div>
-            <span class="agent-mode">advisory control</span>
+            <div><strong>Context &amp; tools</strong><p>Selects the information, tools, dependencies, and resources the current step actually needs.</p></div>
+            <span class="agent-mode">scoping</span>
           </article>
           <article class="agent-card executor-agent">
             <span class="agent-role-number">03</span>
-            <div>
-              <strong>Main Executor</strong>
-              <p>Performs the user-facing reasoning or coding work using the authorized context and services.</p>
-            </div>
-            <span class="agent-mode">user-facing</span>
+            <div><strong>Primary worker</strong><p>Produces the user-facing result using the approved context and available capabilities.</p></div>
+            <span class="agent-mode">result owner</span>
           </article>
         </div>
-
         <div class="agent-specialists-heading">
-          <span>ADAPTIVE SPECIALISTS</span>
-          <small>Selected only when their expertise adds material value</small>
+          <span>SPECIALISTS ON DEMAND</span>
+          <small>Added only when another perspective is likely to improve the result</small>
         </div>
-
         <div class="agent-specialist-grid">
-          <article class="specialist-card"><b>Strategist</b><span>Decomposes goals and dependencies.</span></article>
+          <article class="specialist-card"><b>Strategist</b><span>Breaks down goals and dependencies.</span></article>
           <article class="specialist-card"><b>Researcher</b><span>Targets unknowns and evidence.</span></article>
           <article class="specialist-card"><b>Analyst</b><span>Tests trade-offs and consistency.</span></article>
           <article class="specialist-card"><b>Architect</b><span>Designs boundaries and failure containment.</span></article>
-          <article class="specialist-card"><b>Implementer</b><span>Translates decisions into concrete changes.</span></article>
+          <article class="specialist-card"><b>Implementer</b><span>Turns decisions into focused changes.</span></article>
           <article class="specialist-card"><b>Critic</b><span>Challenges assumptions and likely failure modes.</span></article>
-          <article class="specialist-card"><b>Communicator</b><span>Shapes clear audience-ready results.</span></article>
+          <article class="specialist-card"><b>Communicator</b><span>Shapes clear, audience-ready results.</span></article>
           <article class="specialist-card"><b>Diagnostician</b><span>Separates symptoms, causes, and next tests.</span></article>
           <article class="specialist-card"><b>Debugger</b><span>Finds software root causes.</span></article>
           <article class="specialist-card"><b>Test Engineer</b><span>Builds focused regression checks.</span></article>
           <article class="specialist-card"><b>Security Reviewer</b><span>Checks trust boundaries and data flow.</span></article>
           <article class="specialist-card"><b>Performance Reviewer</b><span>Finds measurable resource risks.</span></article>
         </div>
-
         <div class="agent-flow-note">
-          <span class="mono">situation → role utility → smallest useful team → execution → evidence → reassess</span>
-          <strong>Independent review can be added when complexity, stakes, code, or a retry justify a second opinion.</strong>
+          <span class="mono">understand → choose the smallest useful team → work → verify → reassess</span>
+          <strong>Independent review joins when complexity, risk, or uncertainty makes a second perspective valuable.</strong>
         </div>
       </div>
     </section>
 
     <section class="landing-principles" aria-label="Core principles">
-      <div><strong>One authority</strong><span>The server owns transitions, permissions, tools, writes, and verification.</span></div>
-      <div><strong>One next step</strong><span>Later work is not pre-created just because it might become useful.</span></div>
-      <div><strong>Adaptive effort</strong><span>Simple requests stay lightweight; complex requests earn more capability.</span></div>
-      <div><strong>Same conversation</strong><span>Work continues from the current state instead of restarting the whole process.</span></div>
+      <div><strong>Clear control</strong><span>Permissions, tool use, project writes, and completion checks stay explicit.</span></div>
+      <div><strong>Right-sized effort</strong><span>Simple requests stay lightweight; harder work earns more depth and specialist help.</span></div>
+      <div><strong>Evidence before finish</strong><span>Important work is checked against what actually happened before it is called complete.</span></div>
+      <div><strong>Continuity by default</strong><span>Work continues from the current conversation or project state instead of restarting from scratch.</span></div>
     </section>
   </main>
 
   <footer class="landing-footer">
-    <span>Kindgleam — adaptive intelligence for reasoning, research, creation, analysis, and governed execution.</span>
+    <span>Kindgleam — adaptive AI for everyday work, software projects, and evidence-driven research.</span>
     <a href="/policy.html">Terms and usage policy</a>
   </footer>
 </section>
@@ -585,7 +628,7 @@
 <dialog class="terms-dialog" id="termsDialog" aria-labelledby="termsTitle">
   <form class="stack" id="termsForm" method="dialog">
     <h2 id="termsTitle">Before you start</h2>
-    <p class="muted">Kindgleam is an AI assistant. It can make mistakes, so check important information. It helps with anything good and declines what would hurt people.</p>
+    <p class="muted">Kindgleam uses AI and can make mistakes. Verify important information and review consequential actions before relying on them.</p>
     <label class="terms-check"><input type="checkbox" id="termsAge"> <span>I am <strong id="termsMinimumAge">16</strong> or older.</span></label>
     <label class="terms-check"><input type="checkbox" id="termsAccept"> <span>I accept the <a href="/policy.html" target="_blank" rel="noopener">terms and usage policy</a>.</span></label>
     <div id="termsNotice" hidden></div>
