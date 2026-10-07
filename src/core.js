@@ -17,7 +17,7 @@ import {
   discoverCapabilityRequirements,
   resolveAdaptiveContext
 } from './adaptive.js';
-import { workScale, BUILT_IN } from './work-scale.js';
+import { workScale } from './work-scale.js';
 import { approvalReasons, verificationContract } from './capabilities.js';
 import { buildUnifiedAdaptiveIntelligence } from './unified-adaptive-intelligence.js';
 import { nextAdaptiveStage } from './unified-adaptive-workflow.js';
