@@ -1418,6 +1418,22 @@ function syncComposerAction() {
   control.title = state.stoppingRun ? 'Stopping current work…' : active ? 'Stop current work' : sending ? 'Sending…' : 'Send';
   if (stopIcon) stopIcon.hidden = !active;
   if (sendIcon) sendIcon.hidden = active;
+
+  const mini = $('workMiniStatus');
+  if (mini) {
+    const visible = active || sending;
+    const label = mini.querySelector('.composer-work-label');
+    mini.hidden = !visible;
+    mini.classList.toggle('stopping', Boolean(state.stoppingRun));
+    mini.classList.toggle('sending', sending && !active);
+    if (label) {
+      label.textContent = state.stoppingRun
+        ? 'Stopping safely…'
+        : active
+          ? (state.drivingLabel || 'Working in background')
+          : 'Sending…';
+    }
+  }
 }
 
 document.addEventListener('kindgleam:composer-state', syncComposerAction);
