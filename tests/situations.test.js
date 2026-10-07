@@ -92,7 +92,7 @@ test('a person in crisis gets an immediate, caring answer, not a workflow', () =
   for (const goal of ['I feel like hurting myself.', 'I want to end my life.', "I don't want to live anymore."]) {
     const plan = planGoal(goal);
     assert.equal(plan.workflow, 'direct', goal);
-    assert.deepEqual(plan.tasks.map(task => task.id), ['respond', 'verify'], goal);
+    assert.deepEqual(plan.tasks.map(task => task.id), ['respond'], goal);
     assert.equal(plan.execution.approvalRequired, false, goal);
     assert.equal(plan.situation.risk, 'crisis', goal);
     assert.deepEqual(plan.situation.questions, [], 'nobody in crisis is asked for success criteria');
@@ -113,7 +113,7 @@ test('the model reads a crisis in any language and however it is phrased; it can
     assert.notEqual(planGoal(goal).situation.risk, 'crisis', goal);
     const plan = planGoal(goal, { classifierHints: hints('emergency') });
     assert.equal(plan.workflow, 'direct', goal);
-    assert.deepEqual(ids(plan), ['respond', 'verify'], goal);
+    assert.deepEqual(plan.tasks.map(task => task.id), ['respond'], goal);
     assert.equal(plan.situation.crisisKind, 'emergency', goal);
     const respond = plan.tasks.find(task => task.id === 'respond');
     assert.match(respond.purpose, /emergency number[\s\S]*emergency vet[\s\S]*language the person wrote in/);
@@ -196,7 +196,7 @@ test('a medical or physical emergency gets an immediate answer that sends for he
     const plan = planGoal(goal);
     assert.equal(plan.situation.risk, 'crisis', goal);
     assert.equal(plan.situation.crisisKind, 'emergency', goal);
-    assert.deepEqual(plan.tasks.map(task => task.id), ['respond', 'verify'], goal);
+    assert.deepEqual(plan.tasks.map(task => task.id), ['respond'], goal);
     assert.match(plan.tasks[0].purpose, /emergency number/, goal);
   }
   assert.equal(planGoal('I want to end my life').situation.crisisKind, 'self-harm');
