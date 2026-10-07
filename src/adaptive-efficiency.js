@@ -165,7 +165,7 @@ export function adaptiveExecutionStrategy({
     toolPolicy: deepReasoning ? 'just-in-time' : 'avoid-unless-material',
     parallelizeIndependentWork: parallelize,
     reuseVerifiedState,
-    avoidRedundantDiscovery: reuseVerifiedState || !deepReasoning,
+    avoidRedundantDiscovery: reuseVerifiedState || previousFailure || !deepReasoning,
     verification,
     stopWhenSatisfied: stop,
     budgetPressure: budget < 0.25 ? 'conserve' : 'normal',
