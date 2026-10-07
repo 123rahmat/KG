@@ -161,6 +161,11 @@ check('dev-compose-loopback-password',
   && !/POSTGRES_PASSWORD:\s*kindgleam\b/.test(await read('docker-compose.yml')),
   'development PostgreSQL is loopback-only and requires an explicit local password');
 check('ci-release-gates', /npm ci/.test(ci) && /npm audit/.test(ci) && /npm test/.test(ci) && /docker build/.test(ci), 'CI covers install, audit, tests and production image build');
+check('graceful-drain-release-gate',
+  /SHUTDOWN_DRAIN_MS:\s*1500/.test(ci)
+    && /kill -TERM "\$pid"/.test(ci)
+    && /"draining":true/.test(ci),
+  'production boot CI proves readiness turns unavailable before SIGTERM shutdown completes');
 check('verify-release-gate', /npm run verify/.test(verify), 'Verify invokes the unified application verification contract');
 check('codeql-enabled', /github\/codeql-action\/init/.test(codeql) && /security-extended/.test(codeql), 'CodeQL security-extended analysis is present');
 check('codeql-upload-conditional', /upload:\s*\$\{\{/.test(codeql), 'CodeQL upload policy is environment-aware');

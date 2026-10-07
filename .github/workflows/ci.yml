@@ -256,6 +256,9 @@ jobs:
       OBJECT_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       RUNNER_TOKEN: ci-dummy-runner-token-32-characters-min
       MAX_REQUEST_BYTES: 8388608
+      # Keep the process alive briefly after SIGTERM so CI can prove that
+      # readiness flips before listener shutdown during a rolling deploy.
+      SHUTDOWN_DRAIN_MS: 1500
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -287,8 +290,25 @@ jobs:
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:3100/api/ready > ready.json; then
               cat ready.json
-              kill "$pid"
-              wait "$pid" || true
+              kill -TERM "$pid"
+              draining=0
+              for drain_attempt in $(seq 1 20); do
+                code=$(curl --silent --output draining.json --write-out '%{http_code}' http://127.0.0.1:3100/api/ready || true)
+                if [ "$code" = "503" ] && grep -q '"draining":true' draining.json; then
+                  draining=1
+                  break
+                fi
+                if ! kill -0 "$pid" 2>/dev/null; then
+                  break
+                fi
+                sleep 0.1
+              done
+              if [ "$draining" != "1" ]; then
+                echo "readiness did not enter draining state before shutdown"
+                cat production-boot.log
+                exit 1
+              fi
+              wait "$pid"
               exit 0
             fi
             if ! kill -0 "$pid" 2>/dev/null; then
