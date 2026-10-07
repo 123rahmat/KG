@@ -85,6 +85,7 @@ test('classifier and verification share the same Vertex Gemini runtime', () => {
     assert.ok(calls.every(url => /aiplatform\.googleapis\.com/.test(url)));
   }, {
     env: ENV,
+    nativeVertex: true,
     fetchImpl: async (url, options) => {
       calls.push(String(url));
       const body = JSON.parse(options.body || '{}');
