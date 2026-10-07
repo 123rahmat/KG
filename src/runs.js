@@ -2079,6 +2079,26 @@ export class RunStore {
       if (candidate) candidate.requirementIds = [activeRequirement?.id].filter(Boolean);
     }
 
+    // Full workflows never jump straight from work/tool output to delivery.
+    // A completed, criterion-checked server verification is the authority that
+    // unlocks delivery. The completion gate remains the final defense; this
+    // graph rule prevents an avoidable blocked deliver node from being created.
+    if (requirementsEnabled && candidate?.type === 'deliver') {
+      const verified = tasks.some(item =>
+        item.type === 'verify'
+        && item.status === 'complete'
+        && item.evidence?.verdict?.verdict === 'pass'
+      );
+      if (!verified) {
+        candidate = {
+          type: 'verify',
+          title: 'Verify the result',
+          purpose: 'Check the current result against the success criteria and the evidence actually produced.',
+          requires: ['verification']
+        };
+      }
+    }
+
     if (requirementsEnabled && !candidate && activeRequirement && structured?.judged !== false) {
       const action = requirementAction(requirementModel);
       if (action && target.type !== 'deliver') candidate = { ...action, requirementIds: [activeRequirement.id] };
