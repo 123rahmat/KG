@@ -8,6 +8,14 @@ RUN apk add --no-cache python3 make g++ \
   && npm ci --omit=dev
 
 FROM node:24-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81
+# Keep the pinned base image for reproducibility, then apply current Alpine
+# security fixes. The production container runs Node directly and never needs
+# npm/npx/corepack, so remove those global package-manager trees from the
+# runtime layer as additional attack-surface and vulnerability reduction.
+RUN apk upgrade --no-cache \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+  && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+           /usr/local/bin/yarn /usr/local/bin/yarnpkg /usr/local/bin/pnpm /usr/local/bin/pnpx
 WORKDIR /app
 ENV NODE_ENV=production
 
