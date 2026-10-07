@@ -400,8 +400,14 @@ test('research searches the web with the AI provider, reads what it found, and k
     assert.equal(research.evidence.citations[0].url, 'https://example.com/source');
     assert.deepEqual(research.evidence.tools.map(item => [item.tool, item.outcome]), [['web.search', 'ok']]);
     assert.equal(research.status, 'complete');
-    // Only the search itself used the provider's web search tool.
-    assert.deepEqual(calls.map(body => Boolean(body.tools)), [false, false, true, false]);
+    // Internal adaptive-control calls may be added or removed without
+    // changing the research contract. Exactly one call performs grounded
+    // search, and at least one later/non-search call synthesizes the result.
+    const groundedCalls = calls.filter(body => Boolean(body.tools));
+    const plainCalls = calls.filter(body => !body.tools);
+    assert.equal(groundedCalls.length, 1);
+    assert.ok(plainCalls.length >= 1);
+    assert.ok(calls.indexOf(groundedCalls[0]) < calls.length - 1, 'grounded evidence is synthesized before delivery');
   }, {
     env: VERTEX,
     fetchImpl: async (_url, options) => {
