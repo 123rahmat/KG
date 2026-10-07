@@ -112,6 +112,10 @@ export function nextAdaptiveStage(current, options = {}) {
   if (current === 'execute') return 'observe';
   if (current === 'observe') return 'verify';
   if (current === 'verify') {
+    const hasVerificationEvidence = options.verificationEvidenceAvailable === true
+      || options.situation?.verificationEvidenceAvailable === true
+      || options.situation?.evidence?.verification != null;
+    if (!hasVerificationEvidence) return 'replan';
     if (coverage.evidenceGap) return 'investigate';
     return 'deliver';
   }
