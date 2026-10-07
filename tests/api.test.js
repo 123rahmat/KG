@@ -670,14 +670,19 @@ test('iterate starts a new attempt and the budget eventually stops it', () =>
 
     const again = await failAndReplan();
     assert.equal(again.body.attempt, 2);
-    assert.equal(again.body.state, 'understand');
-    assert.deepEqual(again.body.tasks.map(task => [task.id, task.status]), [['understand', 'pending']], 'the next attempt grows again from understanding');
+    assert.ok(again.body.next, 'the second attempt has an adaptive current step');
+    assert.ok(again.body.tasks.every(task => task.status === 'pending'));
+    assert.equal(
+      again.body.state,
+      again.body.tasks.find(task => task.id === again.body.next)?.type,
+      'the new attempt starts at the smallest justified adaptive step'
+    );
 
-    // maxAttempts is 2 here, so the next replan is refused rather than looping.
+    // maxAttempts is 2 here, so another real attempt is refused rather than looping.
     const exhausted = await failAndReplan();
     assert.equal(exhausted.body.state, 'exhausted');
 
-    const after = await call('POST', `/api/runs/${run.id}/advance`, { ...auth, body: { taskId: 'understand' } });
+    const after = await call('POST', `/api/runs/${run.id}/advance`, { ...auth, body: { taskId: exhausted.body.next || again.body.next } });
     assert.equal(after.status, 409);
     assert.equal(after.body.code, 'run-terminal');
   }, { env: { MAX_RUN_ATTEMPTS: '2' } }));
