@@ -506,7 +506,6 @@ export function resolveAdaptiveContext(goal, {
   const allowed = ['auto', 'local', 'hosted', 'hybrid'];
   const requested = allowed.includes(text(runtimeMode)) ? text(runtimeMode) : 'auto';
   const mode = requested === 'auto' ? 'hosted' : requested;
-  const preferred = text(activeSurface);
   const primarySurface = boundary.surface === 'code' ? 'code'
     : boundary.surface === 'research' ? 'research'
       : 'chat';
