@@ -128,8 +128,15 @@ export function compileCodeContext({
   const normalized = normalizeWorkspaceFiles(files);
   if (!normalized.length) return null;
   const defaults = CONTEXT_BUDGETS[scale] ?? CONTEXT_BUDGETS.standard;
-  const charBudget = Math.max(4_000, Number(maxChars) || defaults.maxChars);
-  const requestedFileBudget = Math.max(2, Number(maxFiles) || defaults.maxFiles);
+  // Overrides cannot turn a single model call into an unbounded project dump.
+  // Larger projects are still available through targeted workspace tools.
+  const bounded = (value, fallback, minimum, maximum) => {
+    const requested = Number(value);
+    return Math.min(maximum, Math.max(minimum,
+      Number.isFinite(requested) && requested > 0 ? Math.floor(requested) : fallback));
+  };
+  const charBudget = bounded(maxChars, defaults.maxChars, 4_000, CONTEXT_BUDGETS.advanced.maxChars);
+  const requestedFileBudget = bounded(maxFiles, defaults.maxFiles, 2, CONTEXT_BUDGETS.advanced.maxFiles);
   const totalContentChars = normalized.reduce((sum, file) => sum + String(file.content ?? '').length, 0);
   // Small projects stay whole; large projects stay bounded to the useful budget.
   const fileBudget = totalContentChars <= charBudget
@@ -270,8 +277,14 @@ export function compactContextPack(pack,{maxChars=18_000,maxFiles=10}={}) {
     ...(pack.focus?.changedFiles ?? []),
     ...(pack.focus?.relevantSymbols ?? []).map(symbol => symbol?.path).filter(Boolean)
   ]);
-  const fileLimit = Math.max(maxFiles, criticalPaths.size);
-  let remaining = Math.max(2_000,Number(maxChars)||18_000);
+  const requestedFiles = Number(maxFiles);
+  const boundedFiles = Number.isFinite(requestedFiles) && requestedFiles > 0
+    ? Math.min(CONTEXT_BUDGETS.advanced.maxFiles, Math.max(1, Math.floor(requestedFiles))) : 10;
+  const fileLimit = Math.max(boundedFiles, criticalPaths.size);
+  const requestedChars = Number(maxChars);
+  const charLimit = Number.isFinite(requestedChars) && requestedChars > 0
+    ? Math.min(CONTEXT_BUDGETS.advanced.maxChars, Math.max(2_000, Math.floor(requestedChars))) : 18_000;
+  let remaining = charLimit;
   const compactFiles = [];
   const ordered = [...files].sort((a, b) =>
     Number(criticalPaths.has(b?.path)) - Number(criticalPaths.has(a?.path))
@@ -310,7 +323,7 @@ export function compactContextPack(pack,{maxChars=18_000,maxFiles=10}={}) {
     previousAttempts:pack.previousAttempts ?? [], failure:pack.failure ?? null,
     files:compactFiles,
     budget:{
-      maxChars,
+      maxChars:charLimit,
       files:compactFiles.length,
       criticalFiles:criticalPaths.size,
       criticalFilesIncluded:criticalPaths.size-criticalOmitted.length,
