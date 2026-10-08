@@ -1068,7 +1068,7 @@ function runControlStrip(data) {
   });
   const active = !view.terminal && !view.waiting && !view.stopping
     && (view.live || run.state === 'queued');
-  if (!active && !view.waiting && !view.disconnected) return null;
+  if (!active && !view.waiting && !view.disconnected && !view.stopping) return null;
   const focus = liveWorkFocus(run, {
     workspace: data.workspace,
     connectedGitHub: state.workspaceSource?.kind === 'github',
