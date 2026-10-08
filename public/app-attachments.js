@@ -77,6 +77,9 @@ function renderAttachments() {
         element('span', { class: 'truncate', text: file.name })
       ]),
       element('span', { class: 'muted', text: bytes(file.size) }),
+      /\\.zip$/i.test(file.name)
+        ? element('span', { class: 'attachment-archive-note', title: 'Archives are inspected after upload; switching workspaces is optional.', text: 'ZIP archive' })
+        : null,
       element('button', {
         type: 'button', class: 'chip-x', 'aria-label': 'Remove ' + file.name, text: '✕',
         onclick: () => {
@@ -140,7 +143,7 @@ export function renderThread() {
         ? consentCard(state.chat.pending.goal)
         : state.chat.pending.reply
           ? element('div', { class: `answer${state.chat.pending.declined ? ' declined' : ''}` }, [renderMarkdown(state.chat.pending.reply)])
-          : element('div', { class: 'thinking' }, [element('span', { class: 'pulse' }), element('span', { text: 'Reading your message…' })]))
+          : element('div', { class: 'thinking' }, [element('span', { class: 'pulse' }), element('span', { text: state.chat.pending.status || 'Reading your message…' })]))
     ]) });
   }
   syncThread(thread, entries, state.chat.id ?? 'new:' + (state.activeProjectId ?? ''));
@@ -591,7 +594,10 @@ export async function sendMessage(text) {
     return;
   }
 
-  chat.pending = { goal, reply: '', files: files.map(file => file.name) };
+  chat.pending = {
+    goal, reply: '', files: files.map(file => file.name),
+    status: files.length ? 'Preparing ' + files.length + ' selected file' + (files.length === 1 ? '' : 's') + '…' : 'Preparing your request…'
+  };
   state.sendWaiting = true;
   document.dispatchEvent(new Event('kindgleam:composer-state'));
   $('goal').value = '';
@@ -603,12 +609,18 @@ export async function sendMessage(text) {
   const idempotencyKey = crypto.randomUUID();
   try {
     if (navigator.onLine !== false && submission.workspaceSourceId) {
+      if (chat.pending) chat.pending.status = 'Checking the selected project source…';
+      if (state.chat === chat) renderThread();
       await syncActiveWorkspaceSource({ sourceId: submission.workspaceSourceId, workspaceId: submission.workspaceId, chat }).catch(error => notify('runNotice', 'warn', error.message || 'Couldn’t refresh the connected project source.'));
     }
-    for (const file of files) {
+    for (const [index, file] of files.entries()) {
+      if (chat.pending) chat.pending.status = 'Uploading selected file ' + (index + 1) + ' of ' + files.length + ' · ' + file.name.slice(0, 75);
+      if (state.chat === chat) renderThread();
       const uploaded = await uploadAttachments([file], visibility, submission.workspaceId);
       attachments.push(...uploaded);
     }
+    if (chat.pending) chat.pending.status = 'Creating your task…';
+    if (state.chat === chat) renderThread();
     const run = await api('POST', '/api/runs', {
       goal,
       conversationId: chat.id,
