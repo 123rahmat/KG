@@ -458,6 +458,16 @@ export function renderWorkStatus(run) {
     backgroundItems.length ? element('div', { class: 'work-background-strip', 'aria-label': 'Current work details' }, [
       ...backgroundItems.map(item => element('span', { class: 'work-background-chip small', text: item }))
     ]) : null,
+    panel.fileNames.length ? element('details', {
+      class: 'work-stage-details work-file-details'
+    }, [
+      element('summary', { class: 'work-stage-summary' }, [
+        element('strong', { text: 'Files in this task' }),
+        element('span', { class: 'small muted', text: panel.fileNames.length + ' listed' })
+      ]),
+      element('ul', { class: 'work-file-list' }, panel.fileNames.map(name =>
+        element('li', { text: name })))
+    ]) : null,
     stageDetail(run, panel, view),
     background.activity.roles.length ? element('details', { class: 'work-agent-details' }, [
       element('summary', { class: 'small', text: 'Specialist contributions · ' + background.activity.roles.length + ' recorded' }),
