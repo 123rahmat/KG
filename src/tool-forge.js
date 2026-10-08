@@ -37,7 +37,9 @@ export async function runInSandbox(ctx, job, { label = 'code.run' } = {}) {
     executionTarget: 'general-ai-sandbox',
     task: { id: `tool:${label}`, type: 'code' },
     payload: { job }
-  }, { config: ctx.config, fetchImpl: ctx.fetchImpl, timeoutMs: SANDBOX_TIMEOUT_MS, signal: ctx.signal,
+  }, { config: ctx.config, fetchImpl: ctx.fetchImpl,
+    token: ctx.config.runners.sandboxToken,
+    timeoutMs: SANDBOX_TIMEOUT_MS, signal: ctx.signal,
     beforeCall: () => ctx.beforeRunner?.({ tool: label.split(':')[0] }) });
   if (!outcome.executed) return { error: outcome.message || `The sandbox did not run the code (${outcome.status}).` };
   return outcome.result?.output ?? { error: 'The sandbox returned no result.' };
