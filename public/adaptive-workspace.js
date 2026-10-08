@@ -978,6 +978,47 @@ function renderCapabilityDock() {
   }));
 }
 
+/** Lightweight controller for the selected run. Rendered from real server state;
+ * buttons only invoke existing actions, and never fabricate completion. */
+function runControlStrip(data) {
+  const run = data.run;
+  if (!run || !Array.isArray(run.tasks) || !run.tasks.length) return null;
+  const view = workPresentation(run, {
+    driving: state.driving === run.id || state.drivingRuns?.has(run.id) || state.busyRuns?.has(run.id),
+    online: state.network?.online !== false && state.network?.reachable !== false,
+    consent: state.consentNeeded?.has(run.id),
+    manual: state.manualOpen?.has(run.id),
+    stopping: state.stoppingRun === run.id
+  });
+  const active = !view.terminal && !view.waiting && !view.stopping
+    && (view.live || run.state === 'queued');
+  if (!active && !view.waiting && !view.disconnected) return null;
+  const tasks = workspaceProgressPanel(run, data.workspace);
+  const showDetails = () => {
+    const cards = [...document.querySelectorAll('#thread .work-status-card')];
+    const card = cards.at(-1);
+    if (!card) return;
+    const detail = card.querySelector('.work-stage-details');
+    if (detail) detail.open = true;
+    card.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'center' });
+  };
+  const controls = [button('View work', showDetails, 'adaptive-running-button')];
+  if (active && state.run?.id === run.id) controls.push(button('Stop', () => {
+    document.dispatchEvent(new CustomEvent('kindgleam:stop-current-run', { detail: { runId: run.id } }));
+  }, 'adaptive-running-button stop'));
+  return element('div', {
+    class: 'adaptive-running-strip', 'data-running': String(view.live),
+    'aria-label': 'Current task controls'
+  }, [
+    element('span', { class: 'adaptive-running-dot', 'aria-hidden': 'true' }),
+    element('span', { class: 'adaptive-running-copy' }, [
+      element('strong', { text: view.label }),
+      element('span', { class: 'muted small', text: tasks.completed + ' of ' + tasks.stageCount + ' recorded steps completed' })
+    ]),
+    element('div', { class: 'adaptive-running-buttons' }, controls)
+  ]);
+}
+
 export function renderAdaptiveWorkspace(host, mode = 'chat') {
   if (!host) return;
   const data = adaptiveWorkspaceState();
@@ -989,6 +1030,8 @@ export function renderAdaptiveWorkspace(host, mode = 'chat') {
     class: 'adaptive-workspace-surfaces', role: 'toolbar', 'aria-label': 'Adaptive workspace surfaces'
   }, surfaces.map(name => surfaceButton(name, data.workspace === (name === 'runs' ? 'normal-chat' : name))));
   const focus = controls.contains(document.activeElement) ? document.activeElement : null;
+  const actionFocus = host.contains(document.activeElement) && document.activeElement?.classList?.contains('adaptive-running-button')
+    ? document.activeElement.textContent : null;
   for (const control of controls.querySelectorAll('[data-surface]')) {
     const active = data.workspace === (control.dataset.surface === 'runs' ? 'normal-chat' : control.dataset.surface);
     control.classList.toggle('adaptive-active', active);
@@ -1007,10 +1050,12 @@ export function renderAdaptiveWorkspace(host, mode = 'chat') {
       ])
     ]),
     controls,
+    runControlStrip(data),
     normalChatToolStrip(data),
     adaptiveNextActions(data)
   );
   if (focus) focus.focus({ preventScroll: true });
+  else if (actionFocus) [...host.querySelectorAll('.adaptive-running-button')].find(node => node.textContent === actionFocus)?.focus({ preventScroll: true });
   host.dataset.surfaceCount = String(surfaces.length);
   host.dataset.mode = mode;
   host.dataset.workspace = data.workspace;
