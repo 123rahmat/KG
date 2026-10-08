@@ -55,6 +55,32 @@ export function workspaceProgressPanel(run, workspace = 'normal-chat') {
     || /test|verif/i.test(safe(task?.type) + ' ' + safe(task?.id))).length;
   const files = Math.max(attachments.length, overlay.length,
     count(run?.intelligence?.context?.fileCount));
+  // Only explain a stage when the server has an actual selected task.
+  // These are concise public progress reasons, not private model deliberation.
+  const hasObservedResults = tasks.some(task => task?.status === 'complete'
+    && task?.evidence && typeof task.evidence === 'object'
+    && Object.keys(task.evidence).length > 0);
+  const phase = liveTask?.status === 'running' ? 'Working' : 'Up next';
+  let stageContext = null;
+  if (liveTask?.type === 'reassess') {
+    stageContext = {
+      title: phase + ' · reassess the next action',
+      detail: hasObservedResults
+        ? 'Review recorded results and remaining requirements before proposing more work.'
+        : 'Check the existing plan and what evidence is still needed.'
+    };
+  } else if (liveTask?.type === 'verify') {
+    stageContext = {
+      title: phase + ' · verify the result',
+      detail: 'Check the available result against the requested outcomes before delivery.'
+    };
+  } else if (files && liveTask && ['respond', 'step', 'code', 'tool', 'prototype'].includes(liveTask.type)) {
+    stageContext = {
+      title: phase + ' · file-based work',
+      detail: files + ' file' + (files === 1 ? '' : 's')
+        + ' in context. Preview, edits and checks are reported only when recorded.'
+    };
+  }
   let cards = [];
   if (mode === 'code') {
     cards = [
@@ -78,6 +104,7 @@ export function workspaceProgressPanel(run, workspace = 'normal-chat') {
     workspace: mode,
     cards: Object.freeze(cards),
     fileNames: Object.freeze(fileNames),
+    stageContext: stageContext ? Object.freeze(stageContext) : null,
     stages: Object.freeze(stages),
     completed: tasks.filter(task => task?.status === 'complete').length,
     stageCount: tasks.length,
