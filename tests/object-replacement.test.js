@@ -36,7 +36,8 @@ test('replacement quota rejection leaves bytes and blob references unchanged', (
   await call('POST', '/api/objects', { ...auth, body: { name: 'two.txt', content: '1234' } });
   const scope = { workspaceId: workspace, principalId: principal.id };
   await assert.rejects(inScope(scope, () => app.locals.objects.replace(scope, principal, first.id, { content: '1234567' })), error => error.code === 'quota-exceeded');
-  assert.equal((await call('GET', `/api/objects/${first.id}/content`, auth)).body, '1234');
+  const stored = await inScope(scope, () => app.locals.objects.read(scope, first.id));
+  assert.equal(stored.content.toString('utf8'), '1234');
   const { rows } = await pool.query('SELECT size, ref_count FROM blobs WHERE workspace_id = $1', [workspace]);
   assert.deepEqual(rows, [{ size: 4, ref_count: 2 }]);
   const replaced = await inScope(scope, () => app.locals.objects.replace(scope, principal, first.id, { content: '123456' }));
