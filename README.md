@@ -8,15 +8,17 @@ The system starts with the smallest useful action. It adds investigation, tools,
 
 | Workspace | What people use it for | Application behavior |
 | --- | --- | --- |
-| Normal Chat | Conversation, writing, brainstorming, learning, planning, design and lightweight file work | Direct-first responses, scoped attachments, artifact previews and optional configured sandbox execution |
+| Normal Chat | Daily conversation, learning, demanding reasoning, business planning, writing, design and lightweight file work | Adaptive reasoning depth, scoped attachments, artifact previews and authorized tools; optional configured sandbox execution |
 | Code | Repository-scale engineering | GitHub project sources, indexed context, revision-checked patches, durable project sessions, verification and an optional isolated terminal |
 | Research | Investigation and source-heavy work | Source provenance, evidence gaps, conflicting findings and scoped investigator/analyst/critic assistance |
 
-These are three interfaces to the same system. Mixed tasks use the capabilities they need rather than a separate architecture for every subject. Task-aware suggestion banners appear across all three workspaces, even without attached files. Complex coding suggests Code, investigation suggests Research, and clearly lightweight new work can suggest Normal Chat. The switch button preserves the draft and selected files; switching remains an optional user action.
+One conversation continues across these three workspaces. Each has its own controller policy and scoped task context, with a shared runtime enforcing permissions, budgets and verification. Mixed tasks use the capabilities they need. Task-aware suggestion banners appear across all three workspaces, even without attached files. Complex coding suggests Code, investigation suggests Research, and clearly lightweight new work can suggest Normal Chat. The switch button preserves the draft and selected files; switching remains an optional user action.
 
 Normal Chat is the everyday starting point: conversation, tutoring and educational problem-solving, demanding mathematical reasoning, business ideas and plans, presentations, decisions and multi-file editing are native work here. Reasoning effort adapts from direct to focused or deep without requiring a workspace switch or automatically recruiting agents. A routine current-fact question can use authorized web evidence in Chat; thesis-scale source investigation belongs in Research. The [Normal Chat task profile](src/normal-chat-task-profile.js) advises reasoning/context and verification only; it cannot authorize tools, execution or memory.
 
 Normal Chat supports up to ten attachments per browser message, each up to 5 MB. Previews show artifacts; actual execution requires a configured runner and recorded execution evidence. Code Workspace accepts GitHub repositories; its sessions and terminal require an attached GitHub source.
+
+The browser and server share [request-intent hints](public/workspace-intent.js): teaching Python or planning an API startup stays in Chat; researching GitHub adoption belongs in Research; updating a repository belongs in Code. Explicit workspace requests take precedence. Recommendations are bounded heuristics, and a small code bundle can suggest Code while remaining supported in Chat. Selected attachment names reach the task controller without copying document contents into its policy. On a workspace or project change, conversation history stays available while implicitly inherited controller state, project identity and file overlays are discarded. Explicitly supplied context remains subject to the existing authorization checks.
 
 ## One adaptive architecture
 

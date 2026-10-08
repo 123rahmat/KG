@@ -55,11 +55,19 @@ Persisted compatibility fields such as runtime `currentStage` identify the curre
 
 | Workspace | Additional context and capabilities | Optional effort |
 | --- | --- | --- |
-| Normal Chat | Conversation, current attachments, artifact previews, configured lightweight sandbox | Direct-first; bring skills/tools/specialists only when useful |
+| Normal Chat | Conversation, selected attachment names, scoped files and artifact previews, authorized tools and configured lightweight sandbox | Direct, focused or deep reasoning; bring skills/tools/specialists only when useful |
 | Code | Attached GitHub source, project index, files/revisions, context compiler, patching, isolated terminal | Architect/implementer/debugger/test/security roles when warranted by actual task scope |
 | Research | Sources, provenance, conflicts, unresolved questions and research artifacts | Independent discovery, analysis and criticism when evidence coverage benefits |
 
 The same acceptance, authorization, recovery and provider boundaries apply throughout. A workspace suggestion does not transfer files, send messages or authorize execution. Code sessions and terminal require a GitHub project source. Normal Chat can work with a small file set without creating a project workspace.
+
+### Intent and ongoing context
+
+`public/workspace-intent.js` provides pure, bounded request hints to both the browser recommendation policy and the server surface policy. It distinguishes the work requested from its subject: explanations of software or research methods remain everyday work; actual investigations and repository changes use their specialized policies. Explicit workspace requests outrank incidental topic words. The browser can recommend Code for a small bundle that the server still supports in Normal Chat; recommendations never establish execution authority.
+
+`normal-chat-task-profile.js` describes everyday purpose, reasoning depth, context priorities and verification emphasis. `mode-controllers.js` consumes the situation's selected artifacts, so an attached draft can receive file-integrity checks even when the request simply says “improve this.” Increasing reasoning depth does not automatically create an agent team or grant tools.
+
+Conversation history and controller state have different lifetimes. `RunStore.conversationState` reads the persisted surface as well as the latest run. `workspaceStateFor` permits implicit state reuse only in the same workspace and compatible project. A manually selected boundary prevents inheritance before planning; an intent-driven boundary rebuilds the pure plan with scoped context before persistence. Previous controller state, completed task evidence, project identity and inherited overlays do not silently cross the boundary. Conversation history remains available, and explicitly selected files/context are checked by the existing authorization path. Research keeps its evidence state within a compatible continuation; Code keeps its revision/write boundaries. These are separate policies and contexts over one authoritative RunStore, not competing task schedulers.
 
 ## Specialist execution and optimization
 

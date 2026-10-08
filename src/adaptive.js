@@ -469,7 +469,7 @@ export function resolveAdaptiveContext(goal, {
     skillLevel, preferences, currentState, completedSteps, failedSteps,
     evidence, questions, dataSources, connections, connectedServices,
     verifiedConnections, privacyConsent, need, adaptiveControl, classifierHints, blockedTopics, modelSelection, policyDecision,
-    learnedSkills, attachedCode
+    learnedSkills, attachedCode, attachedArtifacts
   };
   const analysis = inspectGoal(goal, adaptiveContext);
   const capabilityRequirements = discoverCapabilityRequirements(goal, analysis);

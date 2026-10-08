@@ -6,20 +6,10 @@
  * capabilities inside those workspaces, not additional product surfaces.
  */
 import { classifyAttachmentSet } from './documents.js';
+import { workspaceIntent } from '../public/workspace-intent.js';
 
 const text = value => String(value ?? '').trim();
-const CODE = /\b(?:code|coding|program|programming|debug|debugging|refactor|repository|repo|pull request|branch|commit|function|class|bug|stack trace|compile|test suite|unit test|typescript|javascript|python|rust|golang|java|sql|api|backend|frontend|software|app|application|website|web app|github|simulation|simulate|simulating|computational model|numerical model)\b|\b[\w-]+\.(?:py|js|mjs|cjs|ts|tsx|jsx|go|rs|java|kt|c|cc|cpp|h|hpp|cs|rb|php|swift|sql|sh|html|css|json)\b/i;
-const CODE_PROJECT_SCOPE = /\b(?:repository|repo|codebase|project|code workspace|github|pull request|branch|commit|multi[- ]file|multiple files|whole app|whole application|service|backend|frontend|api|deployment|deploy)\b/i;
-const CODE_SINGLE_SCOPE = /\b(?:function|method|class|variable|snippet|script|single file|this file|one file|small fix|small change|edit this file|fix this file|explain this code|review this code|run this script|test this file|small program|utility script)\b/i;
-const EXPLICIT_CODE = /\b(?:switch|move|open|use|take me to|continue in|work in)\s+(?:the\s+)?(?:code|coding)(?:\s+workspace)?\b|\b(?:code|coding)\s+workspace\b/i;
-const EXPLICIT_RESEARCH = /\b(?:switch|move|open|use|take me to|continue in|work in)\s+(?:the\s+)?research(?:\s+workspace)?\b|\b(?:research|deep research)\s+workspace\b/i;
 const MEDIUM_ANALYSIS = /\b(?:explain|compare|analy[sz]e|solve|calculate|derive|show|teach|why|how|which|evaluate|recommend|suggest|summari[sz]e|interpret|design|visual|poster|logo|diagram|presentation)\b/i;
-// Normal Chat handles ordinary tutoring/current-fact requests; dedicated
-// Research is for evidence-heavy projects, not every factual lookup.
-const DEEP_RESEARCH_SCOPE = /\b(?:deep research|systematic review|literature review|thesis|dissertation|academic paper|research paper|meta-analysis|research project|comprehensive research|peer-reviewed studies|source[- ]by[- ]source|compare (?:credible|multiple|primary) sources|verify (?:the )?citations)\b/i;
-const SOURCE_HEAVY_RESEARCH = /\b(?:research|investigate)\b.{0,160}\b(?:sources|citations|papers|studies|evidence|literature)\b/i;
-const EVERYDAY_LEARNING = /^(?:(?:please|could you|can you|help me)\s+)*(?:explain|teach|show|learn|study|solve|prove|derive|outline|describe|compare|what|why|how|give an? (?:explanation|overview|lesson))\b/i;
-const BUSINESS_LEARNING = /\b(?:business plan|business strategy|marketing plan|financial forecast|business model|lesson plan|curriculum|course plan|study plan|learning roadmap|business case|case study|education(?:al)? plan)\b/i;
 
 const aliases = Object.freeze({ chat:'normal-chat', visual:'normal-chat', design:'normal-chat', 'normal-chat':'normal-chat', code:'code', research:'research' });
 const normalizeSurfaceId = value => aliases[text(value).toLowerCase()] ?? 'normal-chat';
@@ -27,31 +17,26 @@ const attachmentProfile = attachments => classifyAttachmentSet(Array.isArray(att
 const names = attachments => (Array.isArray(attachments)?attachments:[]).map(x=>text(typeof x==='string'?x:x?.name)).filter(Boolean);
 const kinds = attachments => (Array.isArray(attachments)?attachments:[]).map(x=>typeof x==='object'?text(x?.archiveKind):'').filter(Boolean);
 
-function shouldUseCodeWorkspace(value, attachments, actions=[]) {
+function shouldUseCodeWorkspace(intent, attachments, actions=[]) {
   const profile = attachmentProfile(attachments);
   const attached = names(attachments);
   const hasProjectManifest = profile.codeFiles?.some(name =>
     /(?:package\.json|pyproject\.toml|Cargo\.toml|go\.mod|Dockerfile|Makefile|requirements\.txt)$/i.test(name));
   // A user-selected Code workspace or a real repository/project always has
   // durable project state. Merely attaching several scripts is not a repo.
-  if (EXPLICIT_CODE.test(value) || kinds(attachments).includes('code-project')) return true;
-  if (!CODE.test(value)) return false;
-  if (CODE_PROJECT_SCOPE.test(value) || hasProjectManifest) return true;
+  if (kinds(attachments).includes('code-project') && !intent.researchRequest) return true;
+  if (!intent.codeTopic) return false;
+  if (intent.codeProject || hasProjectManifest) return true;
 
   // Simulation development and explicitly compound engineering require the
   // project/test lifecycle even when no files have been uploaded yet.
-  const construction = /\b(?:simulate|simulating|simulation|computational model|numerical model)\b/i.test(value)
-    && /\b(?:simulate|simulating|develop|build|create|implement|test|refine)\b/i.test(value)
-    && !/^\s*(?:explain|describe|what|why|how)\b/i.test(value);
-  const compound = /\b(?:build|develop|implement|refactor|create)\b.{0,110}\b(?:code|software|application|model)\b/i.test(value)
-    && /\b(?:and|then|plus)\b.{0,80}\b(?:modify|edit|refactor|test|fix)\b/i.test(value);
-  if (construction || compound) return true;
+  if (intent.projectLifecycle || intent.softwareBuild) return true;
 
   // Normal Chat handles a bounded bundle of small code files using the
   // optional sandbox. A heuristic attachment "code" category is not authority
   // to force the user into Code Workspace.
   if (attached.length > 0 && attached.length <= 10) return false;
-  if (CODE_SINGLE_SCOPE.test(value)) return false;
+  if (intent.singleCode) return false;
   return actions.some(action => ['create','transform','execute'].includes(text(action).toLowerCase()));
 }
 
@@ -113,7 +98,7 @@ export const WORKSPACE_ENVIRONMENT_CONTRACTS=Object.freeze({
 });
 export function workspaceEnvironment(surface='normal-chat'){return WORKSPACE_ENVIRONMENT_CONTRACTS[normalizeSurfaceId(surface)]??WORKSPACE_ENVIRONMENT_CONTRACTS['normal-chat'];}
 
-export const SURFACE_POLICY_VERSION='5';
+export const SURFACE_POLICY_VERSION='6';
 export const SURFACE_WORKSPACE_CONTRACTS=Object.freeze({
   'normal-chat':Object.freeze({
     id:'normal-chat', label:'NormalChat', mode:'conversation-first',
@@ -161,14 +146,16 @@ export const SURFACE_POLICY=Object.freeze({version:SURFACE_POLICY_VERSION,surfac
 
 export function classifySurfaceBoundary(goal,{activeSurface='',attachments=[],flags={},actions=[]}={}){
   const value=text(goal); const active=normalizeSurfaceId(activeSurface); const profile=attachmentProfile(attachments);
-  const code=shouldUseCodeWorkspace(value,attachments,actions) || (flags.code===true && actions.some(a=>['create','transform','execute'].includes(text(a).toLowerCase())) && CODE_PROJECT_SCOPE.test(value) && !EVERYDAY_LEARNING.test(value) && !BUSINESS_LEARNING.test(value));
-  const deepResearch = !EVERYDAY_LEARNING.test(value)
-    && (DEEP_RESEARCH_SCOPE.test(value) || SOURCE_HEAVY_RESEARCH.test(value));
+  const intent=workspaceIntent(value);
+  const code=shouldUseCodeWorkspace(intent,attachments,actions);
+  const deepResearch = intent.researchRequest || intent.researchProject || intent.sourceHeavyResearch;
   const research=kinds(attachments).includes('research-bundle') || profile.kind==='research'
-    || EXPLICIT_RESEARCH.test(value) || deepResearch
-    || (flags.research===true && !EVERYDAY_LEARNING.test(value)
-      && /\b(?:citations?|papers?|literature|source verification|peer-reviewed|systematic review)\b/i.test(value));
+    || deepResearch || (flags.research===true && intent.researchEvidence);
   const requested=activeSurface||'normal-chat';
+  if(intent.explicitWorkspace) {
+    const surface=intent.explicitWorkspace;
+    return {requested,surface,redirect:active!==surface,transition:active===surface?'stay':'switch',reason:'explicit-workspace-request',complexity:surface==='normal-chat'?'adaptive':'deep-eligible',workspace:SURFACE_WORKSPACE_CONTRACTS[surface],attachmentProfile:profile};
+  }
   if(code) return {requested,surface:'code',redirect:active!=='code',transition:active==='code'?'stay':'switch',reason:'coding-work-requires-code-surface',complexity:'deep-eligible',workspace:SURFACE_WORKSPACE_CONTRACTS.code,attachmentProfile:profile};
   if(research) return {requested,surface:'research',redirect:active!=='research',transition:active==='research'?'stay':'switch',reason:'deep-research-work-requires-research-surface',complexity:'deep-eligible',workspace:SURFACE_WORKSPACE_CONTRACTS.research,attachmentProfile:profile};
   if(active==='code') return {requested,surface:'code',redirect:false,transition:'stay',reason:'selected-code-workspace-stays-authoritative',complexity:'deep-eligible',workspace:SURFACE_WORKSPACE_CONTRACTS.code,attachmentProfile:profile};

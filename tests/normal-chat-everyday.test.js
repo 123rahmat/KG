@@ -4,6 +4,8 @@ import { normalChatTaskProfile } from '../src/normal-chat-task-profile.js';
 import { classifySurfaceBoundary } from '../src/surface-policy.js';
 import { buildModeControllerContract } from '../src/mode-controllers.js';
 import { workspaceCapabilities } from '../public/normal-chat-capabilities.js';
+import { planGoal } from '../src/core.js';
+import { resolveAdaptiveContext } from '../src/adaptive.js';
 
 test('everyday chat, teaching, business strategy and mathematical reasoning remain in Normal Chat', () => {
   for (const goal of [
@@ -109,4 +111,67 @@ test('three workspace controller contracts stay independent while sharing securi
   assert.equal(code.mode,'code');
   assert.equal(research.mode,'research');
   assert.notEqual(code.controller,research.controller);
+});
+
+test('UI and server distinguish the requested work from software or research topics', () => {
+  for (const [goal, workspace] of [
+    ['Teach me how to build an API with code examples', 'normal-chat'],
+    ['Explain how an existing GitHub application works', 'normal-chat'],
+    ['Build a business plan for an API-based startup', 'normal-chat'],
+    ['Explain a systematic literature review to a student', 'normal-chat'],
+    ['Research GitHub adoption using credible sources', 'research'],
+    ['Research battery recycling', 'research'],
+    ['Investigate deployment failure rates using peer-reviewed studies', 'research'],
+    ['Research the dependency release and then update the repository', 'code'],
+    ['Explain the failing GitHub tests and then fix them', 'code'],
+    ['Investigate the failing repository tests and fix them', 'code'],
+    ['Investigate this GitHub repository bug and implement a fix', 'code'],
+    ['Research the dependency release, then update package.json', 'code'],
+    ['Research the Python API and implement it', 'code'],
+    ['Teach me Python and test my understanding', 'normal-chat'],
+    ['Create a project plan for a community garden', 'normal-chat'],
+    ['Create a customer service training plan', 'normal-chat'],
+    ['Build a complete frontend and backend application', 'code']
+  ]) {
+    const boundary = classifySurfaceBoundary(goal, { actions: ['answer', 'create', 'transform'], flags: { code: true, research: true } });
+    assert.equal(boundary.surface, workspace, goal);
+    assert.equal(workspaceCapabilities({ goal }).suggestedWorkspace,
+      workspace === 'normal-chat' ? null : workspace, goal);
+    const plan = planGoal(goal, { activeSurface: 'normal-chat' });
+    assert.equal(plan.surface, workspace === 'normal-chat' ? 'chat' : workspace, goal);
+    assert.equal(plan.adaptation.modeController.mode, workspace, goal);
+  }
+});
+
+test('business and educational wording does not expose a software execution affordance', () => {
+  for (const goal of ['Build a business plan for an API-based startup', 'Teach me how to build an API with code examples']) {
+    const capabilities = workspaceCapabilities({ goal });
+    assert.equal(capabilities.showSandbox, false, goal);
+    assert.equal(capabilities.suggestedWorkspace, null, goal);
+  }
+});
+
+test('explicit workspace selection outranks incidental topic and attachment classification', () => {
+  for (const [goal, workspace, attachments] of [
+    ['Open Research Workspace and examine this GitHub repository', 'research', [{ name: 'repo.zip', archiveKind: 'code-project' }]],
+    ['Open Code Workspace and implement a citation checker', 'code', [{ name: 'sources.zip', archiveKind: 'research-bundle' }]]
+  ]) {
+    assert.equal(classifySurfaceBoundary(goal, { attachments }).surface, workspace);
+    assert.equal(workspaceCapabilities({ goal, attachments }).suggestedWorkspace, workspace);
+  }
+});
+
+test('selected file context reaches the Normal Chat controller without content or privileges', () => {
+  const goal = 'Improve this and explain your changes';
+  const attachments = [{ name: 'draft.docx', text: 'Private document content' }];
+  const context = resolveAdaptiveContext(goal, { attachedArtifacts: ['draft.docx'] });
+  const plan = planGoal(goal, { attachments });
+  for (const controller of [context.modeController, plan.adaptation.modeController]) {
+    assert.equal(controller.mode, 'normal-chat');
+    assert.equal(controller.everyday.domain, 'file-work');
+    assert.ok(controller.everyday.contextPriorities.includes('selected-attachments'));
+    assert.equal(controller.everyday.verification, 'check-observable-claims-and-artifacts');
+    assert.equal(controller.everyday.toolPolicy, 'just-in-time-authorized-only');
+    assert.equal(JSON.stringify(controller).includes('Private document content'), false);
+  }
 });

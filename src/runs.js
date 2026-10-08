@@ -189,6 +189,28 @@ function projectContextKey(project, attachments = []) {
 
 export { RunError, projectContextKey };
 
+const normalizeWorkspaceSurface = value => {
+  const surface = text(value).toLowerCase();
+  return ['chat', 'visual', 'design'].includes(surface) ? 'normal-chat' : surface;
+};
+const previousWorkspaceSurface = state => normalizeWorkspaceSurface(
+  state?.surface || state?.adaptation?.modeController?.mode
+  || state?.adaptation?.modeController?.surface
+  || state?.adaptation?.unifiedAdaptiveWorkflow?.surface
+  || state?.adaptation?.primarySurface
+);
+
+/** Conversation history is shared; implicit controller/project state is scoped. */
+export function workspaceStateFor(previousState, { surface = '', projectKey = null } = {}) {
+  if (!previousState) return null;
+  const previousSurface = previousWorkspaceSurface(previousState);
+  const nextSurface = normalizeWorkspaceSurface(surface);
+  const previousKey = text(previousState.adaptation?.projectContext?.key);
+  if (nextSurface && previousSurface && nextSurface !== previousSurface) return null;
+  if (projectKey && previousKey && text(projectKey) !== previousKey) return null;
+  return previousState;
+}
+
 export class RunStore {
   constructor(pool, { maxAttempts = 5, maxEvidenceBytes = 512 * 1024, maxGoalChars = 32_000, audit, capabilities } = {}) {
     this.pool = pool;
@@ -252,27 +274,22 @@ export class RunStore {
     // silently inheriting each other's files/state.
     const requestedProjectKey = projectContextKey(project, attachments)
       || (linkedProjectId ? 'project:' + linkedProjectId : null);
-    const normalizeWorkspaceSurface = value => {
-      const surface = text(value);
-      return surface === 'chat' ? 'normal-chat' : surface;
-    };
-    const previousSurface = normalizeWorkspaceSurface(
-      previousState?.adaptation?.modeController?.surface
-      || previousState?.adaptation?.unifiedAdaptiveWorkflow?.surface
-      || previousState?.adaptation?.primarySurface
-      || ''
-    );
+    const previousSurface = previousWorkspaceSurface(previousState);
     const explicitSurface = normalizeWorkspaceSurface(activeSurface);
     const inheritedSurface = explicitSurface || previousSurface;
     let projectOverlay = null;
-    let projectContextSwitched = false;
-    const mayInheritWorkspaceState = !previousSurface || !explicitSurface || previousSurface === explicitSurface;
-    if (mayInheritWorkspaceState && !attachments.length && previousState && (CODE_FOLLOW_UP.test(goalText) || FOLLOW_UP_ON_WORK.test(goalText))) {
+    let projectContextSwitched = Boolean(requestedProjectKey && previousState?.adaptation?.projectContext?.key
+      && requestedProjectKey !== previousState.adaptation.projectContext.key);
+    let workspaceState = workspaceStateFor(previousState, { surface: inheritedSurface, projectKey: requestedProjectKey });
+    if (workspaceState && !attachments.length && (CODE_FOLLOW_UP.test(goalText) || FOLLOW_UP_ON_WORK.test(goalText))) {
       const hasFiles = state => Array.isArray(state?.adaptation?.attachments) && state.adaptation.attachments.length > 0;
-      const withFiles = hasFiles(previousState) ? previousState : await this.conversationState(scope, conversation, { withFiles: true });
+      const effectiveProjectKey = requestedProjectKey || text(workspaceState.adaptation?.projectContext?.key) || null;
+      const withFiles = hasFiles(previousState) ? previousState : await this.conversationState(scope, conversation, {
+        withFiles: true, surface: inheritedSurface, projectKey: effectiveProjectKey
+      });
       const previousProjectKey = text(withFiles?.adaptation?.projectContext?.key) || null;
-      const compatible = !requestedProjectKey || !previousProjectKey || requestedProjectKey === previousProjectKey;
-      if (compatible && hasFiles(withFiles)) {
+      const compatible = !effectiveProjectKey || !previousProjectKey || effectiveProjectKey === previousProjectKey;
+      if (compatible && workspaceStateFor(withFiles, { surface: inheritedSurface, projectKey: effectiveProjectKey }) && hasFiles(withFiles)) {
         attachments = withFiles.adaptation.attachments;
         projectOverlay = continuedProject(withFiles);
       } else if (requestedProjectKey && previousProjectKey && requestedProjectKey !== previousProjectKey) {
@@ -280,16 +297,17 @@ export class RunStore {
       }
     }
     const situationContext = {
-      user, workspace, project, files, priorWork: previousState?.completed?.length ? [...priorWork, ...previousState.completed] : priorWork, constraints, resources, requirements,
-      successCriteria, outputs, environment, language, skillLevel, preferences, currentState: currentState ?? previousState,
+      user, workspace, project, files, priorWork: workspaceState?.completed?.length ? [...priorWork, ...workspaceState.completed] : priorWork, constraints, resources, requirements,
+      attachedArtifacts: attachments.map(item => text(typeof item === 'string' ? item : item?.name)).filter(Boolean),
+      successCriteria, outputs, environment, language, skillLevel, preferences, currentState: currentState ?? workspaceState,
       completedSteps, failedSteps, evidence, questions, dataSources, connections, connectedServices,
       commitments, dependencies, dueAt, startAt, userBehavior, capacity, availability, competingCommitments, now, creationMode,
       privacyConsent, need, adaptiveControl, verifiedConnections, workspaceType, runtimeMode,
       activeSurface: inheritedSurface, jurisdiction, classifierHints, modelSelection, learnedSkills
     };
-    const situation = buildSituationModel(goalText, situationContext);
+    let situation = buildSituationModel(goalText, situationContext);
     if (ethics) situation.ethics = ethics;
-    const plan = planGoal(goalText, {
+    let plan = planGoal(goalText, {
       policies, activeSurface: inheritedSurface, timeZone, runtimeMode, workspaceType, jurisdiction,
       conversation: history,
       attachments,
@@ -313,6 +331,26 @@ export class RunStore {
         projectOverlay = null;
       }
       projectContextSwitched = true;
+    }
+    if (workspaceState && !workspaceStateFor(workspaceState, { surface: plannedSurface, projectKey: requestedProjectKey })) {
+      // An implicit intent transition is resolved by the planner. Rebuild its
+      // context without the previous workspace before persisting any state.
+      workspaceState = null;
+      situationContext.currentState = currentState ?? null;
+      situationContext.priorWork = priorWork;
+      situationContext.attachedArtifacts = attachments.map(item => text(typeof item === 'string' ? item : item?.name)).filter(Boolean);
+      situationContext.activeSurface = plannedSurface;
+      situation = buildSituationModel(goalText, situationContext);
+      if (ethics) situation.ethics = ethics;
+      plan = planGoal(goalText, {
+        policies, timeZone, conversation: history, attachments, executionAvailable, ethics,
+        ...situationContext
+      });
+      if (plan.state === 'needs-input') {
+        throw new RunError('More detail is needed before this can be planned', {
+          status: 400, code: 'needs-input', detail: { questions: plan.questions }
+        });
+      }
     }
 
     const requirementModel = plan.workflow === 'direct'
@@ -382,7 +420,7 @@ export class RunStore {
     plan.adaptation.timeZone = plan.context?.timeZone ?? 'UTC';
     if (history.length) plan.adaptation.conversation = history;
     const projectKey = requestedProjectKey
-      || text(previousState?.adaptation?.projectContext?.key)
+      || text(workspaceState?.adaptation?.projectContext?.key)
       || (attachments.length ? projectContextKey(null, attachments) : null);
     const workspaceSourceId = text(attachments.find(item => item?.sourceId)?.sourceId) || null;
     plan.adaptation.projectContext = {
@@ -398,7 +436,11 @@ export class RunStore {
       files,
       projectOverlay,
       situation,
-      currentState: currentState ?? previousState,
+      currentState: currentState ?? workspaceState,
+      identityOverride: projectKey ? {
+        key: projectKey,
+        source: project || linkedProjectId ? 'project' : attachments.length ? 'attachments' : 'continued-project'
+      } : null,
       conversationId: conversation || null,
       multiAgent: {
         mode: adaptiveControl?.multiAgentMode ?? adaptiveControl?.multiAgent ?? 'auto',
@@ -424,7 +466,7 @@ export class RunStore {
       plan.adaptation.researchWorkspace = createResearchWorkspaceState({
         goal: goalText,
         question: goalText,
-        prior: !surfaceContextSwitched ? previousState?.adaptation?.researchWorkspace ?? null : null,
+        prior: workspaceState?.adaptation?.researchWorkspace ?? null,
         conversationId: conversation || null
       });
     }
@@ -580,19 +622,21 @@ export class RunStore {
    * in their normal stores and are selected later by the adaptive resource
    * planner.
    */
-  async conversationState(scope, conversationId, { withFiles = false } = {}) {
+  async conversationState(scope, conversationId, { withFiles = false, surface = '', projectKey = null } = {}) {
     // withFiles: the latest turn that worked on files, so a follow-up after
     // small talk ("thanks", then "now add a test") still finds the project.
     const { rows: [run] } = await this.pool.query(
-      `SELECT id, goal, state, adaptation, situation, requirements, updated_at
+      `SELECT id, goal, surface, state, adaptation, situation, requirements, updated_at
          FROM runs
         WHERE workspace_id = $1
           AND (visibility = 'workspace' OR principal_id = $2)
           AND conversation_id = $3
           ${withFiles ? "AND CASE WHEN jsonb_typeof(adaptation->'attachments') = 'array' THEN jsonb_array_length(adaptation->'attachments') ELSE 0 END > 0" : ''}
+          AND ($4::text IS NULL OR surface = $4 OR ($4 = 'normal-chat' AND surface IN ('chat', 'visual', 'design')))
+          AND ($5::text IS NULL OR adaptation->'projectContext'->>'key' = $5)
         ORDER BY updated_at DESC, id DESC
         LIMIT 1`,
-      [scope.workspaceId, scope.principalId, conversationId]
+      [scope.workspaceId, scope.principalId, conversationId, normalizeWorkspaceSurface(surface) || null, text(projectKey) || null]
     );
     if (!run) return null;
     const { rows: tasks } = await this.pool.query(
@@ -612,6 +656,7 @@ export class RunStore {
     return {
       runId: run.id,
       goal: text(run.goal),
+      surface: text(run.surface),
       state: text(run.state),
       situation: run.situation ?? {},
       requirements: run.requirements ?? {},

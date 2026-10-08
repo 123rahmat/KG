@@ -222,7 +222,7 @@ export function buildModeControllerContract({
   // a workspace, a permanent specialist team, or new permissions.
   const everyday = controller.mode === 'normal-chat'
     ? normalChatTaskProfile({
-        goal: situation?.goal, attachments: situation?.attachments,
+        goal: situation?.goal, attachments: situation?.attachments ?? situation?.artifacts,
         complexity, uncertainty, risk: normalizedRisk,
         verificationRequired: compute.qualityFloor === 'verified-before-completion'
       }) : null;

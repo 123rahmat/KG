@@ -57,6 +57,15 @@ export async function checkWorkspaceSuggestions(browser, url) {
     assert.equal(await page.evaluate(() => window.switchQA.state.activeSurface), 'normal-chat');
     assert.equal(await draft.inputValue(), 'Translate this paragraph');
 
+    for (const goal of ['Teach me how to build an API with code examples', 'Build a business plan for an API-based startup', 'Explain a systematic literature review to a student']) {
+      await draft.fill(goal);
+      assert.equal(await page.locator('.normal-chat-switch-action').count(), 0, 'daily reasoning and tutoring stay in Normal Chat');
+    }
+    await draft.fill('Research GitHub adoption using credible sources');
+    await page.getByRole('button', { name: 'Use Research workspace', exact: true }).waitFor({ timeout: 3000 });
+    assert.equal(await codeButton.count(), 0, 'the software topic must not override research intent');
+    assert.equal(await page.evaluate(() => window.switchQA.state.activeSurface), 'normal-chat');
+
     await page.evaluate(() => {
       const { state, renderThread, addAttachments } = window.switchQA;
       state.attachments = []; state.attachmentScope = null;

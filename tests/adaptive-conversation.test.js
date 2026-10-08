@@ -187,3 +187,71 @@ test('three workspace runs expose their persisted task graph on creation and aft
       }
     }
   }));
+
+test('workspace switches retain conversation but discard implicitly inherited project and controller state', () =>
+  withServer(async ({ call, seed }) => {
+    const { token, workspace } = await seed();
+    const auth = { token, workspace };
+    for (const [destination, goal, explicit] of [
+      ['normal-chat', 'Teach me algebra with worked examples', true],
+      ['research', 'Research GitHub adoption using credible sources', false]
+    ]) {
+      const conversationId = `chat-state-isolation-${destination}`;
+      const first = await call('POST', '/api/runs', { ...auth, body: {
+        conversationId, activeSurface: 'code', goal: 'Fix the GitHub repository and run its tests',
+        project: { id: 'old-repository' }, files: ['app.js'], currentState: { marker: 'old-controller-state' }
+      } });
+      assert.equal(first.status, 201);
+      assert.ok(first.body.adaptation.projectContext.key);
+      const next = await call('POST', '/api/runs', { ...auth, body: {
+        conversationId, ...(explicit ? { activeSurface: destination } : {}), goal
+      } });
+      assert.equal(next.status, 201);
+      const run = next.body;
+      assert.equal(run.surface, destination === 'normal-chat' ? 'chat' : destination);
+      assert.equal(run.adaptation.continuation.mode, 'workspace-switch');
+      assert.equal(run.adaptation.projectContext.key, null);
+      assert.equal(run.adaptation.unifiedWorkContext.situation.currentState, null);
+      assert.equal(run.situation.state.current, null);
+      assert.deepEqual(run.situation.state.priorWork, []);
+      assert.match(run.adaptation.conversation.at(-1).user, /GitHub repository/);
+      assert.equal(run.adaptation.modeController.mode, destination);
+      const read = await call('GET', `/api/runs/${run.id}`, auth);
+      assert.equal(read.status, 200);
+      assert.equal(read.body.adaptation.unifiedWorkContext.situation.currentState, null);
+    }
+  }));
+
+test('file lookup after a project change cannot resurrect another project in the same chat', () =>
+  withServer(async ({ call, seed }) => {
+    const { token, workspace } = await seed();
+    const auth = { token, workspace };
+    const conversationId = 'chat-historical-project-isolation';
+    const upload = await call('POST', '/api/objects', { ...auth, body: {
+      name: 'project-a.js', type: 'attachment', contentType: 'text/plain', content: 'console.log("project A")'
+    } });
+    assert.equal(upload.status, 201);
+    const first = await call('POST', '/api/runs', { ...auth, body: {
+      conversationId, activeSurface: 'code', project: { id: 'project-a' },
+      goal: 'Fix this repository', attachments: [upload.body.id]
+    } });
+    assert.equal(first.status, 201);
+    const second = await call('POST', '/api/runs', { ...auth, body: {
+      conversationId, activeSurface: 'code', project: { id: 'project-b' },
+      goal: 'Build a new API repository with tests'
+    } });
+    assert.equal(second.status, 201);
+    const key = second.body.adaptation.projectContext.key;
+    assert.notEqual(key, first.body.adaptation.projectContext.key);
+    const third = await call('POST', '/api/runs', { ...auth, body: {
+      conversationId, goal: 'Now add a test for this repository'
+    } });
+    assert.equal(third.status, 201);
+    assert.equal(third.body.adaptation.projectContext.key, key);
+    assert.equal(third.body.adaptation.unifiedWorkContext.identity.key, key);
+    assert.equal(third.body.adaptation.attachments, undefined);
+    assert.equal(third.body.adaptation.projectOverlay, undefined);
+    assert.deepEqual(third.body.adaptation.unifiedWorkContext.filesystem.attachments, []);
+    assert.equal(third.body.adaptation.continuation.previousRunId, second.body.id);
+    assert.equal(third.body.adaptation.unifiedWorkContext.situation.currentState.runId, second.body.id);
+  }));

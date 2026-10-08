@@ -81,3 +81,27 @@ it does not submit a request or import attachments into a Code project. Code
 project tools still require the existing GitHub source boundary. These are
 lightweight presentation hints, not guaranteed semantic classification or
 permission grants; users can always choose another workspace manually.
+
+The presentation policy and server `surface-policy.js` consume the same pure
+request hints in `public/workspace-intent.js`. Teaching or explaining a subject
+does not turn its software/research vocabulary into engineering or an
+investigation. Explicit workspace intent takes precedence; a research request
+about GitHub stays an investigation, while researching a dependency and then
+updating its repository uses Code with supporting research capabilities.
+The server still supports small file bundles in Chat even when the browser
+offers an optional Code recommendation.
+
+## Ongoing work and state ownership
+
+Normal Chat's controller reads selected artifact names from the situation;
+its purpose and verification policy adapt to files as well as task wording.
+File contents remain in scoped artifact storage. Difficult reasoning can
+increase depth without forcing a specialist workspace or adding permissions.
+
+RunStore preserves conversation history across switches and independently
+checks whether the prior controller/project state is compatible. Only that
+compatible state may enter a follow-up plan, project identity, file overlay
+or research ledger. An intent-driven transition rebuilds the plan without
+implicitly inherited state before saving it. A new project likewise starts
+with its own context. Explicit user context is retained and remains subject
+to authorization; shared conversation history does not authorize a mutation.

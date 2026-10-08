@@ -44,7 +44,9 @@ function collectContext(context = {}) {
     user: c.user ?? c.userProfile ?? null,
     workspace: c.workspace ?? null,
     project: c.project ?? null,
-    files: asList(c.files ?? c.artifacts),
+    // Keep selected attachment names in the situation across reassessment.
+    // File contents stay in their scoped artifact stores.
+    files: uniq([...asList(c.files ?? c.artifacts), ...asList(c.attachedArtifacts)]).slice(0, 80),
     priorWork: asList(c.priorWork ?? c.history),
     constraints: asList(c.constraints),
     resources: asList(c.resources ?? c.availableResources),
