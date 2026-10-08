@@ -40,6 +40,9 @@ test('terminal action requires Code, an authorized connected GitHub source, and 
   const run = runWith('code');
   assert.equal(liveWorkFocus(run, { workspace: 'normal-chat', connectedGitHub: true }).allowTerminal, false);
   assert.equal(liveWorkFocus(run, { workspace: 'code', connectedGitHub: false }).allowTerminal, false);
+  assert.equal(liveWorkFocus(run, { workspace: 'code', connectedGitHub: true }).allowTerminal, false,
+    'normal code generation should not promote interactive terminal');
+  run.tasks[0].purpose = 'Debug checkout tax rounding in the terminal';
   assert.equal(liveWorkFocus(run, { workspace: 'code', connectedGitHub: true }).allowTerminal, true);
   assert.equal(liveWorkFocus(run, { workspace: 'code', connectedGitHub: true, offline: true }).allowTerminal, false);
   assert.equal(liveWorkFocus(runWith('respond'), { workspace: 'code', connectedGitHub: true }).allowTerminal, false);
@@ -63,7 +66,7 @@ test('code verification shows last recorded sandbox outcome without implying it 
   const view = liveWorkFocus(run, { workspace: 'code' });
   assert.equal(view.line, 'Working · Check acceptance criteria');
   assert.equal(view.hasRecordedExecution, true);
-  assert.ok(view.activity.some(item => item.label === 'Last recorded execution' && item.value === 'Sandbox'));
+  assert.ok(view.activity.some(item => item.label === 'Last recorded execution target' && item.value === 'Sandbox'));
 });
 
 test('Research work stays in its own surface and labels a queued step honestly', () => {
