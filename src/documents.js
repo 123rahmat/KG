@@ -10,6 +10,7 @@
  */
 
 import zlib from 'node:zlib';
+import { inspectZipManifest, ZIP_LIMITS } from './zip-intake-policy.js';
 
 export const MAX_TEXT_CHARS = 400_000;
 // PDFs are attacker-controlled input. Bound page fan-out and decoded image size
@@ -32,16 +33,20 @@ export class DocumentError extends Error {
 /* ------------------------------------------------------------------ zip */
 
 /** The entries of a ZIP archive: name → () => Buffer, with size limits. */
-export function readZip(buffer) {
+export function readZip(buffer, { collectManifest = false } = {}) {
   const eocd = buffer.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
   if (eocd < 0 || eocd + 22 > buffer.length) throw new DocumentError('This file is not a valid Office document or zip archive (no ZIP directory).');
   const count = buffer.readUInt16LE(eocd + 10);
   let offset = buffer.readUInt32LE(eocd + 16);
   if (count > MAX_ZIP_ENTRIES) throw new DocumentError('This document has too many parts to read safely.');
   const entries = new Map();
+  const manifest = [];
   let total = 0;
   for (let i = 0; i < count; i += 1) {
-    if (buffer.readUInt32LE(offset) !== 0x02014b50) throw new DocumentError('This document is damaged (bad ZIP entry).');
+    if (offset < 0 || offset + 46 > buffer.length || buffer.readUInt32LE(offset) !== 0x02014b50) {
+      throw new DocumentError('This document is damaged (bad ZIP entry).');
+    }
+    const flags = buffer.readUInt16LE(offset + 8);
     const method = buffer.readUInt16LE(offset + 10);
     const compressed = buffer.readUInt32LE(offset + 20);
     const size = buffer.readUInt32LE(offset + 24);
@@ -49,8 +54,20 @@ export function readZip(buffer) {
     const extraLength = buffer.readUInt16LE(offset + 30);
     const commentLength = buffer.readUInt16LE(offset + 32);
     const local = buffer.readUInt32LE(offset + 42);
+    const externalAttributes = buffer.readUInt32LE(offset + 38);
+    const end = offset + 46 + nameLength + extraLength + commentLength;
+    if (end > buffer.length) throw new DocumentError('This document has a truncated ZIP directory.');
     const name = buffer.toString('utf8', offset + 46, offset + 46 + nameLength);
-    offset += 46 + nameLength + extraLength + commentLength;
+    offset = end;
+    if (collectManifest) {
+      const fileType = (externalAttributes >>> 16) & 0xf000;
+      const type = fileType === 0xa000 ? 'symlink'
+        : name.endsWith('/') || fileType === 0x4000 ? 'directory'
+          : fileType && fileType !== 0x8000 ? 'special' : 'file';
+      if (flags & 1) throw new DocumentError('Encrypted ZIP entries are not supported.');
+      if (method !== 0 && method !== 8) throw new DocumentError('This ZIP uses unsupported compression.');
+      manifest.push({ name, type, compressedSize: compressed, uncompressedSize: size });
+    }
     if (size > MAX_ENTRY_BYTES) continue;
     total += size;
     if (total > MAX_TOTAL_BYTES) throw new DocumentError('This document expands to more than can be read safely.');
@@ -70,6 +87,7 @@ export function readZip(buffer) {
       throw new DocumentError(`This document uses a ZIP compression that is not supported (${method}).`);
     });
   }
+  if (collectManifest) entries.manifest = manifest;
   return entries;
 }
 
@@ -266,8 +284,16 @@ const RESEARCH_DOCUMENT_FORMATS = new Set(['pdf', 'docx', 'pptx']);
 const DOCUMENT_FORMATS = new Set(['pdf', 'docx', 'xlsx', 'pptx', 'text']);
 
 function archiveEntries(buffer) {
-  const zip = readZip(buffer);
-  const entries = new Map([...zip].map(([name, read]) => [name.replaceAll('\\', '/'), read]));
+  const zip = readZip(buffer, { collectManifest: true });
+  const assessment = inspectZipManifest(zip.manifest, {
+    ...ZIP_LIMITS,
+    maxExpandedBytes: Math.min(ZIP_LIMITS.maxExpandedBytes, MAX_TOTAL_BYTES),
+    maxEntryBytes: Math.min(ZIP_LIMITS.maxEntryBytes, MAX_ENTRY_BYTES)
+  });
+  if (!assessment.accepted) {
+    throw new DocumentError('ZIP archive rejected: ' + assessment.reason, 'document-unreadable');
+  }
+  const entries = new Map([...zip]);
   const names = [...entries.keys()]
     .filter(name => !name.endsWith('/')
       && !SKIP_DIRS.test('/' + name)
