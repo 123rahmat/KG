@@ -44,6 +44,8 @@ test('terminal action requires Code, an authorized connected GitHub source, and 
     'normal code generation should not promote interactive terminal');
   run.tasks[0].purpose = 'Debug checkout tax rounding in the terminal';
   assert.equal(liveWorkFocus(run, { workspace: 'code', connectedGitHub: true }).allowTerminal, true);
+  assert.equal(liveWorkFocus(run, { workspace: 'code', connectedGitHub: true, canOpenTerminal: false }).allowTerminal, false,
+    'read-only viewers cannot open an interactive terminal');
   assert.equal(liveWorkFocus(run, { workspace: 'code', connectedGitHub: true, offline: true }).allowTerminal, false);
   assert.equal(liveWorkFocus(runWith('respond'), { workspace: 'code', connectedGitHub: true }).allowTerminal, false);
 });
