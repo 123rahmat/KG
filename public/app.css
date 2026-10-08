@@ -4624,3 +4624,50 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
   font-family: var(--mono);
   overflow-wrap: anywhere;
 }
+
+
+/* Small task control strip: always server-derived, no speculative animation. */
+.adaptive-running-strip {
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:9px;
+  padding:9px 12px;
+  margin:4px 0;
+  border:1px solid var(--line);
+  background:var(--softer);
+  border-radius:var(--radius);
+  min-width:0;
+}
+.adaptive-running-dot {
+  flex:none;width:7px;height:7px;border-radius:50%;
+  background:var(--muted);
+}
+.adaptive-running-strip[data-running="true"] .adaptive-running-dot { background:var(--accent); }
+.adaptive-running-copy {
+  display:grid;
+  flex:1 1 150px;
+  min-width:0;
+  gap:1px;
+  line-height:1.35;
+}
+.adaptive-running-copy strong { font-size:.76rem;overflow-wrap:anywhere; }
+.adaptive-running-copy .small { font-size:.67rem; }
+.adaptive-running-buttons { display:flex; gap:7px; flex:none; }
+.adaptive-running-button {
+  font:600 .72rem/1.4 var(--sans);
+  color:var(--ink-2);
+  background:var(--panel);
+  padding:6px 10px;
+  border:1px solid var(--line-strong);
+  border-radius:var(--radius-sm);
+  cursor:pointer;
+}
+.adaptive-running-button:hover { border-color:var(--accent);color:var(--accent); }
+.adaptive-running-button.stop { color:var(--bad); }
+.adaptive-running-button.stop:hover { border-color:var(--bad);background:var(--bad-soft); }
+.adaptive-running-button:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
+@media (max-width:500px) {
+  .adaptive-running-strip { padding:8px 10px; }
+  .adaptive-running-buttons { width:100%;justify-content:flex-end; }
+}
