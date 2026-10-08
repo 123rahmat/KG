@@ -9,7 +9,7 @@ import { callModel, callRunner, withRunControl, SANDBOX_TIMEOUT_MS } from '../ru
 import { chooseExecutionTarget, codeActionDecision, executionTargetsFor, verifyExecutionReceipt, signExecutionChallenge, executionPayloadDigest, executionSucceeded, executionIdFor, RECEIPT_ALGORITHM } from '../execution.js';
 import { text } from '../http/context.js';
 import { configuredExecutionTargets, runnerForTarget, planPolicyAllows, dataPolicyAllows, dataPolicyDecision, modelPolicyAllows } from '../http/policy.js';
-import { assertUsageAllowed, createUsageGate, UsageLimitError } from '../usage.js';
+import { assertUsageAllowed, createUsageGate, unrecordedModelUsage, UsageLimitError } from '../usage.js';
 import { attachmentContext, projectFiles } from '../attachments.js';
 import { answerWithTools } from '../toolbox.js';
 import { RunActions, ActionError } from '../run-actions.js';
@@ -847,10 +847,12 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       }
 
       if (execution && typeof execution === 'object') execution.codeAction = codeAction;
+      const pendingUsage = unrecordedModelUsage(execution);
+      if (execution.usageBudget?.recorded) execution.budget = execution.usageBudget;
       if (!execution.executed) {
         // Tokens already spent (a design whose run then failed) still count.
-        if (execution.usage) {
-          await runs.addTokens(run.id, { provider: execution.provider, model: execution.model, ...execution.usage }, { source: execution.usageSource });
+        if (pendingUsage) {
+          await runs.addTokens(run.id, { provider: execution.provider, model: execution.model, ...pendingUsage }, { source: execution.usageSource });
         }
         // Nothing ran, so nothing is recorded and the task stays pending. A
         // missing runner is a deployment gap, not a failed attempt, and must
@@ -864,8 +866,8 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       // told how to go on instead of seeing a generic failure.
       if (task.id === 'build-code' && task.metadata?.modelGenerated === true
           && !(text(execution.structured?.language) && hasCode(execution.structured))) {
-        if (execution.usage) {
-          await runs.addTokens(run.id, { provider: execution.provider, model: execution.model, ...execution.usage }, { source: execution.usageSource });
+        if (pendingUsage) {
+          await runs.addTokens(run.id, { provider: execution.provider, model: execution.model, ...pendingUsage }, { source: execution.usageSource });
         }
         metrics.increment('executions_total', { type: task.type, outcome: 'invalid-model-output' });
         return res.status(200).json({
@@ -879,8 +881,8 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         });
       }
 
-      if (execution.usage) {
-        const budget = await runs.addTokens(run.id, { provider: execution.provider, model: execution.model, ...execution.usage }, { source: execution.usageSource });
+      if (pendingUsage) {
+        const budget = await runs.addTokens(run.id, { provider: execution.provider, model: execution.model, ...pendingUsage }, { source: execution.usageSource });
         if (budget) execution.budget = budget;
       }
 
@@ -1849,8 +1851,8 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     if (answer.incomplete) {
       // Tokens were spent, so they count against the budget, but a refused,
       // truncated or empty answer is never recorded as the task's result.
-      if (answer.usage) {
-        await runs.addTokens(run.id, { ...answer.usage, provider: answer.provider, model: answer.model });
+      if (unrecordedModelUsage(answer)) {
+        await runs.addTokens(run.id, { ...unrecordedModelUsage(answer), provider: answer.provider, model: answer.model });
       }
       return {
         configured: true,
@@ -1908,6 +1910,11 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         usageSource: 'chat-retry'
       });
       if (retry?.usage) {
+        const pending = [unrecordedModelUsage(answer), unrecordedModelUsage(retry)].filter(Boolean);
+        answer.unrecordedUsage = { inputTokens: pending.reduce((sum, used) => sum + (used.inputTokens ?? 0), 0),
+          outputTokens: pending.reduce((sum, used) => sum + (used.outputTokens ?? 0), 0) };
+        answer.usageRecorded = pending.length === 0;
+        answer.usageBudget = retry.usageBudget ?? answer.usageBudget;
         answer.usage = {
           ...answer.usage,
           inputTokens: (answer.usage?.inputTokens ?? 0) + (retry.usage.inputTokens ?? 0),
@@ -1945,7 +1952,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       });
       const spent = answer.usage ? (answer.usage.inputTokens ?? 0) + (answer.usage.outputTokens ?? 0) : 0;
       if (!verdict) {
-        if (spent && !answer.usageRecorded) await runs.addTokens(run.id, { ...answer.usage, provider: answer.provider, model: answer.model });
+        if (spent && unrecordedModelUsage(answer)) await runs.addTokens(run.id, { ...unrecordedModelUsage(answer), provider: answer.provider, model: answer.model });
         return {
           configured: true, executed: false, status: 'verification-inconclusive',
           message: 'The verifier did not return a readable verdict; nothing was recorded.',
@@ -1988,7 +1995,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       // human, or code that ran without tests of its own.
       const untested = untestedCode(run);
       if (verdict.verdict === 'pass' && (task.metadata?.verification?.humanReviewRequired === true || untested)) {
-        if (spent && !answer.usageRecorded) await runs.addTokens(run.id, { ...answer.usage, provider: answer.provider, model: answer.model });
+        if (spent && unrecordedModelUsage(answer)) await runs.addTokens(run.id, { ...unrecordedModelUsage(answer), provider: answer.provider, model: answer.model });
         return {
           configured: true, executed: false, status: 'human-verification-required',
           message: task.metadata?.verification?.humanReviewRequired === true
@@ -2013,6 +2020,9 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       provider: answer.provider,
       model: answer.model,
       usage: answer.usage,
+      usageRecorded: answer.usageRecorded,
+      unrecordedUsage: answer.unrecordedUsage,
+      usageBudget: answer.usageBudget,
       multiAgent: multiAgent.brief ?? null,
 
       toolLog: answer.toolLog ?? [],

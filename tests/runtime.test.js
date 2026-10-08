@@ -70,11 +70,12 @@ test('Vertex generateContent transport and usage are parsed correctly', async ()
   assert.equal(answer.text, 'ready');
   assert.equal(answer.provider, 'google');
   assert.deepEqual(answer.usage, { inputTokens: 3, outputTokens: 2, reasoningTokens: 1 });
+  assert.equal(answer.usageRecorded, false, 'a response without settlement still needs usage accounting');
 });
 
 test('dispatch revalidates and shrinks queued token reservations before sending', async () => {
   let sentLimit; let revalidations = 0;
-  await callModel([{ role: 'user', content: 'Hello' }], {
+  const answer = await callModel([{ role: 'user', content: 'Hello' }], {
     config: base, retries: 0, maxOutputTokens: 1000,
     usageGate: {
       reserve: async () => ({ id: 'reservation', estimatedTokens: 1000 }),
@@ -85,6 +86,7 @@ test('dispatch revalidates and shrinks queued token reservations before sending'
   });
   assert.equal(revalidations, 1);
   assert.equal(sentLimit, 64);
+  assert.equal(answer.usageRecorded, true, 'settled reservations must not be charged a second time');
 });
 
 test('adaptive reasoning clamps xhigh to Vertex HIGH', () => {

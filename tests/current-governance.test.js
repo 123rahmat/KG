@@ -66,6 +66,7 @@ test('policy audit failure rolls back the policy mutation', () =>
 
 test('a newly lowered policy budget constrains provider admission and stays lowered', () => {
   let admittedOutput = null;
+  let modelCalls = 0;
   return withServer(async ({ call, seed, pool }) => {
     const user = await seed();
     const governance = new GovernanceStore(pool);
@@ -79,10 +80,14 @@ test('a newly lowered policy budget constrains provider admission and stays lowe
     const saved = await call('GET', `/api/runs/${created.body.id}`, user);
     assert.equal(saved.body.maxTokens, 512);
     assert.equal(saved.body.tokensUsed, 7);
+    assert.equal(modelCalls, 1);
+    const ledger = await pool.query('SELECT input_tokens, output_tokens FROM usage_events WHERE run_id=$1', [created.body.id]);
+    assert.deepEqual(ledger.rows, [{ input_tokens: 5, output_tokens: 2 }], 'one settled call creates one charge in the ledger');
     await governance.set({ layer: 'workspace', scopeId: user.workspace, policy: {} });
     const relaxed = await call('GET', `/api/runs/${created.body.id}`, user);
     assert.equal(relaxed.body.maxTokens, 512);
   }, { env: { AI_PROVIDER: 'google', GOOGLE_CLOUD_PROJECT: 'test', VERTEX_ACCESS_TOKEN: 'test', AI_MODEL: 'gemini-3.8-flash' }, fetchImpl: async (_url, request) => {
+    modelCalls++;
     admittedOutput = JSON.parse(request.body).generationConfig.maxOutputTokens;
     return vertexReply();
   } });

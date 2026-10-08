@@ -512,6 +512,12 @@ export function createUsageGate(pool, { principalId, workspaceId, runId = null, 
   });
 }
 
+/** Only charge the portion not already committed by provider reservations. */
+export function unrecordedModelUsage(result) {
+  if (!result?.usage || result.usageRecorded === true) return null;
+  return result.unrecordedUsage ?? result.usage;
+}
+
 export class UsageLimitError extends Error {
   constructor(window, { canUpgrade = false } = {}) {
     const when = window.resetsAt ? new Date(window.resetsAt) : null;

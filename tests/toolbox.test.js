@@ -329,3 +329,16 @@ test('multiple partial attachment matches require an exact name or ID', async ()
   assert.equal((await useTool('data.analyze', { file: 'obj1' }, ctx)).columns[0].sum, 2);
   assert.equal((await useTool('data.analyze', { file: 'spring.csv' }, ctx)).columns[0].sum, 1);
 });
+test('tool loops retain only unsettled usage for fallback accounting', async () => {
+  const sent = []; let admissions = 0;
+  const answer = await answerWithTools([{ role: 'user', content: 'Use arithmetic to answer.' }], { config }, {
+    config, maxRounds: 2,
+    fetchImpl: scripted(['{"tool":"math.evaluate","input":{"expression":"2+2"}}', 'Four.'], sent),
+    usageGate: { reserve: async () => ++admissions === 1 ? null : { id: 'settled', estimatedTokens: 100 },
+      settle: async () => ({ recorded: true }), release: async () => {} }
+  });
+  assert.equal(admissions, 2);
+  assert.deepEqual(answer.usage, { inputTokens: 20, outputTokens: 10 });
+  assert.deepEqual(answer.unrecordedUsage, { inputTokens: 10, outputTokens: 5 });
+  assert.equal(answer.usageRecorded, false);
+});

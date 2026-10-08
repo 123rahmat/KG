@@ -36,7 +36,7 @@ Model authorization is checked at admission and immediately before outbound atte
 
 If policy newly requires human approval, automatic continuation pauses. The browser offers approval for that step with a token bound to the current policy revision, run, task and acting person. An old generic `approved: true` cannot approve a changed policy. Background job summaries retain the approval token but not model output. Local continuation preserves its chosen target and preflight, carries approval through receipt submission, and retains a completed receipt in memory for resubmission rather than repeating local execution if policy changes again. Continuation is bound to the account, workspace, task, attempt, repair round and current execution challenge; stale context is discarded. Declining a proposed action remains available even when current policy blocks execution.
 
-Requests already sent to an external provider cannot be revoked retroactively. Token admission uses estimates; providers can report higher actual usage, which is charged and prevents later admission when exhausted. Existing runs retain restrictions even after policy is relaxed; create a new run when intentionally using broader permissions.
+Requests already sent to an external provider cannot be revoked retroactively. Reservation settlement records each provider call once. Fallback accounting includes only unsettled usage, including mixed tool-loop calls and code retries. Token admission uses estimates; providers can report higher actual usage, which is charged and prevents later admission when exhausted. Existing runs retain restrictions even after policy is relaxed; create a new run when intentionally using broader permissions.
 
 ## Browser controls
 

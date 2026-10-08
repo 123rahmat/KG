@@ -411,6 +411,8 @@ export async function callModel(messages, {
   }
 
   let segment;
+  let usageRecorded = false;
+  let usageBudget = null;
   try {
     segment = vertexParse(JSON.parse(outcome.raw));
   } catch {
@@ -420,7 +422,7 @@ export async function callModel(messages, {
   if (reservation) {
     const usage = segment.usage ?? {};
     try {
-      await usageGate.settle({
+      usageBudget = await usageGate.settle({
         reservationId: reservation.id,
         source: usageSource,
         provider: 'google',
@@ -429,6 +431,7 @@ export async function callModel(messages, {
         outputTokens: usage.outputTokens || 0,
         conversationId: null
       });
+      usageRecorded = usageBudget?.recorded === true;
       reservation = null;
     } catch (error) {
       await usageGate.release(reservation).catch(() => {});
@@ -451,7 +454,8 @@ export async function callModel(messages, {
       budgetConstrained: routingDecision.budgetConstrained
     },
     incomplete: segment.incomplete,
-    usageRecorded: Boolean(!reservation),
+    usageRecorded,
+    usageBudget,
     webSearchPolicy: webPolicy,
     ...(webPolicy.shouldSearch && !shouldSearch ? { webSearchUnavailable: true } : {})
   };

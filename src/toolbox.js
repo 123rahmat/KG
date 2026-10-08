@@ -303,7 +303,7 @@ const BUILT_IN = [
         usageSource: 'web-search'
       });
       if (!found) return { error: 'Search is not available.' };
-      ctx.onUsage?.(found.usage, 'web.search');
+      ctx.onUsage?.(found.usage, 'web.search', found.usageRecorded);
       // An answer from memory is not a search result: say search is down.
       if (found.webSearchUnavailable) return { error: 'Web search is not available right now (its quota is used up or it was refused). Read a known page with web.fetch, or answer from what you know and say plainly that it was not checked against current sources.' };
       if (found.incomplete) return { error: `The search did not finish (${found.incomplete}).` };
@@ -635,16 +635,29 @@ export async function answerWithTools(messages, ctx = {}, { config, fetchImpl, m
   const sources = new Map();
   const reach = createReach(messages);
   const usage = { inputTokens: 0, outputTokens: 0 };
+  const unrecordedUsage = { inputTokens: 0, outputTokens: 0 };
+  let usageCalls = 0; let unrecordedCalls = 0;
+  const trackUsage = (used, recorded) => {
+    if (!used) return;
+    usageCalls++;
+    usage.inputTokens += used.inputTokens ?? 0;
+    usage.outputTokens += used.outputTokens ?? 0;
+    if (!recorded) {
+      unrecordedCalls++;
+      unrecordedUsage.inputTokens += used.inputTokens ?? 0;
+      unrecordedUsage.outputTokens += used.outputTokens ?? 0;
+    }
+  };
   const toolLoop = { stopReason: 'answer', modelCalls: 0, toolCalls: 0, avoidedToolCalls: 0 };
   const proposals = new Map();
   let previousFailure = null;
   let lastAnswer = null;
-  const finish = answer => ({ ...answer, citations: [...sources.values()], usage, toolLog, toolLoop: { ...toolLoop } });
+  const finish = answer => ({ ...answer, citations: [...sources.values()], usage, unrecordedUsage,
+    usageRecorded: usageCalls > 0 && unrecordedCalls === 0, toolLog, toolLoop: { ...toolLoop } });
   // Tools that call the model themselves (web.search) add to this step's usage.
-  const toolCtx = { ...ctx, signal: options.signal ?? ctx.signal, usageGate: ctx.usageGate, onUsage: (used, source) => {
-    usage.inputTokens += used?.inputTokens ?? 0;
-    usage.outputTokens += used?.outputTokens ?? 0;
-    ctx.onUsage?.(used, source);
+  const toolCtx = { ...ctx, signal: options.signal ?? ctx.signal, usageGate: ctx.usageGate, onUsage: (used, source, recorded) => {
+    trackUsage(used, recorded);
+    ctx.onUsage?.(used, source, recorded);
   } };
   const finalSynthesis = async (stopReason = 'round-budget') => {
     options.signal?.throwIfAborted();
@@ -697,8 +710,7 @@ export async function answerWithTools(messages, ctx = {}, { config, fetchImpl, m
       if (!synthesis) return null;
       options.signal?.throwIfAborted();
       last = synthesis;
-      usage.inputTokens += synthesis.usage?.inputTokens ?? 0;
-      usage.outputTokens += synthesis.usage?.outputTokens ?? 0;
+      trackUsage(synthesis.usage, synthesis.usageRecorded);
       for (const source of Array.isArray(synthesis.citations) ? synthesis.citations : []) {
         if (source?.url) sources.set(source.url, source);
       }
@@ -766,8 +778,7 @@ export async function answerWithTools(messages, ctx = {}, { config, fetchImpl, m
     if (!answer) return null;
     options.signal?.throwIfAborted();
     lastAnswer = answer;
-    usage.inputTokens += answer.usage?.inputTokens ?? 0;
-    usage.outputTokens += answer.usage?.outputTokens ?? 0;
+    trackUsage(answer.usage, answer.usageRecorded);
     // Preserve model-grounded sources immediately. This is important for a
     // tool-backed research step: the search result may itself contain
     // citations even when the final synthesis does not repeat them.
