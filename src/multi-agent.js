@@ -2677,6 +2677,13 @@ export async function runAdaptiveAgentPanel({
     const waveRecord = {
       index: waveIndex,
       roles: waveRoles,
+      specialistAdaptation: specialistWave ? {
+        action: specialistWave.action,
+        reason: specialistWave.reason,
+        targetAgents: specialistWave.targetAgents,
+        maxParallel: specialistWave.maxParallel,
+        verificationAuthority: specialistWave.verificationAuthority
+      } : null,
       parallel: lanePlan.waves.some(wave => (wave.lanes ?? []).length > 1),
       lanePlan,
       completed: results.filter(item => item.parsed).map(item => item.role),
