@@ -162,6 +162,19 @@ export function inlineText(spans) {
   return spans.map(span => (span.type === 'math' ? flattenMath(span.parts) : span.text ?? inlineText(span.children ?? []))).join('');
 }
 
+/** Mark explicit summary, example and caution callouts in user-visible answers only. */
+export function quotePresentation(item) {
+  const first = item?.children?.find(child => child.type === 'paragraph');
+  const value = first ? inlineText(first.children).trim() : '';
+  const match = value.match(/^(?:key point|reasoning summary|explanation|example|note|tip|important|caution|result)\s*:/i);
+  if (!match) return null;
+  const name = match[0].slice(0, -1).toLowerCase();
+  return name === 'caution' || name === 'important' ? 'caution'
+    : name === 'example' ? 'example'
+      : name === 'reasoning summary' || name === 'explanation' ? 'reasoning'
+        : 'insight';
+}
+
 /**
  * Build DOM nodes. `codeActions(block)` may return extra buttons for a code
  * block (copy, download, run).
@@ -200,7 +213,12 @@ export function renderMarkdown(markdown, { codeActions = () => [] } = {}) {
       case 'heading': return make(`h${Math.min(6, item.level + 2)}`, 'md-heading', inline(item.children));
       case 'paragraph': return make('p', '', inline(item.children));
       case 'rule': return make('hr');
-      case 'quote': return make('blockquote', '', item.children.map(block));
+      case 'quote': {
+        const presentation = quotePresentation(item);
+        return make(presentation ? 'aside' : 'blockquote',
+          presentation ? 'md-callout md-callout-' + presentation : '',
+          item.children.map(block));
+      }
       case 'code': {
         const code = make('code', item.language ? `language-${item.language}` : '');
         code.textContent = item.text;
@@ -227,9 +245,21 @@ export function renderMarkdown(markdown, { codeActions = () => [] } = {}) {
         return list;
       }
       case 'table': {
-        const head = make('tr', '', item.header.map((cell, index) => { const th = make('th', '', inline(cell)); if (item.align[index]) th.dataset.align = item.align[index]; return th; }));
+        const head = make('tr', '', item.header.map((cell, index) => {
+          const th = make('th', '', inline(cell));
+          th.scope = 'col';
+          if (item.align[index]) th.dataset.align = item.align[index];
+          return th;
+        }));
         const body = item.rows.map(row => make('tr', '', row.map((cell, index) => { const td = make('td', '', inline(cell)); if (item.align[index]) td.dataset.align = item.align[index]; return td; })));
-        return make('div', 'md-table', [make('table', '', [make('thead', '', [head]), make('tbody', '', body)])]);
+        const wrapper = make('div', 'md-table', [make('table', '', [
+          make('thead', '', [head]), make('tbody', '', body)
+        ])]);
+        wrapper.tabIndex = 0;
+        wrapper.setAttribute('role', 'region');
+        wrapper.setAttribute('aria-label', 'Answer table: ' +
+          item.header.slice(0, 3).map(inlineText).join(', ').slice(0, 100));
+        return wrapper;
       }
       default: return null;
     }
