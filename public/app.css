@@ -4606,3 +4606,21 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
 @media (prefers-reduced-motion: reduce) {
   .work-progress-meter i, .work-status-dot.active { transition: none; animation: none; }
 }
+
+
+.work-file-list {
+  list-style: none;
+  padding: 7px 0 0;
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+.work-file-list li {
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--softer);
+  font-size: .72rem;
+  font-family: var(--mono);
+  overflow-wrap: anywhere;
+}
