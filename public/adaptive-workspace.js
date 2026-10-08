@@ -358,7 +358,7 @@ function stageDetail(run, panel, view) {
       panel.stages.map(item => element('li', { class: 'work-stage-row', 'data-stage-status': item.status }, [
         element('span', { class: 'work-stage-mark', 'aria-hidden': 'true' }),
         element('span', { class: 'work-stage-name', text: item.label }),
-        element('span', { class: 'work-stage-state', text: item.statusLabel })
+        element('span', { class: 'work-stage-state', text: item.statusLabel + (item.evidenceAnchor ? ' · Evidence from ' + item.evidenceAnchor : '') })
       ]))),
     panel.stageCount > panel.stages.length ? element('p', {
       class: 'small muted', text: 'Showing the latest ' + panel.stages.length + ' stages'
@@ -710,7 +710,7 @@ function workspaceActivitySection(run, workspace) {
         }, [
           element('span', { class: 'work-stage-mark', 'aria-hidden': 'true' }),
           element('span', { class: 'work-stage-name', text: item.label }),
-          element('span', { class: 'work-stage-state', text: item.statusLabel })
+          element('span', { class: 'work-stage-state', text: item.statusLabel + (item.evidenceAnchor ? ' · Evidence from ' + item.evidenceAnchor : '') })
         ])))
       : element('p', { class: 'small muted', text: 'Recorded work stages will appear after a project task starts.' }),
     panel.stageCount > panel.stages.length
