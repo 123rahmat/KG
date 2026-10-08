@@ -21,6 +21,7 @@ import { readDocumentIsolated } from './document-runner.js';
 import { screenToolInput, recordRefusal, blockedTopicsFrom } from './safety.js';
 import { isSensitiveWorkspacePath } from './workspace-path.js';
 import { listMcpTools, callMcpTool } from './mcp.js';
+import { policyAllows } from './core.js';
 
 const text = value => String(value ?? '').trim();
 const MAX_TOOL_CHARS = 30_000;
@@ -298,6 +299,7 @@ const BUILT_IN = [
         modelId: ctx.modelId || null,
         effort: 'low',
         usageGate: ctx.usageGate,
+        beforeCall: ctx.beforeCall,
         usageSource: 'web-search'
       });
       if (!found) return { error: 'Search is not available.' };
@@ -442,6 +444,10 @@ export function toolNamed(name, ctx = {}) {
 export async function useTool(name, input, ctx) {
   ctx?.signal?.throwIfAborted();
   const wanted = text(name);
+  await ctx?.beforeTool?.(wanted);
+  if (ctx?.run?.governance && !policyAllows(ctx.run.governance, { tool: wanted })) {
+    return { error: `The active governance policy denies the tool "${wanted}".`, code: 'policy-blocked' };
+  }
   const allowed = allowedToolSet(ctx);
   if (allowed && !allowed.has(wanted)) return { error: `That tool is outside the current adaptive scope: "${wanted}".`, code: 'tool-out-of-scope' };
   const tool = toolNamed(wanted, ctx);

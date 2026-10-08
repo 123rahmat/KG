@@ -936,6 +936,7 @@
         <button type="button" class="settings-nav-item" data-settings-section="appearance"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-contrast"/></svg></span><span>Appearance</span></button>
         <button type="button" class="settings-nav-item" data-settings-section="voice"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-mic"/></svg></span><span>Voice</span></button>
         <button type="button" class="settings-nav-item" data-settings-section="data"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-database"/></svg></span><span>Data controls</span></button>
+        <button type="button" class="settings-nav-item" data-settings-section="policies"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-sliders"/></svg></span><span>Policy controls</span></button>
         <button type="button" class="settings-nav-item" data-settings-section="schedules"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-activity"/></svg></span><span>Schedules</span></button>
         <button type="button" class="settings-nav-item" data-settings-section="usage"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-gauge"/></svg></span><span>Usage</span></button>
         <button type="button" class="settings-nav-item" data-settings-section="billing"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-card"/></svg></span><span>Billing</span></button>
@@ -946,7 +947,7 @@
       </nav>
       <div class="settings-sidebar-foot">
         <span class="settings-status-dot"></span>
-        <span>Changes save automatically</span>
+        <span>Preferences save automatically; policies use Save</span>
       </div>
     </aside>
 
@@ -963,6 +964,7 @@
       </div>
 
       <div class="settings-content" id="settingsContent">
+
         <section class="settings-group settings-section" data-settings-section="general" data-settings-title="General" data-settings-description="Control how Kindgleam responds and adapts to your work.">
           <h3>Response preferences</h3>
           <label>Language
@@ -1045,6 +1047,19 @@
           <label>Voice language
             <select id="setVoiceLanguage"><option value="">Use my browser language</option><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option><option value="ur-PK">اردو (Pakistan)</option><option value="ar-SA">العربية</option><option value="hi-IN">हिन्दी</option></select>
           </label>
+        </section>
+
+        <section class="settings-group settings-section" data-settings-section="policies" data-settings-title="Policy controls" data-settings-description="Manage restrictions at your authorized scope and see which controls apply.">
+          <label>Policy scope<select id="policyLayer"><option value="user">Personal</option><option value="workspace">Workspace</option><option value="organization">Organization</option></select></label>
+          <p id="policyAuthority" class="small muted" aria-live="polite"></p>
+          <h3>Effective controls</h3>
+          <p id="policyEffective" class="small" aria-live="polite"></p>
+          <label class="settings-toggle-row"><span><strong>Require human approval</strong><small>New approval requirements pause existing work before its next step.</small></span><input id="policyApproval" type="checkbox" disabled></label>
+          <label>Run token cap<input id="policyTokens" type="number" min="0" step="1" placeholder="No local cap" disabled><span class="hint">Zero prevents further AI spending. Existing runs retain their tighter budget.</span></label>
+          <label>Blocked tools<textarea id="policyDeniedTools" rows="3" placeholder="One tool per line, for example code.run or mcp.*" disabled></textarea></label>
+          <details><summary>Additional restrictions</summary><label>Policy JSON<textarea id="policyAdvanced" rows="8" class="mono" spellcheck="false" disabled></textarea><span class="hint">Supported fields include allowedModels, deniedModels, allowedCapabilities, deniedCapabilities, allowedDataClasses, deniedDataClasses, allowedRiskClasses and deniedRiskClasses. Use arrays of names; * matches all names.</span></label></details>
+          <div class="row wrap"><button id="policySave" type="button" class="primary" disabled>Save policy</button><button id="policyReload" type="button">Reload policy</button></div>
+          <div id="policyNotice" class="notice" aria-live="polite" hidden></div>
         </section>
 
         <section class="settings-group settings-section" data-settings-section="data" data-settings-title="Data controls" data-settings-description="Control sharing, external context and local resilience.">

@@ -5,6 +5,7 @@
 
 import { privacyDecision, normalizeDataClasses } from '../privacy.js';
 import { executionTargetsFor } from '../execution.js';
+import { policyAllows } from '../core.js';
 
 export function targetConfigured(config, target) {
   if (target === 'local') return Boolean(config.execution.localAgentUrl && config.execution.localAgentSharedSecret);
@@ -27,33 +28,8 @@ export function runnerForTarget(config, target) {
   return null;
 }
 
-/** A policy rule: exact, `*`, `prefix*` or `*suffix`. */
-const matches = (rule, value) => rule === '*' || rule === value
-  || (rule.endsWith('*') && value.startsWith(rule.slice(0, -1)))
-  || (rule.startsWith('*') && value.endsWith(rule.slice(1)));
-
 export function planPolicyAllows(run, target, risk, dataClass = '') {
-  const constraints = run.governance?.constraints;
-  if (!constraints) return true;
-
-  const denied = constraints.deniedTools ?? [];
-
-  if (denied.some(rule => matches(rule, target))) return false;
-
-  const allowedTools = constraints.allowedTools ?? [];
-  if (constraints.allowedToolsSpecified && !allowedTools.some(rule => matches(rule, target))) return false;
-
-  if ((constraints.deniedRiskClasses ?? []).some(rule => matches(rule, risk))) return false;
-  if (constraints.allowedRiskClassesSpecified
-      && !(constraints.allowedRiskClasses ?? []).some(rule => matches(rule, risk))) return false;
-
-  const deniedData = constraints.deniedDataClasses ?? [];
-  const allowedData = constraints.allowedDataClasses ?? [];
-  if (dataClass && deniedData.some(rule => matches(rule, dataClass))) return false;
-  if (dataClass && constraints.allowedDataClassesSpecified
-      && !allowedData.some(rule => matches(rule, dataClass))) return false;
-
-  return true;
+  return !run.governance?.constraints || policyAllows(run.governance, { tool: target, risk, dataClass });
 }
 
 export function dataPolicyAllows(run, dataClasses, destination, options) {
@@ -73,7 +49,7 @@ export function dataPolicyDecision(run, dataClasses = ['user-content'], destinat
   const sources = Array.isArray(run.governance?.sources) ? run.governance.sources : [];
   const allowListDeclared = sources.some(source => source?.allowedDataClassesSpecified === true);
   const allowedDataClasses = allowListDeclared
-    ? (Array.isArray(constraints.allowedDataClasses) ? constraints.allowedDataClasses : [])
+    ? classes.filter(dataClass => policyAllows(run.governance, { dataClass }))
     : ['*'];
   const decision = privacyDecision({
     workspaceScope: run.workspaceId ?? run.situation?.workspace?.id ?? null,
@@ -85,19 +61,12 @@ export function dataPolicyDecision(run, dataClasses = ['user-content'], destinat
     connectionAuthorized,
     explicitConsent
   });
+  if (decision.allowed && run.governance && classes.some(dataClass => !policyAllows(run.governance, { dataClass }))) {
+    return { ...decision, allowed: false, reason: 'data-class-not-authorized-by-policy' };
+  }
   return decision;
 }
 
 export function modelPolicyAllows(run, model, risk = 'medium') {
-  const constraints = run.governance?.constraints;
-  if (!constraints) return true;
-
-
-  if ((constraints.deniedModels ?? []).some(rule => matches(rule, model))) return false;
-  if (constraints.allowedModelsSpecified
-      && !constraints.allowedModels.some(rule => matches(rule, model))) return false;
-  if ((constraints.deniedRiskClasses ?? []).some(rule => matches(rule, risk))) return false;
-
-  return !constraints.allowedRiskClassesSpecified
-    || constraints.allowedRiskClasses.some(rule => matches(rule, risk));
+  return !run.governance?.constraints || policyAllows(run.governance, { model, risk });
 }

@@ -1706,7 +1706,7 @@ async function runCodeWorkspaceAgentPanels({
           maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
           usageGate,
           usageSource: 'multi-agent'
-        }).catch(error => { if (signal?.aborted) throw signal.reason; if (error?.name === 'AbortError') throw error; return null; });
+        }).catch(error => { if (signal?.aborted) throw signal.reason; if (error?.name === 'AbortError' || (error?.expose && error.status >= 400 && error.status < 500)) throw error; return null; });
 
         if (result?.usage) {
           tokensSpent += Number(result.usage.inputTokens ?? 0) + Number(result.usage.outputTokens ?? 0);
@@ -2025,7 +2025,7 @@ async function runCodeWorkspaceAgentPanels({
       maxOutputTokens: ARBITER_MAX_OUTPUT_TOKENS,
       usageGate,
       usageSource: 'multi-agent'
-    }).catch(error => { if (signal?.aborted) throw signal.reason; if (error?.name === 'AbortError') throw error; return null; });
+    }).catch(error => { if (signal?.aborted) throw signal.reason; if (error?.name === 'AbortError' || (error?.expose && error.status >= 400 && error.status < 500)) throw error; return null; });
     const parsed = result && !result.incomplete
       ? normalizedRoleFinding(parseJsonObject(result.text), 'integration-arbiter')
       : null;
@@ -2424,7 +2424,7 @@ export async function runAdaptiveAgentPanel({
         maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
         usageGate,
         usageSource: 'multi-agent'
-      }).catch(error => { if (signal?.aborted) throw signal.reason; if (error?.name === 'AbortError') throw error; return null; });
+      }).catch(error => { if (signal?.aborted) throw signal.reason; if (error?.name === 'AbortError' || (error?.expose && error.status >= 400 && error.status < 500)) throw error; return null; });
       if (result?.usage) {
         tokensSpent += Number(result.usage.inputTokens ?? 0) + Number(result.usage.outputTokens ?? 0);
         if (!result.usageRecorded) await recordUsage(result.usage, result.provider, result.model);
@@ -2571,7 +2571,7 @@ export async function runAdaptiveAgentPanel({
       maxOutputTokens: ARBITER_MAX_OUTPUT_TOKENS,
       usageGate,
       usageSource: 'multi-agent'
-    }).catch(error => { if (signal?.aborted) throw signal.reason; if (error?.name === 'AbortError') throw error; return null; });
+    }).catch(error => { if (signal?.aborted) throw signal.reason; if (error?.name === 'AbortError' || (error?.expose && error.status >= 400 && error.status < 500)) throw error; return null; });
     if (result?.usage && !result.usageRecorded) await recordUsage(result.usage, result.provider, result.model);
     const parsed = result && !result.incomplete
       ? normalizedRoleFinding(parseJsonObject(result.text), 'arbiter')

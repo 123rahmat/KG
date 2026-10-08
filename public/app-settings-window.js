@@ -8,6 +8,7 @@ import { loadUsage, openBillingPortal, renderBillingSection, renderMemories, ren
 import { setupVoiceInput, svgIcon } from './app.js';
 import { DEFAULT_SETTINGS, applyTheme, persistPreferencePatch, saveSettings } from './app-settings.js';
 import { renderReports } from './app-actions.js';
+import { loadPolicyControls, initPolicyControls } from './governance-controls.js';
 
 /* ---------------------------------------------------------- settings window */
 
@@ -211,6 +212,7 @@ export function activateSettingsSection(name) {
   if (activeName === 'usage') { renderUsageSection(); loadUsage(); }
   if (activeName === 'billing') renderBillingSection();
   if (activeName === 'security') renderSecuritySection();
+  if (activeName === 'policies') loadPolicyControls();
   if (activeName === 'workspace') { renderWorkspaceTools(); renderReports(); }
   if (activeName === 'schedules') { renderSchedules(); syncScheduleForm(); }
   if (activeName === 'personalization') { renderMemories(); renderSkillLearning(); }
@@ -221,6 +223,7 @@ let resetArmedUntil = 0;
 
 /** Start-up work of this part, run by app.js at the point it always ran. */
 export function initSettingsWindow() {
+  initPolicyControls();
   // Every change is saved at once; there is no separate save button to miss.
   $('settingsForm').addEventListener('input', event => {
     const entry = SETTING_FIELDS.find(([id]) => id === event.target.id);

@@ -42,6 +42,8 @@ import { RagStore } from '../rag.js';
 import { loadSelectedSkills, SkillLearningStore, skillContextSignature, skillPlanForSelectedSkills } from '../skills.js';
 import { BlackboardStore } from '../blackboard.js';
 import { buildSubsystemPlan, compactSubsystemPlan } from '../subsystem-orchestrator.js';
+import { evaluatePolicy, policyAllows } from '../core.js';
+import { narrowPolicyDecision, PolicyError } from '../governance.js';
 
 /** Which tasks execute where. Everything else needs a human decision. */
 const RUNNER_FOR = {
@@ -115,6 +117,51 @@ function replyRecorder() {
 }
 
 export function registerExecutionRoutes(app, { config, pool, audit, governance, capabilities, objects, runs, jobs, scheduler = null, memories = null, metrics, fetchImpl, scoped, route, idempotent = (_req, _res, next) => next() }) {
+  // A plan is a restriction snapshot, never a permanent authorization grant.
+  async function refreshPolicy(run, scope, principalId, body = {}, { humanApproved = false, baseline = run.governance } = {}) {
+    try {
+      const current = evaluatePolicy(await governance.forScope({ workspaceId: scope.workspaceId, principalId }));
+      const combined = narrowPolicyDecision(baseline, current);
+      run.governance = combined;
+      const budgets = [run.maxTokens, combined.constraints.maxTokens].filter(Number.isFinite);
+      run.maxTokens = budgets.length ? Math.min(...budgets) : null;
+      if (current.status !== 'evaluated' || combined.status === 'incomplete'
+        || (run.capabilities?.required ?? []).some(capability => !policyAllows(combined, { capability }))) {
+        throw new PolicyError('Current policy denies required capabilities or mandatory policy is unavailable.', 'policy-blocked', 403);
+      }
+      const originalApprovals = new Set((baseline?.approvals ?? []).map(item => JSON.stringify(item)));
+      const newApprovals = current.approvals.filter(item => !originalApprovals.has(JSON.stringify(item)));
+      if (!humanApproved && newApprovals.length) {
+        const policyRevision = crypto.createHash('sha256').update(JSON.stringify({
+          runId: run.id, taskId: run.next, principalId, approvals: newApprovals
+        })).digest('hex');
+        if (body.approved !== true || body.policyRevision !== policyRevision) {
+          const error = new PolicyError('Policy changed and now requires your approval for this step.', 'policy-approval-required', 409);
+          error.detail = { policyRevision };
+          throw error;
+        }
+      }
+      if (run.maxTokens !== null) {
+        // Reservations read the durable cap. Tighten it atomically, including
+        // when another caller is already admitting work for the same run.
+        const { rows: [budget] } = await pool.query(
+          `UPDATE runs SET max_tokens = LEAST(COALESCE(max_tokens, $3::bigint), $3::bigint)
+            WHERE id = $1 AND workspace_id = $2 RETURNING tokens_used, max_tokens`,
+          [run.id, scope.workspaceId, run.maxTokens]
+        );
+        if (!budget) throw new PolicyError('Run is no longer accessible.', 'no-run', 404);
+        run.maxTokens = budget.max_tokens;
+        run.tokensUsed = budget.tokens_used;
+        if (run.tokensUsed >= run.maxTokens) throw new PolicyError('The current run token budget is exhausted.', 'budget-exhausted', 409);
+      }
+      return run;
+    } catch (error) {
+      if (error instanceof PolicyError) await audit?.record({ principalId, workspaceId: scope.workspaceId,
+        action: 'run.execute.denied', target: run.id, outcome: 'denied', detail: { code: error.code, taskId: run.next } });
+      throw error;
+    }
+  }
+
   // A refusal at the execution boundary belongs in the audit trail as much as
   // an approval does. Only the reason is kept, never the task content.
   const recordBoundaryDenial = (req, run, task, code, detail = {}) => audit?.record({
@@ -126,6 +173,24 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     detail: { taskId: task?.id ?? null, code, ...detail },
     requestId: req.requestId
   });
+
+  function bindToolPolicy(ctx, recheckPolicy, explicitConsent) {
+    ctx.beforeTool = async name => {
+      await recheckPolicy?.();
+      if (name && !policyAllows(ctx.run.governance, { tool: name })) throw new PolicyError('Current policy denies this tool.', 'policy-blocked', 403);
+      if (toolNamed(name, ctx)?.network && !dataPolicyAllows(ctx.run, ctx.run.adaptation?.dataClasses ?? ['user-content'], 'external-tool', {
+        explicitConsent: explicitConsent || ctx.run.adaptation?.privacy?.consent?.modelProvider === true
+      })) throw new PolicyError('Current policy denies data transfer to this tool.', 'tool-data-policy-denied', 403);
+    };
+    ctx.beforeRunner = async ({ tool = 'code.run' } = {}) => {
+      await recheckPolicy?.();
+      if (!policyAllows(ctx.run.governance, { capability: 'code-execution', tool }) || !planPolicyAllows(ctx.run, 'general-ai-sandbox', 'high')
+        || !dataPolicyAllows(ctx.run, ctx.run.adaptation?.dataClasses ?? ['user-content'], 'execution-runner', {
+          explicitConsent: explicitConsent || ctx.run.adaptation?.privacy?.consent?.modelProvider === true
+        })) throw new PolicyError('Current policy denies sandbox execution or data transfer.', 'execution-target-policy-denied', 403);
+    };
+    return ctx;
+  }
 
   /**
    * Execute a run's next task. The HTTP route calls this synchronously and
@@ -281,6 +346,9 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     await (async () => {
       const run = await runs.get(req.scope, req.params.id);
       if (!run) return res.status(404).json({ error: 'Run not found', code: 'no-run' });
+      const policyBaseline = run.governance;
+      const recheckPolicy = () => refreshPolicy(run, req.scope, req.principal.id, req.body, { baseline: policyBaseline });
+      await recheckPolicy();
       if (run.state === 'blocked') {
         return res.status(409).json({
           error: `Policy denies required capabilities: ${run.capabilities.blocked.join(', ')}`,
@@ -742,6 +810,14 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
             fetchImpl,
             signal,
             token: runnerKey === 'sandbox' ? config.runners.sandboxToken : config.runners.toolToken,
+            beforeCall: async () => {
+              await recheckPolicy();
+              const namedTool = text(req.body?.payload?.tool ?? task.metadata?.tool);
+              if (!policyAllows(run.governance, { tool: namedTool, capability: executionDecision?.target === 'general-ai-sandbox' ? 'code-execution' : '' })
+                || !planPolicyAllows(run, executionDecision?.target, 'high') || !dataPolicyAllows(run, run.adaptation?.dataClasses ?? ['user-content'], 'execution-runner', {
+                explicitConsent: req.body?.approved === true
+              })) throw new PolicyError('Current policy denies this runner or data transfer.', 'execution-target-policy-denied', 403);
+            },
             ...(executionDecision?.target === 'general-ai-sandbox' ? { timeoutMs: SANDBOX_TIMEOUT_MS } : {})
           })
         : MODEL_TASKS.has(task.type) || task.metadata?.modelGenerated === true || BUILTIN_TOOL_TARGETS.has(executionDecision?.target)
@@ -750,6 +826,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
               executionId: managedExecutionId,
               scope: req.scope,
               signal,
+              recheckPolicy,
               // Approving built-in research or tools is explicit consent for
               // them, and a person may consent for this step when asked
               // (policy denials still apply; consent only satisfies the consent rule).
@@ -953,7 +1030,10 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       }
 
       res.json({ run: advanced, execution });
-    })();
+    })().catch(error => {
+      if (!(error instanceof PolicyError)) throw error;
+      return res.status(error.status).json({ error: error.message, code: error.code, ...(error.detail ?? {}) });
+    });
     return res.reply ?? { status: 500, body: { error: 'Execution produced no response', code: 'internal' } };
   }
 
@@ -1006,6 +1086,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
   app.post('/api/runs/:id/execution-result', scoped('editor'), route(async (req, res) => {
     const run = await runs.get(req.scope, req.params.id);
     if (!run) return res.status(404).json({ error: 'Run not found', code: 'no-run' });
+    await refreshPolicy(run, req.scope, req.principal.id, req.body);
 
     const taskId = text(req.body?.taskId);
     const task = run.tasks.find(item => item.id === taskId);
@@ -1368,7 +1449,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     return gradedCriteria(run.requirements, run.situation);
   }
 
-  async function reason(run, task, { managedTarget = null, explicitConsent = false, executionId = null, scope = null, signal } = {}) {
+  async function reason(run, task, { managedTarget = null, explicitConsent = false, executionId = null, scope = null, signal, recheckPolicy } = {}) {
     let ragResults = [];
     // RAG is evidence retrieval, not a mandatory prelude to every answer.
     // Routine turns avoid retrieval cost and unrelated prior-work context.
@@ -1640,6 +1721,12 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       run, task, effort, hasImages: attached.images.length > 0, fallback: model,
       allows: id => modelPolicyAllows(run, id, 'medium')
     });
+    const beforeCall = async ({ modelId }) => {
+      await recheckPolicy?.();
+      if (!modelPolicyAllows(run, modelId, 'medium') || !dataPolicyAllows(run, run.adaptation?.dataClasses ?? ['user-content'], 'model-provider', {
+        explicitConsent: explicitConsent || run.adaptation?.privacy?.consent?.modelProvider === true
+      })) throw new PolicyError('Current policy denies this model call or data transfer.', 'policy-blocked', 403);
+    };
     // Backups obey the same rules: governance, and a model an admin turned off.
     const allowBackup = () => false;
 
@@ -1651,7 +1738,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       primaryModelId: effectiveModelId,
       config,
       fetchImpl,
-      modelCaller: (messages, options) => callModel(messages, { ...options, signal }),
+      modelCaller: (messages, options) => callModel(messages, { ...options, signal, beforeCall }),
       signal,
       subsystemPlan,
       allowBackup,
@@ -1717,6 +1804,11 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     const maybeToolContext = (managedTarget || TOOL_TASKS.has(task.type) || task.type === 'reason')
       ? await toolContext(run, task, scope, signal)
       : null;
+    if (maybeToolContext) {
+      bindToolPolicy(maybeToolContext, recheckPolicy, explicitConsent);
+      maybeToolContext.beforeCall = beforeCall;
+      maybeToolContext.usageGate = usageGate;
+    }
     const reasonHasScopedTool = task.type === 'reason'
       && maybeToolContext?.allowedTools?.some(name => !PERSONAL_TOOLS.includes(name));
     const useToolLoop = (managedTarget || TOOL_TASKS.has(task.type) || reasonHasScopedTool)
@@ -1724,7 +1816,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       && !task.metadata?.conversational;
     let answer = useToolLoop
       ? await answerWithTools(messages, maybeToolContext, {
-          config, fetchImpl, modelId: effectiveModelId, allowBackup, effort, signal,
+          config, fetchImpl, modelId: effectiveModelId, allowBackup, effort, signal, beforeCall,
           usageGate,
           usageSource: 'chat',
           maxRounds: Math.min(
@@ -1733,6 +1825,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
           )
         })
       : await callModel(messages, {
+          beforeCall,
           config,
           fetchImpl,
           signal,
@@ -1804,6 +1897,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         { role: 'user', content: TESTS_REQUIRED_PROMPT }
       ], {
         config,
+        beforeCall,
         fetchImpl,
         signal,
         modelId: effectiveModelId,
@@ -1869,6 +1963,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         let reviewed = null;
         if (!capped) {
           reviewed = await callModel(reviewMessages(run, { criteria: plannedCriteria, verdict }), {
+            beforeCall,
             config,
             fetchImpl,
             signal,
@@ -1879,7 +1974,11 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
             maxOutputTokens: REVIEW_MAX_OUTPUT_TOKENS,
             usageGate,
             usageSource: 'verification-review'
-          }).catch(() => null);
+          }).catch(error => {
+            if (signal?.aborted) throw signal.reason;
+            if (error?.name === 'AbortError' || (error?.expose && error.status >= 400 && error.status < 500)) throw error;
+            return null;
+          });
           if (reviewed?.usage && !reviewed.usageRecorded) await runs.addTokens(run.id, { ...reviewed.usage, provider: reviewed.provider, model: reviewed.model });
         }
         const review = reviewed && !reviewed.incomplete ? readReview(parseJsonObject(reviewed.text)) : null;
@@ -1952,6 +2051,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     if (!run) return res.status(404).json({ error: 'Run not found', code: 'run-not-found' });
     const approve = req.body?.approve === true;
     if (!approve && req.body?.approve !== false) return res.status(400).json({ error: 'Say approve: true or false.', code: 'action-decision-required' });
+    if (approve) await refreshPolicy(run, req.scope, req.principal.id, req.body, { humanApproved: true });
     const task = run.tasks.find(item => item.id === text(req.body?.taskId)) ?? run.tasks.at(-1);
     // Declining runs nothing, so it is always allowed; only approving an
     // action crosses the execution boundary and passes the gates.
@@ -1967,10 +2067,13 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     }
     try {
       const ctx = await toolContext(run, task, req.scope);
+      const policyBaseline = run.governance;
+      if (approve) bindToolPolicy(ctx, () => refreshPolicy(run, req.scope, req.principal.id, req.body, { humanApproved: true, baseline: policyBaseline }), true);
       const action = await actions.decide(req.scope, req.principal, {
         runId: run.id, actionId: text(req.params.actionId), approve, requestId: req.requestId,
         ctxFor: async () => ({ ...ctx, propose: null }),
-        canApprove: tool => toolNamed(tool, ctx)?.approveRole !== 'admin' || req.scope.role === 'admin'
+        canApprove: tool => policyAllows(run.governance, { tool })
+          && (toolNamed(tool, ctx)?.approveRole !== 'admin' || req.scope.role === 'admin')
       });
       res.json({ action });
     } catch (error) {

@@ -30,6 +30,7 @@ import { adaptiveExecutionEnvelope } from './adaptive-execution-policy.js';
 import { decideAgentTopology } from './adaptive-agents.js';
 import { buildHumanGovernanceContract } from './human-governance.js';
 import { workspaceEnvironment } from './surface-policy.js';
+import { policyMatches as matches } from './policy-rules.js';
 
 export const CONTRACT = 'kindgleam-open-world-situation-adaptive-v9';
 export { CAPABILITIES, SURFACES };
@@ -116,14 +117,15 @@ export function normalizePolicy(policy = {}, layer = 'task') {
   };
 }
 
-const matches = (rule, value) => {
-  if (!value || typeof rule !== 'string') return false;
-  if (rule === '*' || rule === value) return true;
-  if (rule.endsWith('*')) return value.startsWith(rule.slice(0, -1));
-  if (rule.startsWith('*')) return value.endsWith(rule.slice(1));
-  return false;
-};
 const anyMatch = (rules, value) => rules.some(rule => matches(rule, value));
+
+/** Every declared allow-list must match; patterns are never intersected as literal strings. */
+export function constraintAllows(constraints, kind, value) {
+  const key = 'allowed' + kind;
+  if (!value || constraints?.[key + 'Specified'] !== true) return true;
+  const groups = constraints[key + 'Groups'] ?? [constraints[key] ?? []];
+  return groups.length > 0 && groups.every(rules => anyMatch(rules, text(value)));
+}
 
 export function evaluatePolicy(policies = {}) {
   const sources = POLICY_LAYERS
@@ -131,6 +133,7 @@ export function evaluatePolicy(policies = {}) {
     .map(layer => normalizePolicy(policies[layer], layer));
 
   const merge = key => [...new Set(sources.flatMap(source => source[key]))];
+  const groups = key => sources.filter(source => source[key + 'Specified']).map(source => source[key]);
   const intersect = key => {
     const specifiedKey = key + 'Specified';
     const declared = sources.filter(source => source[specifiedKey] === true);
@@ -157,14 +160,19 @@ export function evaluatePolicy(policies = {}) {
     approvals,
     constraints: {
       allowedCapabilities: intersect('allowedCapabilities'),
+      allowedCapabilitiesGroups: groups('allowedCapabilities'),
       allowedCapabilitiesSpecified: sources.some(source => source.allowedCapabilitiesSpecified === true),
       allowedTools: intersect('allowedTools'),
+      allowedToolsGroups: groups('allowedTools'),
       allowedToolsSpecified: sources.some(source => source.allowedToolsSpecified === true),
       allowedModels: intersect('allowedModels'),
+      allowedModelsGroups: groups('allowedModels'),
       allowedModelsSpecified: sources.some(source => source.allowedModelsSpecified === true),
       allowedDataClasses: intersect('allowedDataClasses'),
+      allowedDataClassesGroups: groups('allowedDataClasses'),
       allowedDataClassesSpecified: sources.some(source => source.allowedDataClassesSpecified === true),
       allowedRiskClasses: intersect('allowedRiskClasses'),
+      allowedRiskClassesGroups: groups('allowedRiskClasses'),
       allowedRiskClassesSpecified: sources.some(source => source.allowedRiskClassesSpecified === true),
       deniedCapabilities: merge('deniedCapabilities'),
       deniedTools: merge('deniedTools'),
@@ -188,21 +196,17 @@ export function policyAllows(decision, {
 
   if (dataClass) {
     if (anyMatch(decision.constraints.deniedDataClasses, text(dataClass))) return false;
-    if (decision.constraints.allowedDataClassesSpecified
-        && !anyMatch(decision.constraints.allowedDataClasses, text(dataClass))) return false;
+    if (!constraintAllows(decision.constraints, 'DataClasses', dataClass)) return false;
   }
   if (risk) {
     if (anyMatch(decision.constraints.deniedRiskClasses, risk)) return false;
-    if (decision.constraints.allowedRiskClassesSpecified
-        && !anyMatch(decision.constraints.allowedRiskClasses, risk)) return false;
+    if (!constraintAllows(decision.constraints, 'RiskClasses', risk)) return false;
   }
 
   const allowed = (kind, value) => {
     if (!value) return true;
     if (anyMatch(decision.constraints['denied' + kind], value)) return false;
-    const rules = decision.constraints['allowed' + kind];
-    const specified = decision.constraints['allowed' + kind + 'Specified'] === true;
-    return !specified || anyMatch(rules, value);
+    return constraintAllows(decision.constraints, kind, value);
   };
 
   return allowed('Capabilities', text(capability))

@@ -6,6 +6,8 @@
  * the platform only through an explicitly permitted destination.
  */
 
+import { policyMatches } from './policy-rules.js';
+
 const text = value => String(value ?? '').trim();
 
 export const DATA_CLASSES = Object.freeze([
@@ -65,12 +67,8 @@ export function privacyDecision({
   );
   const privateData = classes.some(item => PRIVATE_DATA_CLASSES.includes(item));
   const hasAllowList = allowed.length > 0;
-  const allAllowed = classes.every(item => allowed.some(rule =>
-    rule === '*' || rule === item || (rule.endsWith('*') && item.startsWith(rule.slice(0, -1)))
-  ));
-  const anyDenied = classes.some(item => denied.some(rule =>
-    rule === '*' || rule === item || (rule.endsWith('*') && item.startsWith(rule.slice(0, -1)))
-  ));
+  const allAllowed = classes.every(item => allowed.some(rule => policyMatches(rule, item)));
+  const anyDenied = classes.some(item => denied.some(rule => policyMatches(rule, item)));
   const external = destination !== 'internal';
 
   let allowedDecision = true;

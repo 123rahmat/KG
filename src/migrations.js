@@ -3085,4 +3085,50 @@ export const MIGRATIONS = [
       REVOKE ALL ON FUNCTION kg_workspace_storage_usage(TEXT) FROM PUBLIC;
     `
   }
+  ,{
+    version: 77,
+    name: 'explicit-organization-authority-and-policy-revisions',
+    sql: `
+      CREATE TABLE organization_admins (
+        organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (organization_id, principal_id)
+      );
+      ALTER TABLE organization_admins ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE organization_admins FORCE ROW LEVEL SECURITY;
+      CREATE POLICY organization_admin_self_read ON organization_admins FOR SELECT
+        USING (principal_id = current_setting('app.principal_id', true));
+      ALTER TABLE governance_policies ADD COLUMN revision BIGINT NOT NULL DEFAULT 1 CHECK (revision > 0);
+
+      DROP POLICY governance_write_policy ON governance_policies;
+      CREATE POLICY governance_write_policy ON governance_policies FOR ALL
+        USING (
+          EXISTS (SELECT 1 FROM memberships m JOIN workspaces w ON w.id = m.workspace_id
+            WHERE m.principal_id = current_setting('app.principal_id', true)
+              AND m.workspace_id = current_setting('app.workspace_id', true)
+              AND w.archived_at IS NULL
+              AND (
+                (layer = 'user' AND scope_id = m.principal_id)
+                OR (layer = 'workspace' AND scope_id = m.workspace_id AND m.role = 'admin')
+                OR (layer = 'organization' AND scope_id = w.organization_id
+                  AND EXISTS (SELECT 1 FROM organizations o WHERE o.id = w.organization_id AND o.type = 'enterprise')
+                  AND EXISTS (SELECT 1 FROM organization_admins a WHERE a.organization_id = w.organization_id AND a.principal_id = m.principal_id))
+              ))
+        )
+        WITH CHECK (
+          EXISTS (SELECT 1 FROM memberships m JOIN workspaces w ON w.id = m.workspace_id
+            WHERE m.principal_id = current_setting('app.principal_id', true)
+              AND m.workspace_id = current_setting('app.workspace_id', true)
+              AND w.archived_at IS NULL
+              AND (
+                (layer = 'user' AND scope_id = m.principal_id)
+                OR (layer = 'workspace' AND scope_id = m.workspace_id AND m.role = 'admin')
+                OR (layer = 'organization' AND scope_id = w.organization_id
+                  AND EXISTS (SELECT 1 FROM organizations o WHERE o.id = w.organization_id AND o.type = 'enterprise')
+                  AND EXISTS (SELECT 1 FROM organization_admins a WHERE a.organization_id = w.organization_id AND a.principal_id = m.principal_id))
+              ))
+        );
+    `
+  }
 ];

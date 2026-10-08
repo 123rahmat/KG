@@ -27,7 +27,7 @@ const text = value => String(value ?? '').trim();
 const newWorkerId = () => 'jobs-' + process.pid + '-' + crypto.randomUUID();
 
 /** Request fields a job may carry; everything else is dropped. */
-const JOB_REQUEST_FIELDS = ['approved', 'executionTarget', 'preflight', 'requirements', 'cloudFallbackAllowed', 'payload', 'modelConsent'];
+const JOB_REQUEST_FIELDS = ['approved', 'policyRevision', 'executionTarget', 'preflight', 'requirements', 'cloudFallbackAllowed', 'payload', 'modelConsent'];
 
 function presentJob(row) {
   if (!row) return null;
@@ -50,6 +50,7 @@ export function summarizeOutcome({ status, body }) {
   return {
     httpStatus: status,
     ...(body?.code ? { code: body.code } : {}),
+    ...(body?.policyRevision ? { policyRevision: body.policyRevision } : {}),
     ...(status >= 400 && body?.error ? { error: body.error } : {}),
     execution: execution ? {
       status: execution.status ?? null,

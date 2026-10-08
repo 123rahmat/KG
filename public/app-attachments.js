@@ -6,7 +6,7 @@
 import { renderMarkdown } from './markdown.js';
 import { syncThread } from './thread-view.js';
 import { workPresentation } from './adaptive-workspace.js';
-import { state, $, element, button, api, notify, guard, aiConnected, clearNotice, updateConnectionUI } from './ui-core.js';
+import { state, $, element, button, api, notify, guard, canEdit, aiConnected, clearNotice, updateConnectionUI } from './ui-core.js';
 import { autoDrive, browserAdaptationContext, bytes, heading, runStatus, svgIcon, timeAgo } from './app.js';
 import { assistantMessage, userMessage, welcome } from './app-actions.js';
 import { loadUsage, renderUsageLimitLock, usageLimitStatus, selectTab } from './app-account.js';
@@ -543,6 +543,7 @@ async function flushQueuedItems() {
 }
 
 export async function sendMessage(text) {
+  if (!canEdit()) return;
   if (usageLimitStatus()) {
     renderUsageLimitLock();
     return;

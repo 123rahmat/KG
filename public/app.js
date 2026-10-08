@@ -12,10 +12,10 @@
  * the next step needs, in plain words.
  */
 
-import { state, $, element, button, api, notify, clearNotice, guard, canEdit, aiConnected, configuredTargets, updateConnectionUI, waitForConnection } from './ui-core.js';
+import { state, $, element, button, api, notify, clearNotice, guard, canEdit, composerControls, aiConnected, configuredTargets, updateConnectionUI, waitForConnection } from './ui-core.js';
 import { addAttachments, flushOfflineQueue, growComposer, loadRuns, newChat, renderChatList, renderRun, renderThread, sendMessage, stopRun } from './app-attachments.js';
 import { initSettings, saveDraftSoon, adoptLegacy } from './app-settings.js';
-import { applyRole, enterApp, initAccount, initGate, loadAudit, loadObjects, loadUsage, registerAppWorker, selectTab, showGate, signIn, signOut, takeSignInToken, uploadObject } from './app-account.js';
+import { applyRole, enterApp, initAccount, initGate, loadAudit, loadObjects, loadUsage, usageLimitStatus, registerAppWorker, selectTab, showGate, signIn, signOut, takeSignInToken, uploadObject } from './app-account.js';
 import { codeMarkdown, hasCode, initActions } from './app-actions.js';
 import { renderMarkdown } from './markdown.js';
 import { initSettingsWindow } from './app-settings-window.js';
@@ -23,6 +23,7 @@ import { initWorkspaceSources } from './workspace-sources.js';
 import { initTerminal } from './terminal.js';
 import { initArtifactPreview } from './artifact-preview.js';
 import { initProjectHub, loadProjects } from './app-projects.js';
+import { executionContextKey, executionContextCurrent } from './execution-context.js';
 
 initSettings();
 initWorkspaceSources();
@@ -350,10 +351,20 @@ function explainNotExecuted(execution, task, targetRun = state.run) {
   return message;
 }
 
-async function runStep(button, extra = {}, targetRun = state.run) {
+function discardStaleContinuation(run) {
+  const saved = state.executionReceipts.get(run.id) ?? state.policyContinuations.get(run.id);
+  if (!saved || executionContextCurrent(saved.context, run, { principalId: state.principal?.id, workspaceId: state.workspaceId })) return false;
+  state.executionReceipts.delete(run.id);
+  state.policyContinuations.delete(run.id);
+  state.policyApprovals.delete(run.id);
+  return true;
+}
+
+export async function runStep(button, extra = {}, targetRun = state.run) {
   const run = targetRun;
   const task = nextTaskOf(run);
-  if (!run || !task) return run;
+  if (!canEdit() || !run || !task) return run;
+  if (discardStaleContinuation(run)) { renderThread(); return run; }
   state.busyRuns ??= new Set();
   if (state.busyRuns.has(run.id)) return run;
   state.busyRuns.add(run.id);
@@ -362,6 +373,9 @@ async function runStep(button, extra = {}, targetRun = state.run) {
   const original = button?.textContent;
   if (button) { button.disabled = true; button.textContent = 'Processing…'; }
   let updatedRun = run;
+  let continuationBody = extra;
+  let contextRun = run;
+  const continuation = body => ({ body, context: executionContextKey(contextRun, { principalId: state.principal?.id, workspaceId: state.workspaceId }) });
   try {
     await guard(async () => {
       state.network.interruptedRunId = null;
@@ -370,6 +384,19 @@ async function runStep(button, extra = {}, targetRun = state.run) {
         state.consentNeeded.delete(run.id);
       }
       const body = { ...extra, taskId: task.id, ...(state.consented.has(run.id) ? { modelConsent: true } : {}) };
+      continuationBody = body;
+      const submitReceipt = async pending => {
+        const result = await api('POST', '/api/runs/' + run.id + '/execution-result', { ...pending, ...body });
+        state.executionReceipts.delete(run.id);
+        state.policyApprovals.delete(run.id);
+        state.policyContinuations.delete(run.id);
+        updatedRun = result.run;
+        renderRun(updatedRun);
+        await loadRuns();
+      };
+      const pending = state.executionReceipts.get(run.id);
+      if (pending?.body.taskId === task.id) { await submitReceipt(pending.body); return; }
+      if (pending) state.executionReceipts.delete(run.id);
       const queued = body.executionTarget === 'local'
         ? null
         : await api('POST', '/api/runs/' + run.id + '/execute', { ...body, background: true }, { idempotencyKey: crypto.randomUUID() })
@@ -381,6 +408,13 @@ async function runStep(button, extra = {}, targetRun = state.run) {
       if (queued) {
         const job = await waitForJob(run.id, queued.job.id, button);
         const outcome = job.outcome ?? {};
+        if (outcome.code === 'policy-approval-required') {
+          state.policyApprovals.set(run.id, outcome.policyRevision);
+          state.policyContinuations.set(run.id, continuation(body));
+        } else if (job.state === 'succeeded') {
+          state.policyApprovals.delete(run.id);
+          state.policyContinuations.delete(run.id);
+        }
         if (outcome.execution?.status === 'consent-required') state.consentNeeded.add(run.id);
         updatedRun = await api('GET', '/api/runs/' + run.id);
         renderRun(updatedRun);
@@ -394,6 +428,8 @@ async function runStep(button, extra = {}, targetRun = state.run) {
       }
       const first = await api('POST', '/api/runs/' + run.id + '/execute', body, { timeoutMs: 10 * 60_000 });
       if (first.execution?.status === 'local-agent-required') {
+        contextRun = first.run ?? run;
+        renderRun(contextRun);
         const local = await executeLocalAgent(first.execution.request);
         const receipt = local.receipt ?? {
           executed: local.executed === true,
@@ -405,14 +441,13 @@ async function runStep(button, extra = {}, targetRun = state.run) {
           notify('runNotice', 'warn', local.message ?? 'The local agent did not report a finished run.');
           return;
         }
-        const result = await api('POST', '/api/runs/' + run.id + '/execution-result', {
-          taskId: task.id, executionTarget: 'local', receipt, evidence: { source: 'local-agent', receipt }
-        });
-        updatedRun = result.run;
-        renderRun(updatedRun);
-        await loadRuns();
+        const pendingReceipt = { ...body, taskId: task.id, executionTarget: 'local', receipt, evidence: { source: 'local-agent', receipt } };
+        state.executionReceipts.set(run.id, continuation(pendingReceipt));
+        await submitReceipt(pendingReceipt);
         return;
       }
+      state.policyApprovals.delete(run.id);
+      state.policyContinuations.delete(run.id);
       updatedRun = first.run;
       renderRun(updatedRun);
       if (!first.execution?.executed) {
@@ -421,6 +456,19 @@ async function runStep(button, extra = {}, targetRun = state.run) {
       }
       await loadRuns();
     }, 'runNotice', error => {
+      if (error.code === 'policy-approval-required') {
+        state.policyApprovals.set(run.id, error.payload?.policyRevision ?? error.detail?.policyRevision);
+        state.policyContinuations.set(run.id, continuation(continuationBody));
+        renderThread();
+        return error.message;
+      }
+      if (['stale-execution-result', 'stale-execution-receipt', 'stale-execution-id', 'stale-execution-challenge'].includes(error.code)) {
+        state.executionReceipts.delete(run.id);
+        state.policyContinuations.delete(run.id);
+        state.policyApprovals.delete(run.id);
+        renderThread();
+        return error.message;
+      }
       if (error.code !== 'offline' && !error.transient) return null;
       state.network.interruptedRunId = run.id;
       return 'Connection lost. Your work can continue safely; this view will update when you reconnect.';
@@ -428,7 +476,7 @@ async function runStep(button, extra = {}, targetRun = state.run) {
   } finally {
     state.busyRuns.delete(run.id);
     if (state.driving === run.id) state.driving = null;
-    if (button?.isConnected) { button.disabled = false; button.textContent = original; }
+    if (button?.isConnected) { button.disabled = !canEdit(); button.textContent = original; }
     loadUsage();
   }
   return updatedRun;
@@ -867,8 +915,13 @@ function executionCard(run, task) {
 }
 
 export function renderNextStep(run) {
+  discardStaleContinuation(run);
   let parts;
   if (!canEdit()) parts = [element('p', { class: 'muted small', text: 'View only: an editor can move this work forward.' })];
+  else if (state.policyApprovals.has(run.id)) parts = [
+    ...heading('Policy changed', 'Current policy requires your approval before this step continues.'),
+    button('Approve this step', event => stepThenContinue(event.currentTarget, { ...state.policyContinuations.get(run.id)?.body, approved: true, policyRevision: state.policyApprovals.get(run.id) }, run), 'primary')
+  ];
   else if (run.state === 'iterate') parts = iterateCard(run);
   else {
     const task = nextTaskOf(run);
@@ -885,7 +938,7 @@ export function renderNextStep(run) {
     else if (task.type === 'code' && task.metadata?.modelGenerated !== true) parts = executionCard(run, task);
     else parts = reasoningCard(run, task);
   }
-  return element('div', { class: 'step-card stack', 'data-input-context': [run.id, run.next, run.attempt].join(':') }, parts.filter(Boolean));
+  return element('div', { class: 'step-card stack', 'data-input-context': [run.id, run.next, run.attempt, state.policyApprovals.get(run.id) || ''].join(':') }, parts.filter(Boolean));
 }
 
 /* -------------------------------------------------------------------- chat */
@@ -897,7 +950,7 @@ const AUTOMATIC_TASKS = ['understand', 'discover', 'discover-capabilities', 'ada
 export function isAutomatic(run) {
   if (!run || TERMINAL_STATES.includes(run.state) || run.state === 'iterate' || !canEdit()) return false;
   const task = nextTaskOf(run);
-  if (!task || state.manualOpen.has(run.id) || state.consentNeeded.has(run.id)) return false;
+  if (!task || state.manualOpen.has(run.id) || state.consentNeeded.has(run.id) || state.policyApprovals.has(run.id)) return false;
   if (task.type === 'observe') return true;
   if (!aiConnected()) return false;
   if (task.type === 'verify') return task.metadata?.verification?.humanReviewRequired !== true;
@@ -1431,7 +1484,8 @@ function syncComposerAction() {
   const stopIcon = control.querySelector('.stop-icon');
   const sendIcon = control.querySelector('.send-icon');
   control.dataset.mode = active ? 'stop' : sending ? 'busy' : 'send';
-  control.disabled = sending && !active;
+  control.disabled = composerControls({ role: state.role, usageLocked: Boolean(usageLimitStatus()), active, sending, stopping: Boolean(state.stoppingRun) }).sendDisabled;
+  control.setAttribute('aria-disabled', String(control.disabled));
   control.setAttribute('aria-label', state.stoppingRun ? 'Stopping current work' : active ? 'Stop current work' : sending ? 'Sending' : 'Send');
   control.title = state.stoppingRun ? 'Stopping current work…' : active ? 'Stop current work' : sending ? 'Sending…' : 'Send';
   if (stopIcon) stopIcon.hidden = !active;

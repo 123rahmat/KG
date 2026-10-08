@@ -431,10 +431,12 @@ export class Identity {
   async workspacesFor(principalId) {
     const { rows } = await this.pool.query(
       `SELECT w.id, w.name, w.max_bytes, w.max_objects, w.jurisdiction,
-              w.organization_id, o.name AS organization_name, o.type AS organization_type, m.role
+              w.organization_id, o.name AS organization_name, o.type AS organization_type, m.role,
+              CASE WHEN a.principal_id IS NOT NULL THEN 'admin' ELSE NULL END AS organization_role
          FROM memberships m
          JOIN workspaces w ON w.id = m.workspace_id
          LEFT JOIN organizations o ON o.id = w.organization_id
+         LEFT JOIN organization_admins a ON a.organization_id = w.organization_id AND a.principal_id = m.principal_id
         WHERE m.principal_id = $1 AND w.archived_at IS NULL
         ORDER BY w.name`,
       [principalId]
@@ -454,17 +456,19 @@ export class Identity {
 
     const { rows } = await this.pool.query(
       `SELECT m.role, w.max_bytes, w.max_objects, w.name, w.jurisdiction,
-              w.organization_id, o.name AS organization_name, o.type AS organization_type
+              w.organization_id, o.name AS organization_name, o.type AS organization_type,
+              CASE WHEN a.principal_id IS NOT NULL THEN 'admin' ELSE NULL END AS organization_role
          FROM memberships m
          JOIN workspaces w ON w.id = m.workspace_id
          LEFT JOIN organizations o ON o.id = w.organization_id
+         LEFT JOIN organization_admins a ON a.organization_id = w.organization_id AND a.principal_id = m.principal_id
         WHERE m.principal_id = $1 AND m.workspace_id = $2 AND w.archived_at IS NULL`,
       [principal.id, id]
     );
     const row = rows[0];
     if (!row) throw new AuthError('Workspace not found', { status: 404, code: 'no-workspace' });
 
-    if (RANK[row.role] < RANK[needed]) {
+    if (!ROLES.includes(row.role) || !ROLES.includes(needed) || RANK[row.role] < RANK[needed]) {
       throw new AuthError(`This action requires the "${needed}" role; you have "${row.role}"`, {
         status: 403,
         code: 'insufficient-role'
@@ -479,7 +483,8 @@ export class Identity {
       jurisdiction: row.jurisdiction,
       organizationId: row.organization_id,
       organizationName: row.organization_name,
-      organizationType: row.organization_type || 'personal'
+      organizationType: row.organization_type || 'personal',
+      organizationRole: row.organization_role ?? null
     };
   }
 }

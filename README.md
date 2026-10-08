@@ -156,6 +156,8 @@ Operational release requirements remain in **docs/PRODUCTION_READINESS.md**.
 
 The file-storage, composer and API contract review is documented in **[docs/FULL_STACK_BOUNDARY_REVIEW.md](docs/FULL_STACK_BOUNDARY_REVIEW.md)**.
 
+Personal, workspace and enterprise policy authority, ongoing execution controls and the settings editor are documented in **[docs/CONTROL_PLANE_HARDENING.md](docs/CONTROL_PLANE_HARDENING.md)**.
+
 ## Principle
 
 **One intelligence. One adaptive control loop. Minimum sufficient work. Strong isolation. Real evidence. Controlled execution. Durable continuity.**

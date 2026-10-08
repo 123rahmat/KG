@@ -184,11 +184,11 @@ async function withRetry(attempt, { retries = 1, backoffMs = 500, maxWaitMs = 80
   for (let index = 0; index <= retries; index += 1) {
     signal?.throwIfAborted();
     try {
-      const result = await attempt();
+      const result = await attempt(index);
       if (!result.retryable || index === retries) return result;
       last = result;
     } catch (error) {
-      if (signal?.aborted || index === retries || error?.code === 'ERESPONSETOOLARGE'
+      if (signal?.aborted || index === retries || (error?.expose === true && error?.status < 500 && !(error instanceof ModelProviderError)) || error?.code === 'ERESPONSETOOLARGE'
           || (error?.upstreamStatus && !RETRY_STATUS.has(error.upstreamStatus))) throw error;
       last = error;
     }
@@ -286,6 +286,7 @@ export async function callModel(messages, {
   allowedDomains = [],
   excludedDomains = [],
   adaptiveContext = {},
+  beforeCall = null,
   signal
 } = {}) {
   signal?.throwIfAborted();
@@ -302,6 +303,8 @@ export async function callModel(messages, {
   const selected = modelId
     ? requested
     : (resolveConfiguredModel(config, `google:${routingDecision.model}`) || requested);
+  await beforeCall?.({ model: selected.model, modelId: `google:${selected.model}` });
+  signal?.throwIfAborted();
 
   const modelKey = `google:${selected.model}`;
   providerGovernor.configure(modelKey, config.providerConcurrency ?? {});
@@ -349,33 +352,46 @@ export async function callModel(messages, {
   // allow-list is required, do not bypass it with integrated grounding.
   const shouldSearch = webPolicy.shouldSearch && !(Array.isArray(allowedDomains) && allowedDomains.length);
 
-  const doRequest = async search => withRetry(async () => providerGovernor.run(modelKey, async () => {
-    const req = vertexBuild(selected, messages, {
-      webSearch: search,
-      maxOutputTokens: admittedMaxOutputTokens,
-      effort: effectiveEffort(effort, config.ai.effort),
-      json,
-      excludedDomains
-    });
-    const response = await fetchImpl(req.url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
-      body: JSON.stringify(req.body),
-      signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])])
-    });
-    // The governor must observe HTTP failures before retry policy handles them.
-    if (!response.ok) {
-      await response.body?.cancel().catch(() => {});
-      throw new ModelProviderError('google', response.status, { retryAfterMs: retryAfterMs(response.headers) });
-    }
-    const raw = await readBounded(response, config.limits.responseBytes);
-    return {
-      retryable: !response.ok && RETRY_STATUS.has(response.status),
-      status: response.status,
-      raw,
-      retryAfterMs: retryAfterMs(response.headers)
-    };
-  }, { signal }), { sleep, retries, backoffMs: 500, maxWaitMs: 8000, signal });
+  const doRequest = async search => withRetry(async index => {
+    if (index > 0) await beforeCall?.({ model: selected.model, modelId: `google:${selected.model}` });
+    return providerGovernor.run(modelKey, async () => {
+      await beforeCall?.({ model: selected.model, modelId: `google:${selected.model}` });
+      signal?.throwIfAborted();
+      // Re-admit after queueing and on retries: a policy edit or another call
+      // may have consumed the budget since the initial reservation.
+      if (usageGate?.revalidate) {
+        reservation = await usageGate.revalidate(reservation, {
+          estimatedTokens: estimateModelTokens(messages, { maxOutputTokens: admittedMaxOutputTokens }), usageSource
+        });
+        if (reservation?.estimatedTokens) admittedMaxOutputTokens = Math.max(1, Math.min(admittedMaxOutputTokens, Number(reservation.estimatedTokens)));
+      }
+      const req = vertexBuild(selected, messages, {
+        webSearch: search,
+        maxOutputTokens: admittedMaxOutputTokens,
+        effort: effectiveEffort(effort, config.ai.effort),
+        json,
+        excludedDomains
+      });
+      const response = await fetchImpl(req.url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify(req.body),
+        signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])])
+      });
+      // The governor must observe HTTP failures before retry policy handles them.
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => {});
+        throw new ModelProviderError('google', response.status, { retryAfterMs: retryAfterMs(response.headers) });
+      }
+      const raw = await readBounded(response, config.limits.responseBytes);
+      return {
+        retryable: !response.ok && RETRY_STATUS.has(response.status),
+        status: response.status,
+        raw,
+        retryAfterMs: retryAfterMs(response.headers)
+      };
+    }, { signal });
+  }, { sleep, retries, backoffMs: 500, maxWaitMs: 8000, signal });
 
   let outcome;
   try {
@@ -441,7 +457,7 @@ export async function callModel(messages, {
   };
 }
 
-export async function callRunner(url, payload, { config, fetchImpl = fetch, sleep = wait, timeoutMs = RUNNER_TIMEOUT_MS, token = null, signal } = {}) {
+export async function callRunner(url, payload, { config, fetchImpl = fetch, sleep = wait, timeoutMs = RUNNER_TIMEOUT_MS, token = null, signal, beforeCall = null } = {}) {
   signal?.throwIfAborted();
   const endpoint = text(url);
   if (!endpoint) {
@@ -463,6 +479,8 @@ export async function callRunner(url, payload, { config, fetchImpl = fetch, slee
 
   try {
     const outcome = await withRetry(async () => {
+      await beforeCall?.();
+      signal?.throwIfAborted();
       const response = await fetchImpl(endpoint, {
         method: 'POST',
         headers,
@@ -532,6 +550,8 @@ export async function callRunner(url, payload, { config, fetchImpl = fetch, slee
       }
     };
   } catch (error) {
+    if (signal?.aborted) throw signal.reason;
+    if (error?.expose === true && error?.status < 500) throw error;
     // A runner we could not reach did not run anything. Say exactly that.
     return {
       configured: true,

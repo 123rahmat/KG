@@ -61,6 +61,19 @@ test('auto mode stays single-agent for simple work and expands for material comp
   assert.equal(multiAgentDecision(run({ adaptation: { scale: 'complex' } }), { id: 'verify', type: 'verify' }).enabled, false);
 });
 
+test('specialists propagate policy interruptions without publishing advisory findings', async () => {
+  const denial = Object.assign(new Error('Fresh approval required'), { code: 'policy-approval-required', status: 409, expose: true });
+  let writes = 0;
+  await assert.rejects(runAdaptiveAgentPanel({
+    run: run({ adaptation: { scale: 'complex' }, maxTokens: 100000 }),
+    task: { id: 'plan', type: 'plan' }, basePayload: { goal: 'Plan a project', task: { id: 'plan', type: 'plan' } },
+    selection, primaryModelId: 'google:gemini-3.8-flash', config: { agents: { multiAgent: 'always', maxAgents: 2 } },
+    modelCaller: async () => { throw denial; }, recordWave: async () => { writes++; },
+    recordAgent: async () => { writes++; }, recordBlackboard: async () => { writes++; }
+  }), error => error === denial);
+  assert.equal(writes, 0);
+});
+
 test('roles adapt to the task and retry state', () => {
   const code = rolesFor(run({ adaptation: { scale: 'complex' } }), { id: 'build-code', type: 'code' });
   assert.deepEqual(code.roles.slice(0, 2), ['architect', 'critic']);

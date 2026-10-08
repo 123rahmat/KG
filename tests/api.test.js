@@ -620,12 +620,18 @@ test('workspace administrators can manage enterprise governance without touching
     assert.equal(forbidden.status, 403);
   }));
 
-test('an enterprise administrator can manage its organization policy', () =>
-  withVertexServer(async ({ call, seed }) => {
-    const { token, workspace } = await seed({
+test('organization policy requires explicit organization authority and supports conflict detection', () =>
+  withVertexServer(async ({ call, seed, pool }) => {
+    const { token, workspace, principal } = await seed({
       workspace: 'enterprise-ws',
       organizationType: 'enterprise'
     });
+    const denied = await call('POST', '/api/governance', {
+      token, workspace,
+      body: { layer: 'organization', policy: { requireHumanApproval: true } }
+    });
+    assert.equal(denied.status, 403);
+    await pool.query('INSERT INTO organization_admins (organization_id, principal_id) VALUES ($1, $2)', ['org-' + workspace, principal.id]);
     const set = await call('POST', '/api/governance', {
       token, workspace,
       body: { layer: 'organization', policy: { requireHumanApproval: true } }
@@ -635,6 +641,33 @@ test('an enterprise administrator can manage its organization policy', () =>
     const response = await call('GET', '/api/governance?layer=organization', { token, workspace });
     assert.equal(response.status, 200);
     assert.equal(response.body.policy.requireHumanApproval, true);
+    assert.equal(response.body.canEdit, true);
+    assert.equal(response.body.revision, 1);
+    const conflict = await call('POST', '/api/governance', {
+      token, workspace, body: { layer: 'organization', policy: {}, expectedRevision: 0 }
+    });
+    assert.equal(conflict.status, 409);
+    assert.equal(conflict.body.code, 'policy-revision-conflict');
+    const peer = await seed({ workspace, role: 'admin' });
+    const peerRead = await call('GET', '/api/governance?layer=organization', peer);
+    assert.equal(peerRead.body.canEdit, false);
+    const peerWrite = await call('POST', '/api/governance', { ...peer, body: { layer: 'organization', policy: {} } });
+    assert.equal(peerWrite.status, 403);
+  }));
+
+test('viewers can manage their own restrictions but cannot change workspace policy', () =>
+  withServer(async ({ call, seed }) => {
+    const viewer = await seed({ role: 'viewer' });
+    const own = await call('POST', '/api/governance', { ...viewer, body: { layer: 'user', scopeId: 'someone-else', policy: { maxTokens: 50 }, expectedRevision: 0 } });
+    assert.equal(own.status, 200);
+    assert.equal(own.body.scope_id, viewer.principal.id);
+    const workspace = await call('POST', '/api/governance', { ...viewer, body: { layer: 'workspace', policy: {} } });
+    assert.equal(workspace.status, 403);
+    const effective = await call('GET', '/api/governance/effective', viewer);
+    assert.equal(effective.status, 200);
+    assert.equal(effective.body.effective.constraints.maxTokens, 50);
+    const invalid = await call('POST', '/api/governance', { ...viewer, body: { layer: 'user', policy: { requireHumanApproval: 'false' } } });
+    assert.equal(invalid.status, 400);
   }));
 
 test('a policy-blocked run refuses to execute and names the capability', () =>

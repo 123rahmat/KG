@@ -1,9 +1,16 @@
 /** Workspace governance, the discovered-capability registry and the audit trail. */
 
 import { text } from '../http/context.js';
+import { canManagePolicy, PolicyError } from '../governance.js';
+import { evaluatePolicy } from '../core.js';
 
 export function registerGovernanceRoutes(app, { governance, capabilities, audit, scoped, route }) {
-  app.get('/api/governance', scoped('admin'), route(async (req, res) => {
+  app.get('/api/governance/effective', scoped('viewer'), route(async (req, res) => {
+    const policies = await governance.forScope({ workspaceId: req.scope.workspaceId, principalId: req.principal.id });
+    res.json({ effective: evaluatePolicy(policies) });
+  }));
+
+  app.get('/api/governance', scoped('viewer'), route(async (req, res) => {
     const layer = text(req.query.layer) || 'workspace';
     const allowed = new Set(['organization', 'workspace', 'user']);
     if (!allowed.has(layer)) {
@@ -19,15 +26,16 @@ export function registerGovernanceRoutes(app, { governance, capabilities, audit,
         : req.scope.workspaceId;
     if (!scopeId) return res.status(404).json({ error: 'Governance scope not found', code: 'governance-scope-not-found' });
     const row = await governance.get({ layer, scopeId });
-    res.json({ layer, scopeId, policy: row?.policy ?? null, updatedAt: row?.updated_at ?? null });
+    res.json({ layer, scopeId, policy: row?.policy ?? null, updatedAt: row?.updated_at ?? null,
+      revision: row?.revision ?? 0, canEdit: canManagePolicy(layer, req.scope) });
   }));
 
-  app.post('/api/governance', scoped('admin'), route(async (req, res) => {
+  app.post('/api/governance', scoped('viewer'), route(async (req, res) => {
     const layer = text(req.body?.layer).toLowerCase();
     const allowed = new Set(['organization', 'workspace', 'user']);
     if (!allowed.has(layer)) {
       return res.status(403).json({
-        error: 'Platform and jurisdiction policy are operator-managed; workspace admins manage organization, workspace or user scope only',
+        error: 'Platform and jurisdiction policy are operator-managed',
         code: 'governance-layer-forbidden'
       });
     }
@@ -37,6 +45,10 @@ export function registerGovernanceRoutes(app, { governance, capabilities, audit,
         code: 'enterprise-governance-required'
       });
     }
+    if (!canManagePolicy(layer, req.scope)) return res.status(403).json({
+      error: layer === 'organization' ? 'Organization policy requires an explicitly provisioned organization administrator' : 'Workspace policy requires a workspace administrator',
+      code: 'policy-authority-required'
+    });
     const scopeId = layer === 'organization'
       ? req.scope.organizationId
       : layer === 'user'
@@ -47,21 +59,28 @@ export function registerGovernanceRoutes(app, { governance, capabilities, audit,
     if (!policy || typeof policy !== 'object' || Array.isArray(policy)) {
       return res.status(400).json({ error: 'policy must be a JSON object', code: 'invalid-policy' });
     }
-    const row = await governance.set({
-      layer,
-      scopeId,
-      policy: req.body?.policy
-    });
-    await audit.record({
-      principalId: req.principal.id,
-      workspaceId: req.scope.workspaceId,
-      action: 'governance.set',
-      target: layer + ':' + scopeId,
-      outcome: 'allowed',
-      detail: { layer, version: row.version ?? null },
-      requestId: req.requestId
-    });
-    res.status(200).json(row);
+    try {
+      const row = await governance.set({
+        layer,
+        scopeId,
+        policy: req.body?.policy,
+        expectedRevision: Object.hasOwn(req.body, 'expectedRevision') ? req.body.expectedRevision : null,
+        audit,
+        auditEntry: {
+          principalId: req.principal.id,
+          workspaceId: req.scope.workspaceId,
+          action: 'governance.set',
+          target: layer + ':' + scopeId,
+          outcome: 'allowed',
+          requestId: req.requestId
+        }
+      });
+      res.status(200).json(row);
+    } catch (error) {
+      if (error.code === '42501') return res.status(403).json({ error: 'Current policy write authority is unavailable', code: 'policy-authority-required' });
+      if (!(error instanceof PolicyError)) throw error;
+      res.status(error.status).json({ error: error.message, code: error.code });
+    }
   }));
 
   app.get('/api/capability-specs', scoped('viewer'), route(async (req, res) => {

@@ -13,6 +13,7 @@
  *   node bin/admin.js add-member --workspace acme --principal <id> --role editor
  *   node bin/admin.js list-workspaces
  *   node bin/admin.js platform-admin --email ada@example.com [--revoke]
+ *   node bin/admin.js organization-admin --organization <id> --principal <id> [--revoke]
  *   node bin/admin.js migrate
  */
 
@@ -20,7 +21,8 @@ import { loadConfig } from '../src/config.js';
 import { createPool, migrate } from '../src/db.js';
 import { createLogger } from '../src/observability.js';
 import { Identity, ROLES } from '../src/identity.js';
-import { GovernanceStore, LAYERS as GOVERNANCE_LAYERS } from '../src/governance.js';
+import { GovernanceStore, LAYERS as GOVERNANCE_LAYERS, setOrganizationAdmin } from '../src/governance.js';
+import { Audit } from '../src/audit.js';
 
 function parseArgs(argv) {
   const [command, ...rest] = argv;
@@ -150,6 +152,14 @@ const COMMANDS = {
 
   async purge({ identity }) {
     console.log(await identity.purgeExpired());
+  },
+
+  async 'organization-admin'({ pool, flags, config, logger }) {
+    const audit = new Audit(pool, logger, { encryptionKey: config.security.personalDataEncryptionKey,
+      previousEncryptionKey: config.security.personalDataEncryptionKeyPrevious });
+    const result = await setOrganizationAdmin(pool, { organizationId: require_(flags, 'organization'),
+      principalId: require_(flags, 'principal'), grant: flags.revoke !== 'true', audit });
+    console.log(JSON.stringify(result));
   },
 
   async 'set-policy'({ governance, flags }) {

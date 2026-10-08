@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { chromium } from 'playwright';
 import { checkAttachments } from './ui-attachment-checks.js';
+import { checkControls } from './ui-control-checks.js';
 const output = process.env.UI_SMOKE_OUTPUT_DIR || await mkdtemp(path.join(tmpdir(), 'kindgleam-ui-'));
 const artifact = name => path.join(output, name);
 const app = express();
@@ -120,6 +121,7 @@ try {
  await page.screenshot({path:artifact('landing-mobile.png')});
  assert.deepEqual(errors,[],'no client runtime errors');
  await checkAttachments(browser, `http://127.0.0.1:${server.address().port}`);
+ await checkControls(browser, `http://127.0.0.1:${server.address().port}`);
  console.log('Screenshots: ' + output);
  console.log('PASS: stable history, scroll anchoring, drafts, focus, approvals, selection, truthful status, workspace switching/navigation, file context, evidence links, responsive layouts, selected upload bytes, send snapshots, offline file scope, no runtime errors');
 } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}

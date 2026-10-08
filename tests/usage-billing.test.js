@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { withServer, jsonResponse } from './helpers.js';
 import { syncWorkspaceAiEntitlements } from '../src/account-entitlements.js';
-import { reserveUsage } from '../src/usage.js';
+import { reserveUsage, createUsageGate } from '../src/usage.js';
 import { runDbScope } from '../src/db.js';
 
 /** A provider that answers everything with 40 tokens in and 10 out. */
@@ -153,6 +153,27 @@ test('concurrent AI requests share one atomic usage reservation', () =>
     assert.equal(fulfilled[0].value.estimatedTokens, 50);
     assert.equal(rejected[0].reason.code, 'usage-limit-reached');
   }, { env: { ...AI, USAGE_LIMIT_4H_TOKENS: '60' }, fetchImpl: delayedProvider }));
+
+test('dispatch reservations honor lowered run caps and other active reservations', () =>
+  withServer(async ({ call, seed, pool, appPool, config }) => {
+    const user = await seed();
+    const created = await call('POST', '/api/runs', { ...user, body: { goal: 'Hello' } });
+    await pool.query('UPDATE runs SET max_tokens=1000 WHERE id=$1', [created.body.id]);
+    const scope = { principalId: user.principal.id, workspaceId: user.workspace, role: 'editor' };
+    await runDbScope(scope, async () => {
+      const gate = createUsageGate(appPool, { ...scope, runId: created.body.id, config });
+      const first = await gate.reserve({ estimatedTokens: 600 });
+      const second = await gate.reserve({ estimatedTokens: 400 });
+      await pool.query('UPDATE runs SET max_tokens=128 WHERE id=$1', [created.body.id]);
+      await assert.rejects(gate.revalidate(first), { code: 'usage-limit-reached' });
+      await gate.release(second);
+      const refreshed = await gate.revalidate(first);
+      assert.equal(refreshed.id, first.id);
+      assert.equal(refreshed.estimatedTokens, 128);
+      const active = await appPool.query("SELECT estimated_tokens FROM usage_reservations WHERE run_id=$1 AND state='active'", [created.body.id]);
+      assert.deepEqual(active.rows.map(row => Number(row.estimated_tokens)), [128]);
+    });
+  }));
 
 test('billing is provider-owned and never exposes local payment details', () =>
   withServer(async ({ call, seed }) => {

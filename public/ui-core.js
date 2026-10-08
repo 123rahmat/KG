@@ -19,6 +19,9 @@ export const state = {
   // the person has allowed the AI to read in this session.
   consentNeeded: new Set(),
   consented: new Set(),
+  policyApprovals: new Map(),
+  policyContinuations: new Map(),
+  executionReceipts: new Map(),
   // Runs whose person chose "I'll do this step myself".
   manualOpen: new Set(),
   busy: false,
@@ -291,7 +294,12 @@ export const downloadUrl = path => `${path}${path.includes('?') ? '&' : '?'}work
 
 export const aiConnected = () => state.executionConfig?.reasoning?.configured === true;
 
-export const canEdit = () => state.role !== 'viewer';
+export const canEdit = () => ['editor', 'admin'].includes(state.role);
+
+export function composerControls({ role, usageLocked = false, active = false, sending = false, stopping = false } = {}) {
+  const editor = ['editor', 'admin'].includes(role);
+  return { canCompose: editor && !usageLocked, sendDisabled: !editor || stopping || (active ? false : usageLocked || sending) };
+}
 
 export const configuredTargets = taskType => (state.executionConfig?.targets ?? [])
   .filter(target => target.taskTypes.includes(taskType) && target.configured);

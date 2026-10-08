@@ -202,7 +202,7 @@ export async function reencryptPlaintextObjects(pool, masterKey, logger) {
 
 export async function assertRlsReady(pool) {
   const expected = [
-    'workspaces', 'organizations', 'memberships',
+    'workspaces', 'organizations', 'memberships', 'organization_admins',
     'objects', 'blobs', 'runs', 'run_tasks', 'audit_log',
     'governance_policies', 'capability_specs', 'situation_events', 'run_jobs', 'skill_profiles', 'skill_observations',
     'idempotency_keys', 'user_preferences',
@@ -404,7 +404,7 @@ async function hardenRuntimeRole(client, runtimeRole, logger) {
   await client.query('ALTER DEFAULT PRIVILEGES REVOKE ALL ON SEQUENCES FROM ' + role);
 
   const grants = [
-    ['SELECT', ['workspaces', 'organizations', 'memberships', 'principals']],
+    ['SELECT', ['workspaces', 'organizations', 'memberships', 'principals', 'organization_admins']],
     ['SELECT, INSERT, UPDATE', ['governance_policies']],
     ['SELECT, INSERT, UPDATE', ['capability_specs']],
     ['SELECT, UPDATE', ['api_keys']],

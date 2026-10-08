@@ -3,7 +3,7 @@
  * Part of app.js, split out by concern; app.js wires the page together.
  */
 
-import { state, $, element, button, api, notify, guard, canEdit, downloadUrl, clearNotice, updateConnectionUI } from './ui-core.js';
+import { state, $, element, button, api, notify, guard, canEdit, composerControls, downloadUrl, clearNotice, updateConnectionUI } from './ui-core.js';
 import { bytes, formatWhen, loadExecutionConfig, setupVoiceInput, svgIcon, timeAgo } from './app.js';
 import { fileToBase64, flushOfflineQueue, growComposer, loadRuns, newChat, openChat, renderChatHead } from './app-attachments.js';
 import { renderExplore } from './app-actions.js';
@@ -160,6 +160,8 @@ export function applyRole() {
   $('attachBtn').disabled = !editor;
   setupVoiceInput();
   updateConnectionUI();
+  renderUsageLimitLock();
+  document.dispatchEvent(new Event('kindgleam:scope-state'));
 }
 
 export function registerAppWorker() {
@@ -187,7 +189,7 @@ const SOURCE_LABELS = { chat: 'Chat answers & steps', classifier: 'Understanding
 
 let usageLoading = null;
 
-/** Usage quota is scoped to the signed-in person + workspace, not a chat. */
+/** Usage quota is account-wide across chats and workspaces. */
 export function usageLimitStatus() {
   const windows = Array.isArray(state.usage?.windows) ? state.usage.windows : [];
   const exhausted = windows.find(window => window?.exceeded);
@@ -196,7 +198,7 @@ export function usageLimitStatus() {
     window: exhausted.id,
     label: exhausted.label,
     resetsAt: exhausted.resetsAt ?? null,
-    message: `AI usage limit reached for this workspace (${exhausted.label}).`
+    message: `AI usage limit reached for your account (${exhausted.label}).`
   };
 }
 
@@ -217,13 +219,17 @@ export function renderUsageLimitLock() {
     node.textContent = message;
   }
   document.body.dataset.aiUsageLocked = lock ? 'true' : 'false';
+  const controls = composerControls({ role: state.role, usageLocked: Boolean(lock),
+    active: Boolean(state.driving || state.busyRuns?.has(state.run?.id)), sending: Boolean(state.sendWaiting), stopping: Boolean(state.stoppingRun) });
   for (const id of ['goal', 'createRun', 'attachBtn', 'voiceBtn', 'attachInput']) {
     const node = $(id);
     if (!node) continue;
-    node.disabled = Boolean(lock);
-    node.setAttribute('aria-disabled', String(Boolean(lock)));
-    if (lock) node.title = 'AI usage limit reached for this workspace.';
+    node.disabled = id === 'createRun' ? controls.sendDisabled : !controls.canCompose;
+    if (id === 'voiceBtn') node.disabled ||= !(window.SpeechRecognition || window.webkitSpeechRecognition) || !state.settings?.voiceInput;
+    node.setAttribute('aria-disabled', String(node.disabled));
+    if (id !== 'createRun') node.title = lock ? 'AI usage limit reached for your account.' : !canEdit() ? 'View-only access.' : '';
   }
+  document.dispatchEvent(new Event('kindgleam:composer-state'));
   return lock;
 }
 

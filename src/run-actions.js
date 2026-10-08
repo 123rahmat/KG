@@ -155,6 +155,7 @@ export class RunActions {
     let result;
     try {
       const ctx = await ctxFor();
+      await ctx.beforeTool?.(claimed.tool);
       const tool = toolNamed(claimed.tool, ctx);
       if (!tool) throw new Error(`The tool "${claimed.tool}" is no longer available.`);
       const state = tool.ready?.(ctx) ?? { ready: true };

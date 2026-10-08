@@ -269,7 +269,7 @@ const MAX_RESERVATION_TOKENS = 500_000;
 
 export async function reserveUsage(pool, {
   principalId, workspaceId, runId = null, estimatedTokens = 0, config,
-  usageSource = 'chat', ttlMs = RESERVATION_TTL_MS
+  usageSource = 'chat', ttlMs = RESERVATION_TTL_MS, reservationId = null
 } = {}) {
   if (!principalId || !workspaceId) return null;
   const rawEstimate = Math.min(MAX_RESERVATION_TOKENS, count(estimatedTokens));
@@ -289,6 +289,13 @@ export async function reserveUsage(pool, {
       "UPDATE usage_reservations SET state='released', updated_at=now() WHERE principal_id=$1 AND state='active' AND expires_at<=now()",
       [principalId]
     );
+    if (reservationId) {
+      const { rows: [existing] } = await client.query(
+        "SELECT id FROM usage_reservations WHERE id=$1 AND principal_id=$2 AND workspace_id=$3 AND run_id IS NOT DISTINCT FROM $4 AND state='active' FOR UPDATE",
+        [reservationId, principalId, workspaceId, runId]
+      );
+      if (!existing) throw new UsageLimitError({ id: 'run', label: 'Expired reservation', exceeded: true });
+    }
 
     let runUsed = 0;
     let runMax = null;
@@ -325,8 +332,8 @@ export async function reserveUsage(pool, {
          COALESCE(SUM(estimated_tokens),0)::bigint AS global_reserved,
          COALESCE(SUM(estimated_tokens) FILTER (WHERE run_id=$2 AND workspace_id=$3),0)::bigint AS run_reserved
        FROM usage_reservations
-      WHERE principal_id=$1 AND state='active' AND expires_at>now()`,
-      [principalId, runId, workspaceId]
+      WHERE principal_id=$1 AND state='active' AND expires_at>now() AND ($4::text IS NULL OR id <> $4)`,
+      [principalId, runId, workspaceId, reservationId]
     );
     const globalReserved = Number(reservations?.global_reserved || 0);
     const runReserved = Number(reservations?.run_reserved || 0);
@@ -358,7 +365,7 @@ export async function reserveUsage(pool, {
         remaining: Math.max(0, runMax - runUsed - runReserved)
       });
     }
-    if (!available.length) return null;
+    if (!available.length) return reservationId ? { id: reservationId, estimatedTokens: rawEstimate } : null;
 
     const exhausted = available.find(item => item.remaining <= 0);
     if (exhausted) {
@@ -404,7 +411,14 @@ export async function reserveUsage(pool, {
     const estimate = Math.min(rawEstimate, ...available.map(item => item.remaining));
     if (estimate < MIN_ADMISSION_TOKENS) return null;
 
-    const id = crypto.randomUUID();
+    const id = reservationId || crypto.randomUUID();
+    if (reservationId) {
+      await client.query(
+        "UPDATE usage_reservations SET estimated_tokens=$4, expires_at=now()+($5::int * interval '1 millisecond'), updated_at=now() WHERE id=$1 AND principal_id=$2 AND workspace_id=$3",
+        [id, principalId, workspaceId, estimate, safeTtl]
+      );
+      return { id, estimatedTokens: estimate };
+    }
     await client.query(
       "INSERT INTO usage_reservations (id, principal_id, workspace_id, run_id, estimated_tokens, state, expires_at) VALUES ($1,$2,$3,$4,$5,'active',now()+($6::int * interval '1 millisecond'))",
       [id, principalId, workspaceId, runId, estimate, safeTtl]
@@ -479,6 +493,12 @@ export function createUsageGate(pool, { principalId, workspaceId, runId = null, 
     reserve: args => reserveUsage(pool, {
       principalId, workspaceId, runId, config,
       estimatedTokens: args?.estimatedTokens,
+      usageSource: args?.usageSource ?? 'chat'
+    }),
+    revalidate: (reservation, args) => reserveUsage(pool, {
+      principalId, workspaceId, runId, config,
+      reservationId: reservation?.id ?? null,
+      estimatedTokens: reservation?.estimatedTokens ?? args?.estimatedTokens,
       usageSource: args?.usageSource ?? 'chat'
     }),
     settle: args => settleUsageReservation(pool, {
