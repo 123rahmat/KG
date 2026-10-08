@@ -11,8 +11,8 @@ const FILE_WORK = /\b(?:file|files|document|documents|spreadsheet|pdf|word|excel
 const VISUAL = /\b(?:visuals?|visuali[sz](?:e|ation)|diagram|infographic|flowchart|chart|graph|illustration|render|dashboard|mockup|logo|poster|image|images)\b/i;
 const HARD_REASONING = /\b(?:prove|proof|derive|derivation|multi[- ]step|step[- ]by[- ]step|complex reasoning|deep (?:think|thinking|reasoning)|challenging|difficult|optimi[sz]e|trade[- ]offs?|scenario analys\w*|sensitivity analys\w*|differential equation|calculate and verify|root cause|evaluate alternatives)\b/i;
 const MULTIFILE = /\b(?:multiple|several|across|all|batch|many|combined|compare|reconcile|consistent|simultaneous)\b/i;
-const COMPARISON = /\\b(?:compare|comparison|versus|vs\\.?|trade[- ]offs?|alternatives?|options?|pros and cons|decision matrix|scenario)\\b/i;
-const PROCEDURE = /\\b(?:teach|tutor|solve|calculate|step[- ]by[- ]step|worked example|practice|deriv(?:e|ation)|prove|proof)\\b/i;
+const COMPARISON = /\b(?:compare|comparison|versus|vs\.?|trade[- ]offs?|alternatives?|options?|pros and cons|decision matrix|scenario)\b/i;
+const PROCEDURE = /\b(?:teach|tutor|solve|calculate|step[- ]by[- ]step|worked example|practice|deriv(?:e|ation)|prove|proof)\b/i;
 const RISK = /^(?:critical|high|high-impact|physical|regulated)$/i;
 
 export function normalChatTaskProfile({
