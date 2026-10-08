@@ -90,7 +90,7 @@ export function liveWorkFocus(run, { workspace = 'normal-chat', connectedGitHub 
   const relevantToolWork = ['code', 'tool', 'test-code', 'build-code'].includes(current?.type)
     || ['test-code', 'build-code'].includes(current?.id);
   const terminalNeed = current?.metadata?.terminalRequired === true
-    || /\\b(?:terminal|shell|command|debug|reproduce|runtime|run tests|execute tests)\\b/i
+    || /\b(?:terminal|shell|command|debug|reproduce|runtime|run tests|execute tests)\b/i
       .test(String(current?.purpose ?? '') + ' ' + String(current?.metadata?.title ?? ''));
   const isFileWork = files.length > 0 || mode === 'code';
   const activity = [
