@@ -2376,7 +2376,7 @@ export async function runAdaptiveAgentPanel({
   let lastAllocation = allocationResult.allocation;
   let allocationRounds = 0;
   let earlyConvergence = { stop: false, reason: 'not-reached' };
-  let specialistWave = null;
+  let specialistWave;
   let blackboard = await loadBlackboard({ run, task });
   // A normal-chat ZIP project deliberately stays a single panel. It still
   // gets the same adaptive role allocation and parallel specialist execution,
