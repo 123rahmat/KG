@@ -16,6 +16,7 @@ test('NormalChat adapts to real files and reasoning context', () => {
     intelligence: { reasoning: { depth: 'deep' } },
     tasks: [{ id: 'verify', type: 'verify', status: 'complete', evidence: { verdict: { verdict: 'pass' } } }]
   });
+  assert.deepEqual(view.fileNames, ['budget.xlsx', 'plan.docx']);
   assert.deepEqual(view.cards, [
     { label: 'Files in context', value: '2' },
     { label: 'Reasoning effort', value: 'deep' },
