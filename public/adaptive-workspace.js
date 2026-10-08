@@ -445,6 +445,11 @@ export function renderWorkStatus(run) {
       element('span', { class: 'small', text: background.permission })
     ]) : null,
     meter,
+    panel.stageContext && !view.terminal
+      ? element('div', { class: 'work-phase-note', 'aria-label': 'Current task explanation' }, [
+        element('strong', { text: panel.stageContext.title }),
+        element('span', { class: 'small muted', text: panel.stageContext.detail })
+      ]) : null,
     panel.cards.length ? element('dl', {
       class: 'work-focus-grid', 'aria-label': 'Relevant task information'
     }, panel.cards.map(card => element('div', { class: 'work-focus-card' }, [
