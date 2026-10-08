@@ -10,6 +10,7 @@ import { taskLensFor, contextualSuggestions } from './task-lens.js';
 import { agentActivitySnapshot } from './agent-activity.js';
 import { workspaceCapabilities } from './normal-chat-capabilities.js';
 import { workspaceProgressPanel } from './work-progress-panels.js';
+import { liveWorkFocus } from './live-work-focus.js';
 
 const SURFACE_META = {
   runs: { label: 'Normal Chat', icon: 'chat', kind: 'normal-chat' },
@@ -341,6 +342,36 @@ function backgroundSnapshot(run) {
   };
 }
 
+// Keep the user's second-level inspection choice during poll-driven rerenders.
+const activityDisclosure = new Map();
+function realActivityDetails(run, focus) {
+  if (!focus.showDetails) return null;
+  const key = String(run?.id ?? '');
+  const open = activityDisclosure.has(key) ? activityDisclosure.get(key) : true;
+  const rows = focus.activity.map(entry => element('div', { class: 'work-observed-row' }, [
+    element('dt', { text: entry.label }),
+    element('dd', { text: entry.value })
+  ]));
+  const details = element('details', {
+    class: 'work-observed-details', open, 'data-live-inspection': 'true'
+  }, [
+    element('summary', { class: 'work-observed-summary' }, [
+      element('strong', { text: 'Real work activity' }),
+      element('span', { class: 'small muted', text: focus.completed + ' of ' +
+        focus.stageCount + ' stages recorded' })
+    ]),
+    element('dl', { class: 'work-observed-list',
+      'aria-label': 'Saved task, execution and file information' }, rows),
+    element('p', { class: 'small muted', text:
+      'Only recorded activity appears here. Interactive terminal sessions open separately when requested.' })
+  ]);
+  details.addEventListener('toggle', () => {
+    activityDisclosure.set(key, details.open);
+    if (activityDisclosure.size > 64) activityDisclosure.delete(activityDisclosure.keys().next().value);
+  });
+  return details;
+}
+
 // Disclosure preferences survive polling without changing server-owned task state.
 const stageDisclosure = new Map();
 function stageDetail(run, panel, view) {
@@ -384,6 +415,12 @@ export function renderWorkStatus(run) {
   const background = backgroundSnapshot(run);
   const workspace = ['code', 'research'].includes(state.activeSurface) ? state.activeSurface : activeWorkspace(run);
   const panel = workspaceProgressPanel(run, workspace);
+  const focus = liveWorkFocus(run, {
+    workspace,
+    connectedGitHub: state.workspaceSource?.kind === 'github',
+    offline: view.disconnected,
+    stopping: view.stopping
+  });
   const nextDecision = run?.adaptation?.unifiedAdaptiveWorkflow?.openWorld ?? null;
   const decisionNote = nextDecision?.action === 'approval-required'
     ? 'The next proposed action needs approval.'
@@ -429,7 +466,7 @@ export function renderWorkStatus(run) {
       element('div', { class: 'work-status-summary' }, [
         element('span', { class: 'work-status-dot' + (view.live ? ' active' : ''), 'aria-hidden': 'true' }),
         element('div', { class: 'work-status-copy' }, [
-          element('strong', { text: view.label }),
+          element('strong', { class: 'work-exact-line', text: focus.line }),
           element('span', { class: 'small muted', text: view.stopping
             ? (view.disconnected ? 'The stop request will be sent when the connection returns.' : 'No new step will start while the server confirms cancellation.')
             : view.disconnected
@@ -445,6 +482,7 @@ export function renderWorkStatus(run) {
       element('span', { class: 'small', text: background.permission })
     ]) : null,
     meter,
+    realActivityDetails(run, focus),
     panel.stageContext && !view.terminal
       ? element('div', { class: 'work-phase-note', 'aria-label': 'Current task explanation' }, [
         element('strong', { text: panel.stageContext.title }),
@@ -1031,28 +1069,34 @@ function runControlStrip(data) {
   const active = !view.terminal && !view.waiting && !view.stopping
     && (view.live || run.state === 'queued');
   if (!active && !view.waiting && !view.disconnected) return null;
-  const tasks = workspaceProgressPanel(run, data.workspace);
+  const focus = liveWorkFocus(run, {
+    workspace: data.workspace,
+    connectedGitHub: state.workspaceSource?.kind === 'github',
+    offline: view.disconnected, stopping: view.stopping
+  });
   const showDetails = () => {
+    // Only navigate to existing, server-backed progress records.
     const cards = [...document.querySelectorAll('#thread .work-status-card')];
     const card = cards.at(-1);
     if (!card) return;
-    const detail = card.querySelector('.work-stage-details');
+    const detail = card.querySelector('[data-live-inspection]');
     if (detail) detail.open = true;
     card.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'center' });
   };
-  const controls = [button('View work', showDetails, 'adaptive-running-button')];
+  const controls = [button('Details', showDetails, 'adaptive-running-button')];
+  if (focus.allowTerminal && $('openTerminal')) {
+    controls.push(button('Terminal', () => $('openTerminal')?.click(), 'adaptive-running-button'));
+  }
   if (active && state.run?.id === run.id) controls.push(button('Stop', () => {
     document.dispatchEvent(new CustomEvent('kindgleam:stop-current-run', { detail: { runId: run.id } }));
   }, 'adaptive-running-button stop'));
   return element('div', {
     class: 'adaptive-running-strip', 'data-running': String(view.live),
-    'aria-label': 'Current task controls'
+    'data-work-kind': focus.surface, 'aria-label': 'Exact current task and controls'
   }, [
     element('span', { class: 'adaptive-running-dot', 'aria-hidden': 'true' }),
-    element('span', { class: 'adaptive-running-copy' }, [
-      element('strong', { text: view.label }),
-      element('span', { class: 'muted small', text: tasks.completed + ' of ' + tasks.stageCount + ' recorded steps completed' })
-    ]),
+    element('strong', { class: 'adaptive-running-line', text: focus.line,
+      title: focus.line, role: 'status', 'aria-live': 'polite' }),
     element('div', { class: 'adaptive-running-buttons' }, controls)
   ]);
 }
