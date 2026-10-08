@@ -126,6 +126,148 @@ test('a tool with side effects is proposed for approval, never run by the AI', a
   assert.match((await useTool('test.remind', {}, { config })).error, /needs the person's approval/);
 });
 
+test('repeated equivalent approval proposals reuse the original action and converge', async () => {
+  registerTools([{
+    name: 'test.converge-proposal', description: 'test', input: {}, sideEffect: true,
+    ready: () => ({ ready: true }), summarize: () => 'Create action', run: () => assert.fail('must only propose')
+  }]);
+  const proposals = [], sent = [];
+  const answer = await answerWithTools([{ role: 'user', content: 'Create the action once.' }], {
+    config, propose: async action => { proposals.push(action); return { id: `action-${proposals.length}` }; }
+  }, {
+    config, maxRounds: 6, fetchImpl: scripted([
+      JSON.stringify({ tool: 'test.converge-proposal', input: { at: '09:00', tags: ['a', 'b'] } }),
+      JSON.stringify({ tool: 'test.converge-proposal', input: { at: '10:00', tags: ['a', 'b'] } }),
+      JSON.stringify({ tool: 'test.converge-proposal', input: { tags: ['b', 'a'], at: '10:00' } }),
+      JSON.stringify({ tool: ' test.converge-proposal ', input: { tags: ['a', 'b'], at: '09:00' } }),
+      'Three actions are proposed and await approval.'
+    ], sent)
+  });
+  assert.equal(proposals.length, 3, 'distinct values and array order are separate actions; key order is not');
+  assert.equal(answer.toolLog.at(-1).actionId, 'action-1');
+  assert.equal(answer.toolLog.at(-1).reused, true);
+  assert.deepEqual(answer.toolLoop, { stopReason: 'repeated-proposal', modelCalls: 5, toolCalls: 3, avoidedToolCalls: 1 });
+  assert.deepEqual(answer.usage, { inputTokens: 50, outputTokens: 25 });
+  assert.match(sent.at(-1).input.at(-1).content, /action-1/);
+});
+
+test('two unchanged failures stop the loop, while changed failures and successful reads continue', async () => {
+  let calls = 0;
+  registerTools([{
+    name: 'test.converge-read', description: 'test', input: {}, ready: () => ({ ready: true }),
+    run: async () => { calls++; return calls === 1 ? { error: 'first failure' }
+      : calls === 2 ? { error: 'changed failure' } : calls <= 4 ? { value: calls } : { error: 'unchanged failure' }; }
+  }]);
+  const sent = [];
+  const call = '{"tool":"test.converge-read","input":{"key":"x"}}';
+  const answer = await answerWithTools([{ role: 'user', content: 'Read current state.' }], { config }, {
+    config, maxRounds: 8, fetchImpl: scripted([...Array(6).fill(call), 'The source is unavailable.'], sent)
+  });
+  assert.equal(calls, 6, 'changed failures and successful live reads do not trigger an early stop');
+  assert.equal(answer.text, 'The source is unavailable.');
+  assert.deepEqual(answer.toolLoop, { stopReason: 'repeated-failure', modelCalls: 7, toolCalls: 6, avoidedToolCalls: 0 });
+});
+
+test('repeated unmet prerequisites converge without spending all tool rounds', async () => {
+  const sent = [];
+  const call = '{"tool":"file.read","input":{"file":"missing.txt"}}';
+  const answer = await answerWithTools([{ role: 'user', content: 'Read missing.txt.' }], { config }, {
+    config, maxRounds: 6, fetchImpl: scripted([call, call, 'Attach missing.txt so I can read it.'], sent)
+  });
+  assert.equal(answer.toolLog.length, 2);
+  assert.equal(answer.toolLoop.stopReason, 'repeated-failure');
+  assert.equal(sent.length, 3);
+});
+
+test('a changing prerequisite explanation allows the next readiness check', async () => {
+  let checks = 0, ran = 0;
+  registerTools([{
+    name: 'test.readiness-progress', description: 'test', input: {},
+    ready: () => {
+      checks++;
+      // Catalog construction checks readiness once before the model loop.
+      return checks >= 4 ? { ready: true } : { ready: false, needs: 'admin', reason: checks <= 2 ? 'Waiting for approval' : 'Approved, waiting for provisioning' };
+    },
+    run: async () => { ran++; return { value: 'ready' }; }
+  }]);
+  const sent = [], call = '{"tool":"test.readiness-progress","input":{}}';
+  const answer = await answerWithTools([{ role: 'user', content: 'Check provisioning.' }], { config }, {
+    config, maxRounds: 6, fetchImpl: scripted([call, call, call, 'Ready.'], sent)
+  });
+  assert.equal(ran, 1);
+  assert.equal(answer.toolLoop.stopReason, 'answer');
+  assert.equal(answer.toolLog.length, 3);
+});
+
+test('budget synthesis retains the exact task contract and output format', async () => {
+  const sent = [];
+  const payload = {
+    goal: 'Calculate and report', task: { id: 'step-1', type: 'step', purpose: 'Compute required result', requirementIds: ['r1'] },
+    situation: { need: { deliverable: 'JSON result', form: 'JSON' }, constraints: ['Stay on main'], successCriteria: ['Total equals 2'], requirements: [{ id: 'r1', requirement: 'Use SI units' }] },
+    verification: { requiredEvidence: ['A calculated total'], groundedCheck: false },
+    adaptation: { governance: { restrictions: ['No publishing'] } },
+    approvedPlan: { keep: ['Keep the existing authentication boundary'], remove: ['No email delivery'], change: ['Return XML only'] },
+    conversation: [{ role: 'user', content: 'FOLLOWUP-CONSTRAINT: Include the units.' }],
+    rag: [{ content: 'irrelevant context'.repeat(3000) }]
+  };
+  const answer = await answerWithTools([{ role: 'user', content: JSON.stringify(payload) }], { config }, {
+    config, maxRounds: 1, fetchImpl: scripted(['{"tool":"math.evaluate","input":{"expression":"1+1"}}', '{"result":"2","enough":true}'], sent)
+  });
+  assert.equal(answer.text, '{"result":"2","enough":true}');
+  const final = sent.at(-1).input;
+  for (const retained of ['Stay on main', 'Total equals 2', 'Use SI units', 'A calculated total', 'No publishing', 'requirementIds', 'JSON result', 'Keep the existing authentication boundary', 'No email delivery', 'Return XML only', 'FOLLOWUP-CONSTRAINT']) {
+    assert.ok(final.at(-1).content.includes(retained), `${retained} survives synthesis`);
+  }
+  assert.doesNotMatch(final[0].content, /final natural-language answer/);
+  assert.doesNotMatch(final.at(-1).content, /irrelevant context/);
+  assert.equal(answer.toolLoop.stopReason, 'round-budget');
+});
+
+test('oversized synthesis instructions fail explicitly rather than dropping constraints', async () => {
+  const sent = [];
+  const answer = await answerWithTools([{ role: 'user', content: JSON.stringify({ goal: 'Compute 2', task: { id: 'step-1' }, situation: { constraints: ['Do not lose this.'.repeat(1000)] } }) }], { config }, {
+    config, maxRounds: 1, fetchImpl: scripted(['{"tool":"math.evaluate","input":{"expression":"1+1"}}', 'Two.'], sent)
+  });
+  assert.equal(answer.incomplete, 'synthesis-context-over-budget');
+  assert.equal(answer.text, '');
+  assert.equal(sent.length, 1, 'no unconstrained synthesis request');
+  assert.deepEqual(answer.usage, { inputTokens: 10, outputTokens: 5 });
+});
+
+test('synthesis retains earlier workflow evidence separately from its task contract', async () => {
+  const sent = [];
+  await answerWithTools([{ role: 'user', content: JSON.stringify({
+    goal: 'Report the calculated total against the measured limit', task: { id: 'step-1', type: 'step' },
+    evidenceSoFar: [{ taskId: 'measure', evidence: { text: 'Measured limit: 230 W', citations: [{ url: 'https://example.com/measurement' }] } }]
+  }) }], { config, requiredTool: { tool: 'math.evaluate', input: { expression: '100+100' } } }, {
+    config, fetchImpl: scripted(['200 W is below 230 W.'], sent)
+  });
+  assert.match(sent.at(-1).input.at(-1).content, /Measured limit: 230 W/);
+  assert.match(sent.at(-1).input.at(-1).content, /https:\/\/example.com\/measurement/);
+});
+
+test('a pre-cancelled context prevents every model and tool call', async () => {
+  const controller = new AbortController();
+  controller.abort(new Error('Stopped by user'));
+  const sent = [];
+  await assert.rejects(answerWithTools([{ role: 'user', content: 'Compute.' }], { config, signal: controller.signal }, {
+    config, fetchImpl: scripted(['Two.'], sent)
+  }), /Stopped by user/);
+  assert.equal(sent.length, 0);
+});
+
+test('context cancellation after a required tool prevents final synthesis', async () => {
+  const controller = new AbortController(), sent = [];
+  registerTools([{
+    name: 'test.cancel-synthesis', description: 'test', input: {}, ready: () => ({ ready: true }),
+    run: async () => { controller.abort(new Error('Stop during tool')); return { value: 2 }; }
+  }]);
+  await assert.rejects(answerWithTools([{ role: 'user', content: 'Compute.' }], {
+    config, signal: controller.signal, requiredTool: { tool: 'test.cancel-synthesis', input: {} }
+  }, { config, fetchImpl: scripted(['Two.'], sent) }), /Stop during tool/);
+  assert.equal(sent.length, 0);
+});
+
 test('the AI downloads a spreadsheet and a PDF from the web and reads them', async () => {
   const http = await import('node:http');
   const { pdf } = await import('./document-fixtures.js');

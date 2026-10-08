@@ -561,11 +561,51 @@ export function createReach(messages = []) {
 
 const UNREACHABLE = 'For safety, only addresses that the person gave, that a web search returned, or that appeared on a page already read can be opened. Search for this page first with web.search, or ask the person for the link.';
 
+// Parsed inputs are JSON values. Object key order is not action identity;
+// array order and values are. These keys never leave this invocation.
+const canonicalJson = value => JSON.stringify(value, (_key, item) =>
+  item && typeof item === 'object' && !Array.isArray(item)
+    ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]]))
+    : item);
+
+// Keep the instructions that determine correctness, independently of the
+// much larger retrieved context. Never truncate this contract silently.
+function synthesisTaskContext(messages) {
+  return messages.filter(message => message?.role !== 'system').map(message => {
+    const content = textOf(message?.content);
+    const parsed = parseJsonObject(content);
+    if (!parsed?.task && !parsed?.goal) return content;
+    return JSON.stringify({
+      goal: parsed.goal ?? null,
+      step: parsed.task ?? null,
+      purpose: parsed.purpose ?? null,
+      situation: parsed.situation ?? null,
+      verification: parsed.verification ?? null,
+      previousAttempts: parsed.previousAttempts ?? null,
+      approvedPlan: parsed.approvedPlan ?? null,
+      conversation: parsed.conversation ?? null,
+      workPlan: parsed.workPlan ?? null,
+      adaptation: {
+        governance: parsed.adaptation?.governance ?? null,
+        codeNotRun: parsed.adaptation?.codeNotRun ?? null,
+        notAvailableHere: parsed.adaptation?.notAvailableHere ?? null,
+        workflowBlueprint: parsed.adaptation?.workflowBlueprint ?? null,
+        resourcePlan: parsed.adaptation?.resourcePlan ? {
+          selected: parsed.adaptation.resourcePlan.selected,
+          budget: parsed.adaptation.resourcePlan.budget
+        } : null
+      }
+    });
+  }).filter(Boolean).join('\n');
+}
+
 /**
  * Ask the model, letting it use tools, until it answers. Returns the final
  * answer (as callModel does) plus `toolLog` and summed `usage`.
  */
-export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRounds = MAX_TOOL_ROUNDS, ...options } = {}) {
+export async function answerWithTools(messages, ctx = {}, { config, fetchImpl, maxRounds = MAX_TOOL_ROUNDS, ...options } = {}) {
+  options = { ...options, signal: options.signal ?? ctx.signal };
+  options.signal?.throwIfAborted();
   // A tool-backed task needs at least one actual tool execution opportunity.
   // A zero-round budget must not turn the model's tool request into the final
   // answer; zero is therefore normalized to one for this governed helper.
@@ -577,52 +617,55 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
   const sources = new Map();
   const reach = createReach(messages);
   const usage = { inputTokens: 0, outputTokens: 0 };
+  const toolLoop = { stopReason: 'answer', modelCalls: 0, toolCalls: 0, avoidedToolCalls: 0 };
+  const proposals = new Map();
+  let previousFailure = null;
+  let lastAnswer = null;
+  const finish = answer => ({ ...answer, citations: [...sources.values()], usage, toolLog, toolLoop: { ...toolLoop } });
   // Tools that call the model themselves (web.search) add to this step's usage.
   const toolCtx = { ...ctx, signal: options.signal ?? ctx.signal, usageGate: ctx.usageGate, onUsage: (used, source) => {
     usage.inputTokens += used?.inputTokens ?? 0;
     usage.outputTokens += used?.outputTokens ?? 0;
     ctx.onUsage?.(used, source);
   } };
-  const finalSynthesis = async () => {
+  const finalSynthesis = async (stopReason = 'round-budget') => {
+    options.signal?.throwIfAborted();
+    toolLoop.stopReason = stopReason;
     const system = conversation.find(message => message?.role === 'system')?.content ?? '';
-    const taskContext = messages
-      .filter(message => message?.role !== 'system')
-      .map(message => {
-        const content = text(message?.content);
-        const parsed = parseJsonObject(content);
-        if (parsed?.task || parsed?.goal) {
-          return JSON.stringify({
-            goal: parsed.goal ?? null,
-            step: parsed.task?.id ?? null,
-            purpose: parsed.task?.purpose ?? parsed.purpose ?? null
-          });
-        }
-        return content;
-      })
-      .filter(Boolean)
-      .join('\n');
-    const toolResults = conversation
+    const taskContext = synthesisTaskContext(messages);
+    if (taskContext.length > 12_000) {
+      return finish({ ...lastAnswer, text: '', incomplete: 'synthesis-context-over-budget' });
+    }
+    const resultMessages = conversation
       .filter(message => message?.role === 'user' && /^Tool result for /i.test(text(message.content)))
-      .slice(-8)
-      .map(message => text(message.content))
-      .join('\n');
+      .slice(-8);
+    const toolResults = resultMessages.map(message => text(message.content)).join('\n');
+    const priorEvidence = messages.filter(message => message?.role === 'user')
+      .map(message => parseJsonObject(textOf(message.content))?.evidenceSoFar)
+      .filter(Boolean);
+    const images = [...messages, ...resultMessages].flatMap(message => message?.images ?? []);
     const synthesisPrompt = [
       system,
       'FINAL SYNTHESIS MODE: use the available tool results to answer the task now.',
-      'No more tools may be executed in this mode. Return only the final natural-language answer; never emit a tool-call JSON object and never request another tool.'
+      'No more tools may be executed in this mode. Return only the completed answer in the format required by this task; never emit a tool-call JSON object and never request another tool. Preserve the user constraints and acceptance criteria. State missing evidence plainly; stopping the tool loop does not prove success.'
     ].join('\n\n');
     let last = null;
     const maxSynthesisAttempts = 2;
     for (let attempt = 0; attempt < maxSynthesisAttempts; attempt += 1) {
+      options.signal?.throwIfAborted();
       const correction = attempt === 0
         ? ''
         : '\n\nThe previous response requested another tool. Tool execution is finished. Use only the supplied results and return the final answer now.';
+      toolLoop.modelCalls++;
       const synthesis = await callModel([
         { role: 'system', content: synthesisPrompt + correction },
         {
           role: 'user',
+          ...(images.length ? { images } : {}),
           content: 'Task context:\n'
-            + clip(taskContext, 6000)
+            + taskContext
+            + '\n\nPrior workflow evidence (bounded excerpt; omitted evidence is not proof):\n'
+            + JSON.stringify(clip(priorEvidence, MAX_TOOL_CHARS))
             + '\n\nAvailable tool results:\n'
             + JSON.stringify(clip(toolResults, MAX_TOOL_CHARS * 2))
             + '\n\nNo more tools can be used. Answer from the available results now.'
@@ -634,6 +677,7 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
         webSearch: false
       });
       if (!synthesis) return null;
+      options.signal?.throwIfAborted();
       last = synthesis;
       usage.inputTokens += synthesis.usage?.inputTokens ?? 0;
       usage.outputTokens += synthesis.usage?.outputTokens ?? 0;
@@ -641,18 +685,15 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
         if (source?.url) sources.set(source.url, source);
       }
       if (!synthesis.incomplete && !parseToolCall(synthesis.text)) {
-        return { ...synthesis, citations: [...sources.values()], usage, toolLog };
+        return finish(synthesis);
       }
     }
     if (!last) return null;
-    return {
+    return finish({
       ...last,
       text: '',
-      incomplete: last.incomplete || 'tool-call-without-budget',
-      citations: [...sources.values()],
-      usage,
-      toolLog
-    };
+      incomplete: last.incomplete || 'tool-call-without-budget'
+    });
   };
 
   // Some exact, read-only tools are selected by server policy because using
@@ -662,6 +703,7 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
   // boundary.
   if (ctx?.requiredTool?.tool) {
     const required = ctx.requiredTool;
+    toolLoop.toolCalls++;
     const result = await useTool(required.tool, required.input ?? {}, toolCtx);
     const { showImage, ...shown } = result ?? {};
     if (!result?.error) reach.learn(result);
@@ -686,14 +728,16 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
       { role: 'assistant', content: JSON.stringify({ tool: required.tool, input: required.input ?? {}, why: text(required.why) }) },
       { role: 'user', content: `Tool result for ${required.tool}:\n${clip(shown)}`, ...(showImage ? { images: [showImage] } : {}) }
     );
-    return finalSynthesis();
+    return finalSynthesis('required-tool');
   }
 
   for (let round = 0; ; round += 1) {
+    options.signal?.throwIfAborted();
     if (round > 0 && round >= effectiveMaxRounds) return finalSynthesis();
     // Once a tool has run, the next model turn is synthesis. Do not re-open
     // provider web search on that turn, or a tool result can start another
     // search cycle instead of converging on the requested answer.
+    toolLoop.modelCalls++;
     const answer = await callModel(conversation, {
       config, fetchImpl, ...options,
       // Governed tool loops must never be short-circuited by provider-side
@@ -702,6 +746,8 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
       webSearch: false
     });
     if (!answer) return null;
+    options.signal?.throwIfAborted();
+    lastAnswer = answer;
     usage.inputTokens += answer.usage?.inputTokens ?? 0;
     usage.outputTokens += answer.usage?.outputTokens ?? 0;
     // Preserve model-grounded sources immediately. This is important for a
@@ -711,15 +757,34 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
       if (source?.url) sources.set(source.url, source);
     }
     const call = answer.incomplete ? null : parseToolCall(answer.text);
-    const cited = () => [...new Map([
-      ...sources.values(),
-      ...(answer.citations ?? [])
-    ].filter(item => item?.url).map(item => [item.url, item])).values()];
-    if (!call) return { ...answer, citations: cited(), usage, toolLog };
+    if (!call) {
+      toolLoop.stopReason = answer.incomplete ? 'model-incomplete' : 'answer';
+      return finish(answer);
+    }
     if (round >= effectiveMaxRounds) return finalSynthesis();
-    const result = REACHING_TOOLS.has(text(call.tool)) && !reach.allows(call.input?.url)
-      ? { error: UNREACHABLE, code: 'address-not-from-a-trusted-source' }
-      : await useTool(call.tool, call.input, toolCtx);
+    const callKey = canonicalJson({
+      tool: text(call.tool),
+      input: call.input && typeof call.input === 'object' && !Array.isArray(call.input) ? call.input : {}
+    });
+    const proposed = proposals.get(callKey);
+    if (proposed) {
+      toolLoop.avoidedToolCalls++;
+      toolLog.push({ round, tool: call.tool, why: call.why, outcome: 'proposed', actionId: proposed.actionId, reused: true });
+      conversation.push({ role: 'user', content: `Tool result for ${call.tool}:\n${clip(proposed)}\nThis exact action is already proposed. Do not propose it again.` });
+      return finalSynthesis('repeated-proposal');
+    }
+    let result;
+    if (REACHING_TOOLS.has(text(call.tool)) && !reach.allows(call.input?.url)) {
+      result = { error: UNREACHABLE, code: 'address-not-from-a-trusted-source' };
+    } else {
+      toolLoop.toolCalls++;
+      result = await useTool(call.tool, call.input, toolCtx);
+    }
+    options.signal?.throwIfAborted();
+    if (result?.proposed) proposals.set(callKey, result);
+    const failure = result?.error || result?.notReady ? canonicalJson({ callKey, result }) : null;
+    const repeatedFailure = failure !== null && previousFailure === failure;
+    previousFailure = failure;
     if (!result?.error) reach.learn(result);
     const { showImage, ...shown } = result ?? {};
     // Where facts came from, so the answer can cite them.
@@ -743,5 +808,6 @@ export async function answerWithTools(messages, ctx, { config, fetchImpl, maxRou
       { role: 'assistant', content: answer.text },
       { role: 'user', content: `Tool result for ${call.tool}:\n${clip(shown)}`, ...(showImage ? { images: [showImage] } : {}) }
     );
+    if (repeatedFailure) return finalSynthesis('repeated-failure');
   }
 }
