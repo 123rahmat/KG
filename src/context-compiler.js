@@ -102,7 +102,7 @@ function boundedWindows(content, targetLines, radius, maxChars) {
       // line. Never silently drop the changed file: retain a bounded preview
       // with an explicit truncation marker instead of an empty result.
       if (!output && maxChars > 24) {
-        const marker = '\\n[excerpt truncated; use targeted file read for more]';
+        const marker = '\n[excerpt truncated; use targeted file read for more]';
         return candidate.slice(0, Math.max(0, maxChars - marker.length)) + marker;
       }
       break;
