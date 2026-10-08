@@ -31,6 +31,7 @@ export function workspaceProgressPanel(run, workspace = 'normal-chat') {
     label: safe(task?.metadata?.title || LABELS[task?.id] || LABELS[task?.type] || task?.purpose || task?.id || 'Work step', 120),
     status: safe(task?.status || 'pending', 24),
     statusLabel: STATUSES[task?.status] || 'Recorded',
+    evidenceAnchor: safe(task?.metadata?.evidenceAnchorTaskId, 80),
     active: task?.id === liveTask?.id && task?.status === 'running'
   }));
   const attachments = array(run?.adaptation?.attachments);
