@@ -121,7 +121,7 @@ export async function checkControls(browser, url) {
       const { state } = window.controlsQA; const { runStep, renderNextStep } = await import('/app.js');
       state.role = 'editor'; state.driving = null; state.usage = null; state.run = run;
       state.chat = { id: run.conversationId, runs: [run], pending: null };
-      state.executionConfig = { localAgentUrl: window.location.origin + '/local-fixture', targets: [{ id: 'local' }] };
+      state.executionConfig = { localAgentUrl: window.location.origin + '/local-fixture', targets: [{ id: 'local', label: 'Local machine', taskTypes: ['code'], configured: true }] };
       window.controlsQA.renderNextStep = renderNextStep;
       await runStep(null, { executionTarget: 'local', approved: true, policyRevision: 'first-revision', preflight: { agent: { available: true } } }, run);
     }, localRun);
