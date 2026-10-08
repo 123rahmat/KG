@@ -1,0 +1,68 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { workspaceProgressPanel } from '../public/work-progress-panels.js';
+
+test('NormalChat hides irrelevant metrics on everyday conversations', () => {
+  const view = workspaceProgressPanel({ tasks: [{ id: 'respond', status: 'running' }], next: 'respond' });
+  assert.equal(view.workspace, 'normal-chat');
+  assert.deepEqual(view.cards, []);
+  assert.equal(view.stages[0].statusLabel, 'Working');
+  assert.equal(view.stages[0].active, true);
+});
+
+test('NormalChat adapts to real files and reasoning context', () => {
+  const view = workspaceProgressPanel({
+    adaptation: { attachments: [{ name: 'budget.xlsx' }, { name: 'plan.docx' }] },
+    intelligence: { reasoning: { depth: 'deep' } },
+    tasks: [{ id: 'verify', type: 'verify', status: 'complete', evidence: { verdict: { verdict: 'pass' } } }]
+  });
+  assert.deepEqual(view.cards, [
+    { label: 'Files in context', value: '2' },
+    { label: 'Reasoning effort', value: 'deep' },
+    { label: 'Verified checks', value: '1' }
+  ]);
+});
+
+test('Code view distinguishes recorded checks from verified outcomes', () => {
+  const view = workspaceProgressPanel({
+    adaptation: { projectOverlay: [{ path: 'a.js' }] },
+    tasks: [
+      { id: 'test-code', status: 'failed' },
+      { id: 'verify', type: 'verify', status: 'complete', evidence: { verdict: { verdict: 'fail' } } }
+    ]
+  }, 'code');
+  assert.equal(view.cards[0].value, '1');
+  assert.equal(view.cards[1].value, '2');
+  assert.equal(view.cards[2].value, '0');
+});
+
+test('Research view shows source and evidence records, not estimates', () => {
+  const view = workspaceProgressPanel({
+    adaptation: { researchWorkspace: {
+      sourceCount: 4, evidenceCount: 8, unresolvedQuestions: ['gap'], conflicts: ['disagreement']
+    } },
+    tasks: []
+  }, 'research');
+  assert.deepEqual(view.cards, [
+    { label: 'Sources recorded', value: '4' },
+    { label: 'Evidence items', value: '8' },
+    { label: 'Evidence conflicts', value: '1' }
+  ]);
+});
+
+test('Waiting and failed stages are never presented as completed', () => {
+  const view = workspaceProgressPanel({ tasks: [
+    { id: 'plan', status: 'complete' }, { id: 'build-code', status: 'failed' },
+    { id: 'approval', status: 'waiting' }
+  ] }, 'code');
+  assert.deepEqual(view.stages.map(item => item.statusLabel), ['Done', 'Failed', 'Waiting']);
+  assert.equal(view.completed, 1);
+});
+
+test('Progress model bounds stage rows and sanitizes unknown values', () => {
+  const tasks = Array.from({ length: 20 }, (_, i) => ({ id: 'respond', status: 'pending', metadata: { title: 'x'.repeat(150) + i } }));
+  const view = workspaceProgressPanel({ tasks }, 'unexpected-mode');
+  assert.equal(view.stages.length, 12);
+  assert.equal(view.stages[0].label.length, 120);
+  assert.equal(view.workspace, 'normal-chat');
+});
