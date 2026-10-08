@@ -2025,12 +2025,6 @@ export class RunStore {
         return { type: 'investigate', title: 'Investigate the required evidence',
           purpose: 'Retrieve or establish the evidence needed to resolve the identified uncertainty.' };
       }
-      // Only files the person gave: "a single HTML file" is what to make.
-      const hasFiles = (run.adaptation?.attachments?.length ?? 0) > 0 || (run.situation?.artifacts?.length ?? 0) > 0;
-      if (planned.has('file-analysis') && hasFiles && !started('respond')) {
-        return { type: 'respond', title: 'Work from the attached files',
-          purpose: 'Read the attached files with the file tools, work out what the person asked from their actual contents, and answer from that evidence.' };
-      }
       if (planned.has('code-generation') && !started('code')) {
         // All substantive coding work is reviewed with the person before
         // mutation. New builds and existing-code changes use the same
@@ -2045,6 +2039,12 @@ export class RunStore {
         }
         return { type: 'code', title: 'Write the code',
           purpose: 'Write the requested code with its automated tests, as a reviewable package; do not claim that it has run.' };
+      }
+      // Only files the person gave: "a single HTML file" is what to make.
+      const hasFiles = (run.adaptation?.attachments?.length ?? 0) > 0 || (run.situation?.artifacts?.length ?? 0) > 0;
+      if (planned.has('file-analysis') && hasFiles && !started('respond')) {
+        return { type: 'respond', title: 'Work from the attached files',
+          purpose: 'Read the attached files with the file tools, work out what the person asked from their actual contents, and answer from that evidence.' };
       }
       if (planned.has('invention') && !started('prototype')) {
         return { type: 'prototype', title: 'Invent and plan the decisive experiment',
