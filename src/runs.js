@@ -33,6 +33,7 @@ import { buildUnifiedWorkContext, applyWorkChange } from './unified-work-context
 import { reevaluateSituationGovernance } from './situation-governance.js';
 import { MAX_CODE_REPAIRS, canRepair, builtCode, staleAfterRepair, repairRecord, hasCode, isProject, codeFiles, deletedPaths, mergeFix, repairsThisAttempt, normalizePackage } from './code-workflow.js';
 import { normalizeNextStep } from './step-plan.js';
+import { evidenceNextTaskGate } from './evidence-next-task-gate.js';
 import { buildRequirementModel, normalizeRequirementModel, reconcileRequirements, nextRequirement, requirementAction, gradedCriteria } from './requirements.js';
 import { insertTask, insertTasks, loadTasks } from './run-graph.js';
 import { present, summarize, encodeCursor, decodeCursor, normalizeUnderstanding, isEmpty } from './run-view.js';
@@ -2059,6 +2060,11 @@ export class RunStore {
     };
 
     let candidate = canonical(next);
+    const novelProposal = candidate && (
+      target.type === 'reassess' ||
+      (target.type === 'step' && ['investigate', 'tool', 'code', 'discover-capabilities', 'prototype'].includes(candidate.type))
+    );
+    let admittedExpansion = null;
     // A build plan is followed by the person agreeing it, whatever the model
     // suggested; only then is the code written, to the agreed plan.
     if (target.type === 'plan' && target.metadata?.buildPlan) {
@@ -2237,6 +2243,37 @@ export class RunStore {
       };
     }
 
+    // Unplanned model-proposed extensions must be justified by a real
+    // prior observation and an unmet acceptance need. Planned work, user
+    // approvals and mandatory verification remain governed by their existing
+    // distinct server gates.
+    if (candidate && (
+      (novelProposal && candidate.type === canonical(next)?.type)
+      || (target.type === 'reassess' && Array.isArray(candidate.capabilitySpecs)
+        && candidate.capabilitySpecs.length > 0)
+    )) {
+      const evidenceDecision = evidenceNextTaskGate({
+        sourceTask: target,
+        proposal: candidate,
+        tasks,
+        requirements: requirementModel,
+        budgetAllows: totalCreated < workflowBudget.maxWorkflowNodes
+      });
+      if (!evidenceDecision.allowed) {
+        await client.query(
+          'INSERT INTO situation_events (run_id, workspace_id, principal_id, event_type, event) VALUES ($1, $2, $3, $4, $5::jsonb)',
+          [run.id, run.workspace_id, run.principal_id, 'adaptive-expansion-deferred',
+            JSON.stringify({ after: target.id, proposedType: candidate.type, reason: evidenceDecision.reason })]
+        );
+        candidate = plannedStage() ?? {
+          type: 'verify', title: 'Verify the result',
+          purpose: 'Check the recorded evidence and remaining requirements before adding more work.',
+          requires: ['verification']
+        };
+      } else {
+        admittedExpansion = evidenceDecision;
+      }
+    }
     if (!candidate) return;
     // Executed work is reassessed before it is verified: the evidence may call
     // for a new capability or a changed plan. Clean evidence is recorded by
@@ -2355,6 +2392,7 @@ export class RunStore {
       ...(candidate.inventionLoop === true ? { inventionLoop: true } : {}),
       ...(candidate.type === 'reassess' && candidate.sourceTask ? { sourceTask: candidate.sourceTask } : {}),
       ...(candidate.humanInput ? { humanInput: true } : {}),
+      ...(admittedExpansion?.evidenceTaskId ? { evidenceAnchorTaskId: admittedExpansion.evidenceTaskId, admission: admittedExpansion.reason } : {}),
       ...(candidate.buildPlan ? {
         buildPlan: true,
         outputSchema: BUILD_PLAN_SCHEMA,
