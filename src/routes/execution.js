@@ -1407,7 +1407,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     const blueprint = run.adaptation?.workflowBlueprint ?? {};
     const selected = plan.selected ?? {};
     const lines = [
-      `Way of working: ${blueprint.mode ?? 'answer'}${blueprint.phases?.length ? ` (${blueprint.phases.join(' → ')})` : ''}.`,
+      `Way of working: ${blueprint.strategy ?? blueprint.mode ?? 'adaptive'}; next decision: ${blueprint.nextAction ?? 'evaluate-current-evidence'}.`,
       selected.capabilities?.length ? `Capabilities: ${selected.capabilities.join(', ')}.` : null,
       selected.dataSources?.length ? `Data: ${selected.dataSources.join(', ')}.` : null,
       selected.artifacts?.length ? `Files: ${selected.artifacts.join(', ')}.` : null,

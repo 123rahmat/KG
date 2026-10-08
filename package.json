@@ -27,6 +27,7 @@
     "smoke:providers": "node bin/provider-smoke.js",
     "eval:live": "node bin/live-eval.js",
     "eval:skills": "node bin/skill-eval.js",
+    "eval:adaptive-matrix": "node bin/adaptive-task-matrix.js",
     "smoke:deploy": "node bin/deploy-smoke.js",
     "load-test": "node bin/workflow-load.js",
     "test:ui": "node bin/ui-smoke.js"

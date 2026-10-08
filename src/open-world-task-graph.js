@@ -83,13 +83,17 @@ export function recordOpenWorldOutcome(graph, id, {
 export function openWorldFrontier(graph, { maxParallel = 3, risk = 'ordinary' } = {}) {
   const valid = validateOpenWorldGraph(graph);
   const highRisk = HIGH_RISK.has(value(risk).toLowerCase());
-  const selected = readyTasks(valid.nodes);
+  // A stale result must become eligible for re-execution once prerequisites
+  // are valid, or a changed requirement could deadlock the run permanently.
+  const scheduled = valid.nodes.map(node => node.status === 'stale'
+    ? { ...node, status: 'pending' } : node);
+  const selected = readyTasks(scheduled);
   return {
     revision: valid.revision,
     ready: selected.map(item => item.id),
     waves: parallelWaves(selected, { maxParallel: highRisk ? 1 : Math.max(1, Math.min(8, Math.floor(finite(maxParallel, 1)))) })
       .map(group => group.map(item => item.id)),
-    blocked: valid.nodes.filter(item => item.status === 'pending' && !selected.includes(item)).map(item => item.id)
+    blocked: scheduled.filter(item => item.status === 'pending' && !selected.includes(item)).map(item => item.id)
   };
 }
 
@@ -109,8 +113,10 @@ export function composeOpenWorldDecision({
     && clamp(situation?.complexity) < .3 && !situation?.executionRequired;
   const headroom = remainingBudgetRatio === null || remainingBudgetRatio === undefined
     ? null : clamp(remainingBudgetRatio);
-  const authorized = new Set(list(authorizedCapabilities));
-  const available = new Set(list(availableCapabilities));
+  const capabilityIds = items => list((Array.isArray(items) ? items : []).map(item =>
+    typeof item === 'string' ? item : item?.id ?? item?.name));
+  const authorized = new Set(capabilityIds(authorizedCapabilities));
+  const available = new Set(capabilityIds(availableCapabilities));
   const byId = new Map(current.nodes.map(item => [item.id, item]));
   const options = (Array.isArray(candidates) ? candidates : []).map(raw =>
     typeof raw === 'string' ? { id: raw, purpose: raw } : raw
@@ -119,6 +125,9 @@ export function composeOpenWorldDecision({
     ['complete', 'skipped'].includes(byId.get(dep)?.status)
   ) && list(item.requires).every(cap => authorized.has(cap) && available.has(cap)));
   const gated = situation?.authorizationRequired === true && situation.authorizationSatisfied === false;
+  const frontier = openWorldFrontier(current, { risk: situation?.risk });
+  const waiting = current.nodes.some(node => node.status === 'running');
+  const failed = current.nodes.some(node => ['failed', 'blocked'].includes(node.status));
   const scored = admissible.map(item => ({
     item, score: 3 * clamp(item?.expectedQualityGain ?? item?.value ?? .5)
       + 2 * clamp(item?.evidenceGain ?? (unknown ? .5 : .1))
@@ -126,20 +135,30 @@ export function composeOpenWorldDecision({
   })).sort((a, b) => b.score - a.score || value(a.item.id).localeCompare(value(b.item.id)));
   let action = direct ? 'direct' : unknown ? 'investigate' : 'reason';
   let reason = direct ? 'small-sufficient-response' : unknown ? 'reduce-uncertainty' : 'determine-next-useful-work';
-  if (scored.length) { action = 'propose-work'; reason = 'justified-registered-capability'; }
-  if (options.length && !scored.length) { action = 'capability-gap'; reason = 'candidate-dependencies-or-authorization-unmet'; }
-  if (headroom !== null && headroom < .08 && action !== 'direct') {
+  // Existing work always takes precedence over inventing more work.
+  if (frontier.ready.length) { action = 'continue-work'; reason = 'existing-ready-work'; }
+  else if (waiting) { action = 'await-work'; reason = 'existing-work-running'; }
+  else if (failed) { action = 'recover'; reason = 'existing-failed-or-blocked-work'; }
+  else if (current.nodes.length && current.nodes.every(node => ['complete', 'skipped'].includes(node.status))
+      && acceptance?.satisfied === true) { action = 'ready-to-deliver'; reason = 'server-must-check-completion'; }
+  else if (scored.length && !direct) { action = 'propose-work'; reason = 'justified-registered-capability'; }
+  if (!['ready-to-deliver', 'continue-work', 'await-work', 'recover'].includes(action)
+      && options.length && !scored.length && !direct) {
+    action = 'capability-gap'; reason = 'candidate-dependencies-or-authorization-unmet';
+  }
+  if (headroom !== null && headroom < .08 && !['direct', 'ready-to-deliver', 'await-work'].includes(action)) {
     action = 'budget-gate'; reason = 'insufficient-budget-for-optional-expansion';
   }
   if (gated) { action = 'approval-required'; reason = 'human-control-required'; }
-  const next = action === 'propose-work' ? scored[0].item : null;
+  const next = action === 'propose-work' ? scored[0].item
+    : action === 'continue-work' ? current.nodes.find(node => node.id === frontier.ready[0]) : null;
   return Object.freeze({
     version: 1, authority: 'proposal-only', revision: current.revision,
     goal: value(goal).slice(0, 500), action, reason,
     next: next ? { id: value(next.id), purpose: value(next.purpose).slice(0, 240),
       requires: list(next.requires), dependsOn: list(next.dependsOn) } : null,
     unknowns: questions, contradictions,
-    frontier: openWorldFrontier(current, { risk: situation?.risk }),
+    frontier,
     acceptanceSatisfied: acceptance?.satisfied === true,
     headroom, unauthorizedExecutionForbidden: true
   });

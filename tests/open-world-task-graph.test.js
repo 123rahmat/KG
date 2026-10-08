@@ -74,13 +74,13 @@ test('material reassessment preserves existing graph revision instead of restart
     taskGraph: graph, situation: { uncertainty: .8, unresolvedQuestions: ['What sensor?'] },
     acceptance: { criteria: ['Explain the signal'] }
   });
-  assert.equal(first.openWorld.action, 'investigate');
+  assert.equal(first.openWorld.action, 'continue-work');
   assert.equal(first.taskGraph.revision, 1);
   const second = reassessUnifiedWorkflow(first, { event: { type: 'new-evidence' },
     situation: { uncertainty: .2, unresolvedQuestions: [], evidenceGap: false } });
-  assert.equal(second.openWorld.action, 'direct');
+  assert.equal(second.openWorld.action, 'continue-work');
   assert.equal(second.taskGraph.revision, 1);
-  assert.equal(second.reassessment.openWorldActionChanged, true);
+  assert.equal(second.reassessment.openWorldActionChanged, false);
   assert.equal(second.reassessment.graphRevisionChanged, false);
 });
 

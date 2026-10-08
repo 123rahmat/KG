@@ -42,3 +42,43 @@ KG retains one server-owned workflow and one decision authority. The new `src/op
 - Run security adversarial tests and verify tenant memory separation and irreversible-action approval.
 
 Architecture target: maximize **verified user outcomes per unit of time and money**, subject to safety, privacy and user control. A universal 10/10 outcome cannot be asserted without those measurements.
+
+
+## Legacy architecture cleanup and scenario validation — October 8, 2026
+
+The former `LEGACY_MODES` table and `legacyEvidenceBounds` mode-dependent stage
+generator have been removed from `src/unified-adaptive-workflow.js`.
+The public `selectAdaptiveWorkflow` function remains as a small compatibility
+projection for existing callers; it returns a **single incremental-open-world
+strategy**, current proposed action, context budget and reassessment triggers.
+It no longer generates a fixed list of future phases for coding, research,
+invention, image work or other domains.
+
+The reasoning prompt no longer instructs the model to follow old
+`workflowBlueprint.phases`. The server execution-status text now describes
+the adaptive strategy and current proposed action. Stale dependent work is
+eligible for re-execution when prerequisite tasks are complete, and completed
+independent work is preserved. Existing ready/running work takes precedence
+over unnecessary new specialist or tool proposals. A fulfilled acceptance
+projection is only `ready-to-deliver`: the server still owns the final
+completion and verification gate.
+
+Run `npm run eval:adaptive-matrix` for the deterministic scenario check or
+`node --test tests/adaptive-task-matrix.test.js tests/adaptive-workflow.test.js
+tests/open-world-task-graph.test.js tests/adaptive-contract.test.js
+tests/unified-adaptive-workflow.test.js tests/evals.test.js` for focused tests.
+
+The scenario matrix covers conversation, writing, brainstorming, coding,
+research, image capability availability, unfamiliar engineering work,
+approval, scarce budget, in-progress work, failed tools and changed
+requirements. **It evaluates control decisions, not Gemini-generated task
+answers.** Do not interpret a simulated 'direct' or 'propose-work' action as
+proof of answer correctness, successful image rendering or end-to-end
+execution. A real Vertex/Gemini test requires provider credentials and
+usable tool execution; the full database and browser suites require a
+complete dependency/runtime configuration.
+
+Live rollout remains conditional on the production suite, privacy and
+approval checks, user-task success benchmarks, and measured cost per
+accepted result. Existing task persistence and security enforcement are
+preserved rather than replaced by the proposal-only graph.
