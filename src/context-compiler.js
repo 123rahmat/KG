@@ -157,7 +157,9 @@ export function compileCodeContext({
   const ranked = normalized.map(file => ({
     file,
     score: scoreFile(file, { changed, impacted, queryTerms: terms, tests: testPaths, config: configPaths, symbolPaths, subtreePaths })
-  })).sort((a,b) => b.score - a.score || a.file.path.localeCompare(b.file.path));
+  })).sort((a,b) => Number(changed.has(b.file.path)) - Number(changed.has(a.file.path))
+    || Number(symbolPaths.has(b.file.path)) - Number(symbolPaths.has(a.file.path))
+    || b.score - a.score || a.file.path.localeCompare(b.file.path));
 
   const selected = [];
   const selectedPathSet = new Set();
