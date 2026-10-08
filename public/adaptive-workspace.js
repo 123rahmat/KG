@@ -222,9 +222,6 @@ function progressSnapshot(run) {
 
 function backgroundSnapshot(run) {
   const tasks = Array.isArray(run?.tasks) ? run.tasks : [];
-  const multi = tasks.map(task => task?.evidence?.multiAgent).filter(Boolean).at(-1)
-    ?? run?.adaptation?.multiAgent
-    ?? null;
   const activity = agentActivitySnapshot(run);
   const activeAgents = activity.active.map(item => item.role);
   const completedAgents = activity.completed;

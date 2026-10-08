@@ -30,7 +30,8 @@
     "eval:adaptive-matrix": "node bin/adaptive-task-matrix.js",
     "smoke:deploy": "node bin/deploy-smoke.js",
     "load-test": "node bin/workflow-load.js",
-    "test:ui": "node bin/ui-smoke.js"
+    "test:ui": "node bin/ui-smoke.js",
+    "smoke:coding": "node --test tests/coding-real-fixture.test.js"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

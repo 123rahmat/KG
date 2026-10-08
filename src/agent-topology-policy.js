@@ -31,8 +31,9 @@ export function specialistTopology({
   const highRisk = HIGH_RISK.has(String(risk).toLowerCase());
   const budgetKnown = remainingBudgetRatio !== null && remainingBudgetRatio !== undefined && Number.isFinite(Number(remainingBudgetRatio));
   const budget = budgetKnown ? clamp(remainingBudgetRatio) : 1;
-  const workspaceCeiling = workspace === 'normal-chat' ? 3
-    : workspace === 'code' && highRisk && advancedBuild ? 6 : 5;
+  const workspaceCeiling = highRisk && advancedBuild ? 11
+    : normalizedMode === 'always' ? 11
+    : workspace === 'normal-chat' ? 3 : 5;
   const ceiling = Math.min(11, positiveInt(maxAgents, 6), workspaceCeiling);
   const target = Math.min(ceiling, positiveInt(proposedAgents, 1));
   const qualityGate = highRisk ? 'independent-verification-required' : 'task-acceptance-required';
@@ -58,7 +59,7 @@ export function specialistTopology({
   }
   const independent = clamp(independentWork);
   const canParallelize = !highRisk && agents > 1 && budget >= 0.25
-    && ((normalizedMode === 'always' && explicitParallel) || independent >= 0.2);
+    && (normalizedMode === 'always' || explicitParallel || independent >= 0.2);
   const maxParallel = canParallelize ? Math.min(agents, workspace === 'normal-chat' ? 2 : workspace === 'code' ? 3 : 4) : 1;
   return Object.freeze({
     mode: maxParallel > 1 ? 'parallel' : 'specialists',
