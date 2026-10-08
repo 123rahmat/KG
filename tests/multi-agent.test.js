@@ -972,3 +972,16 @@ test('pressure-aware subsystem planning can expand and contract during the same 
   assert.ok(high.decision === undefined || high.subsystems.length >= 2);
   assert.ok(down.subsystems.length <= high.subsystems.length);
 });
+
+test('adaptive specialist recruitment distinguishes frontend, backend and cross-stack code', () => {
+  const base = run({ adaptation: { scale: 'complex' }, goal: 'Improve responsive UI components' });
+  const frontend = rolesFor(base, { id: 'build-code', type: 'code' }, { mode: 'always', maxAgents: 3 });
+  assert.ok(frontend.roles.includes('frontend-engineer'));
+  assert.equal(frontend.roles.includes('backend-engineer'), false);
+  const backend = rolesFor({ ...base, goal: 'Improve server API and postgres database queries' }, { id: 'build-code', type: 'code' }, { mode: 'always', maxAgents: 3 });
+  assert.ok(backend.roles.includes('backend-engineer'));
+  assert.equal(backend.roles.includes('frontend-engineer'), false);
+  const both = rolesFor({ ...base, goal: 'Update frontend React UI and backend API' }, { id: 'build-code', type: 'code' }, { mode: 'always', maxAgents: 3 });
+  assert.ok(both.roles.includes('frontend-engineer'));
+  assert.ok(both.roles.includes('backend-engineer'));
+});

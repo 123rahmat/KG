@@ -4425,3 +4425,39 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
   .work-status-dot.active { animation: none; }
 }
+
+/* Universal contextual lens stays within Normal Chat: no extra mode or tab. */
+.adaptive-lens-hint { font-size: .7rem; line-height: 1.35; }
+.adaptive-next-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+}
+.adaptive-next-heading { font: 700 .64rem/1.3 var(--sans); color: var(--muted); margin-right: 2px; }
+.adaptive-next-action {
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink-2);
+  border-radius: 999px; padding: 6px 10px; font-size: .7rem; line-height: 1.3;
+  text-align: left; max-width: min(100%, 360px); white-space: normal;
+}
+.adaptive-next-action:hover { border-color: var(--accent); color: var(--accent); }
+.adaptive-next-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 640px) {
+  .adaptive-next-actions { align-items: stretch; }
+  .adaptive-next-heading { flex-basis: 100%; }
+  .adaptive-next-action { max-width: 100%; }
+}
+
+/* Task-specific specialist activity: progressive disclosure, not fake live counts. */
+.work-agent-details{border-top:1px solid var(--line);padding-top:9px;min-width:0}
+.work-agent-details>summary{cursor:pointer;color:var(--ink-2);font-weight:600;list-style-position:inside}
+.work-agent-details>summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+.work-agent-details>p{margin:8px 0;color:var(--muted)}
+.work-agent-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 12px;border-top:1px solid var(--line);padding:8px 0}
+.work-agent-row strong{min-width:0;overflow-wrap:anywhere;text-transform:capitalize}
+.work-agent-row .work-agent-summary{grid-column:1/-1;line-height:1.45;overflow-wrap:anywhere}
+@media(max-width:520px){.work-agent-row{grid-template-columns:1fr}.work-agent-row .work-agent-summary{grid-column:1}}

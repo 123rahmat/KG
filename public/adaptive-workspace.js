@@ -6,6 +6,8 @@
  * useful set of visible workspace surfaces and a clear current focus.
  */
 import { state, $, element, button } from './ui-core.js';
+import { taskLensFor, contextualSuggestions } from './task-lens.js';
+import { agentActivitySnapshot } from './agent-activity.js';
 
 const SURFACE_META = {
   runs: { label: 'Normal Chat', icon: 'chat', kind: 'normal-chat' },
@@ -90,8 +92,30 @@ export function adaptiveWorkspaceState() {
     focus: runFocus(run),
     status: currentStatus(run),
     workspace,
+    lens: taskLensFor(run),
     surfaces: surfaceSet(run)
   };
+}
+
+function draftNextRequest(suggestion) {
+  const composer = $('goal');
+  if (!composer || composer.disabled) return;
+  // A follow-up is a draft, not an automatic model invocation; never erase
+  // text the user has already composed.
+  const existing = String(composer.value || '').trim();
+  composer.value = existing ? existing + '\n' + suggestion : suggestion;
+  composer.dispatchEvent(new Event('input', { bubbles: true }));
+  composer.focus({ preventScroll: false });
+}
+
+function adaptiveNextActions(data) {
+  if (data.workspace !== 'normal-chat') return null;
+  const suggestions = contextualSuggestions(data.run);
+  if (!suggestions.length) return null;
+  return element('div', { class: 'adaptive-next-actions', 'aria-label': 'Optional next requests' }, [
+    element('span', { class: 'adaptive-next-heading', text: 'Explore further' }),
+    ...suggestions.slice(0, 2).map(suggestion => button(suggestion, () => draftNextRequest(suggestion), 'adaptive-next-action'))
+  ]);
 }
 
 function taskLabel(task) {
@@ -201,12 +225,9 @@ function backgroundSnapshot(run) {
   const multi = tasks.map(task => task?.evidence?.multiAgent).filter(Boolean).at(-1)
     ?? run?.adaptation?.multiAgent
     ?? null;
-  const agentStates = Array.isArray(multi?.agentStates) ? multi.agentStates : [];
-  const activeAgents = agentStates
-    .filter(item => ['running', 'queued', 'working'].includes(text(item?.status).toLowerCase()))
-    .map(item => text(item?.role))
-    .filter(Boolean);
-  const completedAgents = agentStates.filter(item => item?.status === 'complete').length;
+  const activity = agentActivitySnapshot(run);
+  const activeAgents = activity.active.map(item => item.role);
+  const completedAgents = activity.completed;
 
   const tools = new Set();
   let activeTool = '';
@@ -250,7 +271,7 @@ function backgroundSnapshot(run) {
       : [];
   });
   const budgetHeadroom = ratios.length ? Math.round(Math.min(...ratios) * 100) : null;
-  const parallel = Math.max(1, Number(multi?.maxParallel ?? multi?.decision?.maxParallel ?? 1) || 1);
+  const parallel = activity.maxParallel;
 
   let permission = '';
   let permissionTone = '';
@@ -268,6 +289,7 @@ function backgroundSnapshot(run) {
   return {
     activeAgents,
     completedAgents,
+    activity,
     toolCount: tools.size,
     activeTool,
     executionTarget,
@@ -344,6 +366,17 @@ export function renderWorkStatus(run) {
     metrics.length ? element('div', { class: 'work-evidence-chips' }, metrics.map(([label, value]) => element('span', { class: 'work-evidence-chip', text: value + ' ' + label.toLowerCase() }))) : null,
     backgroundItems.length ? element('div', { class: 'work-background-strip', 'aria-label': 'Current work details' }, [
       ...backgroundItems.map(item => element('span', { class: 'work-background-chip small', text: item }))
+    ]) : null,
+    background.activity.roles.length ? element('details', { class: 'work-agent-details' }, [
+      element('summary', { class: 'small', text: 'Specialist contributions · ' + background.activity.roles.length + ' recorded' }),
+      element('p', { class: 'small muted', text: background.activity.observedParallel
+        ? 'Independent specialist work ran in parallel where allowed. These are saved results, not a live activity claim.'
+        : 'Saved advisory findings. The main workflow remains responsible for execution and verification.' }),
+      ...background.activity.roles.slice(-8).map(agent => element('div', { class: 'work-agent-row' }, [
+        element('strong', { class: 'small', text: agent.role.replace(/-/g, ' ') }),
+        element('span', { class: 'small muted', text: agent.status + (agent.wave ? ' · wave ' + agent.wave : '') }),
+        agent.summary ? element('span', { class: 'small work-agent-summary', text: agent.summary }) : null
+      ].filter(Boolean)))
     ]) : null,
     snapshot.conflicts || snapshot.gaps ? element('div', { class: 'work-progress-alerts' }, [
       snapshot.conflicts ? element('span', { class: 'pill warn', text: snapshot.conflicts + ' evidence conflicts to resolve' }) : null,
@@ -832,12 +865,16 @@ export function renderAdaptiveWorkspace(host, mode = 'chat') {
     element('div', { class: 'adaptive-workspace-main' }, [
       element('span', { class: 'adaptive-workspace-dot' }),
       element('div', { class: 'adaptive-workspace-copy' }, [
-        element('span', { class: 'adaptive-workspace-kicker', text: workspaceLabel }),
+        element('span', { class: 'adaptive-workspace-kicker', text: data.workspace === 'normal-chat' && data.run
+          ? 'Normal Chat · ' + data.lens.label : workspaceLabel }),
         element('strong', { class: 'truncate', text: data.focus }),
-        element('span', { class: 'muted small truncate', text: data.status, role: 'status', 'aria-live': 'polite' })
+        element('span', { class: 'muted small truncate', text: data.status, role: 'status', 'aria-live': 'polite' }),
+        data.workspace === 'normal-chat' && data.run
+          ? element('span', { class: 'adaptive-lens-hint muted small', text: data.lens.hint }) : null
       ])
     ]),
-    controls
+    controls,
+    adaptiveNextActions(data)
   );
   if (focus) focus.focus({ preventScroll: true });
   host.dataset.surfaceCount = String(surfaces.length);
