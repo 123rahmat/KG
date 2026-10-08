@@ -5,7 +5,7 @@
  * remains authoritative; this only turns that state into the smallest
  * useful set of visible workspace surfaces and a clear current focus.
  */
-import { state, $, element, button } from './ui-core.js';
+import { state, $, element, button, canEdit } from './ui-core.js';
 import { taskLensFor, contextualSuggestions } from './task-lens.js';
 import { agentActivitySnapshot } from './agent-activity.js';
 import { workspaceCapabilities } from './normal-chat-capabilities.js';
@@ -1071,7 +1071,9 @@ function runControlStrip(data) {
   if (!active && !view.waiting && !view.disconnected && !view.stopping) return null;
   const focus = liveWorkFocus(run, {
     workspace: data.workspace,
-    connectedGitHub: state.workspaceSource?.kind === 'github',
+    connectedGitHub: state.workspaceSource?.kind === 'github'
+      && Boolean(state.workspaceSource?.id),
+    canOpenTerminal: canEdit(),
     offline: view.disconnected, stopping: view.stopping
   });
   const showDetails = () => {
