@@ -1602,6 +1602,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       conversation: (run.adaptation?.conversation ?? []).slice(-maxContextItems),
       attachments: codeIntelligence
         ? (attached.files ?? []).map(item => ({
+            id: item?.id,
             name: item?.name,
             readable: item?.readable,
             kind: item?.kind,

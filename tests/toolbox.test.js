@@ -308,3 +308,24 @@ test('the active adaptive scope hides and blocks tools that are not selected', a
   assert.equal(blocked.code, 'tool-out-of-scope');
   assert.match(blocked.error, /outside the current adaptive scope/);
 });
+
+test('duplicate attachment names require an exact object ID instead of reading the first file', async () => {
+  const ctx = { config, ...filesContext([
+    { name: 'notes.txt', format: 'text', content: Buffer.from('First file') },
+    { name: 'notes.txt', format: 'text', content: Buffer.from('Second file') }
+  ]) };
+  const ambiguous = await useTool('file.read', { file: 'notes.txt' }, ctx);
+  assert.equal(ambiguous.code, 'ambiguous-attachment');
+  assert.deepEqual(ambiguous.matches.map(file => file.id), ['obj0', 'obj1']);
+  assert.equal((await useTool('file.read', { file: 'obj1' }, ctx)).text, 'Second file');
+});
+
+test('multiple partial attachment matches require an exact name or ID', async () => {
+  const ctx = { config, ...filesContext([
+    { name: 'spring.csv', format: 'csv', content: Buffer.from('value\n1') },
+    { name: 'spring-final.csv', format: 'csv', content: Buffer.from('value\n2') }
+  ]) };
+  assert.equal((await useTool('data.analyze', { file: 'spring' }, ctx)).code, 'ambiguous-attachment');
+  assert.equal((await useTool('data.analyze', { file: 'obj1' }, ctx)).columns[0].sum, 2);
+  assert.equal((await useTool('data.analyze', { file: 'spring.csv' }, ctx)).columns[0].sum, 1);
+});

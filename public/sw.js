@@ -1,8 +1,8 @@
 // Offline support for the app shell only. API responses (private data) are
 // never cached. Files are fetched fresh first so a deploy never pairs new
 // HTML with last release's scripts; the cache is the offline fallback.
-const CACHE = 'kindgleam-ui-58';
-const STATIC = ['/', '/index.html', '/app.css', '/app.js', '/app-settings.js', '/app-actions.js', '/app-attachments.js', '/app-account.js', '/app-settings-window.js', '/ui-core.js', '/thread-view.js', '/workspace-sources.js', '/app-projects.js', '/terminal.js', '/artifact-preview.js', '/adaptive-workspace.js', '/markdown.js', '/math-text.js', '/manifest.webmanifest', '/kindgleam.svg', '/kindgleam-192.png', '/kindgleam.png'];
+const CACHE = 'kindgleam-ui-59';
+const STATIC = ['/', '/index.html', '/app.css', '/app.js', '/app-settings.js', '/app-actions.js', '/app-attachments.js', '/attachment-selection.js', '/app-account.js', '/app-settings-window.js', '/ui-core.js', '/thread-view.js', '/workspace-sources.js', '/app-projects.js', '/terminal.js', '/artifact-preview.js', '/adaptive-workspace.js', '/markdown.js', '/math-text.js', '/manifest.webmanifest', '/kindgleam.svg', '/kindgleam-192.png', '/kindgleam.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(

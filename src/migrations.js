@@ -3056,4 +3056,33 @@ export const MIGRATIONS = [
     `
   }
 
+  ,{
+    version: 76,
+    name: 'workspace-storage-quota-totals',
+    sql: `
+      -- Return only aggregate storage totals for the caller's workspace.
+      -- Quota admission must include peers' private objects without giving
+      -- the runtime role access to those objects or their names/content.
+      CREATE OR REPLACE FUNCTION kg_workspace_storage_usage(target_workspace TEXT)
+      RETURNS TABLE(objects BIGINT, bytes BIGINT, archived BIGINT)
+      LANGUAGE SQL
+      SECURITY DEFINER
+      SET search_path = public, pg_temp
+      SET row_security = off
+      AS $storage$
+        SELECT COUNT(*)::bigint,
+               COALESCE(SUM(o.size), 0)::bigint,
+               COUNT(*) FILTER (WHERE o.lifecycle = 'archived')::bigint
+          FROM objects o
+         WHERE o.workspace_id = target_workspace
+        HAVING target_workspace = current_setting('app.workspace_id', true)
+           AND EXISTS (
+             SELECT 1 FROM memberships m
+              WHERE m.workspace_id = target_workspace
+                AND m.principal_id = current_setting('app.principal_id', true)
+           )
+      $storage$;
+      REVOKE ALL ON FUNCTION kg_workspace_storage_usage(TEXT) FROM PUBLIC;
+    `
+  }
 ];

@@ -64,6 +64,22 @@ export class ObjectStore {
     return Buffer.from(String(content ?? ''), 'utf8');
   }
 
+  async #workspaceQuota(client, workspaceId) {
+    // All storage-increasing operations acquire this before object/blob
+    // locks. Share the key with existing deployments and concurrent creates.
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended('professor.workspace-quota:' || $1, 0))",
+      [workspaceId]
+    );
+    const { rows: [workspace] } = await client.query(
+      'SELECT max_bytes, max_objects FROM workspaces WHERE id = $1', [workspaceId]
+    );
+    const { rows: [usage] } = await client.query(
+      'SELECT * FROM kg_workspace_storage_usage($1)', [workspaceId]
+    );
+    return { workspace, usage };
+  }
+
   /**
    * Store an object.
    *
@@ -117,20 +133,7 @@ export class ObjectStore {
       // Serialize quota checks per workspace. A transaction-scoped advisory
       // lock does this without SELECT ... FOR UPDATE, which would need UPDATE
       // on workspaces and so let the runtime role rewrite its own quotas.
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended('professor.workspace-quota:' || $1, 0))" /* lock key shared by every running version; never rename */,
-        [scope.workspaceId]
-      );
-      const { rows: [workspace] } = await client.query(
-        'SELECT max_bytes, max_objects FROM workspaces WHERE id = $1',
-        [scope.workspaceId]
-      );
-
-      const { rows: [usage] } = await client.query(
-        `SELECT COUNT(*)::bigint AS objects, COALESCE(SUM(size), 0)::bigint AS bytes
-           FROM objects WHERE workspace_id = $1`,
-        [scope.workspaceId]
-      );
+      const { workspace, usage } = await this.#workspaceQuota(client, scope.workspaceId);
 
       if (usage.objects + 1 > workspace.max_objects) {
         throw new QuotaError('Workspace object limit reached', {
@@ -247,6 +250,7 @@ export class ObjectStore {
       : { version: 0, bytes: content };
 
     return transaction(this.pool, async client => {
+      const { workspace, usage } = await this.#workspaceQuota(client, scope.workspaceId);
       const { rows: [object] } = await client.query(
         `SELECT * FROM objects
           WHERE id = $1 AND workspace_id = $2
@@ -255,6 +259,12 @@ export class ObjectStore {
         [text(id), scope.workspaceId, scope.principalId]
       );
       if (!object) return null;
+      const adding = content.byteLength - object.size;
+      if (adding > 0 && usage.bytes + adding > workspace.max_bytes) {
+        throw new QuotaError('Workspace storage limit reached', {
+          bytes: usage.bytes, adding, limit: workspace.max_bytes
+        });
+      }
       if (digest === object.digest) {
         // Replacing with identical content needs no blob refcount change.
       } else {
@@ -269,9 +279,7 @@ export class ObjectStore {
           );
         }
         await client.query('UPDATE blobs SET ref_count = ref_count - 1 WHERE digest = $1', [object.digest]);
-        await client.query('DELETE FROM blobs WHERE digest = $1 AND ref_count = 0', [object.digest]);
       }
-      await client.query('DELETE FROM blobs WHERE digest = $1 AND ref_count = 0', [object.digest]);
       const { rows: [updated] } = await client.query(
         `UPDATE objects
             SET name = COALESCE(NULLIF($2, ''), name),
@@ -280,6 +288,9 @@ export class ObjectStore {
           WHERE id = $1 RETURNING *`,
         [text(id), name, contentType, content.byteLength, digest]
       );
+      // The object must stop referencing the old blob before its final
+      // reference is removed: objects.digest has an immediate foreign key.
+      if (digest !== object.digest) await client.query('DELETE FROM blobs WHERE digest = $1 AND ref_count = 0', [object.digest]);
       await this.audit?.record({
         principalId: principal.id,
         workspaceId: scope.workspaceId,
@@ -383,10 +394,7 @@ export class ObjectStore {
 
   async usage(scope) {
     const { rows: [row] } = await this.pool.query(
-      `SELECT COUNT(*)::bigint AS objects,
-              COALESCE(SUM(size), 0)::bigint AS bytes,
-              COUNT(*) FILTER (WHERE lifecycle = 'archived')::bigint AS archived
-         FROM objects WHERE workspace_id = $1`,
+      'SELECT * FROM kg_workspace_storage_usage($1)',
       [scope.workspaceId]
     );
     return {

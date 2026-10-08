@@ -103,20 +103,20 @@ export async function attachmentContext(objects, scope, attachments, { maxChars 
     .sort((a, b) => attachmentPriority(b, focus) - attachmentPriority(a, focus));
   for (const file of orderedAttachments) {
     if (!file.readable) {
-      files.push({ name: file.name, readable: false, note: 'This file type cannot be read; ask the person what it contains, or use a tool that can.' });
+      files.push({ id: file.id, name: file.name, readable: false, note: 'This file type cannot be read; ask the person what it contains, or use a tool that can.' });
       continue;
     }
     const read = await readAttachment(objects, scope, file, { signal });
-    if (read.error) { files.push({ name: file.name, readable: false, note: read.error }); continue; }
+    if (read.error) { files.push({ id: file.id, name: file.name, readable: false, note: read.error }); continue; }
     if (isSensitiveWorkspacePath(file.name)) {
-      files.push({ name: file.name, readable: false, note: 'Sensitive credential-bearing files are never sent to the AI model.' });
+      files.push({ id: file.id, name: file.name, readable: false, note: 'Sensitive credential-bearing files are never sent to the AI model.' });
       continue;
     }
     if (read.kind === 'image') {
       if (images.length < imageLimit) {
         images.push(read.image);
-        files.push({ name: file.name, readable: true, kind: 'image', note: 'Shown to you as an image.' });
-      } else files.push({ name: file.name, readable: false, note: `Only ${imageLimit} images are shown per step.` });
+        files.push({ id: file.id, name: file.name, readable: true, kind: 'image', note: 'Shown to you as an image.' });
+      } else files.push({ id: file.id, name: file.name, readable: false, note: `Only ${imageLimit} images are shown per step.` });
       continue;
     }
     // A code project larger than the budget shows the files this step needs.
@@ -126,7 +126,7 @@ export async function attachmentContext(objects, scope, attachments, { maxChars 
       overlaid = true;
       const view = projectView(current, { focus, budget, skipped: read.skipped ?? [] });
       files.push({
-        name: file.name, readable: true, kind: 'project', format: 'project',
+        id: file.id, name: file.name, readable: true, kind: 'project', format: 'project',
         truncated: view.notShown.length > 0, text: view.text,
         ...(view.notShown.length ? { notShown: view.notShown.length } : {}),
         ...(read.ingestion?.partial ? {
@@ -149,7 +149,7 @@ export async function attachmentContext(objects, scope, attachments, { maxChars 
         .map(item => `=== ${item.path} [${item.format}] ===${item.text ? '\\n' + item.text : ''}`)
         .join('\\n');
       files.push({
-        name: file.name,
+        id: file.id, name: file.name,
         readable: true,
         kind: 'bundle',
         format: 'bundle',
@@ -173,7 +173,7 @@ export async function attachmentContext(objects, scope, attachments, { maxChars 
     const textValue = read.text ?? '';
     const note = read.scanned ? 'This PDF looks scanned: it has little or no text layer.' : undefined;
     files.push({
-      name: file.name, readable: true, kind: read.kind, format: read.format,
+      id: file.id, name: file.name, readable: true, kind: read.kind, format: read.format,
       pages: read.pages, truncated: read.truncated || textValue.length > budget,
       text: textValue.slice(0, Math.max(0, budget)),
       ...(textValue.length > budget ? { more: 'Use the file.read tool with an offset to read the rest.' } : {}),

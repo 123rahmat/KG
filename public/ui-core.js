@@ -103,6 +103,13 @@ const backoff = attempt => Math.min(8_000, 500 * 2 ** attempt) * (0.75 + Math.ra
 // Statuses a proxy or restarting server gives while the app itself is fine.
 const TRANSIENT_STATUS = new Set([408, 425, 429, 502, 503, 504]);
 
+function retryAfterMs(value) {
+  if (!value?.trim()) return null;
+  const delay = /^\d+$/.test(value.trim())
+    ? Number(value) * 1000 : Date.parse(value) - Date.now();
+  return Number.isFinite(delay) ? Math.max(0, delay) : null;
+}
+
 function offlineError(cause) {
   const error = new Error('You appear to be offline. Unsent work will stay on this device and retry when the connection returns.');
   error.code = 'offline';
@@ -122,8 +129,13 @@ async function requestOnce(method, path, headers, body, timeoutMs) {
       signal: controller.signal
     });
     // Reading the body is part of the request: a connection can drop mid-way.
-    const raw = response.status === 204 ? '' : await response.text();
-    return { response, raw };
+    try {
+      const raw = response.status === 204 ? '' : await response.text();
+      return { response, raw };
+    } catch (bodyError) {
+      // Headers may already forbid an early retry even if the body drops.
+      return { response, raw: '', bodyError };
+    }
   } finally {
     clearTimeout(timer);
   }
@@ -135,13 +147,15 @@ async function requestOnce(method, path, headers, body, timeoutMs) {
  * briefly unavailable; the server replays a write it already did, so a retry
  * never does the work twice. Other writes are tried once.
  */
-export async function api(method, path, body, { workspace = true, idempotencyKey = '', timeoutMs = 30_000, retries } = {}) {
+export async function api(method, path, body, { workspace = true, workspaceId = state.workspaceId, idempotencyKey = '', timeoutMs = 30_000, retries } = {}) {
+  method = String(method).toUpperCase();
   const headers = { 'x-kindgleam-client': 'web' };
   if (body !== undefined) headers['content-type'] = 'application/json';
   if (idempotencyKey) headers['idempotency-key'] = idempotencyKey;
-  if (workspace && state.workspaceId) headers['x-workspace-id'] = state.workspaceId;
+  if (workspace && workspaceId) headers['x-workspace-id'] = workspaceId;
   const safe = method === 'GET' || Boolean(idempotencyKey);
-  const attempts = 1 + (retries ?? (safe ? 3 : 0));
+  const budget = retries === undefined || !Number.isFinite(Number(retries)) ? 3 : Math.max(0, Math.min(5, Math.floor(Number(retries))));
+  const attempts = 1 + (safe ? budget : 0);
 
   for (let attempt = 0; ; attempt += 1) {
     const last = attempt + 1 >= attempts;
@@ -154,27 +168,31 @@ export async function api(method, path, body, { workspace = true, idempotencyKey
       throw offlineError(error);
     }
     const { response, raw } = result;
-    let payload = {};
-    let parsed = true;
-    try { payload = raw ? JSON.parse(raw) : {}; } catch { parsed = false; }
+    if (response.status === 204) { markReachable(true); return null; }
+    let payload;
+    let parsed = false;
+    try { payload = JSON.parse(raw); parsed = true; } catch { /* Invalid JSON is never a successful API result. */ }
+    const problem = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
     // An HTML error page or an unlabelled 5xx comes from something in front
     // of the app, not the app; treat it as the server being out of reach.
-    const transient = TRANSIENT_STATUS.has(response.status) && (!parsed || !payload.code || ['rate-limited', 'rate-limit-unavailable', 'idempotency-in-progress'].includes(payload.code))
-      || (response.status === 409 && payload.code === 'idempotency-in-progress');
+    const invalidSuccess = response.ok && !parsed;
+    const transient = invalidSuccess || TRANSIENT_STATUS.has(response.status) && (!parsed || !problem.code || ['rate-limited', 'rate-limit-unavailable', 'idempotency-in-progress'].includes(problem.code))
+      || (response.status === 409 && problem.code === 'idempotency-in-progress');
     if (!transient || response.status === 429 || response.status === 409) markReachable(true);
-    if (transient && !last) {
-      const after = Number(response.headers.get('retry-after'));
-      await sleep(after > 0 ? Math.min(after * 1000, 30_000) : backoff(attempt));
+    const after = retryAfterMs(response.headers.get('retry-after'));
+    if (transient && !last && (after === null || after <= 30_000)) {
+      await sleep(after ?? backoff(attempt));
       continue;
     }
-    if (response.status === 204) return null;
-    if (!response.ok) {
-      const error = new Error(payload.error || (transient ? 'Kindgleam is briefly unavailable. Please try again in a moment.' : `Request failed (${response.status})`));
+    if (!response.ok || invalidSuccess) {
+      const error = new Error(invalidSuccess ? 'The server returned an invalid API response. Please try again.' : problem.error || (transient ? 'Kindgleam is briefly unavailable. Please try again in a moment.' : `Request failed (${response.status})`));
       error.status = response.status;
-      error.code = payload.code || (transient ? 'server-unavailable' : undefined);
+      error.code = invalidSuccess ? 'invalid-api-response' : problem.code || (transient ? 'server-unavailable' : undefined);
       error.transient = transient;
-      error.detail = payload.detail;
-      error.payload = payload;
+      error.detail = problem.detail;
+      error.payload = problem;
+      if (result.bodyError) error.cause = result.bodyError;
+      if (after !== null) error.retryAfterMs = after;
       if (response.status === 401 && state.principal && workspace) window.dispatchEvent(new Event('kindgleam:signed-out'));
       throw error;
     }

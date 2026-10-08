@@ -43,9 +43,17 @@ const clip = (value, max = MAX_TOOL_CHARS) => {
 function findAttachment(ctx, name) {
   const wanted = text(name).toLowerCase();
   const files = ctx.attachments ?? [];
-  return files.find(file => text(file.name).toLowerCase() === wanted)
-    ?? files.find(file => text(file.name).toLowerCase().includes(wanted))
-    ?? (files.length === 1 && !wanted ? files[0] : null);
+  const byId = files.find(file => wanted && text(file.id).toLowerCase() === wanted);
+  if (byId) return { file: byId };
+  const exact = files.filter(file => text(file.name).toLowerCase() === wanted);
+  const matches = exact.length ? exact : wanted
+    ? files.filter(file => text(file.name).toLowerCase().includes(wanted)) : files;
+  if (matches.length > 1) return {
+    error: 'More than one attached file matches. Use an exact attachment ID.',
+    code: 'ambiguous-attachment',
+    matches: matches.map(file => ({ id: file.id, name: file.name }))
+  };
+  return { file: matches[0] ?? null };
 }
 
 const ARTIFACT_CONTENT_TYPES = Object.freeze({
@@ -209,10 +217,12 @@ const BUILT_IN = [
     name: 'file.read',
     title: 'Read an attached file',
     description: 'Read the text of an attached PDF, Word, Excel, PowerPoint, CSV or text file, from a character offset.',
-    input: { file: 'file name', offset: 'character to start at (default 0)', length: `characters (default and max ${MAX_TOOL_CHARS})` },
+    input: { file: 'exact attachment ID or unique file name', offset: 'character to start at (default 0)', length: `characters (default and max ${MAX_TOOL_CHARS})` },
     ready: ctx => (ctx.attachments?.length ? { ready: true } : { ready: false, needs: 'files', reason: 'No files are attached. Ask the person to attach them.' }),
     async run(input, ctx) {
-      const file = findAttachment(ctx, input.file);
+      const found = findAttachment(ctx, input.file);
+      if (found.error) return found;
+      const file = found.file;
       if (!file) return { error: `No attached file matches "${text(input.file)}". Attached: ${(ctx.attachments ?? []).map(item => item.name).join(', ') || 'none'}.` };
       if (isSensitiveWorkspacePath(file.name)) return { error: 'Credential-bearing files cannot be exposed to the AI through the file tool.', code: 'sensitive-file-blocked' };
       const read = await readAttachment(ctx.objects, ctx.scope, file, { signal: ctx.signal });
@@ -237,10 +247,12 @@ const BUILT_IN = [
     name: 'data.analyze',
     title: 'Analyse a table',
     description: 'Describe a spreadsheet or CSV: rows, and per column the type, count, min, max, mean, median, sum or most common values.',
-    input: { file: 'file name', sheet: 'sheet name (Excel, optional)', header: 'first row holds column names (default true)' },
+    input: { file: 'exact attachment ID or unique file name', sheet: 'sheet name (Excel, optional)', header: 'first row holds column names (default true)' },
     ready: ctx => (ctx.attachments?.some(file => ['xlsx', 'csv'].includes(file.format)) ? { ready: true } : { ready: false, needs: 'files', reason: 'No spreadsheet or CSV is attached.' }),
     async run(input, ctx) {
-      const file = findAttachment(ctx, input.file);
+      const found = findAttachment(ctx, input.file);
+      if (found.error) return found;
+      const file = found.file;
       if (!file) return { error: `No attached file matches "${text(input.file)}".` };
       if (isSensitiveWorkspacePath(file.name)) return { error: 'Credential-bearing files cannot be exposed to the AI through the file tool.', code: 'sensitive-file-blocked' };
       const read = await readAttachment(ctx.objects, ctx.scope, file, { signal: ctx.signal });

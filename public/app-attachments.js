@@ -13,6 +13,7 @@ import { loadUsage, renderUsageLimitLock, usageLimitStatus, selectTab } from './
 import { clearDraft, deleteOfflineFiles, loadOfflineFiles, storeOfflineFiles, writeOfflineQueue } from './app-settings.js';
 import { syncAdaptiveWorkspace } from './adaptive-workspace.js';
 import { syncActiveWorkspaceSource } from './workspace-sources.js';
+import { selectedAttachments } from './attachment-selection.js';
 
 /* ------------------------------------------------------------- attachments */
 
@@ -37,21 +38,24 @@ function releasePreview(file) {
   attachmentPreviewUrls.delete(file);
 }
 
-function releaseAllPreviews() {
-  for (const url of attachmentPreviewUrls.values()) URL.revokeObjectURL(url);
-  attachmentPreviewUrls.clear();
+function consumeAttachments(files) {
+  const sent = new Set(files);
+  state.attachments = state.attachments.filter(file => !sent.has(file));
+  for (const file of files) { releasePreview(file); state.attachmentScope?.delete(file); }
+  if (!state.attachments.length) state.attachmentScope = null;
+  renderAttachments();
 }
 
 function renderAttachments() {
   const list = $('attachList');
   list.hidden = state.attachments.length === 0;
   if (state.attachments.length && !(state.attachmentScope instanceof Set)) {
-    state.attachmentScope = new Set(state.attachments.map(file => file.name));
+    state.attachmentScope = new Set(state.attachments);
   }
   const live = new Set(state.attachments);
   for (const file of [...attachmentPreviewUrls.keys()]) if (!live.has(file)) releasePreview(file);
   list.replaceChildren(...state.attachments.map((file, index) => {
-    const inScope = state.attachmentScope?.has(file.name) === true;
+    const inScope = state.attachmentScope?.has(file) === true;
     const imageUrl = previewUrl(file);
     const image = imageUrl
       ? element('img', { class: 'attachment-thumb', src: imageUrl, alt: 'Preview of ' + file.name, loading: 'lazy', decoding: 'async' })
@@ -64,9 +68,9 @@ function renderAttachments() {
           checked: inScope,
           'aria-label': 'Use ' + file.name + ' for this request',
           onchange: event => {
-            state.attachmentScope ??= new Set(state.attachments.map(item => item.name));
-            if (event.currentTarget.checked) state.attachmentScope.add(file.name);
-            else state.attachmentScope.delete(file.name);
+            state.attachmentScope ??= new Set(state.attachments);
+            if (event.currentTarget.checked) state.attachmentScope.add(file);
+            else state.attachmentScope.delete(file);
           }
         }),
         element('span', { class: 'truncate', text: file.name })
@@ -78,7 +82,7 @@ function renderAttachments() {
           const removed = state.attachments[index];
           state.attachments.splice(index, 1);
           releasePreview(removed);
-          state.attachmentScope?.delete(file.name);
+          state.attachmentScope?.delete(removed);
           if (!state.attachments.length) state.attachmentScope = null;
           renderAttachments();
         }
@@ -99,7 +103,7 @@ export function addAttachments(fileList) {
     }
     state.attachments.push(file);
     state.attachmentScope ??= new Set();
-    state.attachmentScope.add(file.name);
+    state.attachmentScope.add(file);
   }
   renderAttachments();
   $('goal').focus({ preventScroll: true });
@@ -399,7 +403,7 @@ export function personalContext() {
     ],
     adaptiveControl: {
       ...(state.attachments.length && state.attachmentScope instanceof Set
-        ? { includeArtifacts: [...state.attachmentScope] }
+        ? { includeArtifacts: selectedAttachments(state.attachments, state.attachmentScope).map(file => file.name) }
         : {}),
       depth: settings.adaptiveDepth || 'standard',
       intensity: settings.adaptiveIntensity || 'standard',
@@ -417,7 +421,7 @@ export async function fileToBase64(file) {
   return btoa(binary);
 }
 
-async function uploadAttachments(files, visibility) {
+async function uploadAttachments(files, visibility, workspaceId = state.workspaceId) {
   const ids = [];
   for (const file of files) {
     const object = await api('POST', '/api/objects', {
@@ -427,7 +431,7 @@ async function uploadAttachments(files, visibility) {
       content: await fileToBase64(file),
       encoding: 'base64',
       visibility
-    }, { idempotencyKey: crypto.randomUUID(), timeoutMs: 120_000 });
+    }, { workspaceId, idempotencyKey: crypto.randomUUID(), timeoutMs: 120_000 });
     ids.push(object.id);
   }
   return ids;
@@ -438,7 +442,7 @@ async function createRunFromQueuedItem(item) {
   const attachments = Array.isArray(item.attachmentIds) ? [...item.attachmentIds] : [];
   const files = await loadOfflineFiles(item);
   for (let index = attachments.length; index < files.length; index += 1) {
-    const uploaded = await uploadAttachments([files[index]], visibility);
+    const uploaded = await uploadAttachments([files[index]], visibility, item.workspaceId);
     attachments.push(...uploaded);
     item.attachmentIds = attachments;
     state.network.queue = state.network.queue.map(entry => entry.id === item.id ? item : entry);
@@ -447,48 +451,48 @@ async function createRunFromQueuedItem(item) {
   return api('POST', '/api/runs', {
     goal: item.goal,
     conversationId: item.conversationId,
-    projectId: item.projectId ?? state.activeProjectId ?? null,
+    projectId: Object.hasOwn(item, 'projectId') ? item.projectId : state.activeProjectId ?? null,
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    ...personalContext(),
+    ...(item.context ?? personalContext()),
     adaptiveControl: item.adaptiveControl ?? personalContext().adaptiveControl,
     activeSurface: item.activeSurface ?? state.activeSurface ?? 'normal-chat',
+    creationMode: item.creationMode ?? null,
     attachments,
     ...(item.workspaceSourceId ? { workspaceSourceId: item.workspaceSourceId } : {}),
     visibility,
-    privacyConsent: { modelProvider: state.chat.consent }
-  }, { idempotencyKey: item.idempotencyKey });
+    privacyConsent: { modelProvider: item.modelConsent ?? state.chat.consent }
+  }, { workspaceId: item.workspaceId, idempotencyKey: item.idempotencyKey });
 }
 
-async function queueOfflineMessage(goal, files, visibility, idempotencyKey = crypto.randomUUID()) {
-  state.chat.id ??= crypto.randomUUID();
+async function queueOfflineMessage(goal, files, visibility, idempotencyKey, submission, chat) {
   const item = {
     id: crypto.randomUUID(),
-    idempotencyKey,
-    adaptiveControl: personalContext().adaptiveControl,
+    idempotencyKey: idempotencyKey ?? crypto.randomUUID(),
+    context: submission.context,
+    adaptiveControl: submission.context.adaptiveControl,
     goal,
-    conversationId: state.chat.id,
-    workspaceId: state.workspaceId,
-    projectId: state.activeProjectId ?? null,
+    conversationId: chat.id,
+    workspaceId: submission.workspaceId,
+    projectId: submission.projectId,
     visibility,
-    workspaceSourceId: state.chat.workspaceSourceId ?? state.workspaceSourceId ?? null,
-    activeSurface: state.activeSurface ?? 'normal-chat',
+    workspaceSourceId: submission.workspaceSourceId,
+    activeSurface: submission.activeSurface,
+    creationMode: submission.creationMode,
+    modelConsent: submission.modelConsent,
     attachmentIds: [],
     files
   };
   state.network.queue.push(item);
   writeOfflineQueue();
   await storeOfflineFiles(item);
-  state.chat.pending = {
+  chat.pending = {
     goal,
     reply: 'Queued on this device. I will send it automatically when the connection returns.',
     files: files.map(file => file.name),
     offline: true
   };
-  state.attachments = [];
-  releaseAllPreviews();
-  renderAttachments();
+  if (state.chat === chat && state.workspaceId === submission.workspaceId) consumeAttachments(files);
   updateConnectionUI();
-  clearDraft();
   renderThread();
 }
 
@@ -505,20 +509,21 @@ async function flushQueuedItems() {
   const currentWorkspace = state.workspaceId;
   for (const item of [...state.network.queue]) {
     await loadOfflineFiles(item);
+    if (state.workspaceId !== currentWorkspace) return;
     if (navigator.onLine === false || item.workspaceId !== currentWorkspace) continue;
     try {
       const run = await createRunFromQueuedItem(item);
       state.network.queue = state.network.queue.filter(entry => entry.id !== item.id);
       writeOfflineQueue();
       await deleteOfflineFiles(item.id);
-      if (state.chat.pending?.offline && state.chat.pending.goal === item.goal) state.chat.pending = null;
-      if (state.chat.id === item.conversationId) {
+      if (state.workspaceId === currentWorkspace && state.chat.id === item.conversationId) {
+        if (state.chat.pending?.offline && state.chat.pending.goal === item.goal) state.chat.pending = null;
         state.chat.runs.push(run);
         state.run = run;
         renderThread();
       }
       updateConnectionUI();
-      await autoDrive(run);
+      if (state.workspaceId === currentWorkspace) await autoDrive(run);
     } catch (error) {
       // A temporary failure keeps the message for the next reconnect; only
       // a definite refusal (bad request, policy, access) removes it.
@@ -529,7 +534,7 @@ async function flushQueuedItems() {
       state.network.queue = state.network.queue.filter(entry => entry.id !== item.id);
       writeOfflineQueue();
       await deleteOfflineFiles(item.id);
-      if (state.chat.pending?.offline && state.chat.pending.goal === item.goal) {
+      if (state.workspaceId === currentWorkspace && state.chat.id === item.conversationId && state.chat.pending?.offline && state.chat.pending.goal === item.goal) {
         state.chat.pending = { goal: item.goal, reply: error.message, files: item.files?.map(file => file.name) ?? [] };
         renderThread();
       }
@@ -542,7 +547,8 @@ export async function sendMessage(text) {
     renderUsageLimitLock();
     return;
   }
-  const files = [...state.attachments];
+  const files = selectedAttachments(state.attachments, state.attachmentScope);
+  const context = personalContext();
   const goal = String(text ?? '').trim()
     || (files.length ? `Please look at the attached file${files.length > 1 ? 's' : ''}.` : '');
   if (!goal || state.sendWaiting) return;
@@ -560,66 +566,74 @@ export async function sendMessage(text) {
 
   const visibility = $('shareRun').checked ? 'workspace' : 'private';
   state.chat.id ??= crypto.randomUUID();
-
-  const chatSourceId = state.chat.workspaceSourceId ?? state.workspaceSourceId ?? null;
-  if (navigator.onLine !== false && chatSourceId) {
-    state.workspaceSourceId = chatSourceId;
-    await syncActiveWorkspaceSource().catch(error => notify('runNotice', 'warn', error.message || 'Couldn’t refresh the connected project source.'));
-  }
+  const chat = state.chat;
+  const submission = {
+    context, workspaceId: state.workspaceId,
+    projectId: state.activeProjectId ?? chat.projectId ?? null,
+    workspaceSourceId: chat.workspaceSourceId ?? state.workspaceSourceId ?? null,
+    activeSurface: state.activeSurface ?? 'normal-chat',
+    creationMode: $('adaptiveCreateStrip')?.dataset.mode ?? null,
+    modelConsent: chat.consent
+  };
 
   if (navigator.onLine === false && state.settings.offlineQueue) {
     $('goal').value = '';
-    await queueOfflineMessage(goal, files, visibility);
+    clearDraft();
+    state.sendWaiting = true;
+    try { await queueOfflineMessage(goal, files, visibility, undefined, submission, chat); }
+    finally { state.sendWaiting = false; document.dispatchEvent(new Event('kindgleam:composer-state')); }
     growComposer();
     return;
   }
 
-  state.chat.pending = { goal, reply: '', files: files.map(file => file.name) };
+  chat.pending = { goal, reply: '', files: files.map(file => file.name) };
   state.sendWaiting = true;
   document.dispatchEvent(new Event('kindgleam:composer-state'));
   $('goal').value = '';
+  clearDraft();
   growComposer();
   renderThread();
 
   const attachments = [];
   const idempotencyKey = crypto.randomUUID();
   try {
+    if (navigator.onLine !== false && submission.workspaceSourceId) {
+      await syncActiveWorkspaceSource({ sourceId: submission.workspaceSourceId, workspaceId: submission.workspaceId, chat }).catch(error => notify('runNotice', 'warn', error.message || 'Couldn’t refresh the connected project source.'));
+    }
     for (const file of files) {
-      const uploaded = await uploadAttachments([file], visibility);
+      const uploaded = await uploadAttachments([file], visibility, submission.workspaceId);
       attachments.push(...uploaded);
     }
     const run = await api('POST', '/api/runs', {
       goal,
-      conversationId: state.chat.id,
-      projectId: state.activeProjectId ?? state.chat.projectId ?? null,
+      conversationId: chat.id,
+      projectId: submission.projectId,
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      ...personalContext(),
+      ...context,
       attachments,
-      ...(chatSourceId ? { workspaceSourceId: chatSourceId } : {}),
-      activeSurface: state.activeSurface ?? 'normal-chat',
-      creationMode: $('adaptiveCreateStrip')?.dataset.mode ?? null,
+      ...(submission.workspaceSourceId ? { workspaceSourceId: submission.workspaceSourceId } : {}),
+      activeSurface: submission.activeSurface,
+      creationMode: submission.creationMode,
       visibility,
-      privacyConsent: { modelProvider: state.chat.consent }
-    }, { idempotencyKey });
-    state.chat.pending = null;
-    state.chat.projectId = run.projectId ?? state.activeProjectId ?? null;
-    state.attachments = [];
-    state.attachmentScope = null;
-    releaseAllPreviews();
-    renderAttachments();
-    clearDraft();
-    if (state.chat.consent) state.consented.add(run.id);
-    state.chat.runs.push(run);
-    state.run = run;
+      privacyConsent: { modelProvider: submission.modelConsent }
+    }, { workspaceId: submission.workspaceId, idempotencyKey });
+    chat.pending = null;
+    chat.projectId = run.projectId ?? submission.projectId;
+    if (state.chat === chat && state.workspaceId === submission.workspaceId) {
+      consumeAttachments(files);
+      state.run = run;
+    }
+    if (submission.modelConsent) state.consented.add(run.id);
+    chat.runs.push(run);
     state.cancelledRuns?.delete(run.id);
     renderThread();
     loadRuns().catch(() => {});
-    await autoDrive(run);
+    if (state.workspaceId === submission.workspaceId) await autoDrive(run);
     loadRuns().catch(() => {});
   } catch (error) {
     if (error.code === 'usage-limit-reached') {
-      state.chat.pending = null;
-      $('goal').value = goal;
+      chat.pending = null;
+      if (state.chat === chat && !$('goal').value) $('goal').value = goal;
       renderThread();
       await loadUsage();
       renderUsageLimitLock();
@@ -628,11 +642,11 @@ export async function sendMessage(text) {
     if ((error.code === 'offline' || error.transient || navigator.onLine === false) && state.settings.offlineQueue) {
       // Same key as the attempt: if the server did get it, the retry
       // returns that chat turn instead of starting a second one.
-      await queueOfflineMessage(goal, files, visibility, idempotencyKey);
+      await queueOfflineMessage(goal, files, visibility, idempotencyKey, submission, chat);
       const queued = state.network.queue.at(-1);
       if (queued) queued.attachmentIds = [...attachments];
       writeOfflineQueue();
-      state.chat.pending = {
+      chat.pending = {
         goal,
         reply: 'Connection lost. Your message is queued locally and will retry automatically.',
         files: files.map(file => file.name),
@@ -642,7 +656,7 @@ export async function sendMessage(text) {
       renderThread();
       return;
     }
-    state.chat.pending = {
+    chat.pending = {
       goal,
       reply: error.code === 'needs-input' && Array.isArray(error.detail?.questions)
         ? `Could you tell me a bit more? ${error.detail.questions.join(' ')}`

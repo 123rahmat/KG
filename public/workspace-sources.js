@@ -89,16 +89,18 @@ export async function connectGitHub() {
   } finally { const button = $('connectGithub'); if (button) button.disabled = false; }
 }
 
-export async function syncActiveWorkspaceSource() {
-  const sourceId = state.chat?.workspaceSourceId ?? state.workspaceSourceId;
+export async function syncActiveWorkspaceSource({ sourceId = state.chat?.workspaceSourceId ?? state.workspaceSourceId, workspaceId = state.workspaceId, chat = state.chat } = {}) {
   if (!sourceId) return null;
   if (state.workspaceSource?.kind !== 'github') {
     state.workspaceSource = null; state.workspaceSourceId = null;
     if (state.chat) state.chat.workspaceSourceId = null;
     updateSourceUI(); return null;
   }
-  return api('POST', `/api/workspace/sources/${encodeURIComponent(sourceId)}/sync`).then(result => {
-    state.workspaceSource = result.source; updateSourceUI(); return result;
+  return api('POST', `/api/workspace/sources/${encodeURIComponent(sourceId)}/sync`, undefined, { workspaceId }).then(result => {
+    if (state.workspaceId === workspaceId && state.chat === chat && (state.chat?.workspaceSourceId ?? state.workspaceSourceId) === sourceId) {
+      state.workspaceSource = result.source; updateSourceUI();
+    }
+    return result;
   });
 }
 

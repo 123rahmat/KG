@@ -2,6 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { withServer, jsonResponse } from './helpers.js';
 import { docx, pdf, png } from './document-fixtures.js';
+import { attachmentContext } from '../src/attachments.js';
+
+test('attachment context preserves distinct IDs even when parsed content is cached under the same name', async () => {
+  const objects = { read: async () => ({ metadata: { digest: 'shared', name: 'same.txt', contentType: 'text/plain' }, content: Buffer.from('Shared text') }) };
+  const files = ['one', 'two'].map(id => ({ id, name: 'same.txt', digest: 'shared', readable: true, format: 'text' }));
+  const context = await attachmentContext(objects, { workspaceId: 'context-identity-test' }, files);
+  assert.deepEqual(context.files.map(file => [file.id, file.name, file.text]), [
+    ['one', 'same.txt', 'Shared text'], ['two', 'same.txt', 'Shared text']
+  ]);
+});
 
 const MODEL_FIXTURE = { AI_PROVIDER: 'fixture', AI_MODEL: 'fixture-model' };
 const reply = text => jsonResponse({ stop_reason: 'end_turn', content: [{ type: 'text', text }], usage: { input_tokens: 2, output_tokens: 2 } });
