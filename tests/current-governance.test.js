@@ -37,9 +37,9 @@ test('new human approval requires a current policy token before existing work re
     assert.equal(denied.status, 409);
     assert.equal(denied.body.code, 'policy-approval-required');
     assert.ok(denied.body.policyRevision);
-    const allowed = await call('POST', `/api/runs/${created.body.id}/execute`, { ...user, body: { approved: true, policyRevision: denied.body.policyRevision } });
+    const allowed = await call('POST', `/api/runs/${created.body.id}/execute`, { ...user, body: { approved: true, modelConsent: true, policyRevision: denied.body.policyRevision } });
     assert.equal(allowed.status, 200);
-    assert.equal(allowed.body.execution.executed, true);
+    assert.equal(allowed.body.execution.executed, true, JSON.stringify(allowed.body.execution));
     assert.equal(allowed.body.execution.text, 'Hello.');
   }, { env: { AI_PROVIDER: 'google', GOOGLE_CLOUD_PROJECT: 'test', VERTEX_ACCESS_TOKEN: 'test', AI_MODEL: 'gemini-3.8-flash' }, fetchImpl: async () => vertexReply() }));
 
@@ -71,9 +71,9 @@ test('a newly lowered policy budget constrains provider admission and stays lowe
     const governance = new GovernanceStore(pool);
     const created = await call('POST', '/api/runs', { ...user, body: { goal: 'Hello', modelConsent: true } });
     await governance.set({ layer: 'workspace', scopeId: user.workspace, policy: { maxTokens: 512 } });
-    const result = await call('POST', `/api/runs/${created.body.id}/execute`, user);
+    const result = await call('POST', `/api/runs/${created.body.id}/execute`, { ...user, body: { modelConsent: true } });
     assert.equal(result.status, 200);
-    assert.equal(result.body.execution.executed, true);
+    assert.equal(result.body.execution.executed, true, JSON.stringify(result.body.execution));
     assert.equal(result.body.execution.text, 'Hello.');
     assert.ok(admittedOutput > 0 && admittedOutput <= 512, String(admittedOutput));
     const saved = await call('GET', `/api/runs/${created.body.id}`, user);

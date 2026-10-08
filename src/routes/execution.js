@@ -43,7 +43,7 @@ import { loadSelectedSkills, SkillLearningStore, skillContextSignature, skillPla
 import { BlackboardStore } from '../blackboard.js';
 import { buildSubsystemPlan, compactSubsystemPlan } from '../subsystem-orchestrator.js';
 import { evaluatePolicy, policyAllows } from '../core.js';
-import { narrowPolicyDecision, PolicyError } from '../governance.js';
+import { narrowPolicyDecision, policyApprovalKey, PolicyError } from '../governance.js';
 
 /** Which tasks execute where. Everything else needs a human decision. */
 const RUNNER_FOR = {
@@ -129,8 +129,8 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         || (run.capabilities?.required ?? []).some(capability => !policyAllows(combined, { capability }))) {
         throw new PolicyError('Current policy denies required capabilities or mandatory policy is unavailable.', 'policy-blocked', 403);
       }
-      const originalApprovals = new Set((baseline?.approvals ?? []).map(item => JSON.stringify(item)));
-      const newApprovals = current.approvals.filter(item => !originalApprovals.has(JSON.stringify(item)));
+      const originalApprovals = new Set((baseline?.approvals ?? []).map(policyApprovalKey));
+      const newApprovals = current.approvals.filter(item => !originalApprovals.has(policyApprovalKey(item)));
       if (!humanApproved && newApprovals.length) {
         const policyRevision = crypto.createHash('sha256').update(JSON.stringify({
           runId: run.id, taskId: run.next, principalId, approvals: newApprovals
@@ -348,13 +348,13 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       if (!run) return res.status(404).json({ error: 'Run not found', code: 'no-run' });
       const policyBaseline = run.governance;
       const recheckPolicy = () => refreshPolicy(run, req.scope, req.principal.id, req.body, { baseline: policyBaseline });
-      await recheckPolicy();
       if (run.state === 'blocked') {
         return res.status(409).json({
           error: `Policy denies required capabilities: ${run.capabilities.blocked.join(', ')}`,
           code: 'policy-blocked', run
         });
       }
+      await recheckPolicy();
       if (run.state === 'iterate') {
         return res.status(409).json({
           error: run.tasks.some(task => task.status === 'failed')

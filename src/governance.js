@@ -51,6 +51,9 @@ export function validatePolicy(policy) {
   return policy;
 }
 
+/** JSONB may reorder object keys; policy approval identity is semantic. */
+export const policyApprovalKey = approval => JSON.stringify([approval.layer, approval.id, approval.version]);
+
 /** Original run restrictions remain binding even if a live policy is relaxed. */
 export function narrowPolicyDecision(original, current) {
   const decisions = [original, current].filter(Boolean);
@@ -77,7 +80,7 @@ export function narrowPolicyDecision(original, current) {
     status: decisions.some(item => item.status === 'incomplete') ? 'incomplete' : sources.length ? 'evaluated' : 'unconfigured',
     missingRequired: [...new Set(decisions.flatMap(item => item.missingRequired ?? []))],
     sources,
-    approvals: [...new Map(decisions.flatMap(item => item.approvals ?? []).map(item => [JSON.stringify(item), item])).values()],
+    approvals: [...new Map(decisions.flatMap(item => item.approvals ?? []).map(item => [policyApprovalKey(item), item])).values()],
     constraints
   };
 }

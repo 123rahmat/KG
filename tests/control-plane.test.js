@@ -27,6 +27,13 @@ test('malformed governance constraints never reach a database mutation', async (
   assert.equal(writes, 0);
 });
 
+test('approval identity survives JSON database key ordering without becoming a new grant', () => {
+  const planned = { layer: 'workspace', id: 'policy', version: '1@2' };
+  const stored = { version: '1@2', id: 'policy', layer: 'workspace' };
+  assert.equal(governance.policyApprovalKey(planned), governance.policyApprovalKey(stored));
+  assert.notEqual(governance.policyApprovalKey(planned), governance.policyApprovalKey({ ...stored, version: '1@3' }));
+});
+
 test('resuming a run retains original constraints while applying stricter current policy', () => {
   assert.equal(typeof governance.narrowPolicyDecision, 'function');
   const original = evaluatePolicy({ platform: {}, workspace: { deniedTools: ['web.fetch'], allowedModels: ['fast', 'careful'], maxTokens: 1000 }, task: { deniedDataClasses: ['private-code'] } });
