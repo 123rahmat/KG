@@ -67,3 +67,15 @@ test('Progress model bounds stage rows and sanitizes unknown values', () => {
   assert.equal(view.stages[0].label.length, 120);
   assert.equal(view.workspace, 'normal-chat');
 });
+
+test('new task reason is visible only when the server recorded an evidence anchor', () => {
+  const view = workspaceProgressPanel({ tasks: [
+    { id: 'test-code', type: 'code', status: 'complete' },
+    { id: 'investigate-1', type: 'investigate', status: 'pending',
+      metadata: { evidenceAnchorTaskId: 'test-code', admission: 'observed-evidence-and-unmet-requirement' } },
+    { id: 'verify', type: 'verify', status: 'pending' }
+  ] }, 'code');
+  assert.equal(view.stages[0].evidenceAnchor, '');
+  assert.equal(view.stages[1].evidenceAnchor, 'test-code');
+  assert.equal(view.stages[2].evidenceAnchor, '');
+});
