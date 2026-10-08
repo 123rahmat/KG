@@ -42,3 +42,16 @@ test('high-risk tasks remain serialized even with an explicit parallel request',
   assert.equal(r.agents, 5);
   assert.equal(r.maxParallel, 1);
 });
+
+test('missing budget readings do not suppress justified optional specialists', () => {
+  for (const value of [null, undefined, '', ' ', NaN, Infinity]) {
+    const ratio = remainingSpecialistBudget({ adaptiveBudget: {
+      budget: { tokens: 100 }, remaining: { tokens: value }
+    } });
+    assert.equal(ratio, null, String(value));
+    const result = specialistTopology({ surface: 'code', proposedAgents: 4,
+      independentWork: .9, remainingBudgetRatio: value });
+    assert.equal(result.agents, 4, String(value));
+    assert.equal(result.budgetKnown, false, String(value));
+  }
+});

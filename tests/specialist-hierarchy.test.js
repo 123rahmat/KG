@@ -83,3 +83,18 @@ test('Thesis Research role allocation prefers evidence expertise; Normal Chat st
     {id:'respond',type:'respond'});
   assert.equal(simple.agentCount,0);
 });
+
+test('unknown budgets preserve task-specific Code and Research breadth', () => {
+  for (const remainingBudgetRatio of [null, undefined, '', ' ', NaN, Infinity]) {
+    const team = codeSpecialistTeam({ id: 'ui', roots: ['src/ui'] }, {
+      maxRoles: 3, remainingBudgetRatio
+    });
+    assert.deepEqual(team.roles, ['ux-designer', 'frontend-engineer', 'test-engineer']);
+    const hierarchy = researchSpecialistTeams({
+      goal: 'Write a thesis methodology using quantitative results',
+      researchState: { sourceCount: 4 }, remainingBudgetRatio
+    });
+    assert.deepEqual(hierarchy.teams.map(item => item.focus),
+      ['literature', 'methodology', 'analysis', 'writing']);
+  }
+});

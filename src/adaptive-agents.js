@@ -265,7 +265,7 @@ export function decideAgentTopology({
     uncertainty,
     risk,
     previousFailure: retrying,
-    remainingBudgetRatio: Number(budget.remainingBudgetRatio ?? 1),
+    remainingBudgetRatio: budget.remainingBudgetRatio,
     independentWork,
     verificationRequired: sourceTasks.some(task => ['verify','test'].includes(text(task.type)))
   });

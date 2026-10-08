@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { multiAgentDecision } from '../src/multi-agent.js';
 import { adaptiveParallelLimit, buildWorkspaceParallelPlan } from '../src/parallel-orchestrator.js';
+import { decideAgentTopology } from '../src/adaptive-agents.js';
 
 test('agent orchestration remains single-agent for simple work', () => {
   const decision = multiAgentDecision(
@@ -44,4 +45,16 @@ test('code writers only parallelize on the same immutable revision and disjoint 
   });
   assert.equal(plan.waves[0].parallel, true);
   assert.equal(plan.waveCount, 2);
+});
+
+test('agent planner preserves unknown budget readings at the controller boundary', () => {
+  for (const remainingBudgetRatio of ['', ' ', NaN]) {
+    const plan = decideAgentTopology({
+      workspace: 'code', scale: 'large', complexity: .9, uncertainty: .7,
+      tasks: [{ id: 'frontend', type: 'code' }, { id: 'backend', type: 'code' }],
+      budget: { remainingBudgetRatio }
+    });
+    assert.equal(plan.computePolicy.budgetMode, 'normal');
+    assert.ok(plan.computePolicy.recommendedAgents > 1);
+  }
 });

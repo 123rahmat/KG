@@ -95,3 +95,14 @@ test('Normal Chat can still adapt for difficult tasks without a separate brain',
   assert.ok(c.compute.maxParallel <= 2);
   assert.match(c.principle,/one shared state/i);
 });
+
+test('unknown compute budgets retain scoped expertise without false conservation', () => {
+  for (const surface of ['normal-chat', 'code', 'research']) {
+    for (const remainingBudgetRatio of [null, undefined, '', ' ', NaN, Infinity]) {
+      const c = mode(surface, { remainingBudgetRatio });
+      assert.equal(c.compute.budgetMode, 'normal');
+      assert.equal(c.decision.recruitSpecialist, true);
+      assert.equal(c.decision.reduceEffort, false);
+    }
+  }
+});

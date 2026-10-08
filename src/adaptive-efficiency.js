@@ -10,6 +10,7 @@ const clamp01 = value => Math.min(1, Math.max(0, Number.isFinite(Number(value)) 
 const RISK = Object.freeze({ low: 0.15, medium: 0.45, high: 0.75, critical: 1 });
 
 import { adaptiveDecisionAuthority, buildAcceptanceContract } from './adaptive-decision-authority.js';
+import { specialistBudgetRatio } from './agent-topology-policy.js';
 
 export function normalizeAdaptiveRisk(value = 'medium') {
   const key = String(value ?? '').trim().toLowerCase();
@@ -132,7 +133,7 @@ export function adaptiveExecutionStrategy({
   const u = clamp01(uncertainty);
   const c = clamp01(complexity);
   const independent = clamp01(independentWork);
-  const budget = clamp01(remainingBudgetRatio);
+  const budget = specialistBudgetRatio(remainingBudgetRatio) ?? 1;
   const highRisk = ['high', 'critical'].includes(String(risk).toLowerCase());
 
   // Verified state is more valuable than recomputation. A cache hit may skip
@@ -200,7 +201,7 @@ export function adaptiveBehaviorContract(profile = adaptiveEffortProfile({}), {
     independentWork: Number(situation?.independentWork ?? situation?.parallelOpportunity ?? 0),
     cacheHit: situation?.verifiedStateReusable === true,
     previousFailure: Number(situation?.failedAttempts ?? 0) > 0,
-    remainingBudgetRatio: Number(situation?.remainingBudgetRatio ?? 1)
+    remainingBudgetRatio: situation?.remainingBudgetRatio
   });
   const level = String(p.level ?? 'standard');
   const rounds = level === 'minimal' ? 2 : level === 'standard' ? 4 : level === 'deep' ? 6 : 8;

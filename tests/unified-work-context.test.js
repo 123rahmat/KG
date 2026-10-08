@@ -96,3 +96,38 @@ test('unified code workspace context binds chat memory and multi-agent settings 
   assert.equal(context.chat.multiAgent.maxAgents, 3);
   assert.equal(context.chat.multiAgent.serverOrchestrated, true);
 });
+
+test('successive file edits preserve conversation, opt-out and project snapshot', () => {
+  const context = buildUnifiedWorkContext({
+    goal: 'Fix the app',
+    project: { id: 'project-chat', name: 'My app', revisionId: 'snapshot-1' },
+    conversationId: 'chat-12345678',
+    multiAgent: { mode: 'off', maxAgents: 2 },
+    currentState: { pending: ['verify edits'] },
+    files: [{ path: 'src/app.js' }]
+  });
+  const first = applyWorkChange(context, { files: [{ path: 'src/app.js' }] });
+  const next = applyWorkChange(first, { files: [{ path: 'src/test.js' }] });
+  assert.equal(next.chat.conversationId, 'chat-12345678');
+  assert.equal(next.chat.memory.scope, 'conversation');
+  assert.equal(next.chat.multiAgent.mode, 'off');
+  assert.equal(next.chat.multiAgent.maxAgents, 2);
+  assert.equal(next.workspace.projectName, 'My app');
+  assert.equal(next.workspace.revisionId, 'snapshot-1');
+  assert.deepEqual(next.situation.currentState, { pending: ['verify edits'] });
+  assert.equal(next.revision, 2);
+  assert.equal(next.workspace.dirty, true);
+});
+
+test('recreating a deleted file clears its tombstone through later edits', () => {
+  const context = buildUnifiedWorkContext({
+    project: { id: 'restore-project' },
+    projectOverlay: [{ path: 'src/restored.js', content: null }]
+  });
+  const restored = applyWorkChange(context, { files: [{ path: 'src/restored.js' }] });
+  const next = applyWorkChange(restored, { files: [{ path: 'src/next.js' }] });
+  assert.ok(next.filesystem.files.some(file => file.path === 'src/restored.js'));
+  assert.ok(next.filesystem.overlay.includes('src/restored.js'));
+  assert.ok(!next.filesystem.deleted.includes('src/restored.js'));
+  assert.ok(!next.lastChange.deleted.includes('src/restored.js'));
+});
