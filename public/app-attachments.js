@@ -77,7 +77,7 @@ function renderAttachments() {
         element('span', { class: 'truncate', text: file.name })
       ]),
       element('span', { class: 'muted', text: bytes(file.size) }),
-      /\\.zip$/i.test(file.name)
+      /\.zip$/i.test(file.name)
         ? element('span', { class: 'attachment-archive-note', title: 'Archives are inspected after upload; switching workspaces is optional.', text: 'ZIP archive' })
         : null,
       element('button', {
