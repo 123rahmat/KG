@@ -1107,6 +1107,7 @@ export function renderAdaptiveWorkspace(host, mode = 'chat') {
   const surfaces = data.surfaces;
 
   const workspaceLabel = SURFACE_META[data.workspace === 'normal-chat' ? 'runs' : data.workspace]?.label ?? 'Normal Chat';
+  const oneLineWork = runControlStrip(data);
   // Workspace controls retain focus while their status text updates.
   const controls = host.querySelector('.adaptive-workspace-surfaces') ?? element('div', {
     class: 'adaptive-workspace-surfaces', role: 'toolbar', 'aria-label': 'Adaptive workspace surfaces'
@@ -1126,13 +1127,14 @@ export function renderAdaptiveWorkspace(host, mode = 'chat') {
         element('span', { class: 'adaptive-workspace-kicker', text: data.workspace === 'normal-chat' && data.run
           ? 'Normal Chat · ' + data.lens.label : workspaceLabel }),
         element('strong', { class: 'truncate', text: data.focus }),
-        element('span', { class: 'muted small truncate', text: data.status, role: 'status', 'aria-live': 'polite' }),
-        data.workspace === 'normal-chat' && data.run
+        !oneLineWork ? element('span', { class: 'muted small truncate',
+          text: data.status, role: 'status', 'aria-live': 'polite' }) : null,
+        !oneLineWork && data.workspace === 'normal-chat' && data.run
           ? element('span', { class: 'adaptive-lens-hint muted small', text: data.lens.hint }) : null
       ])
     ]),
     controls,
-    runControlStrip(data),
+    oneLineWork,
     normalChatToolStrip(data),
     adaptiveNextActions(data)
   );
