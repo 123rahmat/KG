@@ -1,0 +1,81 @@
+name: Workspace sandbox integration
+
+# Real execution in every supported sandbox language, kept separate from
+# the fast CI because pulling large language toolchain images costs time.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/workspace-sandbox-integration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  python-node-tools:
+    name: Sandbox Python, JavaScript and tool lifecycle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+      SANDBOX_PYTHON_IMAGE: mirror.gcr.io/library/python:3.12-slim
+      SANDBOX_NODE_IMAGE: mirror.gcr.io/library/node:22-slim
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Pull actual sandbox runner images
+        run: |
+          docker pull "$SANDBOX_PYTHON_IMAGE"
+          docker pull "$SANDBOX_NODE_IMAGE"
+          docker image inspect "$SANDBOX_PYTHON_IMAGE" "$SANDBOX_NODE_IMAGE"
+      - name: Test real sandbox executions and governed tool creation
+        run: node --test tests/sandbox.test.js tests/forge.test.js
+
+  compiled-languages:
+    name: Real sandbox ${{ matrix.language }} execution
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: Go
+            image: golang:1.23-alpine
+          - language: Java
+            image: eclipse-temurin:21-jdk-alpine
+          - language: C and C++
+            image: gcc:14
+          - language: Rust
+            image: rust:1-alpine
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Pull ${{ matrix.language }} sandbox image
+        env:
+          SANDBOX_TEST_IMAGE: ${{ matrix.image }}
+        run: |
+          docker pull "$SANDBOX_TEST_IMAGE"
+          docker image inspect "$SANDBOX_TEST_IMAGE"
+      - name: Test actual compiled-language sandbox behavior
+        run: node --test tests/sandbox-languages.test.js
