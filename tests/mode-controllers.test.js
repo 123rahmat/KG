@@ -13,7 +13,7 @@ test('three mode controllers are distinct policies over one shared contract', ()
 
 test('controller effort adapts without changing authority', () => {
   const code=buildModeControllerContract({
-    surface:'code', situation:{successCriteria:['correct','tested']}, acceptance:{criteria:['correct','tested']},
+    surface:'code', situation:{successCriteria:['correct','tested'],independentWork:.82}, acceptance:{criteria:['correct','tested']},
     pressure:3, uncertainty:.8, complexity:.7, risk:'medium', remainingBudgetRatio:.9
   });
   assert.equal(code.mode,'code');

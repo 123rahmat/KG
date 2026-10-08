@@ -57,7 +57,9 @@ export function workspaceComputePolicy({
     verificationRequired ? 0.62 : 0
   );
   const independent = clamp01(independentWork);
-  const conserve = budget < 0.25 && pressure < 0.8 && !previousFailure;
+  // Scarce remaining budget limits optional advisory work regardless of
+  // pressure. Required verification still belongs to the parent workflow.
+  const conserve = budget < 0.25;
 
   let recommendedAgents = key === 'normal-chat'
     ? (pressure >= 0.78 ? 3 : pressure >= 0.52 ? 2 : 1)
@@ -65,13 +67,14 @@ export function workspaceComputePolicy({
       ? (pressure >= 0.78 ? 4 : pressure >= 0.48 ? 3 : 1)
       : (pressure >= 0.72 ? 4 : pressure >= 0.42 ? 3 : 1);
 
-  if (conserve) recommendedAgents = Math.max(1, recommendedAgents - 1);
+  if (conserve) recommendedAgents = 1;
+  else if (budget < 0.45) recommendedAgents = Math.min(recommendedAgents, 2);
   recommendedAgents = Math.min(profile.agentCeiling, recommendedAgents);
 
   const parallelThreshold = key === 'normal-chat' ? 0.68 : key === 'code' ? 0.52 : 0.42;
   let maxParallel = independent >= parallelThreshold && !previousFailure ? profile.parallelCeiling : 1;
   maxParallel = Math.min(maxParallel, recommendedAgents);
-  if (conserve) maxParallel = 1;
+  if (conserve || riskPressure(risk) >= 0.9) maxParallel = 1;
 
   return Object.freeze({
     workspace: key,
@@ -80,6 +83,7 @@ export function workspaceComputePolicy({
     recommendedAgents,
     maxAgents: profile.agentCeiling,
     maxParallel,
+    parallelBasis: maxParallel > 1 ? 'observed-independent-work' : 'no-safe-parallelism-established',
     modelPolicy: profile.modelPolicy,
     contextBudget: profile.contextBudget,
     verificationBudget: profile.verificationBudget,
@@ -194,10 +198,10 @@ export function buildModeControllerContract({
   const escalate = previousFailure || highUncertainty || complex || normalizedRisk === 'high' || normalizedRisk === 'critical';
   const verified = acceptance?.verificationSatisfied === true;
   const criteria = uniq(acceptance?.criteria ?? situation?.successCriteria);
-  const inferredIndependentWork = Number(
-    situation?.independentWork
-      ?? situation?.parallelOpportunity
-      ?? (controller.mode === 'normal-chat' ? 0 : (complex || highUncertainty || highPressure ? 0.7 : 0))
+  // Complexity or uncertainty alone does not prove work is independent.
+  // The run planner must establish safe independent lanes explicitly.
+  const observedIndependentWork = Number(
+    situation?.independentWork ?? situation?.parallelOpportunity ?? 0
   );
   const compute = workspaceComputePolicy({
     surface: controller.mode,
@@ -206,9 +210,10 @@ export function buildModeControllerContract({
     risk: normalizedRisk,
     previousFailure,
     remainingBudgetRatio,
-    independentWork: inferredIndependentWork,
+    independentWork: observedIndependentWork,
     verificationRequired: acceptance?.verificationRequired === true || criteria.length > 0
   });
+  const acceptanceMet = acceptance?.satisfied === true;
   return Object.freeze({
     version: MODE_CONTROLLER_VERSION,
     controller: controller.id,
@@ -217,8 +222,9 @@ export function buildModeControllerContract({
     decision: {
       defaultAction: controller.mode === 'normal-chat' ? 'direct' : 'specialized-next-step',
       broadenContext: escalate,
-      recruitSpecialist: compute.recommendedAgents > 1 && (controller.mode !== 'normal-chat' || escalate || highPressure),
-      parallelIndependentWork: compute.maxParallel > 1,
+      recruitSpecialist: !acceptanceMet && compute.recommendedAgents > 1
+        && (controller.mode !== 'normal-chat' || escalate || highPressure),
+      parallelIndependentWork: !acceptanceMet && compute.maxParallel > 1,
       reduceEffort: limitedBudget && !highUncertainty && !previousFailure,
       reuseVerifiedState: verified,
       stopWhenSatisfied: true

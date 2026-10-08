@@ -31,6 +31,8 @@ flowchart TD
 
 **One intelligence, three user-facing surfaces.** Normal Chat is the default for conversation, brainstorming, writing, learning, planning, design, images and lighter engineering questions. Code Workspace manages durable project files, revisions, targeted edits and execution. Research Workspace organizes source provenance, evidence conflicts and deeper investigation. The surfaces are **not separate AI brains**, and mixed-domain tasks are not restricted to one preset category.
 
+**Adaptive specialization varies by workspace:** Normal Chat uses a direct-first, minimum-sufficient response policy. Code adds task-specific architect/implementer/debugger/test/security specialists when complexity warrants them. Research adds independent source-discovery, analyst and critic roles when they can meaningfully improve evidence coverage. Difficulty alone never authorizes parallel work; the controller needs a declared independent-work opportunity and the server scheduler must enforce task dependencies and conflicts. Low budgets reduce optional panels, and satisfied acceptance criteria stop further expansion. See [three-workspace adaptive policy](docs/WORKSPACE_ADAPTIVE_POLICY.md).
+
 ## Dynamic task decomposition and parallel execution
 
 **KG should split a task into smaller goals only when doing so is more likely to improve quality, speed, recoverability or verification than it costs in extra coordination.** One Gemini call should remain the default when sufficient.
