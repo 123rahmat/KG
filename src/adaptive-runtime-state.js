@@ -2,10 +2,9 @@
  * Server-owned adaptive runtime projection.
  *
  * Decision authority lives in adaptive-decision-authority.js and the unified
- * workflow kernel. This module stores bounded runtime history and keeps a
- * small compatibility facade for older callers; it does not own recovery.
+ * workflow kernel. This module records bounded runtime history and recovery
+ * lessons; it does not choose recovery actions or advance tasks.
  */
-import { classifyAdaptiveFailure, recoveryDecision } from './adaptive-decision-authority.js';
 
 const text = value => String(value ?? '').trim();
 const clip = (value, max = 500) => {
@@ -57,79 +56,6 @@ export function updateAdaptiveRuntimeState(previous = {}, {
     next.lastFailure = null;
   }
   return next;
-}
-
-/**
- * Compatibility classification for callers that still use this module.
- * The canonical failure taxonomy is shared with the main recovery authority.
- */
-export function classifyRecoveryFailure(reason = '') {
-  const canonical = classifyAdaptiveFailure(reason);
-  if (canonical === 'implementation') return 'syntax';
-  if (canonical === 'verification') {
-    return /test|assert|regression/i.test(String(reason)) ? 'tests' : 'verification';
-  }
-  if (canonical === 'transient') {
-    return /timeout|timed.?out|slow/i.test(String(reason)) ? 'timeout' : 'dependency';
-  }
-  if (canonical === 'missing-capability') return 'dependency';
-  if (canonical === 'unknown' || canonical === 'fundamental' || canonical === 'wrong-assumption') return 'other';
-  return canonical;
-}
-
-/**
- * Legacy compatibility facade. New run code uses unifiedRecoveryDecision()
- * directly; this function delegates to the canonical recovery authority.
- */
-export function decideRecovery({
-  taskType = '',
-  reason = '',
-  attempt = 1,
-  maxAttempts = 1,
-  governanceStatus = 'ready',
-  humanReviewRequired = false,
-  repairAvailable = false
-} = {}) {
-  const currentAttempt = Math.max(1, Number(attempt) || 1);
-  const maximum = Math.max(1, Number(maxAttempts) || 1);
-  const failureClass = classifyRecoveryFailure(reason);
-
-  if (governanceStatus === 'blocked') {
-    return { action: 'stop', failureClass, reason: 'governance-blocked', terminal: true };
-  }
-
-  // Human review remains a compatibility signal for callers that have not yet
-  // moved to the unified workflow's authority contract.
-  if (humanReviewRequired) {
-    return { action: 'escalate', failureClass, reason: 'human-review-required', terminal: false };
-  }
-
-  const canonical = recoveryDecision({
-    reason,
-    attempts: currentAttempt,
-    maxAttempts: maximum,
-    humanControlRequired: false
-  });
-
-  // Compatibility projection only: the unified authority still decides
-  // the recovery class. A verified, bounded code-repair opportunity is exposed
-  // as "repair" for older callers without introducing a second recovery loop.
-  const compatibilityAction = repairAvailable && failureClass === 'tests'
-    ? 'repair'
-    : canonical.action === 'retry'
-      ? 'retry'
-      : canonical.action === 'stop'
-        ? 'stop'
-        : 'replan';
-
-  void taskType;
-
-  return {
-    action: compatibilityAction,
-    failureClass,
-    reason: canonical.reason,
-    terminal: compatibilityAction === 'stop'
-  };
 }
 
 export function recoveryLesson(decision, { taskId = '', summary = '' } = {}) {

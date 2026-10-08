@@ -61,21 +61,3 @@ export function buildHarnessContext({
     authority: { modelCanPropose: true, modelCanAuthorize: false, modelCanGrantCapabilities: false, modelCanMutatePolicy: false }
   };
 }
-
-export function clampBudget(budget = {}, defaults = {}) {
-  return {
-    tokens: Math.max(1, Math.min(Number(budget.tokens ?? defaults.tokens ?? 4000), 100000)),
-    steps: Math.max(1, Math.min(Number(budget.steps ?? defaults.steps ?? 8), 100)),
-    seconds: Math.max(1, Math.min(Number(budget.seconds ?? defaults.seconds ?? 120), 3600)),
-    spend: Math.max(0, Number(budget.spend ?? defaults.spend ?? 0) || 0)
-  };
-}
-
-export function createHarnessPolicy({ risk = 'ordinary', allowedTools = [], allowedModels = [], budget = {} } = {}) {
-  return Object.freeze({
-    risk: text(risk) || 'ordinary',
-    allowedTools: [...new Set(allowedTools.map(text).filter(Boolean))],
-    allowedModels: [...new Set(allowedModels.map(text).filter(Boolean))],
-    budget: clampBudget(budget)
-  });
-}

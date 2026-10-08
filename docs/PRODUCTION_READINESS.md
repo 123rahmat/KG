@@ -283,7 +283,7 @@ dependencies are missing rather than pretending they exist.
 Account preferences are created by migration 17 and protected by PostgreSQL RLS. Voice and offline queue preferences are accepted and stored by the preferences API. The browser offline queue stores attachment metadata in session storage and attachment bytes in IndexedDB when available; private API responses remain uncached. Migration 29 removed the old simulation tables and schedules.
 ## Vertex Gemini via Google Cloud
 
-Kindgleam's sole production model family is Gemini through Google Vertex AI. Configure `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, and `VERTEX_MODEL=gemini-3.8-flash`; production authentication should use Application Default Credentials or workload identity. The runtime accepts only provider `google` and the approved Gemini family; the adaptive controller may select Gemini 3.5 Flash-Lite for lightweight work or Gemini 3.8 Flash for deeper Code, Research, verification, and agent work.
+Kindgleam's sole production model family is Gemini through Google Vertex AI. Configure `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, and `VERTEX_MODEL=gemini-3.8-flash`; supported Google-hosted deployments should provide service-account identity through the metadata server. Local development needs an explicit temporary `VERTEX_ACCESS_TOKEN`; the runtime does not load local ADC files. The runtime accepts only provider `google` and the approved Gemini family; the adaptive controller may select Gemini 3.5 Flash-Lite for lightweight work or Gemini 3.8 Flash for deeper Code, Research, verification, and agent work.
 
 ## Release-gate verification (September 30, 2026)
 

@@ -1,340 +1,88 @@
-# Kindgleam — Canonical Architecture
+# Kindgleam architecture and application system
 
-This file is the single product-architecture source of truth.
+This is the canonical description of the implemented application. Kindgleam has one incremental, server-owned workflow, three workspaces and a Vertex Gemini model boundary. Planning and context projections advise the runtime; they do not execute work or grant authority.
 
-Kindgleam is **one adaptive intelligence system with exactly three user-facing workspaces**:
+## Application services
 
-1. **Normal Chat**
-2. **Code Workspace**
-3. **Research Workspace**
-
-There is no Design Workspace, Simulation Workspace, Files Workspace, Learning Workspace, Engineering Workspace, or provider-selection workspace. Files, visuals, skills, tools, memory, agents, verification, permissions, and progress are shared capabilities used inside the three workspaces.
-
-## 1. System shape
-
-```
-User
-  |
-  v
-Situation + intent understanding
-  |
-  +-------------------+-------------------+
-  |                   |                   |
-Normal Chat        Code Workspace      Research Workspace
-  |                   |                   |
-  +-------------------+-------------------+
-                      |
-              Shared adaptive core
-                      |
-   +------------------+------------------+
-   |        |         |        |         |
- Gemini   Skills    Tools    Files     Memory
- Vertex   & learn   & forge  & state   & project
-   |        |         |        |         |
-   +------------------+------------------+
-                      |
-         Permissions / progress / jobs
-                      |
-          Multi-agent / parallel agent
-                      |
-             Evidence + verification
-                      |
-                 Final result
+```mermaid
+flowchart TD
+  B["Browser: Chat / Code / Research"] --> H["Express API: identity, validation, policy"]
+  H --> R["RunStore: persisted tasks and transitions"]
+  H --> P["Project and object stores"]
+  J["Jobs / fleet / scheduler"] --> H
+  R --> X["Scoped runtime calls and verification"]
+  X --> R
+  R --> D["PostgreSQL: isolation, leases, audit"]
+  P --> D
+  J --> D
 ```
 
-The workspaces are **specialized operating environments**, not separate AI brains.
+`server.js` validates configuration, constructs shared services, checks database readiness and starts HTTP plus background workers. `src/app.js` wires routes and the common execution entry point. Identity and workspace membership control access. ProjectStore and ObjectStore hold durable project/artifact state; RunStore owns runs and real tasks. JobStore, fleet workers and Scheduler deliver background work through that same execution path.
 
-## 2. Model boundary: Gemini family only
+The browser presents saved state, scoped context, previews and optional user actions. It cannot change authority through a workspace selection, proposed task, specialist finding or UI status.
 
-Production reasoning uses **Google Vertex AI and the approved Gemini family only**.
+## Responsibility and authority
 
-Current adaptive roles:
+| Layer | Modules | Authority |
+| --- | --- | --- |
+| Initial planning | `core.js`, `adaptive.js` | Creates the current task and goal/context contracts; `decideAdvance` validates existing task transitions |
+| Run execution state | `runs.js` | Locks and updates persisted tasks; adapts next work, applies recovery and enforces completion |
+| Decision policy | `unified-adaptive-workflow.js`, `adaptive-decision-authority.js` | Pure acceptance, capability, budget and recovery decisions enforced by RunStore |
+| Situation/context | `unified-adaptive-intelligence.js`, `universal-context.js`, `reasoning-context.js` | Describes evidence, uncertainty, effort and useful resources; schedules no phases |
+| Mode and compute policy | `mode-controllers.js`, `agent-topology-policy.js`, `adaptive-efficiency.js` | Shared ceilings and workspace-specific optional effort; unknown budget telemetry remains distinct from exhausted budget |
+| Advisory topology | `adaptive-agents.js` | Describes logical assignments and dependencies; never calls providers or tools |
+| Specialist execution | `multi-agent.js`, `agent-lane-executor.js`, `parallel-orchestrator.js` | Runs scoped advisory calls with ordered waves, dependency/conflict constraints and hard concurrency limits |
+| Hierarchical scope | `specialist-hierarchy.js`, `subsystem-orchestrator.js`, `task-specialization.js` | Bounded role/context hints, ownership and typed findings; no independent recursive executor |
+| Model/provider boundary | `runtime.js`, `model-routing.js`, `model-catalog.js` | Configured Gemini routing, usage admission, provider limits, timeouts and cancellation |
+| Context procedures | `agent-harness.js`, `skills.js`, `memory.js`, `rag.js` | Relevant skills, bounded retrieval and authorized memory as data; no new permissions |
+| Execution capabilities | `toolbox.js`, `sandbox.js`, `tool-forge.js`, `terminal.js` | Explicit authorized routing and configured isolation; records observed outcomes |
+| Verification | `verification.js` | Evaluates evidence against acceptance; model claims alone cannot establish execution success |
+| State views | `persisted-task-projection.js`, `open-world-task-graph.js`, `adaptive-runtime-state.js` | Bounded projection/history of real work and proposals; no task dispatch |
 
-- **Gemini 3.5 Flash-Lite** — lightweight chat, routing, classification, summarization, and high-volume low-complexity work.
-- **Gemini 3.8 Flash** — primary model for Code, Research, difficult reasoning, agents, verification, and complex multimodal work.
+All module paths in this table are relative to `src/`.
 
-The adaptive controller may choose between approved Gemini models according to task complexity, risk, context, tools, latency, and cost. It does not expose other model providers or model-family switching to the user.
+## Incremental task lifecycle
 
-Model choice never grants permissions, changes server policy, or proves that an external action happened.
+The initial planner creates the current work item rather than a future chain for a domain. At each authoritative transition, RunStore checks the target and dependencies, records actual evidence/outcomes, reassesses the current situation and creates only justified next work. Investigation, execution and verification are conditional work types, not mandatory reasoning phases.
 
-## 3. Normal Chat
+Changed evidence, requirements, failures or verification results can reopen reasoning and affected work. Unrelated completed work remains available. Recovery decisions come from `unifiedRecoveryDecision` and the shared failure taxonomy, subject to bounded attempts, capabilities, authorization and budgets.
 
-Normal Chat is the default and should remain the simplest surface.
+`run_tasks` is the scheduling source of truth. RunStore mirrors a privacy-safe open-world graph during creation and advancement in the same database transaction. The projection holds at most 48 nodes, excludes raw secrets/evidence and does not queue a proposed action. Its revision changes only with visible task changes. See [graph implementation](OPEN_WORLD_ADAPTIVE_ARCHITECTURE.md).
 
-It handles:
+Persisted compatibility fields such as runtime `currentStage` identify the current task type. They do not imply a stage scheduler. Existing database migrations and task formats remain supported.
 
-- normal conversation and questions;
-- writing, explanation, math, planning, analysis, and summaries;
-- lightweight file and image understanding;
-- single-file and small code tasks when a project workspace is unnecessary;
-- visual/diagram/presentation requests as capabilities inside the conversation;
-- small tool-assisted tasks;
-- adaptive specialist help when it materially improves quality.
+## Three workspaces, shared policies
 
-Normal Chat uses the **minimum sufficient machinery**. One model call is preferred when one call can solve the request reliably. Tools, verification, specialists, and extra reasoning are added only when justified.
+| Workspace | Additional context and capabilities | Optional effort |
+| --- | --- | --- |
+| Normal Chat | Conversation, current attachments, artifact previews, configured lightweight sandbox | Direct-first; bring skills/tools/specialists only when useful |
+| Code | Attached GitHub source, project index, files/revisions, context compiler, patching, isolated terminal | Architect/implementer/debugger/test/security roles when warranted by actual task scope |
+| Research | Sources, provenance, conflicts, unresolved questions and research artifacts | Independent discovery, analysis and criticism when evidence coverage benefits |
 
-Normal Chat may suggest switching to Code or Research when durable specialized state would materially improve the result.
+The same acceptance, authorization, recovery and provider boundaries apply throughout. A workspace suggestion does not transfer files, send messages or authorize execution. Code sessions and terminal require a GitHub project source. Normal Chat can work with a small file set without creating a project workspace.
 
-## 4. Code Workspace
+## Specialist execution and optimization
 
-Code Workspace is a project-style engineering environment.
+The active dispatcher is `multi-agent.js`. Topology planning is advisory: actual selected specialists are bounded by shared policy, current useful work, user opt-out and per-run ceilings. Role count is a limit, not a quota to fill. Hierarchical scope hints are depth-bounded; they do not spawn an unrestricted tree of agents.
 
-Its continuous workflow is:
+The lane executor validates selected IDs and schedule coverage before any call. It processes waves in order and settles started peers on failure or cancellation before returning. Independent calls may run together within hard provider/token/resource ceilings. Conflicting or consequential work remains serialized by the relevant authority and lane gates.
 
-```
-repository/project
-  -> relevant files and dependency context
-  -> plan only the necessary change
-  -> permission / approval when required
-  -> edit
-  -> diff
-  -> run / terminal / build
-  -> tests
-  -> repair from real evidence
-  -> verification
-  -> explicit write-back
-```
+Specialist findings are advisory and typed. The parent integrates them into the current task, and RunStore retains verification and final state transitions. Optional panels shrink under budget pressure; mandatory authorization and verification are not optional compute overhead.
 
-Files are not a separate workspace. In Code, files are part of the coding state.
+Resource selection retrieves only relevant context and procedures. A shared budget ratio parser prevents missing/non-finite telemetry from silently looking like zero. Code context/indexes and learned procedures are reused within scope; new evidence determines further work. Optimize cost per accepted outcome subject to correctness and user control, then calibrate thresholds against live baselines.
 
-Code Workspace keeps:
+## Persistence, privacy and operations
 
-- exact project/repository identity and revision;
-- relevant file tree and working set;
-- edits and diffs;
-- test/build/runtime evidence;
-- terminal and sandbox state;
-- project memory and history;
-- permissions and approved write scope;
-- failure/repair history;
-- progress, cancellation, and resumable jobs.
+PostgreSQL stores runs, tasks, jobs, leases, project objects, account state and audit history. Row-level security and application ownership checks enforce scope. Encryption domains protect objects and sensitive personal/billing metadata; external payment details remain in Stripe's hosted flow. Production uses separate runtime, migration, backup and restore identities.
 
-Repository writes remain server-governed. Parallel agents may analyze independent scopes concurrently, but conflicting mutations are serialized or rejected.
+Job and fleet leases fence concurrent workers. Revision checks prevent stale file writes and stale task outcomes. Execution receipts and verification evidence remain distinguishable from proposals. Stop is persisted server state; browser disconnection alone does not stop background work. Supported provider/runner cancellation propagates, but an aborted connection does not prove an external side effect never finished.
 
-## 5. Research Workspace
+Skills cannot authorize tools. Scoped memory and retrieved sources are untrusted data. MCP/tool adapters and remote delegation remain behind existing policy boundaries. Isolated runners have explicit configuration; unavailable capabilities stay unavailable rather than producing invented success.
 
-Research Workspace is a project-style evidence environment.
+Health, readiness and metrics expose operational state. Provider concurrency adapts to pressure, and retries release provider slots during bounded waits. Authentication failures are not retried as transient pressure. Consult [runtime notes](UNIFIED_ADAPTIVE_RUNTIME.md) and [production readiness](PRODUCTION_READINESS.md) for deployment details.
 
-Its continuous workflow is:
+## Removed architecture and validation
 
-```
-research question
-  -> source discovery
-  -> source reading
-  -> evidence ledger
-  -> claims / conflicts / uncertainty
-  -> synthesis
-  -> citation and provenance checks
-  -> verification
-  -> research artifact
-```
+The unused `advanceAdaptiveWorkflow` / `nextAdaptiveStage` phase engine and its coverage helpers have been removed. The unused generic `executeAdaptiveAgentPlan` executor has been removed; production specialists continue through the lane executor. Unused recovery compatibility facades and standalone harness-policy helpers have also been removed. There is no replacement competing scheduler.
 
-Files are not a separate workspace. In Research, files are sources and evidence.
-
-Research Workspace keeps:
-
-- root question and subquestions;
-- source set and source quality;
-- claim-to-source relationships;
-- evidence and uncertainty;
-- conflicting findings;
-- citations and provenance;
-- drafts and research artifacts;
-- project memory and research history;
-- progress, permissions, cancellation, and resumable jobs.
-
-Parallel researchers are used only when independent source discovery or analysis is useful. Duplicate searches and repeated context are avoided.
-
-## 6. Skills and learning
-
-The skill system is a core part of the architecture and must remain.
-
-Skills provide bounded procedural knowledge for tasks such as coding, testing, security review, research, deployment, analysis, and other reusable workflows.
-
-The server may learn which skills work well for a task/context signature, but learning may only influence:
-
-- skill selection;
-- ordering;
-- effort;
-- review depth;
-- verification depth.
-
-Learning may **not**:
-
-- grant permissions;
-- bypass approvals;
-- weaken safety or governance;
-- silently rewrite policies;
-- silently change model providers;
-- claim an action succeeded.
-
-Skill dependencies remain explicit and cyclic dependencies are rejected.
-
-## 7. Tools, MCP, and tool forging
-
-The tool system is also core and must remain.
-
-Tools are discovered and invoked just in time from a governed registry. The system should choose the **smallest sufficient tool set**, not preload every tool.
-
-**Model Context Protocol (MCP)** is shared tool infrastructure, not another workspace. Configured remote MCP servers can expose external tools to Normal Chat, Code, or Research when the active task justifies them. MCP discovery is cached, concurrency is bounded, calls have timeouts and circuit breaking, and actual remote tool calls are approval-gated. Read-only discovery may retry; tool calls are never automatically retried because an ambiguous network failure must not duplicate a side effect.
-
-Tool forging may define or register a missing capability only through the existing governed lifecycle:
-
-```
-need
-  -> capability contract
-  -> implementation check
-  -> permission / governance
-  -> bounded execution
-  -> evidence
-  -> verification
-  -> promotion or rejection
-```
-
-Discovery is never execution. A model cannot invent a working tool, connector, runner, or external result.
-
-## 8. Files and project state
-
-Files are shared infrastructure, never a fourth workspace.
-
-- **Normal Chat:** lightweight attachments and generated artifacts.
-- **Code:** repository files, working set, diffs, tests, build outputs.
-- **Research:** papers, documents, sources, evidence, drafts.
-
-File access is scoped to the active authenticated project/workspace. Sensitive files follow centralized path and data policies. Writes require the appropriate permission and revision checks.
-
-## 9. Memory and continuity
-
-Memory remains shared infrastructure.
-
-Memory is scoped by authenticated principal, workspace, conversation, and project as appropriate. Current-chat context has priority; broader recall is bounded and permission-controlled.
-
-The system must never use memory as authority. Memory can help recover context, preferences, prior decisions, and project state, but current evidence and explicit user instructions win.
-
-## 10. Multi-agent and parallel-agent system
-
-Multi-agent behavior remains a major capability, but it is **adaptive rather than mandatory**.
-
-Default rule:
-
-```
-Can one Gemini call solve this reliably?
-  -> yes: use one call
-  -> no: add the minimum necessary specialist/tool
-```
-
-Normal Chat uses specialists sparingly.
-
-Code may recruit roles such as architecture, implementation, testing, debugging, security review, performance review, and critique when justified.
-
-Research may recruit independent research, analysis, source review, and critique roles when source diversity or disagreement matters.
-
-Parallel execution is allowed only for independent work. Shared mutations, overlapping repository paths, and dependent tasks are serialized through server-owned scheduling.
-
-Agents are advisory. The server owns permissions, tool access, workflow state, writes, job leases, approval gates, and verification.
-
-## 11. Progress, cancellation, resume, and jobs
-
-Live progress is application state, not model narration.
-
-The UI should show structured server events such as:
-
-- understanding request;
-- reading project/source context;
-- waiting for approval;
-- editing;
-- running tests;
-- searching sources;
-- verifying;
-- complete;
-- stopped;
-- failed with recoverable state.
-
-Do not fabricate percentages.
-
-Long-running Code and Research work uses server-owned jobs with bounded leases, cancellation, safe stopping points, and recoverable state. A disconnected client does not own the job lifecycle.
-
-Progress metadata should not be repeatedly inserted into LLM prompts. Only model-relevant state enters model context.
-
-## 12. Permission model
-
-Permissions remain explicit and server-enforced.
-
-User-facing controls cover the meaningful risk boundaries:
-
-- file writes;
-- command/code execution;
-- network/web access;
-- external actions;
-- destructive actions;
-- project/repository write-back.
-
-The UI may display permission state, but the backend is the authority. A model cannot grant itself permission.
-
-## 13. Verification
-
-Verification is evidence-driven and proportional to the work.
-
-Normal Chat verifies when factual uncertainty, tools, transformations, or stakes justify it.
-
-Code verifies with the most relevant combination of diff review, tests, builds, runtime output, static checks, and repository state.
-
-Research verifies important claims against sources, provenance, conflicts, and citation coverage.
-
-No subsystem may claim external execution or successful mutation without evidence.
-
-## 14. Safety, privacy, and governance
-
-Safety, privacy, tenant isolation, and data boundaries remain shared platform invariants.
-
-Governance is evaluated before risky work and again when the situation changes. Lower-level agents or tools cannot weaken higher-level policy.
-
-Credentials, secrets, payment data, and protected sensitive data do not enter prompts or user-visible logs unless a narrowly authorized workflow explicitly requires safe handling.
-
-## 15. UI contract
-
-The primary product navigation exposes only:
-
-- **Normal Chat**
-- **Code**
-- **Research**
-
-Project/file/history/settings controls may exist around those workspaces, but they are supporting product controls, not additional AI workspaces.
-
-The UI should progressively disclose complexity:
-
-- Normal Chat stays calm and conversation-first.
-- Code exposes project tree, working set, diff, terminal/tests, progress, and write controls.
-- Research exposes sources, evidence, citations, conflicts, progress, and research artifacts.
-
-## 16. What is retired
-
-The following are not product workspaces or architecture modes:
-
-- Design Workspace
-- Simulation Workspace
-- Files Workspace
-- Learning Workspace
-- Engineering Workspace
-- Presentation Workspace
-- provider/model-family selection UI
-
-Visual work remains a Normal Chat capability. Simulation requests, when relevant, are handled as ordinary Code/tool work. Learning exists inside the skill/memory/evaluation systems, not as a workspace.
-
-## 17. Non-negotiable invariants
-
-1. Exactly three user-facing AI workspaces: Normal Chat, Code, Research.
-2. One shared adaptive intelligence core.
-3. Gemini family only in the production model layer.
-4. Skills, tools, MCP, files, memory, multi-agent, parallel execution, progress, permissions, and verification are shared infrastructure.
-5. Files are contextual state, not a workspace.
-6. Simple tasks stay simple.
-7. Extra agents/tools/model effort are added only when they can materially improve the result.
-8. The server owns workflow state and permissions.
-9. Parallel work must be independent or safely fenced.
-10. No action or mutation is claimed without evidence.
-11. Code and Research maintain durable project state.
-12. UI progress is server-reported rather than token-heavy model narration.
-13. Retired architecture paths must not remain as active product contracts.
-
-This architecture should be changed only by intentionally updating this file together with the corresponding production contracts and tests.
+Source/lint/doctor checks, focused control tests, database integration, browser checks and container checks validate different parts of this architecture. Actual Gemini correctness, outcome quality, latency and cost require credentialed live evaluation; distributed endurance requires operational trials. See [README verification](../README.md#verification) and [live evaluation](LIVE_EVALUATION.md).

@@ -985,3 +985,61 @@ test('adaptive specialist recruitment distinguishes frontend, backend and cross-
   assert.ok(both.roles.includes('frontend-engineer'));
   assert.ok(both.roles.includes('backend-engineer'));
 });
+
+test('Code specialist waves drain started peers before a rejected call releases the parent', async () => {
+  let releasePeer;
+  const peerGate = new Promise(resolve => { releasePeer = resolve; });
+  let fastRejected;
+  const rejectedCall = new Promise(resolve => { fastRejected = resolve; });
+  let calls = 0; let active = 0; let usageWrites = 0; let parentSettled = false;
+  const denial = Object.assign(new Error('policy denied'), { expose: true, status: 403 });
+  const panel = runAdaptiveAgentPanel({
+    run: run({ adaptation: { scale: 'complex' }, maxTokens: 100000 }),
+    task: { id: 'build-code', type: 'code' },
+    basePayload: {
+      goal: 'Repair the project', task: { id: 'build-code', type: 'code' },
+      workspace: { projectId: 'p1', revisionId: 'r1', paths: ['src/app.js', 'tests/app.test.js'] },
+      codeIntelligence: { project: { id: 'p1', revisionId: 'r1', contentHash: 'h1', files: [{ path: 'src/app.js', language: 'javascript', bytes: 100 }, { path: 'tests/app.test.js', language: 'javascript', bytes: 100 }], dependencies: [], totals: { bytes: 200, dependencies: 0 } } }
+    },
+    selection, primaryModelId: 'google:gemini-3.8-flash',
+    config: { agents: { multiAgent: 'always', maxAgents: 6, parallel: 'always' } },
+    modelCaller: async () => {
+      calls++; active++;
+      try {
+        if (calls === 1) { fastRejected(); throw denial; }
+        await peerGate;
+        return { text: JSON.stringify(finding('proceed', 'inspected')), provider: 'google', model: 'gemini', usage: { inputTokens: 1, outputTokens: 1 } };
+      } finally { active--; }
+    },
+    recordUsage: async () => { usageWrites++; }
+  });
+  const observed = panel.then(() => { parentSettled = true; return null; }, error => { parentSettled = true; return error; });
+  await rejectedCall;
+  await new Promise(resolve => setImmediate(resolve));
+  try {
+    assert.ok(calls > 1, 'the test must start concurrent Code peers');
+    assert.ok(active > 0);
+    assert.equal(parentSettled, false, 'the parent must retain ownership of started calls');
+  } finally {
+    releasePeer();
+    await observed;
+  }
+  assert.equal(await observed, denial);
+  assert.equal(active, 0);
+  assert.equal(usageWrites, calls - 1);
+});
+
+test('Code specialist model calls receive the parent cancellation signal', async () => {
+  const controller = new AbortController();
+  const signals = [];
+  await assert.rejects(runAdaptiveAgentPanel({
+    run: run({ adaptation: { scale: 'complex' }, maxTokens: 100000 }),
+    task: { id: 'build-code', type: 'code' },
+    basePayload: { goal: 'Repair the project', task: { id: 'build-code', type: 'code' }, workspace: { projectId: 'p1', revisionId: 'r1', paths: ['src/app.js'] }, codeIntelligence: { project: { id: 'p1', revisionId: 'r1', contentHash: 'h1', files: [{ path: 'src/app.js', language: 'javascript', bytes: 100 }], dependencies: [], totals: { bytes: 100, dependencies: 0 } } } },
+    selection, primaryModelId: 'google:gemini-3.8-flash',
+    config: { agents: { multiAgent: 'always', maxAgents: 2 } }, signal: controller.signal,
+    modelCaller: async (_messages, options) => { signals.push(options.signal); controller.abort(); throw controller.signal.reason; }
+  }), { name: 'AbortError' });
+  assert.ok(signals.length > 0);
+  assert.ok(signals.every(signal => signal === controller.signal));
+});

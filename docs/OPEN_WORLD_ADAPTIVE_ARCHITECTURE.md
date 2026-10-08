@@ -1,4 +1,6 @@
-# KG open-world adaptive intelligence — implementation specification
+# Open-world graph: implementation and limits
+
+The [canonical architecture](ARCHITECTURE.md) describes the application. This document covers its pure graph/proposal layer; RunStore owns execution.
 
 ## What changes in this increment
 
@@ -112,3 +114,18 @@ Live rollout remains conditional on the production suite, privacy and
 approval checks, user-task success benchmarks, and measured cost per
 accepted result. Existing task persistence and security enforcement are
 preserved rather than replaced by the proposal-only graph.
+
+
+## Consolidated runtime — October 8, 2026
+
+The unused fixed-stage advancement helpers (`advanceAdaptiveWorkflow`,
+`nextAdaptiveStage`, `adaptiveCoverage`) and duplicate generic agent executor
+have been removed. Current intelligence describes an incremental strategy
+with RunStore scheduling authority, without publishing a required future
+phase list. Actual verification check categories remain available.
+
+The active `selectAdaptiveWorkflow` compatibility projection, shared recovery
+authority, advisory topology planner and persisted task graph remain. Database
+migrations and existing task/history fields are retained for existing data.
+Removing dead engines does not make the proposal graph an execution engine
+or extend autonomous tool-generation capability.

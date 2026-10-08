@@ -494,7 +494,8 @@ function buildMetaReasoning({ goal, analysis, complexity, coding, projectWork, u
 
 function buildUnifiedControlLoop({ metaReasoning, management, decisionModel }) {
   return {
-    stages: ['understand', 'model-situation', 'reason', 'challenge', 'decide', 'plan', 'execute', 'observe', 'verify', 'replan', 'deliver'],
+    strategy: 'incremental-open-world',
+    schedulingAuthority: 'RunStore',
     adaptive: true,
     oneWorkflow: true,
     decisionGate: 'Only the minimum necessary next action is selected from the current evidence.',

@@ -1,38 +1,26 @@
-# KG unified adaptive agentic architecture
+# Specialist planning and dispatch
 
-## Principle
+The [canonical architecture](ARCHITECTURE.md) describes the whole application. This document defines the advisory specialist boundary within that system.
 
-KG is one server-owned, situation-adaptive system. It solves the user's current goal using the least expensive *reliable* strategy. It does not create a fixed sequence of tasks or activate a permanent team of specialists based only on a category name.
+## Planning versus execution
 
-## Runtime flow
+`src/adaptive-agents.js` is a pure topology planner used to describe assignments and adapt saved planning metadata. It does not call agents or advance tasks. Actual specialist recruitment and dispatch use `src/multi-agent.js`, shared `src/agent-topology-policy.js` limits and `src/agent-lane-executor.js` scheduling. The removed generic executor is not a supported alternate runtime.
 
-1. The existing unified intelligence and workflow modules determine the user's requested outcome, accepted scope, known evidence, constraints, risk and currently useful next step.
-2. The existing multi-agent decision determines whether additional **advisory** capacity materially improves the task. Simple chat stays one agent.
-3. A task-specific assignment binds each specialist to the user's current goal, available success criteria and bounded file/task scope. No agent can expand permissions, mutate policy or self-certify delivery.
-4. The single optional specialist-topology policy enforces remaining budgets and maximum parallel capacity. Unknown budget values are not interpreted as exhausted budgets. Scarce budgets suppress speculative panels, not mandatory safety and verification work.
-5. The lane scheduler processes dependency/conflict waves **in sequence**, only running independent work within a wave concurrently and applying the configured parallel ceiling.
-6. Recorded findings are integrated through the existing server-owned workflow and verification gates. Disagreement can request targeted arbitration. Errors, blocked work and cancellations are not presented as success.
-7. The existing adaptive workspace UI presents the task's current focus. A safe task lens can enhance normal chat for brainstorming, planning, decisions, writing, learning and design without creating a separate application. Code and research retain their deep workspaces. Follow-up suggestions are optional drafts, never automatic actions.
+A specialist receives the current goal, task, success criteria, bounded files/context, capabilities, evidence requirements and a stop rule. Findings remain advisory. Specialists cannot widen permissions, mutate policy or certify final delivery. The parent integrates findings; RunStore owns accepted state and completion.
 
-## Core contracts
+## Scheduling and budget contracts
 
-- Task: goal, current step, constraints, acceptance criteria, evidence, risk and permission scope.
-- Specialist: role, dynamic task, expected evidence, bounded context, scope, stop rule and advisory-only authority.
-- Allocation: selected roles, compute budget, parallel ceiling, reason, integration and verification requirements.
-- UI: authoritative run state, context-appropriate label, current activity, saved specialist findings, optional user actions. UI never grants execution authority.
+- Direct work remains the default when sufficient. Independent work and quality pressure must justify coordination overhead.
+- Shared policy bounds optional roles, tokens, breadth and parallelism. Missing budget telemetry is distinct from exhausted budget; user opt-out and caps remain effective through context revisions.
+- The executor validates IDs and complete schedule coverage before dispatch. Waves execute in order; only ready independent work runs concurrently within the ceiling.
+- Resource/file conflicts and consequential actions retain their existing serialization and approval boundaries.
+- Started peers settle before failed/cancelled waves return. Cancellation and partial failures never become successful completion.
+- Hierarchical assignments and subsystem communication remain bounded and revision-scoped; they are not independent recursive execution loops.
 
-## Operational invariants
+See [workspace policy](WORKSPACE_ADAPTIVE_POLICY.md) and [hierarchical scope](HIERARCHICAL_ADAPTIVE_SPECIALISTS.md).
 
-- Source-of-truth for workflow, approvals and completion stays with the server.
-- High-risk side effects are serialized and require their original approval/verification gates.
-- Only justified optional specialists are recruited. There is no requirement for a specialist on every task.
-- Model context remains minimized; code intelligence is not serialized twice into the same prompt.
-- Agent work follows ordered waves and bounded concurrency.
-- User-authored composer text is never overwritten by a suggested next task.
-- Recorded agent contributions are not falsely reported as currently running.
+## Evidence and UI
 
-## Verification and remaining work
+The encrypted run blackboard stores typed findings with optimistic revision checks. It is working state, not durable personal memory. UI activity comes from saved state and does not report old contributions as still running. Suggested follow-ups are optional drafts and do not overwrite user-authored text or start work automatically.
 
-Included unit checks cover budget conservation, task-bound scope, sequential waves, concurrency, UI task lens and stale activity. Existing code/research workflow behavior must still pass repository CI with installed dependencies.
-
-This commit improves the architecture incrementally; it is **not** proof of a 10/10 product. Before production rollout, measure representative user tasks against single-agent and prior-build baselines: acceptance rate, correctness, p50/p95 latency, total cost per accepted result, regressions, recoverability, privacy, accessibility and operator safety. Remaining work includes richer composable UI types for unfamiliar tasks, calibrated recruitment thresholds and a full end-to-end CI/browser suite.
+Tests cover planner conservation, shared compute limits, task scope, ordered lanes, failure/cancellation and UI behavior. Live recruitment calibration still requires comparisons with direct Gemini: accepted outcomes, correctness, latency, tokens and cost per accepted result.

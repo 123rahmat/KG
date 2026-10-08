@@ -1,9 +1,14 @@
-# Unified Adaptive Runtime
+# Runtime state, cancellation and recovery
+
+See the [canonical architecture](ARCHITECTURE.md) for the service map and the [specialist boundary](UNIFIED_ADAPTIVE_AGENTIC_ARCHITECTURE.md) for planning versus dispatch.
 
 The platform uses one server-owned Run/Task lifecycle. Memory, RAG, Skills, orchestration, agents, tools, MCP/A2A adapters, code-workspace sessions, verification, billing, observability and evaluation are participants in the same workflow.
 
-## Lifecycle
-Request -> identity/tenant scope -> situation -> governance -> capability discovery -> Skills + Memory + RAG -> context compilation -> task DAG -> adaptive agent allocation -> bounded parallel waves -> governed Tool Gateway -> isolated execution/workspace -> evidence -> verification -> approval when required -> delivery -> state/memory update -> evaluation signal -> controlled evolution.
+## Incremental execution
+
+RunStore persists and advances actual tasks. Identity, governance, capabilities and budgets constrain every transition. Context, skills, memory, specialists and tools are brought in when the current work requires them. Results become observed evidence for verification, recovery or delivery; no task is required to traverse a fixed phase chain.
+
+The pure workflow/intelligence contracts describe the next useful work and acceptance conditions. Advisory agent plans and the read-only persisted graph do not execute. `multi-agent.js` dispatches actual specialist calls through the lane executor; `runtime.js` applies provider admission and cancellation. Shared recovery decisions are enforced by RunStore, while `adaptive-runtime-state.js` records bounded history and lessons.
 
 ## Parallelism
 The same scheduler governs specialist panels, normal-chat control agents and other independent cognitive work. It chooses `auto`, `always`, or `off` through `AGENTS_PARALLEL_MODE`. Independent work runs in bounded waves; dependencies, shared state, and overlapping code writes are serialized. Provider concurrency, task pressure, risk and remaining usage budget can narrow or expand the runtime ceiling, while hard provider and budget limits remain authoritative. A shared code project requires an exact revision and disjoint write set before concurrent work is allowed.
@@ -45,7 +50,3 @@ RAG content is encrypted at rest, retrieved within tenant scope, and short-lived
 ## Learning loop
 
 User feedback is stored as a Run outcome signal. Evaluation systems can use those signals to identify regressions and candidate improvements. No model output or feedback automatically rewrites Skills, prompts or policy.
-
-## Production standards
-
-The deployment path can map workload identity to SPIFFE/SPIRE and telemetry to OpenTelemetry semantic conventions. MCP is treated as a consented tool/context protocol, and A2A as a delegated-agent protocol; neither replaces server-side authorization. Current MCP guidance explicitly calls for user consent and authorization around data access and tools, while A2A 1.0 defines independent agent discovery and collaboration without sharing internal state.

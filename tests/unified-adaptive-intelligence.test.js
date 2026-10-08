@@ -171,7 +171,6 @@ test('advanced intelligence treats verification failure as a reason to reopen re
     }
   );
 
-  assert.ok(intelligence.controlLoop.stages.includes('replan'));
   assert.ok(intelligence.controlLoop.replanningGate.includes('verification outcome'));
   assert.ok(intelligence.management.escalation.triggers.includes('verification-failure'));
 });
@@ -206,63 +205,6 @@ test('resource intelligence decides what to bring, when to bring it, and effort 
   assert.equal(complex.resourceDecision.rules.expandOnMaterialChangeOnly, true);
   assert.ok(complex.metaReasoning.resourceDecision);
   assert.ok(complex.controlLoop.resourceDecision);
-});
-
-
-test('runtime controller materializes the next stage instead of returning a static plan', async () => {
-  const { buildTasks, advanceAdaptiveWorkflow } = await import('../src/core.js');
-  const tasks = buildTasks('chat', ['reasoning'], false, {});
-  assert.equal(tasks.length, 1);
-  assert.equal(tasks[0].type, 'understand');
-
-  const first = advanceAdaptiveWorkflow(tasks, 'understand', {
-    intelligence: { controlLoop: { oneWorkflow: true } },
-    successCriteria: ['answer the question']
-  });
-  assert.equal(first.ok, true);
-  assert.equal(first.next, 'model-situation');
-  assert.equal(first.tasks.length, 2);
-  assert.equal(first.tasks[1].metadata.adaptiveStep, true);
-});
-
-test('runtime controller reopens reasoning after verification failure', async () => {
-  const { buildTasks, advanceAdaptiveWorkflow } = await import('../src/core.js');
-  const tasks = buildTasks('code', ['reasoning'], false, {});
-  const first = advanceAdaptiveWorkflow(tasks, 'understand');
-  const failed = advanceAdaptiveWorkflow(first.tasks, 'model-situation', {
-    verificationFailed: true,
-    situation: { evidence: ['test failure'], verificationFailed: true }
-  });
-  assert.equal(failed.next, 'replan');
-  assert.equal(failed.adaptive.replanned, true);
-  assert.equal(failed.tasks.at(-1).metadata.trigger, 'material-change-or-verification-failure');
-});
-
-test('runtime controller creates a recovery path on execution failure', async () => {
-  const { buildTasks, advanceAdaptiveWorkflow } = await import('../src/core.js');
-  const tasks = buildTasks('code', ['reasoning'], false, {});
-  const result = advanceAdaptiveWorkflow(tasks, 'understand', {
-    status: 'failed',
-    situation: { failure: 'runner error' }
-  });
-  assert.equal(result.next, 'replan');
-  assert.equal(result.tasks.at(-1).type, 'replan');
-});
-
-
-test('runtime controller de-escalates simple chat to the minimum sufficient stages', async () => {
-  const { buildTasks, advanceAdaptiveWorkflow } = await import('../src/core.js');
-  const intelligence = buildUnifiedAdaptiveIntelligence(
-    'What is heat in thermodynamics?',
-    { activeSurface: 'chat' }
-  );
-  let current = buildTasks('chat', ['reasoning'], false, {});
-  let step = advanceAdaptiveWorkflow(current, 'understand', { intelligence });
-  assert.equal(step.next, 'model-situation');
-  step = advanceAdaptiveWorkflow(step.tasks, 'model-situation', { intelligence });
-  assert.equal(step.next, 'reason');
-  step = advanceAdaptiveWorkflow(step.tasks, 'reason', { intelligence });
-  assert.equal(step.next, 'verify');
 });
 
 
@@ -323,16 +265,12 @@ test('verification depth is driven by actual changes and failure, not complexity
   assert.equal(intelligence.verification.drivenBy.actualChanges, true);
 });
 
-test('verification cannot be treated as complete without evidence', async () => {
-  const { buildTasks, advanceAdaptiveWorkflow } = await import('../src/core.js');
-  const intelligence = buildUnifiedAdaptiveIntelligence('What is heat in thermodynamics?', {
-    activeSurface: 'chat'
-  });
-  let tasks = buildTasks('chat', ['reasoning'], false, {});
-  let step = advanceAdaptiveWorkflow(tasks, 'understand', { intelligence });
-  step = advanceAdaptiveWorkflow(step.tasks, 'model-situation', { intelligence });
-  step = advanceAdaptiveWorkflow(step.tasks, 'reason', { intelligence });
-  const blocked = advanceAdaptiveWorkflow(step.tasks, 'verify', { intelligence });
-  assert.equal(blocked.next, 'replan');
-  assert.equal(blocked.adaptive.replanned, true);
+test('all surfaces describe incremental work under RunStore scheduling authority', () => {
+  for (const activeSurface of ['chat', 'code', 'research']) {
+    const intelligence = buildUnifiedAdaptiveIntelligence('Investigate a changed requirement and verify the result', { activeSurface });
+    assert.equal(intelligence.controlLoop.strategy, 'incremental-open-world');
+    assert.equal(intelligence.controlLoop.schedulingAuthority, 'RunStore');
+    assert.equal(intelligence.controlLoop.stages, undefined);
+    assert.equal(intelligence.controlLoop.oneWorkflow, true);
+  }
 });

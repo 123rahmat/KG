@@ -1777,85 +1777,90 @@ async function runCodeWorkspaceAgentPanels({
         const waveJobs = schedulerWave.lanes
           .map(lane => jobs.find(job => job.lane.agentId === lane.agentId))
           .filter(Boolean);
-        const waveResults = await Promise.all(waveJobs.map(async job => {
-        const startedAt = Date.now();
-        const result = await modelCaller(agentMessages(job.role, {
-          ...basePayload,
-          harness,
-          blackboard: blackboard ?? basePayload?.blackboard ?? null,
-          subsystemPlan: scopedSubsystemPlan(subsystemPlanContext, job.subsystem),
-          subsystemWork: job.subsystemWork,
-          codeIntelligence: scopedCodeIntelligence(basePayload?.codeIntelligence, job.subsystem),
-          specialistAssignment: specialistRemit(codeSpecialistTeam(job.subsystem, {
-            goal: basePayload?.goal, maxRoles: maxAgents,
-            remainingBudgetRatio: remainingBudgetRatio(), risk: run?.situation?.risk
-          }), job.role),
-          workspacePanel: {
-            mode: 'unified-adaptive-code-panel',
-            panelId: job.panelId,
-            subsystemId: job.subsystem.id,
-            iteration: job.iteration,
-            ownedFiles: job.subsystem.files,
-            writeRoots: job.subsystem.files?.length ? [] : job.subsystem.roots,
-            readSet: job.subsystem.readSet,
-            writeSet: job.subsystem.writeSet,
-            topology: singlePanel ? 'single-project' : 'subsystem',
-            engine: 'unified-adaptive-code-panel-v1',
-            lifecycle: {
-              cycle: job.iteration,
-              coverage: ['research', 'explain', 'replan', 'implement', 'test', 'critique', 'verify', 'handoff'],
-              researchEveryCycle: true,
-              explanationEveryCycle: true,
-              replanEveryCycle: true,
-              iterationAdaptive: true
-            },
-            communication: {
-              internal: 'independent-first-then-typed-summary',
-              crossSubsystem: singlePanel ? 'panel-local-summary' : 'dependency-scoped-typed-a2a',
-              rawPeerFindingsHidden: true,
-              newEvidenceReassessesPlan: true
-            },
-            a2a: {
-              policy: 'typed, revision-bound, dependency-scoped, untrusted peer data',
-              rawPeerFindingsHidden: true
+        const waveResults = await executeAgentLaneWaves({
+          lanePlan: { waves: [schedulerWave] }, jobs: waveJobs,
+          maxParallel: Math.min(effectiveMaxParallel, providerParallelCap, budgetParallelLimit()), signal,
+          execute: async job => {
+            const startedAt = Date.now();
+            const result = await modelCaller(agentMessages(job.role, {
+              ...basePayload,
+              harness,
+              blackboard: blackboard ?? basePayload?.blackboard ?? null,
+              subsystemPlan: scopedSubsystemPlan(subsystemPlanContext, job.subsystem),
+              subsystemWork: job.subsystemWork,
+              codeIntelligence: scopedCodeIntelligence(basePayload?.codeIntelligence, job.subsystem),
+              specialistAssignment: specialistRemit(codeSpecialistTeam(job.subsystem, {
+                goal: basePayload?.goal, maxRoles: maxAgents,
+                remainingBudgetRatio: remainingBudgetRatio(), risk: run?.situation?.risk
+              }), job.role),
+              workspacePanel: {
+                mode: 'unified-adaptive-code-panel',
+                panelId: job.panelId,
+                subsystemId: job.subsystem.id,
+                iteration: job.iteration,
+                ownedFiles: job.subsystem.files,
+                writeRoots: job.subsystem.files?.length ? [] : job.subsystem.roots,
+                readSet: job.subsystem.readSet,
+                writeSet: job.subsystem.writeSet,
+                topology: singlePanel ? 'single-project' : 'subsystem',
+                engine: 'unified-adaptive-code-panel-v1',
+                lifecycle: {
+                  cycle: job.iteration,
+                  coverage: ['research', 'explain', 'replan', 'implement', 'test', 'critique', 'verify', 'handoff'],
+                  researchEveryCycle: true,
+                  explanationEveryCycle: true,
+                  replanEveryCycle: true,
+                  iterationAdaptive: true
+                },
+                communication: {
+                  internal: 'independent-first-then-typed-summary',
+                  crossSubsystem: singlePanel ? 'panel-local-summary' : 'dependency-scoped-typed-a2a',
+                  rawPeerFindingsHidden: true,
+                  newEvidenceReassessesPlan: true
+                },
+                a2a: {
+                  policy: 'typed, revision-bound, dependency-scoped, untrusted peer data',
+                  rawPeerFindingsHidden: true
+                }
+              },
+              subsystemIteration: job.iteration
+            }), {
+              config,
+              fetchImpl,
+              modelId: job.modelId,
+              allowBackup,
+              effort: initialDecision.pressure >= 0.72 || job.iteration > 1 ? 'high' : 'medium',
+              json: true,
+              maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
+              usageGate,
+              usageSource: 'multi-agent',
+              signal
+            }).catch(error => { if (signal?.aborted) throw signal.reason; if (error?.name === 'AbortError' || (error?.expose && error.status >= 400 && error.status < 500)) throw error; return null; });
+
+            if (result?.usage) {
+              tokensSpent += Number(result.usage.inputTokens ?? 0) + Number(result.usage.outputTokens ?? 0);
+              if (!result.usageRecorded) await recordUsage(result.usage, result.provider, result.model);
             }
-          },
-          subsystemIteration: job.iteration
-        }), {
-          config,
-          fetchImpl,
-          modelId: job.modelId,
-          allowBackup,
-          effort: initialDecision.pressure >= 0.72 || job.iteration > 1 ? 'high' : 'medium',
-          json: true,
-          maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
-          usageGate,
-          usageSource: 'multi-agent'
-        }).catch(error => { if (signal?.aborted) throw signal.reason; if (error?.name === 'AbortError' || (error?.expose && error.status >= 400 && error.status < 500)) throw error; return null; });
 
-        if (result?.usage) {
-          tokensSpent += Number(result.usage.inputTokens ?? 0) + Number(result.usage.outputTokens ?? 0);
-          if (!result.usageRecorded) await recordUsage(result.usage, result.provider, result.model);
-        }
-
-        const parsedRaw = result && !result.incomplete
-          ? normalizedRoleFinding(parseJsonObject(result.text), job.role)
-          : null;
-        const parsed = parsedRaw
-          ? scopeImplementationProposal(parsedRaw, job.subsystem, scopedCodeIntelligence(basePayload?.codeIntelligence, job.subsystem))
-          : null;
-        return {
-          ...job,
-          result,
-          parsed: parsed ? {
-            ...parsed,
-            subsystemId: job.subsystem.id,
-            panelId: job.panelId,
-            iteration: job.iteration
-          } : null,
-          elapsedMs: Date.now() - startedAt
-        };
-        }));
+            const parsedRaw = result && !result.incomplete
+              ? normalizedRoleFinding(parseJsonObject(result.text), job.role)
+              : null;
+            const parsed = parsedRaw
+              ? scopeImplementationProposal(parsedRaw, job.subsystem, scopedCodeIntelligence(basePayload?.codeIntelligence, job.subsystem))
+              : null;
+            return {
+              ...job,
+              result,
+              parsed: parsed ? {
+                ...parsed,
+                subsystemId: job.subsystem.id,
+                panelId: job.panelId,
+                iteration: job.iteration
+              } : null,
+              elapsedMs: Date.now() - startedAt
+            };
+          }
+        });
         // Use observed wave health to adapt the next scheduling decision.
         // This keeps parallelism a means to improve the critical path rather
         // than a fixed cost multiplier: healthy independent work can widen;
@@ -2149,7 +2154,8 @@ async function runCodeWorkspaceAgentPanels({
       json: true,
       maxOutputTokens: ARBITER_MAX_OUTPUT_TOKENS,
       usageGate,
-      usageSource: 'multi-agent'
+      usageSource: 'multi-agent',
+      signal
     }).catch(error => { if (signal?.aborted) throw signal.reason; if (error?.name === 'AbortError' || (error?.expose && error.status >= 400 && error.status < 500)) throw error; return null; });
     const parsed = result && !result.incomplete
       ? normalizedRoleFinding(parseJsonObject(result.text), 'integration-arbiter')
@@ -2562,7 +2568,8 @@ export async function runAdaptiveAgentPanel({
         json: true,
         maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
         usageGate,
-        usageSource: 'multi-agent'
+        usageSource: 'multi-agent',
+        signal
       }).catch(error => { if (signal?.aborted) throw signal.reason; if (error?.name === 'AbortError' || (error?.expose && error.status >= 400 && error.status < 500)) throw error; return null; });
       if (result?.usage) {
         tokensSpent += Number(result.usage.inputTokens ?? 0) + Number(result.usage.outputTokens ?? 0);
@@ -2710,7 +2717,8 @@ export async function runAdaptiveAgentPanel({
       json: true,
       maxOutputTokens: ARBITER_MAX_OUTPUT_TOKENS,
       usageGate,
-      usageSource: 'multi-agent'
+      usageSource: 'multi-agent',
+      signal
     }).catch(error => { if (signal?.aborted) throw signal.reason; if (error?.name === 'AbortError' || (error?.expose && error.status >= 400 && error.status < 500)) throw error; return null; });
     if (result?.usage && !result.usageRecorded) await recordUsage(result.usage, result.provider, result.model);
     const parsed = result && !result.incomplete
