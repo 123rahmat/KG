@@ -23,6 +23,18 @@ export function agentActivitySnapshot(run) {
       reason: safe(wave.specialistAdaptation.reason, 110),
       wave: Number.isInteger(wave.index) && wave.index >= 0 ? wave.index + 1 : null
     }));
+  // The final wave may stop before another record is created. Report only
+  // a saved allocation decision; never label it as an active agent.
+  const finalDecision = allocation?.specialistLifecycle;
+  if (['recruit', 'contract'].includes(finalDecision?.action)
+      && !adaptations.some(item => item.action === finalDecision.action
+        && item.reason === safe(finalDecision.reason, 110))) {
+    adaptations.push({
+      action: finalDecision.action,
+      reason: safe(finalDecision.reason, 110),
+      wave: null
+    });
+  }
   const isLive = !['complete', 'failed', 'blocked', 'exhausted', 'iterate'].includes(run?.state);
   return {
     roles,
