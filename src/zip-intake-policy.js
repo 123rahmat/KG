@@ -19,13 +19,18 @@ export function inspectZipManifest(entries, limits = ZIP_LIMITS) {
   const names = new Set();
   for (const entry of entries) {
     const name = entry?.name;
-    if (typeof name !== 'string' || !name || name.includes('\\') ||
-        name.startsWith('/') || /^[A-Za-z]:/.test(name) ||
-        name.split('/').some(part => part === '..' || part === '.' || part === '') && !name.endsWith('/')) {
-      return { accepted: false, reason: 'unsafe-path' };
+    const parts = typeof name === 'string' ? name.split('/') : [];
+    const directory = typeof name === 'string' && name.endsWith('/');
+    const pathParts = directory ? parts.slice(0, -1) : parts;
+    const normalized = typeof name === 'string' ? name.normalize('NFC').toLowerCase() : '';
+    if (typeof name !== 'string' || !name || name.includes('\\\\')
+        || name.includes('\\0') || name.startsWith('/')
+        || /^[A-Za-z]:/.test(name)
+        || pathParts.some(part => part === '..' || part === '.' || part === '')
+        || names.has(normalized)) {
+      return { accepted: false, reason: 'unsafe-or-duplicate-path' };
     }
-    if (name.includes('\0') || names.has(name)) return { accepted: false, reason: 'unsafe-or-duplicate-name' };
-    names.add(name);
+    names.add(normalized);
     // Symbolic links and special files may escape the extraction sandbox.
     if (entry.type && !['file', 'directory'].includes(entry.type)) return { accepted: false, reason: 'unsupported-entry-type' };
     const size = clampInt(entry.uncompressedSize);
