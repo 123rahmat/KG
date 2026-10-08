@@ -8,7 +8,7 @@
 import { state, $, element, button } from './ui-core.js';
 import { taskLensFor, contextualSuggestions } from './task-lens.js';
 import { agentActivitySnapshot } from './agent-activity.js';
-import { normalChatCapabilities } from './normal-chat-capabilities.js';
+import { workspaceCapabilities } from './normal-chat-capabilities.js';
 
 const SURFACE_META = {
   runs: { label: 'Normal Chat', icon: 'chat', kind: 'normal-chat' },
@@ -110,14 +110,15 @@ function draftNextRequest(suggestion) {
 }
 
 function normalChatToolStrip(data) {
-  if (data.workspace !== 'normal-chat') return null;
   const draft = text($('goal')?.value);
   const pending = Array.isArray(state.attachments) ? state.attachments : [];
-  const previous = Array.isArray(data.run?.adaptation?.attachments)
+  const previous = data.run?.surface === data.workspace && Array.isArray(data.run?.adaptation?.attachments)
     ? data.run.adaptation.attachments : [];
-  const info = normalChatCapabilities({
-    goal: draft || data.run?.goal || '',
-    attachments: pending.length ? pending : previous,
+  const selectedFiles = state.attachmentScope instanceof Set
+    ? pending.filter(file => state.attachmentScope.has(file)) : pending;
+  const info = workspaceCapabilities({
+    goal: draft || (data.run?.surface === data.workspace ? data.run?.goal : '') || '',
+    attachments: pending.length ? selectedFiles : draft ? [] : previous,
     executionTargets: state.executionConfig?.targets ?? [],
     currentSurface: data.workspace
   });
@@ -132,9 +133,17 @@ function normalChatToolStrip(data) {
         : 'Code sandbox not configured · code runs unavailable' }));
   }
   if (info.suggestedWorkspace) {
-    items.push(element('span', { class: 'normal-chat-switch-description', text: info.suggestion }));
-    items.push(button('Use ' + (info.suggestedWorkspace === 'code' ? 'Code' : 'Research') + ' workspace',
-      () => dispatchSurface(info.suggestedWorkspace), 'normal-chat-switch-action small'));
+    const label = { code: 'Code', research: 'Research', 'normal-chat': 'Normal Chat' }[info.suggestedWorkspace];
+    items.push(element('div', { class: 'workspace-switch-banner', role: 'region', 'aria-label': 'Workspace suggestion' }, [
+      element('div', { class: 'workspace-switch-copy' }, [
+        element('strong', { text: label + ' is a better fit for this task' }),
+        element('span', { class: 'normal-chat-switch-description', text: info.suggestion }),
+        info.suggestedWorkspace === 'code' && !state.workspaceSource
+          ? element('small', { class: 'muted', text: 'Attach a GitHub repository in Code for project editing.' }) : null
+      ]),
+      button('Use ' + label + ' workspace',
+        () => dispatchSurface(info.suggestedWorkspace === 'normal-chat' ? 'runs' : info.suggestedWorkspace), 'normal-chat-switch-action small')
+    ]));
   }
   return items.length ? element('div', {
     class: 'normal-chat-tool-strip', 'aria-label': 'Optional file and workspace tools'
@@ -981,11 +990,11 @@ export function syncAdaptiveWorkspace() {
   }
 }
 
-// Update only the lightweight Normal Chat suggestions while the person types.
+// Update lightweight workspace suggestions while the person types.
 // This never starts a model call or alters the current workspace.
 if (typeof document !== 'undefined') {
   document.addEventListener('input', event => {
-    if (event.target?.id === 'goal' && state.activeSurface === 'normal-chat') {
+    if (event.target?.id === 'goal') {
       renderAdaptiveWorkspace($('adaptiveWorkspaceBar'), 'chat');
     }
   });

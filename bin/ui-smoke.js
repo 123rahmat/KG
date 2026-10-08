@@ -9,6 +9,7 @@ import express from 'express';
 import { chromium } from 'playwright';
 import { checkAttachments } from './ui-attachment-checks.js';
 import { checkControls } from './ui-control-checks.js';
+import { checkWorkspaceSuggestions } from './ui-workspace-suggestions.js';
 const output = process.env.UI_SMOKE_OUTPUT_DIR || await mkdtemp(path.join(tmpdir(), 'kindgleam-ui-'));
 const artifact = name => path.join(output, name);
 const app = express();
@@ -120,6 +121,7 @@ try {
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),true,'landing must fit mobile');
  await page.screenshot({path:artifact('landing-mobile.png')});
  assert.deepEqual(errors,[],'no client runtime errors');
+ await checkWorkspaceSuggestions(browser, `http://127.0.0.1:${server.address().port}`);
  await checkAttachments(browser, `http://127.0.0.1:${server.address().port}`);
  await checkControls(browser, `http://127.0.0.1:${server.address().port}`);
  console.log('Screenshots: ' + output);

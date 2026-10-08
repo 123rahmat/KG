@@ -61,3 +61,21 @@ This update improves policy correctness, not evidence that the deployed
 Gemini service has generated excellent outputs. Full live comparisons,
 multi-hour recovery, cost per accepted result, and real multimodal tools
 are still separate release requirements.
+
+
+## Task-aware workspace suggestions
+
+A shared presentation policy in `public/normal-chat-capabilities.js` evaluates
+the current request and selected attachments in every workspace. It offers a
+clear banner and switch button for complex coding, research, or clearly
+lightweight new work. File uploads are not required: a request such as building
+a complete website can suggest Code, while researching a topic can suggest
+Research. General follow-ups remain in the selected workspace.
+
+Suggestions update during typing and file selection. Unchecked attachments
+are excluded, and a new draft is not classified from an older run's files.
+Clicking the button retains the draft, conversation and attachment selection;
+it does not submit a request or import attachments into a Code project. Code
+project tools still require the existing GitHub source boundary. These are
+lightweight presentation hints, not guaranteed semantic classification or
+permission grants; users can always choose another workspace manually.

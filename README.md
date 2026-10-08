@@ -12,7 +12,7 @@ The system starts with the smallest useful action. It adds investigation, tools,
 | Code | Repository-scale engineering | GitHub project sources, indexed context, revision-checked patches, durable project sessions, verification and an optional isolated terminal |
 | Research | Investigation and source-heavy work | Source provenance, evidence gaps, conflicting findings and scoped investigator/analyst/critic assistance |
 
-These are three interfaces to the same system. Mixed tasks use the capabilities they need rather than a separate architecture for every subject. Suggestions to switch workspace remain optional user actions.
+These are three interfaces to the same system. Mixed tasks use the capabilities they need rather than a separate architecture for every subject. Task-aware suggestion banners appear across all three workspaces, even without attached files. Complex coding suggests Code, investigation suggests Research, and clearly lightweight new work can suggest Normal Chat. The switch button preserves the draft and selected files; switching remains an optional user action.
 
 Normal Chat supports up to ten attachments per browser message, each up to 5 MB. Previews show artifacts; actual execution requires a configured runner and recorded execution evidence. Code Workspace accepts GitHub repositories; its sessions and terminal require an attached GitHub source.
 

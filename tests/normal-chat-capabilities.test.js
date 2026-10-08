@@ -59,11 +59,7 @@ test('Simple chat never shows a sandbox or encourages a costly specialist worksp
   assert.equal(r.suggestedWorkspace,null);
 });
 
-test('A specialized workspace is never offered a switch to itself', () => {
-  for(const surface of ['code','research']) {
-    assert.equal(normalChatCapabilities({currentSurface:surface,goal:'Build a full-stack repo and research a thesis'}).suggestedWorkspace,null);
-  }
-});
+
 
 test('Attachment preview is a separate existing pathway from sandbox execution', async () => {
   const { readFile } = await import('node:fs/promises');
@@ -77,4 +73,61 @@ test('Attachment preview is a separate existing pathway from sandbox execution',
   assert.match(ui,/Use .* workspace/);
   assert.match(uploads,/MAX_ATTACH_FILES = 10/);
   assert.match(uploads,/syncAdaptiveWorkspace\(\);/);
+});
+
+test('every workspace suggests the specialized destination required by current work', () => {
+  const cases = [
+    { currentSurface: 'research', goal: 'Fix the entire GitHub repository', attachments: [], want: 'code' },
+    { currentSurface: 'code', goal: 'Write a systematic literature review for my thesis', attachments: [], want: 'research' },
+    { currentSurface: 'research', goal: 'Run and fix these files', attachments: inputs, want: 'code' },
+    { currentSurface: 'code', goal: 'Analyze this research bundle', attachments: [{ name: 'sources.zip', archiveKind: 'research-bundle' }], want: 'research' },
+    { currentSurface: 'research', goal: 'Repair this project', attachments: [{ name: 'project.zip', archiveKind: 'code-project' }], want: 'code' }
+  ];
+  for (const { want, ...input } of cases) assert.equal(normalChatCapabilities(input).suggestedWorkspace, want);
+});
+
+test('clearly lightweight new work can return from a deep workspace to Normal Chat', () => {
+  for (const currentSurface of ['code', 'research']) {
+    assert.equal(normalChatCapabilities({ currentSurface, goal: 'Translate this paragraph', attachments: [{ name: 'note.txt' }] }).suggestedWorkspace, 'normal-chat');
+    assert.equal(normalChatCapabilities({ currentSurface, goal: 'Explain this short script', attachments: [{ name: 'demo.py' }] }).suggestedWorkspace, 'normal-chat');
+    for (const goal of ['', 'Continue', 'What about the previous result?']) {
+      assert.equal(normalChatCapabilities({ currentSurface, goal }).suggestedWorkspace, null);
+    }
+  }
+});
+
+test('recommendations do not offer the selected workspace to itself', () => {
+  for (const [currentSurface, goal] of [['code', 'Fix the entire GitHub repository'], ['research', 'Write my systematic literature review'], ['normal-chat', 'Translate this paragraph']]) {
+    assert.equal(normalChatCapabilities({ currentSurface, goal }).suggestedWorkspace, null);
+  }
+});
+
+test('task text alone suggests the right deep workspace before files are attached', () => {
+  for (const currentSurface of ['normal-chat', 'code', 'research']) {
+    for (const [goal, destination] of [
+      ['Build a complete ecommerce website with authentication and a database', 'code'],
+      ['Research battery recycling and compare credible sources', 'research']
+    ]) {
+      const result = normalChatCapabilities({ currentSurface, goal });
+      assert.equal(result.suggestedWorkspace, currentSurface === destination ? null : destination);
+      assert.equal(result.fileCount, 0);
+    }
+  }
+});
+
+test('ordinary requests about existing work stay in the selected deep workspace', () => {
+  for (const currentSurface of ['code', 'research']) {
+    for (const goal of ['Summarize the findings', 'Explain the previous result', 'Explain the next step', 'Summarize our work so far']) {
+      assert.equal(normalChatCapabilities({ currentSurface, goal }).suggestedWorkspace, null);
+    }
+  }
+});
+
+test('incidental software words do not override the actual task intent', () => {
+  assert.equal(normalChatCapabilities({ currentSurface: 'normal-chat', goal: 'Explain how to create a customer service policy' }).suggestedWorkspace, null);
+  for (const currentSurface of ['normal-chat', 'code', 'research']) {
+    for (const goal of ['Research GitHub adoption using credible sources', 'Investigate deployment failure rates across companies']) {
+      assert.equal(normalChatCapabilities({ currentSurface, goal }).suggestedWorkspace, currentSurface === 'research' ? null : 'research');
+    }
+  }
 });

@@ -4488,3 +4488,18 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
 @media (prefers-reduced-motion:reduce) {
   .normal-chat-tool-strip * { transition:none; }
 }
+
+/* Task-aware suggestions shared by Chat, Code and Research. */
+.normal-chat-tool-strip {grid-column:1 / -1;width:100%;}
+.workspace-switch-banner {
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  width:100%;min-width:0;padding:12px 14px;border:1px solid color-mix(in srgb,var(--accent) 25%,var(--line));
+  border-radius:12px;background:var(--accent-soft);
+}
+.workspace-switch-copy {display:grid;gap:4px;min-width:0;overflow-wrap:anywhere;}
+.workspace-switch-copy strong {font-size:.82rem;color:var(--ink);}
+.workspace-switch-banner .normal-chat-switch-action {flex-shrink:0;min-height:36px;}
+@media (max-width:600px) {
+  .workspace-switch-banner {align-items:flex-start;flex-direction:column;gap:10px;}
+  .workspace-switch-banner .normal-chat-switch-action {width:100%;}
+}

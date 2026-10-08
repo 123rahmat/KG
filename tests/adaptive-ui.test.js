@@ -229,7 +229,6 @@ test('Normal Chat retains multi-file sandbox affordance while specialized worksp
   const css = await read('public/app.css');
   const capabilities = await read('public/normal-chat-capabilities.js');
   assert.match(js, /function normalChatToolStrip/);
-  assert.match(js, /normalChatCapabilities/);
   assert.match(js, /sandboxReady/);
   assert.match(js, /normalChatToolStrip\(data\)/);
   assert.match(css, /\.normal-chat-tool-strip/);

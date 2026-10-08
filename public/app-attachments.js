@@ -71,6 +71,7 @@ function renderAttachments() {
             state.attachmentScope ??= new Set(state.attachments);
             if (event.currentTarget.checked) state.attachmentScope.add(file);
             else state.attachmentScope.delete(file);
+            syncAdaptiveWorkspace();
           }
         }),
         element('span', { class: 'truncate', text: file.name })
