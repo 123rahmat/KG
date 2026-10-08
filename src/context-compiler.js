@@ -137,6 +137,24 @@ export function compileCodeContext({
   };
   const charBudget = bounded(maxChars, defaults.maxChars, 4_000, CONTEXT_BUDGETS.advanced.maxChars);
   const requestedFileBudget = bounded(maxFiles, defaults.maxFiles, 2, CONTEXT_BUDGETS.advanced.maxFiles);
+  // Compute once; the workspace snapshot, task details, and failure history
+  // all affect the answer. Prior caching occurred AFTER expensive selection and
+  // ignored those inputs, which could reuse stale evidence on a follow-up.
+  const projectHash = workspaceContentHash(normalized);
+  const cacheKey = digest(JSON.stringify({
+    projectHash, indexHash:index?.contentHash ?? null, revision:index?.revisionId ?? null,
+    hierarchy:index?.hierarchy?.root?.digest ?? null,
+    goal, task:{ id:task?.id, type:task?.type, purpose:task?.purpose,
+      title:task?.metadata?.title },
+    changed:changedPaths.map(safeWorkspacePath).filter(Boolean).sort(),
+    failure:failure ? { status:failure.status, message:failure.message,
+      stderr:clean(failure.stderr).slice(-1800), stdout:clean(failure.stdout).slice(-900) } : null,
+    previousAttempts:(Array.isArray(previousAttempts) ? previousAttempts : []).slice(-3)
+      .map(item => ({ status:item?.status, summary:clean(item?.summary).slice(0,700) })),
+    scale, charBudget, requestedFileBudget
+  }));
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
   const totalContentChars = normalized.reduce((sum, file) => sum + String(file.content ?? '').length, 0);
   // Small projects stay whole; large projects stay bounded to the useful budget.
   const fileBudget = totalContentChars <= charBudget
@@ -216,14 +234,6 @@ export function compileCodeContext({
   const dependencies = dependenciesFor(index, selectedPaths);
   const symbols = relatedSymbols(index, terms.slice(0,8).join(' '), [...changed], { max: 80 });
   const riskSignals = changeRiskSignals(index, [...changed]);
-  const cacheKey = digest(JSON.stringify({
-    contentHash:index?.contentHash, hierarchyVersion:index?.hierarchy?.version ?? 0, goal, task:task?.id, changed:[...changed].sort(),
-    failure:failure ? { status:failure.status, stderr:clean(failure.stderr).slice(-1000) } : null,
-    scale, charBudget, fileBudget
-  }));
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
-
   const pack = Object.freeze({
     version:1,
     strategy:'semantic-minimum-sufficient-context',
@@ -231,7 +241,7 @@ export function compileCodeContext({
     project:{
       revisionId:index?.revisionId ?? null,
       contentHash:index?.contentHash ?? null,
-      workspaceContentHash: workspaceContentHash(normalized),
+      workspaceContentHash: projectHash,
       fileCount:index?.fileCount ?? normalized.length,
       languages:[...new Set((index?.files ?? []).map(file => file.language).filter(Boolean))].sort(),
       entryPoints:(index?.entryPoints ?? []).slice(0,30),
@@ -245,7 +255,7 @@ export function compileCodeContext({
       mutation: {
         mode: projectScale(index) === 'very-large' ? 'surgical-patch-preferred' : 'patch-or-file-replacement',
         baseRevisionId: index?.revisionId ?? null,
-        baseContentHash: workspaceContentHash(normalized),
+        baseContentHash: projectHash,
         exactBaseRequired: true,
         rule: 'Every code mutation is bound to the exact workspace snapshot used for reasoning; stale patches must be rejected.'
       }
