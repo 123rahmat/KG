@@ -677,6 +677,13 @@ export async function sendMessage(text) {
   }
 }
 
+// The compact activity strip uses exactly the same stop pathway as the composer.
+document.addEventListener('kindgleam:stop-current-run', event => {
+  const id = event?.detail?.runId;
+  if (!id || state.run?.id !== id) return;
+  void stopRun('stopped by user');
+});
+
 export async function stopRun(reason) {
   const run = state.run;
   if (!run || state.stoppingRun === run.id) return;
