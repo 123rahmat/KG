@@ -9,6 +9,7 @@ import { state, $, element, button } from './ui-core.js';
 import { taskLensFor, contextualSuggestions } from './task-lens.js';
 import { agentActivitySnapshot } from './agent-activity.js';
 import { workspaceCapabilities } from './normal-chat-capabilities.js';
+import { workspaceProgressPanel } from './work-progress-panels.js';
 
 const SURFACE_META = {
   runs: { label: 'Normal Chat', icon: 'chat', kind: 'normal-chat' },
@@ -340,6 +341,36 @@ function backgroundSnapshot(run) {
   };
 }
 
+// Disclosure preferences survive polling without changing server-owned task state.
+const stageDisclosure = new Map();
+function stageDetail(run, panel, view) {
+  if (!panel.stages.length) return null;
+  const key = String(run?.id ?? '');
+  const defaultOpen = panel.workspace !== 'normal-chat' && !view.terminal;
+  const open = stageDisclosure.has(key) ? stageDisclosure.get(key) : defaultOpen;
+  const detail = element('details', { class: 'work-stage-details', open }, [
+    element('summary', { class: 'work-stage-summary' }, [
+      element('strong', { text: 'Task stages' }),
+      element('span', { class: 'small muted', text: panel.completed + ' completed · ' +
+        panel.stageCount + ' recorded' })
+    ]),
+    element('ol', { class: 'work-stage-list', 'aria-label': 'Recorded task stages' },
+      panel.stages.map(item => element('li', { class: 'work-stage-row', 'data-stage-status': item.status }, [
+        element('span', { class: 'work-stage-mark', 'aria-hidden': 'true' }),
+        element('span', { class: 'work-stage-name', text: item.label }),
+        element('span', { class: 'work-stage-state', text: item.statusLabel })
+      ]))),
+    panel.stageCount > panel.stages.length ? element('p', {
+      class: 'small muted', text: 'Showing the latest ' + panel.stages.length + ' stages'
+    }) : null
+  ].filter(Boolean));
+  detail.addEventListener('toggle', () => {
+    stageDisclosure.set(key, detail.open);
+    if (stageDisclosure.size > 64) stageDisclosure.delete(stageDisclosure.keys().next().value);
+  });
+  return detail;
+}
+
 export function renderWorkStatus(run) {
   const tasks = Array.isArray(run?.tasks) ? run.tasks : [];
   if (!tasks.length) return null;
@@ -351,6 +382,8 @@ export function renderWorkStatus(run) {
   });
   const snapshot = progressSnapshot(run);
   const background = backgroundSnapshot(run);
+  const workspace = ['code', 'research'].includes(state.activeSurface) ? state.activeSurface : activeWorkspace(run);
+  const panel = workspaceProgressPanel(run, workspace);
   const nextDecision = run?.adaptation?.unifiedAdaptiveWorkflow?.openWorld ?? null;
   const decisionNote = nextDecision?.action === 'approval-required'
     ? 'The next proposed action needs approval.'
@@ -412,6 +445,12 @@ export function renderWorkStatus(run) {
       element('span', { class: 'small', text: background.permission })
     ]) : null,
     meter,
+    panel.cards.length ? element('dl', {
+      class: 'work-focus-grid', 'aria-label': 'Relevant task information'
+    }, panel.cards.map(card => element('div', { class: 'work-focus-card' }, [
+      element('dt', { text: card.label }),
+      element('dd', { text: card.value })
+    ]))) : null,
     !view.terminal && decisionNote ? element('div', { class: 'work-update-note small muted', text: decisionNote }) : null,
     meter ? element('div', { class: 'work-progress-caption small muted', text: view.percent + '% of required outcomes supported by evidence' }) : null,
     !view.terminal && !meter ? element('div', { class: 'work-progress-caption small muted', text: view.completed ? view.completed + ' step' + (view.completed === 1 ? '' : 's') + ' completed · next action adapts as needed' : 'Only the work your request needs' }) : null,
@@ -419,6 +458,7 @@ export function renderWorkStatus(run) {
     backgroundItems.length ? element('div', { class: 'work-background-strip', 'aria-label': 'Current work details' }, [
       ...backgroundItems.map(item => element('span', { class: 'work-background-chip small', text: item }))
     ]) : null,
+    stageDetail(run, panel, view),
     background.activity.roles.length ? element('details', { class: 'work-agent-details' }, [
       element('summary', { class: 'small', text: 'Specialist contributions · ' + background.activity.roles.length + ' recorded' }),
       element('p', { class: 'small muted', text: background.activity.observedParallel
