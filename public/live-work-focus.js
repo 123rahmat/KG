@@ -88,13 +88,16 @@ export function liveWorkFocus(run, { workspace = 'normal-chat', connectedGitHub 
   const completed = tasks.filter(task => task?.status === 'complete').length;
   const relevantToolWork = ['code', 'tool', 'test-code', 'build-code'].includes(current?.type)
     || ['test-code', 'build-code'].includes(current?.id);
+  const terminalNeed = current?.metadata?.terminalRequired === true
+    || /\\b(?:terminal|shell|command|debug|reproduce|runtime|run tests|execute tests)\\b/i
+      .test(String(current?.purpose ?? '') + ' ' + String(current?.metadata?.title ?? ''));
   const isFileWork = files.length > 0 || mode === 'code';
   const activity = [
     ...(current ? [{ label: 'Current task', value: title },
       { label: 'Task state', value: clip(current.status || run?.state || 'pending', 30) }] : []),
     ...(runningTool ? [{ label: 'Recorded live tool', value: runningTool }] : []),
-    ...(currentExecution ? [{ label: 'Selected task execution', value: currentExecution }] : []),
-    ...(lastExecution ? [{ label: 'Last recorded execution', value: lastExecution }] : []),
+    ...(currentExecution ? [{ label: 'Selected execution target', value: currentExecution }] : []),
+    ...(lastExecution ? [{ label: 'Last recorded execution target', value: lastExecution }] : []),
     ...(files.length ? [{ label: 'Selected files', value: files.join(', ').slice(0, 300) }] : []),
     { label: 'Saved stages', value: completed + ' completed of ' + tasks.length + ' recorded' }
   ];
@@ -108,7 +111,8 @@ export function liveWorkFocus(run, { workspace = 'normal-chat', connectedGitHub 
     activity: Object.freeze(activity.map(item => Object.freeze(item))),
     showDetails: tasks.length > 1 || isFileWork || Boolean(runningTool || currentExecution || lastExecution),
     hasRecordedExecution: Boolean(currentExecution || lastExecution),
-    allowTerminal: mode === 'code' && connectedGitHub && relevantToolWork && !terminal && !offline,
+    allowTerminal: mode === 'code' && connectedGitHub && relevantToolWork
+      && terminalNeed && !terminal && !offline && !stopping,
     allowGitHub: mode === 'code' && connectedGitHub,
     isRunning: status === 'Working'
   });
