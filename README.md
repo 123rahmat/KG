@@ -145,6 +145,7 @@ KG's supported production provider route is **Vertex AI**, configured with a Goo
 - **Open-world graph and remaining integration work:** [docs/OPEN_WORLD_ADAPTIVE_ARCHITECTURE.md](docs/OPEN_WORLD_ADAPTIVE_ARCHITECTURE.md)
 - **Production release gates:** [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md)
 - **Live Gemini evaluation (35 scenarios):** [docs/LIVE_EVALUATION.md](docs/LIVE_EVALUATION.md)
+- **Hierarchical Code/Research specialists:** [docs/HIERARCHICAL_ADAPTIVE_SPECIALISTS.md](docs/HIERARCHICAL_ADAPTIVE_SPECIALISTS.md)
 - **Coding regression validation:** [docs/CODING_PRODUCTION_VALIDATION.md](docs/CODING_PRODUCTION_VALIDATION.md)
 - **Privacy and settings authority:** [docs/CONTROL_PLANE_HARDENING.md](docs/CONTROL_PLANE_HARDENING.md)
 

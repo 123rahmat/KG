@@ -1,0 +1,85 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { codeExpertFocus, codeSpecialistTeam, researchSpecialistTeams, specialistRemit } from '../src/specialist-hierarchy.js';
+import { agentMessages, rolesFor } from '../src/multi-agent.js';
+
+test('Code selects subsystem-specific experts from real paths, not generic headcount', () => {
+  for(const [path,focus,role] of [
+    ['src/ui/components','ui-ux','ux-designer'],
+    ['src/frontend','frontend','frontend-engineer'],
+    ['src/backend','backend','backend-engineer'],
+    ['src/auth','security','security-reviewer'],
+    ['src/db/migrations','storage','backend-engineer'],
+    ['tests/api','testing','test-engineer'],
+    ['infra/docker','infrastructure','architect']
+  ]) {
+    const subsystem={id:'module',roots:[path],files:[path+'/file.js']};
+    assert.equal(codeExpertFocus(subsystem),focus,path);
+    const team=codeSpecialistTeam(subsystem);
+    assert.equal(team.leadRole,role,path);
+    assert.equal(team.depth,2);
+    assert.equal(team.authority,'advisory-only');
+  }
+});
+
+test('Small Code change stays cheap; complex teams have strict specialist caps', () => {
+  const sub={id:'ui',roots:['src/ui'],files:['src/ui/app.tsx']};
+  assert.deepEqual(codeSpecialistTeam(sub,{remainingBudgetRatio:.1}).roles,['ux-designer']);
+  assert.equal(codeSpecialistTeam(sub,{remainingBudgetRatio:.36}).roles.length,2);
+  assert.ok(codeSpecialistTeam(sub,{maxRoles:100}).roles.length<=4);
+  assert.equal(codeSpecialistTeam(sub,{risk:'high-impact',independent:true}).parallelEligible,false);
+  const remit=specialistRemit(codeSpecialistTeam(sub),'ux-designer');
+  assert.equal(remit.maySpawnAgents,false);
+  assert.equal(remit.scope.files[0],'src/ui/app.tsx');
+  assert.equal(specialistRemit(codeSpecialistTeam(sub),'unknown-role'),null);
+});
+
+test('Unsourced thesis does not manufacture results or prematurely recruit writer', () => {
+  const h=researchSpecialistTeams({goal:'Write a thesis on energy technology'});
+  assert.equal(h.thesis,true);
+  assert.equal(h.evidenceReady,false);
+  assert.equal(h.noSourceFabrication,true);
+  assert.equal(h.teams[0].leadRole,'literature-reviewer');
+  assert.equal(h.teams.some(t=>t.focus==='writing'),false);
+  assert.equal(h.teams.every(t=>t.verifiedSources===false),true);
+});
+
+test('Evidence-backed thesis can recruit methods, statistics, citations, writing within caps', () => {
+  const h=researchSpecialistTeams({
+    goal:'Write a thesis using quantitative data, methodology and sample results',
+    researchState:{sourceCount:12,evidenceCount:8,unresolvedQuestions:['Which paper explains X?'],
+      conflicts:['Study A and B disagree']},
+    maxTeams:6,maxRoles:4
+  });
+  assert.deepEqual(h.teams.map(t=>t.focus),['literature','methodology','analysis','citations','writing']);
+  assert.ok(h.teams.every(t=>t.roles.length<=4 && t.depth===2));
+  assert.equal(h.teams.at(-1).leadRole,'academic-writer');
+  assert.equal(researchSpecialistTeams({goal:'Write a thesis',remainingBudgetRatio:.1}).teams.length,1);
+  assert.equal(researchSpecialistTeams({goal:'Literature review',risk:'regulated',
+    researchState:{unresolvedQuestions:['A','B']}}).teams[0].parallelEligible,false);
+});
+
+test('Research specialists inherit advisory prompt contracts without new permissions', () => {
+  const h=researchSpecialistTeams({goal:'Academic thesis on methods'});
+  const remit=specialistRemit(h.teams[0],'literature-reviewer');
+  const messages=agentMessages('literature-reviewer',{
+    goal:'Academic thesis on methods',task:{type:'investigate',id:'investigate'},
+    specialistAssignment:remit
+  });
+  assert.match(messages[0].content,/never invent citations/i);
+  const body=JSON.parse(messages[1].content);
+  assert.equal(body.specialistAssignment.authority,'advisory-only');
+  assert.equal(body.specialistAssignment.maySpawnAgents,false);
+});
+
+test('Thesis Research role allocation prefers evidence expertise; Normal Chat stays direct first', () => {
+  const research={surface:'research',goal:'Systematic literature review for a thesis',maxTokens:100000,
+    situation:{risk:'low'},adaptation:{scale:'complex',researchWorkspace:{sourceCount:0,
+    unresolvedQuestions:['Find primary research']}}};
+  const selected=rolesFor(research,{id:'investigate',type:'investigate'},
+    {mode:'always',maxAgents:4});
+  assert.ok(selected.roles.includes('literature-reviewer'));
+  const simple=rolesFor({surface:'normal-chat',situation:{risk:'low'},adaptation:{scale:'small'}},
+    {id:'respond',type:'respond'});
+  assert.equal(simple.agentCount,0);
+});
