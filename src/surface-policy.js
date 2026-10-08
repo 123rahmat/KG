@@ -24,16 +24,31 @@ const names = attachments => (Array.isArray(attachments)?attachments:[]).map(x=>
 const kinds = attachments => (Array.isArray(attachments)?attachments:[]).map(x=>typeof x==='object'?text(x?.archiveKind):'').filter(Boolean);
 
 function shouldUseCodeWorkspace(value, attachments, actions=[]) {
-  const profile=attachmentProfile(attachments);
-  if (EXPLICIT_CODE.test(value) || profile.kind==='code' || kinds(attachments).includes('code-project')) return true;
+  const profile = attachmentProfile(attachments);
+  const attached = names(attachments);
+  const hasProjectManifest = profile.codeFiles?.some(name =>
+    /(?:package\.json|pyproject\.toml|Cargo\.toml|go\.mod|Dockerfile|Makefile|requirements\.txt)$/i.test(name));
+  // A user-selected Code workspace or a real repository/project always has
+  // durable project state. Merely attaching several scripts is not a repo.
+  if (EXPLICIT_CODE.test(value) || kinds(attachments).includes('code-project')) return true;
   if (!CODE.test(value)) return false;
-  if (CODE_PROJECT_SCOPE.test(value) || profile.codeFiles?.some(name=>/(?:package\.json|pyproject\.toml|Cargo\.toml|go\.mod|Dockerfile|Makefile|requirements\.txt)$/i.test(name))) return true;
-  // Several small scripts still fit Normal Chat's bounded sandbox. Do not
-  // mistake an attachment count for an entire repository project.
-  if (names(attachments).length <= 10 && !CODE_PROJECT_SCOPE.test(value)
-      && profile.kind !== 'code') return false;
+  if (CODE_PROJECT_SCOPE.test(value) || hasProjectManifest) return true;
+
+  // Simulation development and explicitly compound engineering require the
+  // project/test lifecycle even when no files have been uploaded yet.
+  const construction = /\b(?:simulate|simulating|simulation|computational model|numerical model)\b/i.test(value)
+    && /\b(?:simulate|simulating|develop|build|create|implement|test|refine)\b/i.test(value)
+    && !/^\s*(?:explain|describe|what|why|how)\b/i.test(value);
+  const compound = /\b(?:build|develop|implement|refactor|create)\b.{0,110}\b(?:code|software|application|model)\b/i.test(value)
+    && /\b(?:and|then|plus)\b.{0,80}\b(?:modify|edit|refactor|test|fix)\b/i.test(value);
+  if (construction || compound) return true;
+
+  // Normal Chat handles a bounded bundle of small code files using the
+  // optional sandbox. A heuristic attachment "code" category is not authority
+  // to force the user into Code Workspace.
+  if (attached.length > 0 && attached.length <= 10) return false;
   if (CODE_SINGLE_SCOPE.test(value)) return false;
-  return actions.some(a=>['create','transform','execute'].includes(text(a).toLowerCase()));
+  return actions.some(action => ['create','transform','execute'].includes(text(action).toLowerCase()));
 }
 
 export const SURFACE_INTELLIGENCE_PROFILES=Object.freeze({
