@@ -684,7 +684,14 @@ function specialistProjectSection(run, workspace) {
       ].filter(Boolean))
     )) : null,
     recorded.observedParallel ? element('p', { class: 'small muted',
-      text: 'Parallel specialist waves were recorded for this task.' }) : null
+      text: 'Parallel specialist waves were recorded for this task.' }) : null,
+    recorded.adaptations.length ? element('div', {
+      class: 'workspace-specialist-adjustments', 'aria-label': 'Recorded agent team adjustments'
+    }, recorded.adaptations.map(change =>
+      element('p', { class: 'small muted', text: (change.action === 'recruit' ? 'Recruited' : 'Reduced') +
+        ' advisory capacity' + (change.wave ? ' · wave ' + change.wave : '') +
+        (change.reason ? ' · ' + change.reason.replaceAll('-', ' ') : '') })
+    )) : null
   ].filter(Boolean));
 }
 
