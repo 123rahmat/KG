@@ -60,7 +60,7 @@ function execution(task) {
 
 /** Detailed surfaces are shown only after the relevant work is recorded. */
 export function liveWorkFocus(run, { workspace = 'normal-chat', connectedGitHub = false,
-  offline = false, stopping = false } = {}) {
+  canOpenTerminal = true, offline = false, stopping = false } = {}) {
   const mode = ['code', 'research'].includes(workspace) ? workspace : 'normal-chat';
   const tasks = array(run?.tasks);
   const terminal = TERMINAL.has(run?.state);
@@ -112,7 +112,7 @@ export function liveWorkFocus(run, { workspace = 'normal-chat', connectedGitHub 
     activity: Object.freeze(activity.map(item => Object.freeze(item))),
     showDetails: tasks.length > 1 || isFileWork || Boolean(runningTool || currentExecution || lastExecution),
     hasRecordedExecution: Boolean(currentExecution || lastExecution),
-    allowTerminal: mode === 'code' && connectedGitHub && relevantToolWork
+    allowTerminal: mode === 'code' && connectedGitHub && canOpenTerminal && relevantToolWork
       && terminalNeed && !terminal && !offline && !stopping,
     allowGitHub: mode === 'code' && connectedGitHub,
     isRunning: status === 'Working'
