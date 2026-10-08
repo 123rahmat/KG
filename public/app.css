@@ -4767,3 +4767,71 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
 }
 .work-phase-note strong { font-size: .74rem; font-weight: 650; }
 .work-phase-note .small { font-size: .72rem; line-height: 1.45; overflow-wrap: anywhere; }
+
+
+/* Two-stage task UI: one exact line followed by evidence-backed inspection. */
+.adaptive-running-strip {
+  flex-wrap: nowrap;
+  gap: 11px;
+  min-height: 42px;
+}
+.adaptive-running-line {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: .77rem;
+  font-weight: 650;
+  line-height: 1.45;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adaptive-running-buttons { margin-inline-start: auto; }
+.work-exact-line {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.work-observed-details {
+  margin: 10px 0 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--softer);
+  min-width: 0;
+}
+.work-observed-summary {
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--ink-2);
+  font-size: .76rem;
+}
+.work-observed-summary strong { font-size: .77rem; color: var(--ink); }
+.work-observed-summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+.work-observed-list { display: grid; gap: 0; margin: 9px 0 0; }
+.work-observed-row {
+  display: grid;
+  grid-template-columns: minmax(98px, 27%) minmax(0, 1fr);
+  gap: 8px 12px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+  line-height: 1.45;
+  font-size: .73rem;
+}
+.work-observed-row dt { color: var(--muted); }
+.work-observed-row dd { color: var(--ink-2); margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.work-observed-details > p { margin: 8px 0 0; line-height: 1.5; }
+@media (max-width: 580px) {
+  .adaptive-running-strip { flex-wrap: wrap; }
+  .adaptive-running-line { max-width: calc(100% - 22px); }
+  .adaptive-running-buttons { width: 100%; justify-content: flex-end; }
+  .work-observed-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}
