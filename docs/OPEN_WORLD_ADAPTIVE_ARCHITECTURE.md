@@ -44,6 +44,36 @@ KG retains one server-owned workflow and one decision authority. The new `src/op
 Architecture target: maximize **verified user outcomes per unit of time and money**, subject to safety, privacy and user control. A universal 10/10 outcome cannot be asserted without those measurements.
 
 
+## Persisted execution synchronization — October 8, 2026
+
+The read-only `src/persisted-task-projection.js` now derives a bounded
+open-world task graph from real server-owned `run_tasks` rows. RunStore
+writes its initial projection in the task-creation transaction and updates
+it after dynamic work/recovery transitions in the task-advance transaction.
+The projection never queues tasks, bypasses the run controller, or accepts
+client/model status as evidence of completion. It holds at most 48 visible
+nodes and includes only task IDs, types, statuses, dependencies, declared
+requirements and bounded purposes. Raw evidence, summaries, secrets and
+untrusted metadata are excluded.
+
+Missing prerequisites outside the window are only considered settled if
+the underlying persisted task is completed or skipped. Other missing
+dependencies keep work blocked in the read-only view. Nodes do not claim
+parallel eligibility without an explicit, verified lane declaration. Graph
+revisions increment only when visible task state changes. The complete
+server task table remains the authoritative scheduler.
+
+Run `node --test tests/persisted-task-projection.test.js
+tests/open-world-task-graph.test.js tests/unified-adaptive-workflow.test.js
+tests/adaptive-task-matrix.test.js` for focused tests. Database-backed
+three-workspace synchronization is covered in
+`tests/adaptive-conversation.test.js` and requires CI infrastructure.
+
+**Still needed:** comprehensive live Gemini/Vertex outcome evaluation,
+observed cost/latency baselines, independent multimodal service checks,
+and multi-hour distributed fault-injection trials. Passing simulated
+model/unit tests does not certify the full product as 10/10.
+
 ## Legacy architecture cleanup and scenario validation — October 8, 2026
 
 The former `LEGACY_MODES` table and `legacyEvidenceBounds` mode-dependent stage

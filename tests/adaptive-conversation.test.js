@@ -143,3 +143,43 @@ test('workspace switching preserves chat history while visual work stays in Norm
     assert.ok(Array.isArray(code.body.adaptation?.conversation));
     assert.match(code.body.adaptation.conversation.at(-1).user, /product launch visual/i);
   }));
+
+test('three workspace runs expose their persisted task graph on creation and after a real task transition', () =>
+  withServer(async ({ call, seed }) => {
+    const { token, workspace } = await seed();
+    const auth = { token, workspace };
+    const scenarios = [
+      { surface: 'normal-chat', goal: 'Explain the purpose of a resistor.' },
+      { surface: 'code', goal: 'Build a small Python API with tests.' },
+      { surface: 'research', goal: 'Research the current battery recycling options with citations.' }
+    ];
+    for (const scenario of scenarios) {
+      const create = await call('POST', '/api/runs', {
+        ...auth, body: { goal: scenario.goal, activeSurface: scenario.surface }
+      });
+      assert.equal(create.status, 201, scenario.surface);
+      const run = create.body;
+      const graph = run.adaptation?.unifiedAdaptiveWorkflow?.taskGraph;
+      assert.equal(graph?.authoritative, 'server-run-tasks', scenario.surface);
+      assert.ok(graph?.nodes?.length > 0, scenario.surface);
+      assert.equal(graph.total, run.tasks.length, scenario.surface);
+      assert.deepEqual(graph.nodes.map(node => node.id), run.tasks.map(item => item.id));
+      const current = run.tasks.find(item => item.status === 'pending');
+      if (current?.type === 'understand') {
+        const advance = await call('POST', `/api/runs/${run.id}/advance`, {
+          ...auth, body: { taskId: 'understand', summary: 'Goal and constraints understood.',
+            evidence: { structured: { goalUnderstood: true } } }
+        });
+        assert.equal(advance.status, 200, scenario.surface);
+        const after = advance.body;
+        const nextGraph = after.adaptation?.unifiedAdaptiveWorkflow?.taskGraph;
+        assert.equal(nextGraph?.authoritative, 'server-run-tasks');
+        assert.equal(nextGraph?.total, after.tasks.length);
+        assert.ok(nextGraph.revision > graph.revision);
+        for (const item of after.tasks) {
+          const node = nextGraph.nodes.find(part => part.id === item.id);
+          assert.equal(node?.status, item.status, item.id);
+        }
+      }
+    }
+  }));

@@ -45,7 +45,7 @@ flowchart TD
 
 **Example — repair an application without breaking existing features:** inspect the affected modules and independently review test coverage; implement a minimal revision-checked change; run regression tests; investigate only failures; report the changed files and real test output. Inspecting disjoint modules can be parallel; applying interdependent schema/API changes usually cannot.
 
-The incremental graph and decision projection are implemented in [`src/open-world-task-graph.js`](src/open-world-task-graph.js) and [`src/unified-adaptive-workflow.js`](src/unified-adaptive-workflow.js). The current graph is a **validated, proposal-only planning/decision layer**, not a fully integrated replacement for transactional persisted execution. See [open-world implementation status](docs/OPEN_WORLD_ADAPTIVE_ARCHITECTURE.md).
+The incremental graph and decision projection live in [`src/open-world-task-graph.js`](src/open-world-task-graph.js) and [`src/unified-adaptive-workflow.js`](src/unified-adaptive-workflow.js). [`src/persisted-task-projection.js`](src/persisted-task-projection.js) mirrors the **actual persisted run tasks** at creation and after task advancement in the same transaction, with a bounded, privacy-safe graph. **This graph remains a read-only proposal/view layer**: the RunStore executes and authorizes real tasks, never the UI projection. See [open-world implementation status](docs/OPEN_WORLD_ADAPTIVE_ARCHITECTURE.md).
 
 ## Skills, memory and dynamically recruited agents
 

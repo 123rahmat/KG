@@ -25,6 +25,8 @@ import { adaptiveBudgetStatus, adaptiveBudgetForRun, reconcileAdaptiveTransition
 import { adaptiveEffortProfile } from './adaptive-efficiency.js';
 import { buildAcceptanceContract } from './adaptive-decision-authority.js';
 import { buildUnifiedAdaptiveWorkflow, reassessUnifiedWorkflow, completionGate, unifiedRecoveryDecision } from './unified-adaptive-workflow.js';
+import { projectPersistedTaskGraph } from './persisted-task-projection.js';
+import { composeOpenWorldDecision } from './open-world-task-graph.js';
 import { updateAdaptiveRuntimeState, recoveryLesson } from './adaptive-runtime-state.js';
 import { createResearchWorkspaceState, updateResearchWorkspaceState } from './research-workspace.js';
 import { buildUnifiedWorkContext, applyWorkChange } from './unified-work-context.js';
@@ -429,6 +431,20 @@ export class RunStore {
     if (projectOverlay?.length) plan.adaptation.projectOverlay = projectOverlay;
     // Later stages (understanding) may add work only this deployment can run.
     if (executionAvailable) plan.adaptation.executionAvailable = executionAvailable;
+    // Initial work is projected from the very tasks about to be persisted.
+    // This is a view, never an alternative scheduler or permission source.
+    const initialGraph = projectPersistedTaskGraph(plan.tasks);
+    const initialUnified = plan.adaptation.unifiedAdaptiveWorkflow;
+    if (initialUnified) {
+      plan.adaptation.unifiedAdaptiveWorkflow = {
+        ...initialUnified,
+        taskGraph: initialGraph,
+        openWorld: composeOpenWorldDecision({
+          goal: goalText, situation, graph: initialGraph,
+          acceptance: initialUnified.acceptance
+        })
+      };
+    }
     const id = crypto.randomUUID();
     const maxTokens = plan.governance.constraints.maxTokens;
 
@@ -1665,7 +1681,7 @@ export class RunStore {
     // The persisted state must be derived from the final server-owned graph,
     // never from the pre-edit decision.
     const { rows: authoritativeTasks } = await client.query(
-      'SELECT id, type, status, depends_on FROM run_tasks WHERE run_id = $1 ORDER BY position',
+      'SELECT id, type, status, depends_on, requires, purpose, metadata FROM run_tasks WHERE run_id = $1 ORDER BY position',
       [run.id]
     );
     const authoritativeNext = nextTask(authoritativeTasks.map(row => ({
@@ -1687,6 +1703,21 @@ export class RunStore {
     }
 
     if (adaptiveUpdate) {
+      // The actual persisted run_tasks rows win over speculative model graphs.
+      // Mirror the final committed task statuses while still in this same
+      // RunStore transaction, after dynamic insertions and recovery rewiring.
+      const priorUnified = adaptiveUpdate.unifiedAdaptiveWorkflow
+        ?? run.adaptation?.unifiedAdaptiveWorkflow;
+      if (priorUnified) {
+        const graph = projectPersistedTaskGraph(authoritativeTasks, priorUnified.taskGraph);
+        adaptiveUpdate.unifiedAdaptiveWorkflow = {
+          ...priorUnified, taskGraph: graph,
+          openWorld: composeOpenWorldDecision({
+            goal: run.goal, situation: run.situation ?? {}, graph,
+            acceptance: priorUnified.acceptance ?? {}
+          })
+        };
+      }
       // Record the authoritative next task only after all server-side graph
       // edits have finished, preventing stale UI/runtime state.
       adaptiveUpdate.runtime = updateAdaptiveRuntimeState(run.adaptation?.runtime ?? {}, {
