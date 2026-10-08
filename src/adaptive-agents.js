@@ -2,14 +2,17 @@ import { DEFAULT_MODEL, LIGHT_MODEL } from './model-catalog.js';
 import { workspaceComputePolicy } from './mode-controllers.js';
 
 /**
- * Adaptive multi-agent coordination.
+ * Advisory agent topology planning.
  *
  * Agents are logical roles over the same server-owned workflow, not separate
  * authorities or provider boundaries. The Gemini family remains the model boundary.
- * The controller creates only the parallelism justified by independent work,
+ * This pure planner proposes only the parallelism justified by independent work,
  * dependency structure, risk and budget.
  *
- * Invariants:
+ * Dispatch belongs to multi-agent.js and agent-lane-executor.js under RunStore.
+ * This module never calls agents or tools and never advances tasks.
+ *
+ * Planning invariants:
  * - no parallel agent may widen permissions or mutate policy;
  * - writes are isolated by ownership and revision;
  * - dependent work waits for its prerequisites;
@@ -298,6 +301,7 @@ export function decideAgentTopology({
       agents: [{
         id: 'lead-1',
         role: 'lead',
+        authority: 'advisory-only',
         taskIds: countable ? [work[0].id] : [],
         model: agentModelFor({ workspace: workspaceId, role: 'lead', complexity, uncertainty, risk, retrying })
       }],
@@ -308,7 +312,7 @@ export function decideAgentTopology({
       computePolicy,
       modelPolicy: 'adaptive-per-role',
       humanGovernance: humanGovernance ?? null,
-      authority: { serverOwned: true, modelCannotAuthorize: true }
+      authority: { serverOwned: true, proposalOnly: true, modelCannotAuthorize: true }
     };
   }
 
@@ -322,7 +326,7 @@ export function decideAgentTopology({
     const agent = {
       id, role, taskIds: [task.id], capabilities: ROLE_CAPABILITIES[role] ?? ['reasoning'],
       model: agentModelFor({ workspace: workspaceId, role, complexity, uncertainty, risk, retrying }),
-      authority: 'propose-and-execute-within-server-granted-scope'
+      authority: 'advisory-only'
     };
     agents.push(agent);
     taskAgent.set(task.id, id);
@@ -371,6 +375,7 @@ export function decideAgentTopology({
     },
     authority: {
       serverOwned: true,
+      proposalOnly: true,
       modelCannotAuthorize: true,
       modelCannotGrantCapabilities: true,
       modelCannotDeclareWorldOutcome: true,
@@ -418,247 +423,4 @@ export function adaptAgentTopology(plan, {
     return { ...next, replanned: true, replanReason: 'material-new-work-discovered' };
   }
   return { ...current, replanned: true, replanReason: 'wave-completed-and-reassessed', lastEvent: eventType || 'completed', lastTaskId: text(taskId) || null };
-}
-
-
-/** Settle the workflow even if a provider ignores cancellation. Late results
- * stay outside the result ledger; provider callbacks must honor the signal to
- * stop their own I/O or side effects. */
-async function boundedAgentCall(operation, { signal, timeoutMs }) {
-  const controller = new AbortController();
-  const cancelled = () => controller.abort(signal?.reason);
-  let interrupt;
-  const interruption = new Promise((_, reject) => {
-    interrupt = () => {
-      const error = new Error(signal?.aborted ? 'cancelled' : 'agent-timeout');
-      error.code = signal?.aborted ? 'cancelled' : 'agent-timeout';
-      reject(error);
-    };
-    controller.signal.addEventListener('abort', interrupt, { once: true });
-  });
-  signal?.addEventListener?.('abort', cancelled, { once: true });
-  const timer = setTimeout(() => controller.abort(), Math.max(1, Number(timeoutMs) || 120000));
-  try {
-    if (signal?.aborted) cancelled();
-    return await Promise.race([
-      interruption,
-      Promise.resolve().then(() => {
-        if (controller.signal.aborted) throw new Error('cancelled');
-        return operation(controller.signal);
-      })
-    ]);
-  } finally {
-    clearTimeout(timer);
-    signal?.removeEventListener?.('abort', cancelled);
-    controller.signal.removeEventListener('abort', interrupt);
-  }
-}
-
-/**
- * Execute an already-approved topology with bounded, dependency-aware
- * concurrency. Topology decides what may run together; this executor decides
- * what actually runs under server-owned authority.
- */
-export async function executeAdaptiveAgentPlan(plan, {
-  tasks = [],
-  executeAgent,
-  integrate = null,
-  checkpoint = null,
-  signal = null,
-  maxRetries = 1,
-  timeoutMs = 120000,
-  currentRevision = null
-} = {}) {
-  if (typeof executeAgent !== 'function') throw new TypeError('executeAgent is required');
-
-  const taskMap = new Map(uniqueTasks(tasks).map(task => [text(task.id), task]));
-  const agents = new Map((Array.isArray(plan?.agents) ? plan.agents : []).map(agent => [text(agent.id), agent]));
-  const requestedWaves = Array.isArray(plan?.waves) ? plan.waves : [];
-  const results = new Map();
-  const completed = new Set();
-  const completedTasks = new Set();
-  const failed = new Set();
-  const started = new Set();
-  const conflicts = [];
-  const blocked = [];
-  const aborted = () => Boolean(signal?.aborted);
-
-  const taskDependencies = task => list(task?.dependencies ?? task?.dependsOn ?? task?.prerequisites);
-  const validatePlan = () => {
-    const seenTasks = new Set();
-    for (const agent of agents.values()) {
-      for (const taskId of Array.isArray(agent?.taskIds) ? agent.taskIds : []) {
-        if (!taskMap.has(taskId)) return { valid: false, reason: 'unknown-task', taskId, agentId: agent.id };
-        if (seenTasks.has(taskId)) return { valid: false, reason: 'task-assigned-to-multiple-agents', taskId };
-        seenTasks.add(taskId);
-      }
-    }
-    for (const task of taskMap.values()) {
-      for (const dependency of taskDependencies(task)) {
-        if (!taskMap.has(dependency)) return { valid: false, reason: 'unknown-dependency', taskId: task.id, dependency };
-      }
-      if (!seenTasks.has(task.id)) return { valid: false, reason: 'unassigned-task', taskId: task.id };
-    }
-    const scheduled = new Set();
-    for (const wave of requestedWaves) {
-      if (!Array.isArray(wave)) return { valid: false, reason: 'invalid-wave' };
-      for (const id of wave) {
-        if (!agents.has(id)) return { valid: false, reason: 'unknown-agent', agentId: id };
-        if (scheduled.has(id)) return { valid: false, reason: 'duplicate-agent-schedule', agentId: id };
-        scheduled.add(id);
-      }
-    }
-    for (const id of agents.keys()) {
-      if (!scheduled.has(id)) return { valid: false, reason: 'unscheduled-agent', agentId: id };
-    }
-    return { valid: true };
-  };
-  const planValidation = validatePlan();
-  const parallelLimit = Math.max(1, Math.min(12, Math.floor(Number(plan?.maxParallel) || agents.size || 1)));
-
-  const resourceKeys = task => [...new Set([
-    ...(Array.isArray(task?.resourceKeys) ? task.resourceKeys : []),
-    ...(Array.isArray(task?.writePaths) ? task.writePaths : []),
-    ...(Array.isArray(task?.artifacts) ? task.artifacts : [])
-  ].map(text).filter(Boolean))].sort();
-
-  const compatibleBatch = ids => {
-    const batch = [];
-    const held = new Set();
-    for (const agentId of ids) {
-      if (batch.length >= parallelLimit) break;
-      const agent = agents.get(agentId);
-      const keys = new Set((Array.isArray(agent?.taskIds) ? agent.taskIds : [])
-        .flatMap(id => resourceKeys(taskMap.get(id))));
-      if ([...keys].some(key => held.has(key))) {
-        conflicts.push({ agentId, reason: 'shared-resource-conflict' });
-        continue;
-      }
-      batch.push(agentId);
-      keys.forEach(key => held.add(key));
-    }
-    return batch;
-  };
-
-  const runOne = async agentId => {
-    if (aborted()) return { agentId, status: 'cancelled', reason: 'cancelled-before-start' };
-    const agent = agents.get(agentId);
-    if (!agent) return { agentId, status: 'failed', reason: 'unknown-agent' };
-    const taskIds = Array.isArray(agent.taskIds) ? agent.taskIds : [];
-    if (!taskIds.length) return { agentId, status: 'completed', output: null };
-
-    for (const taskId of taskIds) {
-      const task = taskMap.get(taskId);
-      if (!task) return { agentId, status: 'failed', reason: 'unknown-task', taskId };
-      const unmet = taskDependencies(task).filter(dependency => !completedTasks.has(dependency));
-      if (unmet.length) return { agentId, status: 'blocked', reason: 'dependencies-not-complete', taskId, unmetDependencies: unmet };
-      const expected = task.expectedRevision ?? task.revision ?? null;
-      if (expected !== null && typeof currentRevision === 'function') {
-        const actual = await currentRevision(task);
-        if (String(actual ?? '') !== String(expected)) {
-          return { agentId, status: 'stale', reason: 'stale-revision', taskId, expectedRevision: expected, actualRevision: actual };
-        }
-      }
-    }
-
-    started.add(agentId);
-    let attempt = 0;
-    const retries = Math.max(0, Number(maxRetries) || 0);
-    while (attempt <= retries) {
-      if (aborted()) return { agentId, status: 'cancelled', reason: 'cancelled' };
-      attempt += 1;
-      try {
-        const output = await boundedAgentCall(agentSignal => executeAgent(agent, {
-          tasks: taskIds.map(id => taskMap.get(id)),
-          completed: [...completed],
-          findings: [...results.values()].filter(item => item.status === 'completed'),
-          attempt,
-          idempotencyKey: 'agent:' + agentId + ':attempt:' + attempt,
-          authority: plan?.authority ?? { serverOwned: true },
-          signal: agentSignal
-        }), { signal, timeoutMs });
-        return { agentId, status: 'completed', attempt, output };
-      } catch (error) {
-        if (signal?.aborted || error?.code === 'agent-timeout' || error?.code === 'cancelled') {
-          return { agentId, status: signal?.aborted ? 'cancelled' : 'failed', attempt, reason: signal?.aborted ? 'cancelled' : 'agent-timeout' };
-        }
-        if (attempt > retries) {
-          return { agentId, status: 'failed', attempt, reason: text(error?.message) || 'agent-failed' };
-        }
-      }
-    }
-    return { agentId, status: 'failed', reason: 'agent-failed' };
-  };
-
-  if (!planValidation.valid) {
-    return {
-      status: 'failed',
-      completedAgents: [],
-      failedAgents: [],
-      startedAgents: [],
-      conflicts: [],
-      blocked,
-      results: [],
-      reason: planValidation.reason,
-      taskId: planValidation.taskId ?? null,
-      agentId: planValidation.agentId ?? null,
-      dependency: planValidation.dependency ?? null
-    };
-  }
-
-  for (const requestedWave of requestedWaves) {
-    if (aborted()) break;
-    let pending = requestedWave.filter(id => agents.has(id));
-    while (pending.length) {
-      if (aborted()) break;
-      const batch = compatibleBatch(pending);
-      const batchSet = new Set(batch);
-      pending = pending.filter(id => !batchSet.has(id));
-      if (!batch.length) {
-        const one = pending.shift();
-        if (one) batch.push(one);
-      }
-      const settled = await Promise.all(batch.map(runOne));
-      for (const result of settled) {
-        results.set(result.agentId, result);
-        if (result.status === 'completed') {
-          completed.add(result.agentId);
-          for (const taskId of agents.get(result.agentId)?.taskIds ?? []) completedTasks.add(taskId);
-        } else if (result.status === 'blocked') {
-          blocked.push(result);
-          failed.add(result.agentId);
-        } else if (['failed', 'stale', 'cancelled'].includes(result.status)) failed.add(result.agentId);
-      }
-      if (typeof checkpoint === 'function') {
-        await checkpoint({ completed: [...completed], failed: [...failed], results: [...results.values()], conflicts: [...conflicts] });
-      }
-      if (settled.some(item => ['failed', 'stale'].includes(item.status))) break;
-    }
-    if (failed.size) break;
-  }
-
-  const summary = {
-    status: aborted() ? 'cancelled' : failed.size ? 'failed' : 'completed',
-    completedAgents: [...completed],
-    failedAgents: [...failed],
-    startedAgents: [...started],
-    conflicts,
-    blocked,
-    results: [...results.values()]
-  };
-
-  if (summary.status === 'completed' && plan?.integrationRequired && typeof integrate === 'function') {
-    try {
-      summary.integration = await boundedAgentCall(agentSignal => integrate({
-      findings: summary.results.filter(item => item.status === 'completed'),
-      authority: plan.authority,
-      signal: agentSignal
-      }), { signal, timeoutMs });
-    } catch (error) {
-      summary.status = signal?.aborted ? 'cancelled' : 'failed';
-      summary.integration = { status: 'failed', reason: text(error?.message) || 'integration-failed' };
-      summary.failedAgents.push('integrator');
-    }
-  }
-  return summary;
 }
