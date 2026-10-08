@@ -35,6 +35,9 @@ export function workspaceProgressPanel(run, workspace = 'normal-chat') {
   }));
   const attachments = array(run?.adaptation?.attachments);
   const overlay = array(run?.adaptation?.projectOverlay);
+  // Names are only for the current run's scoped attachments/overlay; no extra reads.
+  const fileNames = [...new Set([...attachments, ...overlay]
+    .map(item => safe(item?.name || item?.path, 120)).filter(Boolean))].slice(0, 12);
   const research = run?.adaptation?.researchWorkspace ?? {};
   const reasoning = safe(run?.intelligence?.reasoning?.depth
     || run?.adaptation?.resourcePlan?.control?.depth, 24);
@@ -73,6 +76,7 @@ export function workspaceProgressPanel(run, workspace = 'normal-chat') {
   return Object.freeze({
     workspace: mode,
     cards: Object.freeze(cards),
+    fileNames: Object.freeze(fileNames),
     stages: Object.freeze(stages),
     completed: tasks.filter(task => task?.status === 'complete').length,
     stageCount: tasks.length,
