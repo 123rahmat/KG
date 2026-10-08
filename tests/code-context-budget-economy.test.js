@@ -50,3 +50,32 @@ test('compaction limits excessive caller budgets without losing critical change 
   assert.equal(maxed.budget.maxChars, CONTEXT_BUDGETS.advanced.maxChars);
   assert.ok(maxed.files.reduce((sum, item) => sum + item.content.length, 0) <= CONTEXT_BUDGETS.advanced.maxChars);
 });
+
+
+test('project context cache reuses identical input but invalidates on changed files', () => {
+  const files = [{ path: 'src/counter.js', content: 'export const count = 1;\n' }];
+  const index = buildProjectIndex(files, { revisionId: 'rev-one' });
+  const options = { files, index, goal: 'Check the counter',
+    task: { id: 'review-code', type: 'code' } };
+  const a = compileCodeContext(options);
+  assert.equal(compileCodeContext(options), a, 'unchanged inputs reuse the exact pack');
+  const revised = compileCodeContext({ ...options,
+    files: [{ path: 'src/counter.js', content: 'export const count = 2;\n' }] });
+  assert.notEqual(revised, a, 'changed bytes must not reuse stale context');
+  assert.match(revised.files[0].content, /count = 2/);
+  assert.notEqual(revised.project.workspaceContentHash, a.project.workspaceContentHash);
+});
+
+test('context cache incorporates failure evidence and prior attempts', () => {
+  const files = [{ path: 'src/check.js', content: 'export const checked = true;\n' }];
+  const index = buildProjectIndex(files, { revisionId: 'rev-check' });
+  const common = { files, index, goal: 'Debug an issue',
+    task: { id: 'debug-code', type: 'code', purpose: 'Diagnose a failing test' } };
+  const a = compileCodeContext({ ...common, failure: { stderr: 'error one' },
+    previousAttempts: [{ status: 'failed', summary: 'first attempt' }] });
+  const b = compileCodeContext({ ...common, failure: { stderr: 'error two' },
+    previousAttempts: [{ status: 'failed', summary: 'second attempt' }] });
+  assert.notEqual(a, b);
+  assert.match(b.failure.stderr, /error two/);
+  assert.match(b.previousAttempts[0].summary, /second attempt/);
+});
