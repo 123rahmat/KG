@@ -5,7 +5,7 @@ import { appendOpenWorldWork, recordOpenWorldOutcome, openWorldFrontier, compose
 
 test('representative unknown and known tasks use evidence-driven branches', () => {
   const report = runAdaptiveTaskMatrix();
-  assert.equal(report.total, 13);
+  assert.equal(report.total, 17);
   assert.equal(report.passed, report.total, JSON.stringify(report.cases.filter(x => !x.matched)));
   assert.equal(report.legacyPhaseListRemoved, true);
   assert.equal(report.highRiskMaxParallel, 1);
@@ -39,4 +39,18 @@ test('no completed task graph is called verified solely because a model thinks i
   const projected = composeOpenWorldDecision({goal:'write',graph:done,acceptance:{satisfied:true}});
   assert.equal(projected.action,'ready-to-deliver');
   assert.equal(projected.authority,'proposal-only');
+});
+
+
+test('additional language, planning, analysis and document tasks take the correct paths', () => {
+  const results = Object.fromEntries(runAdaptiveTaskMatrix().cases.map(item => [item.name, item]));
+  for (const [name, expected] of [
+    ['translation', 'direct'],
+    ['planning', 'reason'],
+    ['data-analysis', 'investigate'],
+    ['document-conversion-unavailable', 'capability-gap']
+  ]) {
+    assert.equal(results[name]?.actual, expected, name);
+    assert.equal(results[name]?.matched, true, name);
+  }
 });

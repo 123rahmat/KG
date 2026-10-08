@@ -18,14 +18,19 @@ export function runAdaptiveTaskMatrix() {
   caseOf('small-talk', 'Hello!', {situation: {uncertainty:.02, complexity:.02}}, 'direct');
   caseOf('writing', 'Rewrite this email politely', {situation: {uncertainty:.05, complexity:.1}}, 'direct');
   caseOf('brainstorming', 'Brainstorm original business concepts with trade-offs', {situation: {uncertainty:.4, complexity:.55}}, 'reason');
+  caseOf('translation', 'Translate user-supplied text', {situation: {uncertainty:.02, complexity:.12}}, 'direct');
+  caseOf('planning', 'Create a product roadmap', {situation: {uncertainty:.4, complexity:.7}}, 'reason');
   caseOf('coding', 'Debug authentication regression', {situation:{executionRequired:true},
     graph:appendOpenWorldWork({}, {id:'inspect-tests', purpose:'Inspect failing tests'})}, 'continue-work');
   caseOf('research', 'Find and verify recent literature', {situation:{evidenceGap:true, uncertainty:.75}}, 'investigate');
+  caseOf('data-analysis', 'Analyze unfamiliar sensor readings', {situation:{unresolvedQuestions:['Which data fields exist?'],uncertainty:.9}}, 'investigate');
   caseOf('image-ready', 'Produce an illustration', {situation:{executionRequired:true},
     candidates:[{id:'render',requires:['image-renderer'],expectedQualityGain:1}],
     availableCapabilities:[{id:'image-renderer'}],authorizedCapabilities:[{id:'image-renderer'}]}, 'propose-work');
   caseOf('image-unavailable', 'Edit a reference image', {situation:{executionRequired:true},
     candidates:[{id:'render',requires:['image-renderer']}],availableCapabilities:[],authorizedCapabilities:[]}, 'capability-gap');
+  caseOf('document-conversion-unavailable', 'Convert a document with no converter', {situation:{executionRequired:true},
+    candidates:[{id:'convert',requires:['document-converter']}],availableCapabilities:[],authorizedCapabilities:['document-converter']}, 'capability-gap');
   caseOf('unknown-domain', 'Analyze an unfamiliar sensor and revise technician instructions', {
     situation:{unresolvedQuestions:['What file format?'],uncertainty:.9}}, 'investigate');
   caseOf('approval', 'Transfer funds from the budget', {situation:{authorizationRequired:true,authorizationSatisfied:false,executionRequired:true}}, 'approval-required');

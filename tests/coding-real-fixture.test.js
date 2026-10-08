@@ -43,13 +43,21 @@ function runFixture(files) {
       mkdirSync(path.dirname(target),{recursive:true});
       writeFileSync(target,file.content);
     }
-    const child = spawnSync(process.execPath,['--test','tests/pricing.test.mjs'],{
-      cwd:dir, encoding:'utf8', timeout:15_000
-    });
-    assert.equal(child.error,undefined,String(child.error));
-    return {exitCode:child.status,
-      passed:Number(child.stdout.match(/# pass (\d+)/)?.[1]??0),
-      failed:Number(child.stdout.match(/# fail (\d+)/)?.[1]??0)};
+    // A nested node:test process must not inherit its parent's test-worker
+    // context, or it can exit successfully without running any tests.
+    const env = { ...process.env };
+    delete env.NODE_TEST_CONTEXT;
+    const child = spawnSync(process.execPath,
+      ['--test', '--test-reporter=tap', 'tests/pricing.test.mjs'], {
+        cwd:dir, encoding:'utf8', timeout:15_000, env
+      });
+    assert.equal(child.error, undefined, String(child.error));
+    const output = String(child.stdout ?? '');
+    const passed = Number(output.match(/^# pass (\d+)/m)?.[1] ?? 0);
+    const failed = Number(output.match(/^# fail (\d+)/m)?.[1] ?? 0);
+    assert.ok(passed + failed > 0,
+      'Nested test runner executed no tests: ' + String(child.stderr ?? '').slice(0, 300));
+    return {exitCode:child.status, passed, failed};
   } finally { rmSync(dir,{recursive:true,force:true}); }
 }
 
