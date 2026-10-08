@@ -4628,6 +4628,7 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
 
 /* Small task control strip: always server-derived, no speculative animation. */
 .adaptive-running-strip {
+  grid-column:1 / -1;
   display:flex;
   align-items:center;
   flex-wrap:wrap;
