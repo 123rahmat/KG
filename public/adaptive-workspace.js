@@ -688,6 +688,30 @@ function specialistProjectSection(run, workspace) {
   ].filter(Boolean));
 }
 
+/** Shared activity view; labels and states are persisted run records, not model guesses. */
+function workspaceActivitySection(run, workspace) {
+  const panel = workspaceProgressPanel(run, workspace);
+  return element('section', workspaceArea(workspace, 'activity', 'deep-workspace-card detail-card workspace-activity-card'), [
+    element('div', { class: 'deep-workspace-card-head' }, [
+      element('span', { class: 'mono', text: 'RECORDED ACTIVITY' }),
+      element('span', { class: 'small muted', text: panel.completed + ' completed · ' + panel.stageCount + ' stages' })
+    ]),
+    panel.stages.length
+      ? element('ol', { class: 'work-stage-list', 'aria-label': 'Project task progress' },
+        panel.stages.map(item => element('li', {
+          class: 'work-stage-row', 'data-stage-status': item.status
+        }, [
+          element('span', { class: 'work-stage-mark', 'aria-hidden': 'true' }),
+          element('span', { class: 'work-stage-name', text: item.label }),
+          element('span', { class: 'work-stage-state', text: item.statusLabel })
+        ])))
+      : element('p', { class: 'small muted', text: 'Recorded work stages will appear after a project task starts.' }),
+    panel.stageCount > panel.stages.length
+      ? element('p', { class: 'small muted', text: 'Displaying the latest ' + panel.stages.length + ' steps.' }) : null,
+    element('p', { class: 'small muted', text: 'Statuses come from saved task records. The plan may expand as new evidence appears.' })
+  ].filter(Boolean));
+}
+
 function codeWorkspaceProject(data) {
   const run = data.run;
   const view = workspaceWorkView(run);
@@ -730,7 +754,7 @@ function codeWorkspaceProject(data) {
         element('span', { text: view.terminal || view.waiting || view.disconnected ? view.label : run ? 'active' : 'ready' })
       ])
     ]),
-    workspaceNavigation('code', [['overview', 'Overview'], ['files', 'Files'], ['changes', 'Changes'], ['tests', 'Tests'], ['agents', 'Specialists']]),
+    workspaceNavigation('code', [['overview', 'Overview'], ['activity', 'Activity'], ['files', 'Files'], ['changes', 'Changes'], ['tests', 'Tests'], ['agents', 'Specialists']]),
     element('div', workspaceArea('code', 'overview', 'deep-workspace-grid'), [
       element('section', { class: 'deep-workspace-card project-card' }, [
         element('div', { class: 'deep-workspace-card-head' }, [
@@ -759,6 +783,7 @@ function codeWorkspaceProject(data) {
       ])
     ]),
     element('div', { class: 'deep-workspace-section-grid' }, [
+      workspaceActivitySection(run, 'code'),
       element('section', workspaceArea('code', 'files', 'deep-workspace-card detail-card'), [
         element('div', { class: 'deep-workspace-card-head' }, [
           element('span', { class: 'mono', text: 'FILE CONTEXT' }),
@@ -836,7 +861,7 @@ function researchWorkspaceProject(data) {
         })
       ])
     ]),
-    workspaceNavigation('research', [['overview', 'Overview'], ['sources', 'Sources'], ['evidence', 'Evidence'], ['gaps', 'Gaps'], ['team', 'Team']]),
+    workspaceNavigation('research', [['overview', 'Overview'], ['activity', 'Activity'], ['sources', 'Sources'], ['evidence', 'Evidence'], ['gaps', 'Gaps'], ['team', 'Team']]),
     element('div', workspaceArea('research', 'overview', 'deep-workspace-grid'), [
       element('section', { class: 'deep-workspace-card project-card' }, [
         element('div', { class: 'deep-workspace-card-head' }, [
@@ -865,6 +890,7 @@ function researchWorkspaceProject(data) {
       ])
     ]),
     element('div', { class: 'deep-workspace-section-grid' }, [
+      workspaceActivitySection(run, 'research'),
       element('section', workspaceArea('research', 'sources', 'deep-workspace-card detail-card'), [
         element('div', { class: 'deep-workspace-card-head' }, [
           element('span', { class: 'mono', text: 'SOURCE LEDGER' }),
