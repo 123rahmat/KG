@@ -11,6 +11,8 @@ const FILE_WORK = /\b(?:file|files|document|documents|spreadsheet|pdf|word|excel
 const VISUAL = /\b(?:visuals?|visuali[sz](?:e|ation)|diagram|infographic|flowchart|chart|graph|illustration|render|dashboard|mockup|logo|poster|image|images)\b/i;
 const HARD_REASONING = /\b(?:prove|proof|derive|derivation|multi[- ]step|step[- ]by[- ]step|complex reasoning|deep (?:think|thinking|reasoning)|challenging|difficult|optimi[sz]e|trade[- ]offs?|scenario analys\w*|sensitivity analys\w*|differential equation|calculate and verify|root cause|evaluate alternatives)\b/i;
 const MULTIFILE = /\b(?:multiple|several|across|all|batch|many|combined|compare|reconcile|consistent|simultaneous)\b/i;
+const COMPARISON = /\\b(?:compare|comparison|versus|vs\\.?|trade[- ]offs?|alternatives?|options?|pros and cons|decision matrix|scenario)\\b/i;
+const PROCEDURE = /\\b(?:teach|tutor|solve|calculate|step[- ]by[- ]step|worked example|practice|deriv(?:e|ation)|prove|proof)\\b/i;
 const RISK = /^(?:critical|high|high-impact|physical|regulated)$/i;
 
 export function normalChatTaskProfile({
@@ -32,6 +34,19 @@ export function normalChatTaskProfile({
     complexFileWork ? .42 : 0);
   const reasoningDepth = depthScore >= .7 ? 'deep'
     : depthScore >= .3 || domain !== 'everyday' ? 'focused' : 'direct';
+  // These are display suggestions, never tool instructions or hidden reasoning traces.
+  const presentation = Object.freeze({
+    mode: complexFileWork ? 'file-workflow'
+      : visualIntent ? 'visual-first'
+        : COMPARISON.test(question) ? 'comparison'
+          : domain === 'education' && PROCEDURE.test(question) ? 'worked-example'
+            : 'conversational',
+    showTableWhenUseful: COMPARISON.test(question),
+    showWorkedExample: domain === 'education' && PROCEDURE.test(question),
+    showFileProgress: fileIntent,
+    showVisualWhenUseful: visualIntent,
+    allowDeepReasoning: reasoningDepth === 'deep'
+  });
   const verify = verificationRequired || RISK.test(text(risk))
     || fileIntent || visualIntent
     || /\b(?:calculate|forecast|prove|citation|fact[- ]check)\b/i.test(question);
@@ -47,7 +62,7 @@ export function normalChatTaskProfile({
           ? ['current-request','assumptions-and-constraints','active-conversation','scenario-evidence']
           : ['current-request','active-conversation','material-evidence'];
   return Object.freeze({
-    workspace: 'normal-chat', domain, reasoningDepth,
+    workspace: 'normal-chat', domain, reasoningDepth, presentation,
     contextPriorities: Object.freeze(priorities),
     verification: verify ? 'check-observable-claims-and-artifacts' : 'sufficient-and-clear',
     toolPolicy: 'just-in-time-authorized-only',
