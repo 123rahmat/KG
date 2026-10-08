@@ -4671,3 +4671,15 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
   .adaptive-running-strip { padding:8px 10px; }
   .adaptive-running-buttons { width:100%;justify-content:flex-end; }
 }
+
+
+.attachment-archive-note {
+  flex:none;
+  font-size:.66rem;
+  line-height:1.4;
+  color:var(--ink-2);
+  padding:2px 6px;
+  background:var(--accent-soft);
+  border:1px solid var(--line);
+  border-radius:var(--radius-sm);
+}
