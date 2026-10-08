@@ -2041,6 +2041,17 @@ async function runCodeWorkspaceAgentPanels({
       const waveRecord = {
         index: waveIndex,
         type: 'code-workspace-subsystem-panels',
+        specialistAdaptation: jobs.length ? {
+          action: panelWidth > basePanelWidth ? 'recruit'
+            : panelWidth < basePanelWidth ? 'contract' : 'hold',
+          reason: panelWidth !== basePanelWidth
+            ? subsystemEconomy.reason === 'planned-independent-evidence'
+              ? pressureMonitor.reason : subsystemEconomy.reason
+            : 'bounded-code-subsystem-panel',
+          targetAgents: panelWidth,
+          maxParallel: effectiveMaxParallel,
+          verificationAuthority: 'parent-workflow-only'
+        } : null,
         dependencyWaveIndex: subsystemPlan.waves.find(wave => wave.subsystemIds.includes(batch[0]?.id))?.index ?? 0,
         panelIds: batch.map(subsystem => `${subsystem.id}:i${subsystemState.get(subsystem.id)?.iteration ?? 1}`),
         subsystemIds: batch.map(subsystem => subsystem.id),
