@@ -7,14 +7,27 @@ const positiveInt = (value, fallback) => Number.isFinite(Number(value))
   ? Math.max(1, Math.floor(Number(value))) : fallback;
 const HIGH_RISK = new Set(['high', 'critical', 'high-impact', 'physical', 'regulated']);
 
+const budgetNumber = value => {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  if (typeof value === 'string' && !value.trim()) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+
+/** Unknown readings are distinct from a measured zero remaining budget. */
+export function specialistBudgetRatio(value) {
+  const number = budgetNumber(value);
+  return number === null ? null : clamp(number);
+}
+
 export function remainingSpecialistBudget(run = {}) {
   const allocation = run?.adaptiveBudget ?? {};
   const budget = allocation.budget ?? {};
   const remaining = allocation.remaining ?? {};
   const ratios = Object.entries(budget).flatMap(([resource, ceiling]) => {
-    const maximum = Number(ceiling);
-    const available = Number(remaining[resource]);
-    return Number.isFinite(maximum) && maximum > 0 && remaining[resource] !== undefined && Number.isFinite(available)
+    const maximum = budgetNumber(ceiling);
+    const available = budgetNumber(remaining[resource]);
+    return maximum !== null && maximum > 0 && available !== null
       ? [clamp(available / maximum)] : [];
   });
   return ratios.length ? Math.min(...ratios) : null;
@@ -29,8 +42,9 @@ export function specialistTopology({
   const normalizedMode = ['auto', 'always', 'off'].includes(mode) ? mode : 'auto';
   const workspace = ['normal-chat', 'code', 'research'].includes(surface) ? surface : 'normal-chat';
   const highRisk = HIGH_RISK.has(String(risk).toLowerCase());
-  const budgetKnown = remainingBudgetRatio !== null && remainingBudgetRatio !== undefined && Number.isFinite(Number(remainingBudgetRatio));
-  const budget = budgetKnown ? clamp(remainingBudgetRatio) : 1;
+  const ratio = specialistBudgetRatio(remainingBudgetRatio);
+  const budgetKnown = ratio !== null;
+  const budget = ratio ?? 1;
   const workspaceCeiling = highRisk && advancedBuild ? 11
     : normalizedMode === 'always' ? 11
     : workspace === 'normal-chat' ? 3 : 5;

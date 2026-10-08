@@ -229,7 +229,7 @@ export function buildUnifiedAdaptiveWorkflow({
     independentWork: Number(s.independentWork ?? s.parallelOpportunity ?? 0),
     cacheHit: s.verifiedStateReusable === true,
     previousFailure: failedAttempts > 0,
-    remainingBudgetRatio: Number(s.remainingBudgetRatio ?? 1)
+    remainingBudgetRatio: s.remainingBudgetRatio
   });
   const authority = adaptiveDecisionAuthority({
     situation: {
@@ -254,7 +254,7 @@ export function buildUnifiedAdaptiveWorkflow({
     complexity: p.scores?.complexity,
     risk: p.maturity?.level === 'maximum' ? 'critical' : p.scores?.risk >= 0.75 ? 'high' : 'medium',
     previousFailure: failedAttempts > 0,
-    remainingBudgetRatio: Number(s.remainingBudgetRatio ?? 1)
+    remainingBudgetRatio: s.remainingBudgetRatio
   });
   const durableGraph = validateOpenWorldGraph(taskGraph ?? {});
   const openWorld = composeOpenWorldDecision({

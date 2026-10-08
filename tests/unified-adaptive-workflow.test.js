@@ -24,6 +24,18 @@ test('one workflow contract governs all subsystems', () => {
   assert.ok(workflow.subsystems.every(item => item.mayGrantAuthority === false));
 });
 
+test('unified workflow keeps missing budget telemetry distinct from exhaustion', () => {
+  for (const remainingBudgetRatio of [null, '', ' ', NaN]) {
+    const workflow = buildUnifiedAdaptiveWorkflow({
+      surface: 'code', goal: 'Fix a complex application',
+      situation: { complexity: .9, uncertainty: .7, independentWork: .9, remainingBudgetRatio }
+    });
+    assert.equal(workflow.modeController.compute.budgetMode, 'normal');
+    assert.ok(workflow.modeController.compute.recommendedAgents > 1);
+    assert.equal(workflow.execution.runtimeControl.budgetMode, 'normal');
+  }
+});
+
 test('one universal controller adapts coverage instead of switching domain workflows', () => {
   const coverage = adaptiveCoverage({
     situation: {

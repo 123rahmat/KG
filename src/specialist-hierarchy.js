@@ -3,11 +3,13 @@
  * This module recommends second-level advisory roles; it never dispatches
  * an agent, executes a tool, grants permission, or authors a completion claim.
  */
+import { specialistBudgetRatio } from './agent-topology-policy.js';
+
 const string = x => String(x ?? '').trim();
 const unique = a => [...new Set((Array.isArray(a) ? a : []).map(string).filter(Boolean))];
 const limit = (value, fallback, max) => Number.isFinite(Number(value))
   ? Math.max(1, Math.min(max, Math.floor(Number(value)))) : fallback;
-const budget = n => Number.isFinite(Number(n)) ? Math.max(0, Math.min(1, Number(n))) : 1;
+const budget = n => specialistBudgetRatio(n) ?? 1;
 const highRisk = risk => ['critical','high','high-impact','physical','regulated'].includes(string(risk).toLowerCase());
 const CODE = Object.freeze({
   'ui-ux': ['ux-designer','frontend-engineer','test-engineer','implementer'],

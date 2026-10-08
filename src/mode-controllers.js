@@ -4,6 +4,8 @@
  * Controllers specialize policy, context, tool and verification emphasis. They
  * do not own model state, permissions, lifecycle, memory or completion.
  */
+import { specialistBudgetRatio } from './agent-topology-policy.js';
+
 const text = value => String(value ?? '').trim();
 const uniq = value => [...new Set((Array.isArray(value) ? value : []).map(text).filter(Boolean))];
 const clamp01 = value => Math.min(1, Math.max(0, Number.isFinite(Number(value)) ? Number(value) : 0));
@@ -48,7 +50,7 @@ export function workspaceComputePolicy({
     ? text(surface).toLowerCase()
     : 'normal-chat';
   const profile = RUNTIME_PROFILES[key];
-  const budget = clamp01(remainingBudgetRatio);
+  const budget = specialistBudgetRatio(remainingBudgetRatio) ?? 1;
   const pressure = Math.max(
     clamp01(complexity),
     clamp01(uncertainty) * 0.95,
@@ -194,7 +196,7 @@ export function buildModeControllerContract({
   const highPressure = clamp01(pressure / 4) >= 0.75;
   const highUncertainty = clamp01(uncertainty) >= 0.55;
   const complex = clamp01(complexity) >= 0.55;
-  const limitedBudget = clamp01(remainingBudgetRatio) < 0.25;
+  const limitedBudget = (specialistBudgetRatio(remainingBudgetRatio) ?? 1) < 0.25;
   const escalate = previousFailure || highUncertainty || complex || normalizedRisk === 'high' || normalizedRisk === 'critical';
   const verified = acceptance?.verificationSatisfied === true;
   const criteria = uniq(acceptance?.criteria ?? situation?.successCriteria);

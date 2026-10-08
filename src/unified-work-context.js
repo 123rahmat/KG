@@ -143,26 +143,34 @@ export function buildUnifiedWorkContext({
 export function applyWorkChange(context, { files = [], deleted = [] } = {}) {
   const base = context && typeof context === 'object' ? context : buildUnifiedWorkContext();
   const nextFiles = new Map((base.filesystem?.files ?? []).map(file => [file.path, file]));
+  const tombstones = new Set(base.filesystem?.deleted ?? []);
+  const overlay = new Map((base.filesystem?.overlay ?? []).map(path => [path,
+    tombstones.has(path) ? { path, content: null } : { path }
+  ]));
   for (const path of (Array.isArray(deleted) ? deleted : [])) {
     const safe = safePath(path);
-    if (safe) nextFiles.delete(safe);
+    if (safe) {
+      nextFiles.delete(safe);
+      overlay.set(safe, { path: safe, content: null });
+    }
   }
   for (const file of (Array.isArray(files) ? files : [])) {
     const path = safePath(file?.path || file?.name);
-    if (path) nextFiles.set(path, { path, type: text(file?.type || file?.format) });
+    if (path) {
+      nextFiles.set(path, { path, type: text(file?.type || file?.format) });
+      overlay.set(path, { path });
+    }
   }
   const next = buildUnifiedWorkContext({
     goal: base.goal,
+    project: { name: base.workspace?.projectName, revisionId: base.workspace?.revisionId },
+    conversationId: base.chat?.conversationId ?? null,
+    multiAgent: base.chat?.multiAgent ?? null,
     attachments: base.filesystem?.attachments ?? [],
     files: [...nextFiles.values()],
-    projectOverlay: [
-      ...(base.filesystem?.overlay ?? [])
-        .filter(path => !(base.filesystem?.deleted ?? []).includes(path))
-        .map(path => ({ path })),
-      ...(base.filesystem?.deleted ?? []).map(path => ({ path, content: null })),
-      ...(Array.isArray(deleted) ? deleted.map(path => ({ path, content: null })) : [])
-    ],
+    projectOverlay: [...overlay.values()],
     situation: base.situation,
+    currentState: base.situation?.currentState,
     identityOverride: base.identity,
     revision: Number(base.revision ?? 0) + 1,
     lastChange: {

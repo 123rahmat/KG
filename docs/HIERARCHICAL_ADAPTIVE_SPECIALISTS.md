@@ -27,6 +27,14 @@ Normal Chat can handle up to ten selected attachments in one request under the c
 - Specialist findings from peers are untrusted data, not tool grants.
 - The adaptive UI shows persisted specialist results, not planned agents disguised as live activity.
 
+## Runtime continuity and failure handling
+
+Material file edits retain the conversation ID, chat-local memory scope, user agent mode and cap, project name, and immutable source revision. Recreating a deleted file clears its overlay tombstone; later edits preserve that restored state. A material edit advances the work-context revision and still requires verification.
+
+Missing, blank, invalid, or non-finite budget readings are unknown, rather than a measured zero. The shared budget interpretation applies through workflow, execution policy, workspace controller and specialist hierarchy boundaries. Known low budgets continue to narrow optional expertise, and user opt-out, provider limits and required verification remain authoritative.
+
+The lane executor validates all job IDs and complete schedule coverage before invoking agents. On failure or cancellation it waits for already-started peers to settle so usage and evidence callbacks finish within the parent task lifecycle. It then fails the task and starts no later batch or wave. Provider timeouts and cooperative cancellation remain the caller's responsibility.
+
 ## Verification
 
 `node --test tests/specialist-hierarchy.test.js tests/multi-agent.test.js tests/mode-controllers.test.js tests/normal-chat-capabilities.test.js`
