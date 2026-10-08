@@ -600,6 +600,35 @@ function researchSource(source, scope) {
   });
 }
 
+/** Only observed specialist outcomes are shown; no guessed agents or waves. */
+function specialistProjectSection(run, workspace) {
+  const recorded = agentActivitySnapshot(run);
+  const area = workspace === 'code' ? 'agents' : 'team';
+  const roles = recorded.roles.slice(-8);
+  const description = roles.length
+    ? 'Saved specialist findings. The main workflow still owns edits, sources and verification.'
+    : workspace === 'code'
+      ? 'Small code changes can use a single agent. Specialist reviews appear here if they actually run.'
+      : 'Independent research and citation reviews appear here if they actually run.';
+  return element('section', workspaceArea(workspace, area, 'deep-workspace-card detail-card'), [
+    element('div', { class: 'deep-workspace-card-head' }, [
+      element('span', { class: 'mono', text: workspace === 'code' ? 'ENGINEERING SPECIALISTS' : 'RESEARCH SPECIALISTS' }),
+      element('span', { class: 'small muted', text: roles.length + ' recorded' })
+    ]),
+    element('p', { class: 'small muted', text: description }),
+    roles.length ? element('div', { class: 'workspace-detail-list' }, roles.map(item =>
+      element('div', { class: 'workspace-detail-row' }, [
+        element('strong', { text: item.role.replaceAll('-', ' ') }),
+        element('span', { class: 'small muted', text: item.status +
+          (item.wave ? ' · wave ' + item.wave : '') }),
+        item.summary ? element('span', { class: 'small muted', text: item.summary }) : null
+      ].filter(Boolean))
+    )) : null,
+    recorded.observedParallel ? element('p', { class: 'small muted',
+      text: 'Parallel specialist waves were recorded for this task.' }) : null
+  ].filter(Boolean));
+}
+
 function codeWorkspaceProject(data) {
   const run = data.run;
   const view = workspaceWorkView(run);
@@ -642,7 +671,7 @@ function codeWorkspaceProject(data) {
         element('span', { text: view.terminal || view.waiting || view.disconnected ? view.label : run ? 'active' : 'ready' })
       ])
     ]),
-    workspaceNavigation('code', [['overview', 'Overview'], ['files', 'Files'], ['changes', 'Changes'], ['tests', 'Tests']]),
+    workspaceNavigation('code', [['overview', 'Overview'], ['files', 'Files'], ['changes', 'Changes'], ['tests', 'Tests'], ['agents', 'Specialists']]),
     element('div', workspaceArea('code', 'overview', 'deep-workspace-grid'), [
       element('section', { class: 'deep-workspace-card project-card' }, [
         element('div', { class: 'deep-workspace-card-head' }, [
@@ -702,7 +731,8 @@ function codeWorkspaceProject(data) {
               ])
             ))
           : element('p', { class: 'small muted', text: 'Testing expands when the code controller determines the change surface needs it.' })
-      ])
+      ]),
+      specialistProjectSection(run, 'code')
     ]),
     element('div', { class: 'deep-workspace-actions' }, [
       button('GitHub project', () => $('openProjectSources')?.click(), 'small'),
@@ -747,7 +777,7 @@ function researchWorkspaceProject(data) {
         })
       ])
     ]),
-    workspaceNavigation('research', [['overview', 'Overview'], ['sources', 'Sources'], ['evidence', 'Evidence'], ['gaps', 'Gaps']]),
+    workspaceNavigation('research', [['overview', 'Overview'], ['sources', 'Sources'], ['evidence', 'Evidence'], ['gaps', 'Gaps'], ['team', 'Team']]),
     element('div', workspaceArea('research', 'overview', 'deep-workspace-grid'), [
       element('section', { class: 'deep-workspace-card project-card' }, [
         element('div', { class: 'deep-workspace-card-head' }, [
@@ -808,7 +838,8 @@ function researchWorkspaceProject(data) {
         gaps.length
           ? element('div', { class: 'workspace-detail-list' }, gaps.map(gap => element('div', { class: 'workspace-detail-row', text: gap })))
           : element('p', { class: 'small muted', text: 'No unresolved research questions are currently recorded.' })
-      ])
+      ]),
+      specialistProjectSection(run, 'research')
     ]),
     element('div', { class: 'deep-workspace-actions' }, [
       button('Search + gather', () => $('goal')?.focus({ preventScroll: false }), 'primary small'),

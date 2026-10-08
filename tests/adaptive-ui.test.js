@@ -223,3 +223,19 @@ test('landing presents all three workspaces with equal product-level storytellin
   assert.match(css, /\[data-research-step\]\.is-active/);
   assert.match(css, /architecture-split[\s\S]*repeat\(3, minmax\(0, 1fr\)\)/);
 });
+
+test('Normal Chat retains multi-file sandbox affordance while specialized workspace panels show recorded activity', async () => {
+  const js = await read('public/adaptive-workspace.js');
+  const css = await read('public/app.css');
+  const capabilities = await read('public/normal-chat-capabilities.js');
+  assert.match(js, /function normalChatToolStrip/);
+  assert.match(js, /normalChatCapabilities/);
+  assert.match(js, /sandboxReady/);
+  assert.match(js, /normalChatToolStrip\(data\)/);
+  assert.match(css, /\.normal-chat-tool-strip/);
+  assert.match(capabilities, /suggestedWorkspace/);
+  assert.match(js, /specialistProjectSection\(run, 'code'\)/);
+  assert.match(js, /specialistProjectSection\(run, 'research'\)/);
+  assert.match(js, /recorded\.observedParallel/);
+  assert.match(js, /Specialist reviews appear here if they actually run/);
+});
