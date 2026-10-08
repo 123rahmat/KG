@@ -76,7 +76,8 @@ try {
  assert.equal(await page.evaluate(()=>getSelection().toString()===window.selectedText),true,'polling must preserve text selection');
  await page.evaluate(()=>getSelection().removeAllRanges());
  await page.evaluate(()=>{const {state,renderThread}=window.qa;state.network.online=false;state.network.reachable=false;renderThread();});
- assert.equal(await page.locator('.work-status-copy strong').last().textContent(),'Connection lost');
+ assert.match(await page.locator('.work-status-copy strong').last().textContent(),/^Connection lost · /,'offline state keeps selected task context');
+ assert.equal(await page.locator('.work-observed-details').last().count(),1,'recorded activity remains inspectable offline');
  assert.equal(await page.locator('[data-work-live="true"]').count(),0);
  await page.screenshot({path:artifact('offline-desktop.png')});
  await page.evaluate(()=>{const {state,renderThread}=window.qa;state.network.online=true;state.network.reachable=true;state.activeSurface='normal-chat';state.workspaceSource={id:'project',kind:'github',name:'123rahmat/KG',repoRef:'main',permissions:{write:true},metadata:{commitSha:'abc123',manifest:[{path:'src/app.js'}]}};renderThread();});
