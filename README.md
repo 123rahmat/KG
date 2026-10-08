@@ -62,7 +62,7 @@ Use Node.js 22 or newer, npm, PostgreSQL and a C++ build toolchain if your platf
 1. Install dependencies with `npm ci`.
 2. Copy `.env.example` to `.env`, choose a development database password and set `DATABASE_URL`. For the supplied Compose database, use user/database `kindgleam`, the selected password, host `127.0.0.1` and port `5432`. In development, leave `DATABASE_MIGRATION_URL` empty to use that same database identity.
 3. Start the database with `docker compose up -d db`, or provide your own PostgreSQL server.
-4. Configure `GOOGLE_CLOUD_PROJECT` and Vertex credentials through Application Default Credentials/workload identity. `VERTEX_ACCESS_TOKEN` is an optional temporary development credential. Keep model selection within the server's approved Gemini catalog.
+4. Configure `GOOGLE_CLOUD_PROJECT` and an explicit temporary `VERTEX_ACCESS_TOKEN` for local development. The runtime uses that token or the Google metadata server in a supported hosted environment; it does not load local ADC credential files. Keep model selection within the server's approved Gemini catalog.
 5. Migrate, create the first workspace/account and start the application:
 
 ```bash
