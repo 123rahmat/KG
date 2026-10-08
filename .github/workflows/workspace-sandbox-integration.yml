@@ -9,6 +9,8 @@ on:
     paths:
       - '.github/workflows/workspace-sandbox-integration.yml'
       - 'src/tool-forge.js'
+      - 'src/runs.js'
+      - 'tests/real-world-delivery-gate.test.js'
       - 'tests/tool-forge-auth.test.js'
       - 'src/sandbox.js'
       - 'tests/sandbox*.test.js'
