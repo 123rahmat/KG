@@ -1656,16 +1656,38 @@ async function runCodeWorkspaceAgentPanels({
         fileCount: Number(subsystemPlan.project?.fileCount ?? 0),
         remainingBudgetRatio: remainingBudgetRatio()
       });
-      const panelWidth = pressureMonitor.topologyAction === 'expand'
-        ? Math.min(maxAgents, basePanelWidth + 1)
-        : pressureMonitor.topologyAction === 'contract'
-          ? Math.max(1, basePanelWidth - 1)
-          : basePanelWidth;
+      // Wave boundary is the only safe place to change optional specialist
+      // capacity; this does not change committed tasks or verification authority.
+      const budgetReading = remainingSpecialistBudget(run);
+      const subsystemEconomy = specialistWaveDecision({
+        workspace: singlePanel ? 'normal-chat' : 'code',
+        mode,
+        plannedAgents: basePanelWidth,
+        maxAgents,
+        completedRoles: representativeState?.roles ?? [],
+        failedRoles: (representativeState?.unavailableRoles ?? []).map(item => item.role),
+        findings: representativeState?.findings ?? [],
+        remainingBudgetRatio: budgetReading == null
+          ? (run?.maxTokens == null ? null : remainingBudgetRatio())
+          : Math.min(budgetReading, remainingBudgetRatio()),
+        risk: run?.situation?.risk,
+        pressure: pressureMonitor.pressure,
+        independence: ready.length > 1 ? 0.8 : 0.25
+      });
+      const panelWidth = Math.max(1, Math.min(
+        subsystemEconomy.targetAgents || 1,
+        pressureMonitor.topologyAction === 'expand'
+          ? Math.min(maxAgents, basePanelWidth + 1)
+          : pressureMonitor.topologyAction === 'contract'
+            ? Math.max(1, basePanelWidth - 1)
+            : basePanelWidth
+      ));
       // Topology controls how many independent subsystem panels can be active;
       // specialist concurrency is enforced separately by the shared scheduler.
       const maxPanels = singlePanel
         ? 1
-        : Math.min(ready.length, Math.max(1, Math.floor(providerParallelCap / 2)));
+        : Math.min(ready.length, Math.max(1,
+          Math.floor(Math.min(providerParallelCap, subsystemEconomy.maxParallel) / 2)));
       const batch = ready.slice(0, maxPanels);
       const jobs = [];
 
@@ -2778,6 +2800,13 @@ export async function runAdaptiveAgentPanel({
     allocationRounds: Math.max(allocationRounds, completedRoles.length),
     waves,
     waveCount: waves.length,
+    specialistLifecycle: specialistWave ? {
+      action: specialistWave.action,
+      reason: specialistWave.reason,
+      targetAgents: specialistWave.targetAgents,
+      maxParallel: specialistWave.maxParallel,
+      verificationAuthority: specialistWave.verificationAuthority
+    } : null,
     efficiency: {
       earlyConvergence,
       specialistsCompleted: completedRoles.length,
