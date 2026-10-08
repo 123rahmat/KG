@@ -98,20 +98,40 @@ export async function attachmentContext(objects, scope, attachments, { maxChars 
   const singles = [];
   const files = [];
   const images = [];
-  let budget = maxChars;
+  // The model's snapshot is bounded independently of the underlying files.
+  // Explicit file reads and sandbox project snapshots remain unaffected.
+  const requestedBudget = Number(maxChars);
+  let budget = Number.isFinite(requestedBudget)
+    ? Math.min(60_000, Math.max(0, Math.floor(requestedBudget))) : 60_000;
   const orderedAttachments = [...(Array.isArray(attachments) ? attachments : [])]
     .sort((a, b) => attachmentPriority(b, focus) - attachmentPriority(a, focus));
   for (const file of orderedAttachments) {
+    signal?.throwIfAborted();
     if (!file.readable) {
       files.push({ id: file.id, name: file.name, readable: false, note: 'This file type cannot be read; ask the person what it contains, or use a tool that can.' });
       continue;
     }
-    const read = await readAttachment(objects, scope, file, { signal });
-    if (read.error) { files.push({ id: file.id, name: file.name, readable: false, note: read.error }); continue; }
-    if (isSensitiveWorkspacePath(file.name)) {
+    // Never read a sensitive file simply to decide whether to exclude it.
+    if (isSensitiveWorkspacePath(String(file.name ?? ''))) {
       files.push({ id: file.id, name: file.name, readable: false, note: 'Sensitive credential-bearing files are never sent to the AI model.' });
       continue;
     }
+    // Parsing documents and archives can be expensive. Once text context is
+    // full, preserve the file in the task manifest and let an authorized
+    // file.read action fetch targeted ranges if needed.
+    const isPotentialImage = /^image\//i.test(String(file.contentType ?? ''))
+      || /\.(?:png|jpe?g|gif|webp)$/i.test(String(file.name ?? ''))
+      || String(file.format ?? '').toLowerCase() === 'image';
+    if (budget <= 0 && !isPotentialImage) {
+      files.push({
+        id: file.id, name: file.name, readable: true, truncated: true,
+        text: '', more: 'The model context is full. Use file.read with an offset to inspect this file.',
+        note: 'Not parsed in this step; available through authorized file access.'
+      });
+      continue;
+    }
+    const read = await readAttachment(objects, scope, file, { signal });
+    if (read.error) { files.push({ id: file.id, name: file.name, readable: false, note: read.error }); continue; }
     if (read.kind === 'image') {
       if (images.length < imageLimit) {
         images.push(read.image);
