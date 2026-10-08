@@ -50,3 +50,34 @@ test('task profiles never authorize tools or workspace transitions', () => {
   assert.equal(profile.suggestedTransition, null);
   assert.ok(Object.isFrozen(profile.contextPriorities));
 });
+
+test('comparison requests suggest a table without forcing extra agents', () => {
+  const profile = normalChatTaskProfile({ goal: 'Compare these options and trade-offs' });
+  assert.equal(profile.presentation.mode, 'comparison');
+  assert.equal(profile.presentation.showTableWhenUseful, true);
+  assert.equal(profile.agentPolicy, 'one-model-first-recruit-only-when-useful');
+});
+
+test('educational reasoning suggests worked examples', () => {
+  const profile = normalChatTaskProfile({ goal: 'Teach me to solve calculus problems' });
+  assert.equal(profile.domain, 'education');
+  assert.equal(profile.presentation.mode, 'worked-example');
+  assert.equal(profile.presentation.showWorkedExample, true);
+});
+
+test('file edits suggest file progress, while deep reasoning remains optional', () => {
+  const profile = normalChatTaskProfile({
+    goal: 'Edit and reconcile these two documents',
+    attachments: ['a.docx', 'b.docx']
+  });
+  assert.equal(profile.presentation.mode, 'file-workflow');
+  assert.equal(profile.presentation.showFileProgress, true);
+  assert.equal(profile.presentation.allowDeepReasoning, false);
+});
+
+test('visual requests stay native to Chat with preview intent', () => {
+  const profile = normalChatTaskProfile({ goal: 'Create a flowchart of the process' });
+  assert.equal(profile.presentation.mode, 'visual-first');
+  assert.equal(profile.presentation.showVisualWhenUseful, true);
+  assert.equal(profile.suggestedTransition, null);
+});
