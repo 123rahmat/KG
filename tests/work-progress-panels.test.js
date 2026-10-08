@@ -79,3 +79,44 @@ test('new task reason is visible only when the server recorded an evidence ancho
   assert.equal(view.stages[1].evidenceAnchor, 'test-code');
   assert.equal(view.stages[2].evidenceAnchor, '');
 });
+
+test('ongoing file work reports context without inventing edits or test results', () => {
+  const view = workspaceProgressPanel({
+    next: 'respond',
+    adaptation: { attachments: [{ name: 'notes.pdf' }, { name: 'budget.xlsx' }] },
+    tasks: [{ id: 'respond', type: 'respond', status: 'running',
+      purpose: 'Read selected files' }]
+  });
+  assert.equal(view.stageContext.title, 'Working · file-based work');
+  assert.match(view.stageContext.detail, /2 files in context/);
+  assert.match(view.stageContext.detail, /only when recorded/);
+});
+
+test('ongoing reassessment explains the public evidence checkpoint without disclosing private reasoning', () => {
+  const view = workspaceProgressPanel({
+    next: 'reassess',
+    tasks: [
+      { id: 'test-code', type: 'code', status: 'complete',
+        evidence: { result: { exitCode: 1 } } },
+      { id: 'reassess', type: 'reassess', status: 'running' }
+    ]
+  }, 'code');
+  assert.equal(view.stageContext.title, 'Working · reassess the next action');
+  assert.match(view.stageContext.detail, /recorded results/);
+});
+
+test('pending verification is presented as next rather than completed', () => {
+  const view = workspaceProgressPanel({
+    next: 'verify', tasks: [{ id: 'verify', type: 'verify', status: 'pending' }]
+  }, 'research');
+  assert.equal(view.stageContext.title, 'Up next · verify the result');
+  assert.equal(view.completed, 0);
+});
+
+test('single everyday reply has no distracting explanation panel', () => {
+  const view = workspaceProgressPanel({
+    next: 'respond',
+    tasks: [{ id: 'respond', type: 'respond', status: 'running' }]
+  });
+  assert.equal(view.stageContext, null);
+});
