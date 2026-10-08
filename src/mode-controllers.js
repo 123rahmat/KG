@@ -5,6 +5,7 @@
  * do not own model state, permissions, lifecycle, memory or completion.
  */
 import { specialistBudgetRatio } from './agent-topology-policy.js';
+import { normalChatTaskProfile } from './normal-chat-task-profile.js';
 
 const text = value => String(value ?? '').trim();
 const uniq = value => [...new Set((Array.isArray(value) ? value : []).map(text).filter(Boolean))];
@@ -216,6 +217,15 @@ export function buildModeControllerContract({
     verificationRequired: acceptance?.verificationRequired === true || criteria.length > 0
   });
   const acceptanceMet = acceptance?.satisfied === true;
+  // Personal tutoring, business thinking and file work use the same Normal
+  // Chat controller; difficulty can increase reasoning depth without adding
+  // a workspace, a permanent specialist team, or new permissions.
+  const everyday = controller.mode === 'normal-chat'
+    ? normalChatTaskProfile({
+        goal: situation?.goal, attachments: situation?.attachments,
+        complexity, uncertainty, risk: normalizedRisk,
+        verificationRequired: compute.qualityFloor === 'verified-before-completion'
+      }) : null;
   return Object.freeze({
     version: MODE_CONTROLLER_VERSION,
     controller: controller.id,
@@ -241,6 +251,7 @@ export function buildModeControllerContract({
       acceptanceAware: criteria.length > 0
     },
     roles: [...controller.roles],
+    ...(everyday ? { everyday } : {}),
     situation: {
       phase: text(situation?.phase) || 'unknown',
       risk: normalizedRisk,

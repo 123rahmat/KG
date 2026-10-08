@@ -9,7 +9,6 @@ import { classifyAttachmentSet } from './documents.js';
 
 const text = value => String(value ?? '').trim();
 const CODE = /\b(?:code|coding|program|programming|debug|debugging|refactor|repository|repo|pull request|branch|commit|function|class|bug|stack trace|compile|test suite|unit test|typescript|javascript|python|rust|golang|java|sql|api|backend|frontend|software|app|application|website|web app|github|simulation|simulate|simulating|computational model|numerical model)\b|\b[\w-]+\.(?:py|js|mjs|cjs|ts|tsx|jsx|go|rs|java|kt|c|cc|cpp|h|hpp|cs|rb|php|swift|sql|sh|html|css|json)\b/i;
-const RESEARCH_DEEP = /\b(?:research|deep research|investigate|literature review|systematic review|academic papers?|sources?|citations?|references?|evidence|state of the art|comprehensive(?:ly)?|in[- ]depth|fact[- ]check|latest|current|search the web|web search|browse|compare .*sources)\b/i;
 const CURRENT_FACTS = /\b(?:latest|today|current|currently|right now|this week|live|recent|news|price|prices|rate|rates|weather|scores?)\b/i;
 const CODE_PROJECT_SCOPE = /\b(?:repository|repo|codebase|project|code workspace|github|pull request|branch|commit|multi[- ]file|multiple files|whole app|whole application|service|backend|frontend|api|deployment|deploy)\b/i;
 const CODE_SINGLE_SCOPE = /\b(?:function|method|class|variable|snippet|script|single file|this file|one file|small fix|small change|edit this file|fix this file|explain this code|review this code|run this script|test this file|small program|utility script)\b/i;
@@ -157,11 +156,13 @@ export const SURFACE_POLICY=Object.freeze({version:SURFACE_POLICY_VERSION,surfac
 
 export function classifySurfaceBoundary(goal,{activeSurface='',attachments=[],flags={},actions=[]}={}){
   const value=text(goal); const active=normalizeSurfaceId(activeSurface); const profile=attachmentProfile(attachments);
-  const code=shouldUseCodeWorkspace(value,attachments,actions) || (flags.code===true && actions.some(a=>['create','transform','execute'].includes(text(a).toLowerCase())) && CODE_PROJECT_SCOPE.test(value));
-  const research=kinds(attachments).includes('research-bundle') || profile.kind==='research' || EXPLICIT_RESEARCH.test(value)
-    || (RESEARCH_DEEP.test(value) && /\b(?:research|investigat|paper|source|evidence|citation|literature|latest|current|browse|search)\w*\b/i.test(value))
-    || (CURRENT_FACTS.test(value) && /\b(?:search|find|check|verify|compare|source|price|rate|news|weather|score|latest|current)\b/i.test(value))
-    || (flags.research===true && /\b(?:source|evidence|latest|current|paper|literature|research|investigat)\w*\b/i.test(value));
+  const code=shouldUseCodeWorkspace(value,attachments,actions) || (flags.code===true && actions.some(a=>['create','transform','execute'].includes(text(a).toLowerCase())) && CODE_PROJECT_SCOPE.test(value) && !EVERYDAY_LEARNING.test(value) && !BUSINESS_LEARNING.test(value));
+  const deepResearch = !EVERYDAY_LEARNING.test(value)
+    && (DEEP_RESEARCH_SCOPE.test(value) || SOURCE_HEAVY_RESEARCH.test(value));
+  const research=kinds(attachments).includes('research-bundle') || profile.kind==='research'
+    || EXPLICIT_RESEARCH.test(value) || deepResearch
+    || (flags.research===true && !EVERYDAY_LEARNING.test(value)
+      && /\b(?:citations?|papers?|literature|source verification|peer-reviewed|systematic review)\b/i.test(value));
   const requested=activeSurface||'normal-chat';
   if(code) return {requested,surface:'code',redirect:active!=='code',transition:active==='code'?'stay':'switch',reason:'coding-work-requires-code-surface',complexity:'deep-eligible',workspace:SURFACE_WORKSPACE_CONTRACTS.code,attachmentProfile:profile};
   if(research) return {requested,surface:'research',redirect:active!=='research',transition:active==='research'?'stay':'switch',reason:'deep-research-work-requires-research-surface',complexity:'deep-eligible',workspace:SURFACE_WORKSPACE_CONTRACTS.research,attachmentProfile:profile};

@@ -2,6 +2,8 @@
 
 KG uses **one shared adaptive intelligence, memory-scoping, governance,
 checkpointing and verification kernel** with three distinct operating policies.
+
+Normal Chat owns daily assistance **including complex reasoning when warranted**: educational explanations, math and science tutoring, business planning, scenario comparison, writing, file previews and small authorized sandbox work. Its task profile classifies the current purpose, reasoning depth and verification emphasis without dispatching agents or forcing a Code/Research transition. Current events and basic factual lookups remain everyday chat work. Code and Research use independently controlled specialist policies and scoped project/evidence state; they never silently inherit another workspace's edit permissions, state or execution authority.
 These are *profiles*, not independent brains or mandatory agent teams.
 
 | Surface | Fast path | When to specialize | Safe parallel work | Verification |
