@@ -84,7 +84,8 @@ export function specialistWaveDecision({
   // Never construe optional specialist confidence as parent-workflow verification.
   // The active wave must settle before this contract is consulted again.
   const concurrencyCeiling = elevated || failed || budget < 0.25 ? 1
-    : independent < (surface === 'normal-chat' ? 0.7 : 0.35) ? 1
+    : normalizedMode !== 'always'
+      && independent < (surface === 'normal-chat' ? 0.7 : 0.35) ? 1
       : surface === 'normal-chat' ? 2 : surface === 'code' ? 3 : 4;
   const maxParallel = Math.max(1, Math.min(Math.max(1, target), ceiling, concurrencyCeiling));
   return Object.freeze({
