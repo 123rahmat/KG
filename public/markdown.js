@@ -7,6 +7,7 @@
  */
 
 import { latexToParts, looksLikeMath, flattenMath } from './math-text.js';
+import { parseFlowDiagram } from './flow-diagram.js';
 
 /** The direction of a text: that of its first letter (rtl for Arabic, Urdu, Hebrew…). */
 export function textDirection(text) {
@@ -220,6 +221,22 @@ export function renderMarkdown(markdown, { codeActions = () => [] } = {}) {
           item.children.map(block));
       }
       case 'code': {
+        // Structured visualizations are opt-in and conservative. Unsupported
+        // syntax remains a readable code block, never an invented diagram.
+        const steps = item.language === 'flow' ? parseFlowDiagram(item.text) : null;
+        if (steps) {
+          const list = make('ol', 'md-flow-steps', steps.map((label, index) =>
+            make('li', 'md-flow-step', [
+              make('span', 'md-flow-number', [document.createTextNode(String(index + 1))]),
+              make('span', 'md-flow-label', [document.createTextNode(label)])
+            ])));
+          const figure = make('figure', 'md-flow', [
+            make('figcaption', 'md-flow-caption', [document.createTextNode('Process diagram')]),
+            list
+          ]);
+          figure.setAttribute('aria-label', 'Linear process diagram with ' + steps.length + ' steps');
+          return figure;
+        }
         const code = make('code', item.language ? `language-${item.language}` : '');
         code.textContent = item.text;
         const label = make('span', 'md-code-lang');
