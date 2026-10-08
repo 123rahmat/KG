@@ -1664,7 +1664,7 @@ async function runCodeWorkspaceAgentPanels({
         mode,
         plannedAgents: basePanelWidth,
         maxAgents,
-        completedRoles: representativeState?.roles ?? [],
+        completedRoles: (representativeState?.findings ?? []).map((_, index) => 'observed-' + index),
         failedRoles: (representativeState?.unavailableRoles ?? []).map(item => item.role),
         findings: representativeState?.findings ?? [],
         remainingBudgetRatio: budgetReading == null
@@ -1686,8 +1686,9 @@ async function runCodeWorkspaceAgentPanels({
       // specialist concurrency is enforced separately by the shared scheduler.
       const maxPanels = singlePanel
         ? 1
-        : Math.min(ready.length, Math.max(1,
-          Math.floor(Math.min(providerParallelCap, subsystemEconomy.maxParallel) / 2)));
+        : Math.min(ready.length, Math.max(1, Math.floor(providerParallelCap / 2)),
+          subsystemEconomy.budgetKnown && subsystemEconomy.budgetRatio < 0.25
+            || subsystemEconomy.failed > 0 ? 1 : providerParallelCap);
       const batch = ready.slice(0, maxPanels);
       const jobs = [];
 
