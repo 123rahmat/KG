@@ -79,8 +79,9 @@ export function liveWorkFocus(run, { workspace = 'normal-chat', connectedGitHub 
             ? 'Up next' : 'Ready';
   const runningTool = status === 'Working' ? toolState(current) : '';
   const title = terminal ? status : current ? labelFor(current) : 'Preparing the next action';
-  const line = clip(runningTool ? status + ' · ' + runningTool + ' · ' + title
-    : status + ' · ' + title, 220);
+  const line = clip(terminal && !stopping && !offline ? status
+    : runningTool ? status + ' · ' + runningTool + ' · ' + title
+      : status + ' · ' + title, 220);
   const currentExecution = execution(current);
   const lastExecutionTask = [...tasks].reverse().find(task =>
     ['complete', 'failed'].includes(task?.status) && execution(task));
