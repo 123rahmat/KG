@@ -69,7 +69,7 @@ export function liveWorkFocus(run, { workspace = 'normal-chat', connectedGitHub 
       || tasks.find(task => task?.status === 'running')
       || tasks.find(task => ['pending', 'waiting', 'queued'].includes(task?.status)) || null;
   const files = contextNames(run);
-  const status = stopping ? 'Stopping' : offline ? 'Offline'
+  const status = stopping ? 'Stopping' : offline ? 'Connection lost'
     : terminal ? ({ complete: 'Finished', iterate: 'Result ready', failed: 'Failed',
       blocked: 'Blocked', exhausted: 'Limit reached' }[run?.state] || 'Finished')
       : current?.type === 'approval' || current?.type === 'clarify' || run?.state === 'waiting'
