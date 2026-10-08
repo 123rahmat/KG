@@ -19,6 +19,7 @@ import { realWorldMaturity } from './adaptive-efficiency.js';
 import { adaptiveDecisionAuthority, buildAcceptanceContract } from './adaptive-decision-authority.js';
 import { controllerForSurface } from './mode-controllers.js';
 import { remainingSpecialistBudget, specialistTopology } from './agent-topology-policy.js';
+import { specialistWaveDecision } from './specialist-wave-policy.js';
 import { taskSpecialization } from './task-specialization.js';
 import { codeSpecialistTeam, researchSpecialistTeams, specialistRemit } from './specialist-hierarchy.js';
 import { executeAgentLaneWaves } from './agent-lane-executor.js';
@@ -2341,6 +2342,7 @@ export async function runAdaptiveAgentPanel({
   let lastAllocation = allocationResult.allocation;
   let allocationRounds = 0;
   let earlyConvergence = { stop: false, reason: 'not-reached' };
+  let specialistWave = null;
   let blackboard = await loadBlackboard({ run, task });
   // A normal-chat ZIP project deliberately stays a single panel. It still
   // gets the same adaptive role allocation and parallel specialist execution,
@@ -2430,6 +2432,34 @@ export async function runAdaptiveAgentPanel({
       evidenceSoFar: basePayload?.evidenceSoFar,
       findings
     };
+    // Re-evaluate optional specialist capacity only at a wave boundary.
+    // The parent server workflow remains responsible for all verification.
+    const recordedRatio = remainingSpecialistBudget(run);
+    const tokensRatio = run?.maxTokens == null ? null : remainingBudgetRatio();
+    const observedRemainingRatio = recordedRatio === null ? tokensRatio
+      : tokensRatio === null ? recordedRatio : Math.min(recordedRatio, tokensRatio);
+    specialistWave = specialistWaveDecision({
+      workspace: run?.surface || run?.adaptation?.primarySurface || 'normal-chat',
+      mode,
+      plannedAgents: initialPanelFloor,
+      maxAgents,
+      completedRoles, failedRoles, findings,
+      remainingBudgetRatio: observedRemainingRatio,
+      risk: run?.situation?.risk,
+      pressure: lastAllocation?.pressure ?? allocationResult.decision?.pressure ?? 0,
+      independence: lastAllocation?.dimensions?.concurrencyOpportunity ?? 0,
+      acceptanceSatisfied: run?.requirements?.completionReady === true
+        && run?.requirements?.verificationSatisfied === true
+    });
+    if (specialistWave.stopRecruitment) {
+      earlyConvergence = {
+        stop: true,
+        reason: specialistWave.reason,
+        evidenceOnly: true
+      };
+      break;
+    }
+    effectiveMaxParallel = Math.min(effectiveMaxParallel, specialistWave.maxParallel);
     // Reassess convergence before recruiting another specialist wave. A
     // clean pair of independent findings can terminate the generic panel even
     // when the original allocation had a larger theoretical floor.
@@ -2440,7 +2470,13 @@ export async function runAdaptiveAgentPanel({
         break;
       }
     }
-    allocationResult = rolesFor(run, task, { maxAgents, mode, progress, minimumAgents: initialPanelFloor });
+    allocationResult = rolesFor(run, task, {
+      maxAgents: mode === 'auto' ? Math.max(1, specialistWave.targetAgents) : maxAgents,
+      mode, progress,
+      minimumAgents: mode === 'auto'
+        ? Math.min(initialPanelFloor, Math.max(1, specialistWave.targetAgents))
+        : initialPanelFloor
+    });
     lastAllocation = allocationResult.allocation ?? lastAllocation;
 
     const pendingRoles = allocationResult.roles.filter(role =>
@@ -2682,9 +2718,11 @@ export async function runAdaptiveAgentPanel({
     })));
 
     allocationResult = rolesFor(run, task, {
-      maxAgents,
+      maxAgents: mode === 'auto' ? Math.max(1, specialistWave?.targetAgents ?? maxAgents) : maxAgents,
       mode,
-      minimumAgents: initialPanelFloor,
+      minimumAgents: mode === 'auto'
+        ? Math.min(initialPanelFloor, Math.max(1, specialistWave?.targetAgents ?? initialPanelFloor))
+        : initialPanelFloor,
       progress: {
         completedRoles,
         failedRoles,
