@@ -1717,7 +1717,12 @@ async function runCodeWorkspaceAgentPanels({
         capabilities: run?.capabilities?.granted ?? [],
         evidence: basePayload?.evidenceSoFar ?? [],
         projectPaths: basePayload?.workspace?.paths ?? [],
-        priorTopics: basePayload?.conversation?.map(item => item?.user) ?? []
+        priorTopics: basePayload?.conversation?.map(item => item?.user) ?? [],
+        learnedSkills: Array.isArray(basePayload?.skillLearning)
+          ? basePayload.skillLearning : basePayload?.skillLearning?.profiles ?? [],
+        preferences: run?.situation?.preferences ?? [],
+        memory: basePayload?.scopedMemory ?? [],
+        memoryAuthorized: basePayload?.memoryScopeVerified === true
       });
 
       const parallelPlan = adaptiveParallelLimit({
@@ -2476,7 +2481,12 @@ export async function runAdaptiveAgentPanel({
       capabilities: run?.capabilities?.granted ?? [],
       evidence: basePayload?.evidenceSoFar ?? [],
       projectPaths: basePayload?.workspace?.paths ?? [],
-      priorTopics: basePayload?.conversation?.map(item => item?.user) ?? []
+      priorTopics: basePayload?.conversation?.map(item => item?.user) ?? [],
+        learnedSkills: Array.isArray(basePayload?.skillLearning)
+          ? basePayload.skillLearning : basePayload?.skillLearning?.profiles ?? [],
+        preferences: run?.situation?.preferences ?? [],
+        memory: basePayload?.scopedMemory ?? [],
+        memoryAuthorized: basePayload?.memoryScopeVerified === true
     });
 
     // Run the current specialist wave through the same workspace lane

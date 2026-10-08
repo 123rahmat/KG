@@ -120,10 +120,12 @@ export function adaptiveDecisionAuthority({
 
   const usableCapabilities = uniq(authorizedCapabilities.length ? authorizedCapabilities : availableCapabilities);
   const requestedCandidates = Array.isArray(candidates) ? candidates : [];
+  // Never fall back to a candidate excluded by the explicit capability
+  // allow-list. Discovery/selection is not execution authorization.
   const candidate = requestedCandidates.find(item => {
     const id = text(typeof item === 'string' ? item : item?.id);
     return id && (!usableCapabilities.length || usableCapabilities.includes(id));
-  }) ?? requestedCandidates[0] ?? null;
+  }) ?? null;
 
   let action = 'stop';
   let reason = 'No justified next action is available.';

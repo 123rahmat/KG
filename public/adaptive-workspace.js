@@ -312,6 +312,18 @@ export function renderWorkStatus(run) {
   });
   const snapshot = progressSnapshot(run);
   const background = backgroundSnapshot(run);
+  const nextDecision = run?.adaptation?.unifiedAdaptiveWorkflow?.openWorld ?? null;
+  const decisionNote = nextDecision?.action === 'approval-required'
+    ? 'The next proposed action needs approval.'
+    : nextDecision?.action === 'capability-gap'
+      ? 'A required capability or prerequisite is unavailable.'
+      : nextDecision?.action === 'budget-gate'
+        ? 'Resource limits prevent optional expansion.'
+        : nextDecision?.action === 'investigate' && nextDecision?.unknowns?.length
+          ? nextDecision.unknowns.length + ' unresolved question' + (nextDecision.unknowns.length === 1 ? '' : 's') + ' guiding the next action'
+          : nextDecision?.action === 'propose-work' && nextDecision?.next?.purpose
+            ? 'Suggested next action · ' + String(nextDecision.next.purpose).slice(0, 140)
+            : '';
   const backgroundItems = [
     !view.terminal ? 'Work mode · ' + background.runtimeMode : '',
     background.activeAgents.length && view.live
@@ -361,6 +373,7 @@ export function renderWorkStatus(run) {
       element('span', { class: 'small', text: background.permission })
     ]) : null,
     meter,
+    !view.terminal && decisionNote ? element('div', { class: 'work-update-note small muted', text: decisionNote }) : null,
     meter ? element('div', { class: 'work-progress-caption small muted', text: view.percent + '% of required outcomes supported by evidence' }) : null,
     !view.terminal && !meter ? element('div', { class: 'work-progress-caption small muted', text: view.completed ? view.completed + ' step' + (view.completed === 1 ? '' : 's') + ' completed · next action adapts as needed' : 'Only the work your request needs' }) : null,
     metrics.length ? element('div', { class: 'work-evidence-chips' }, metrics.map(([label, value]) => element('span', { class: 'work-evidence-chip', text: value + ' ' + label.toLowerCase() }))) : null,

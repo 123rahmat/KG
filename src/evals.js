@@ -41,8 +41,12 @@ export async function runEvalSuite(cases = [], { concurrency = 4, onCase = null 
       const started = Date.now();
       try {
         const output = await item.run();
+        const tokenCount = Number(output?.tokensUsed ?? output?.tokens ?? output?.usage?.totalTokens);
+        const measuredCost = Number(output?.costUsd ?? output?.usage?.costUsd);
         results[index] = { id: item.id, version: item.version, tags: item.tags,
-          elapsedMs: Date.now() - started, ...scoreEvalResult(output, item.expected) };
+          elapsedMs: Date.now() - started, ...scoreEvalResult(output, item.expected),
+          ...(Number.isFinite(tokenCount) && tokenCount >= 0 ? { tokensUsed: tokenCount } : {}),
+          ...(Number.isFinite(measuredCost) && measuredCost >= 0 ? { costUsd: measuredCost } : {}) };
       } catch (error) {
         results[index] = { id: item.id, version: item.version, tags: item.tags,
           elapsedMs: Date.now() - started, pass: false, score: 0, checks: [],
@@ -68,6 +72,8 @@ export function summarizeEval(report) {
   const passed = results.filter(item => item.pass).length;
   const elapsed = results.map(item => Number(item.elapsedMs)).filter(Number.isFinite);
   const tokens = results.map(item => Number(item.tokens ?? item.tokensUsed)).filter(Number.isFinite);
+  const costs = results.map(item => Number(item.costUsd)).filter(Number.isFinite);
+  const totalCostUsd = costs.reduce((sum, cost) => sum + cost, 0);
   const average = values => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
   return {
     version: 1,
@@ -77,6 +83,8 @@ export function summarizeEval(report) {
     passRate: total ? passed / total : 1,
     averageElapsedMs: average(elapsed),
     averageTokens: average(tokens),
+    totalCostUsd,
+    costPerAcceptedUsd: costs.length && passed > 0 ? totalCostUsd / passed : null,
     p95ElapsedMs: elapsed.length ? elapsed.slice().sort((a, b) => a - b)[Math.min(elapsed.length - 1, Math.ceil(elapsed.length * 0.95) - 1)] : 0,
     tagged: Object.fromEntries([...new Set(results.flatMap(item => Array.isArray(item.tags) ? item.tags : []))].map(tag => {
       const subset = results.filter(item => Array.isArray(item.tags) && item.tags.includes(tag));
@@ -96,13 +104,15 @@ export function compareEvalReports(candidate, baseline) {
     passRateDelta: current.passRate - prior.passRate,
     averageElapsedDeltaMs: current.averageElapsedMs - prior.averageElapsedMs,
     averageTokensDelta: current.averageTokens - prior.averageTokens,
+    costPerAcceptedDeltaUsd: current.costPerAcceptedUsd !== null && prior.costPerAcceptedUsd !== null
+      ? current.costPerAcceptedUsd - prior.costPerAcceptedUsd : null,
     failedDelta: current.failed - prior.failed,
     candidate: current,
     baseline: prior
   };
 }
 
-export function regressionGate(report, { minPassRate = 1, maxFailed = 0, maxPassRateDrop = 0, maxAverageTokenIncrease = Infinity, maxAverageElapsedIncreaseMs = Infinity } = {}) {
+export function regressionGate(report, { minPassRate = 1, maxFailed = 0, maxPassRateDrop = 0, maxAverageTokenIncrease = Infinity, maxAverageElapsedIncreaseMs = Infinity, maxCostPerAcceptedIncreaseUsd = Infinity } = {}) {
   const current = summarizeEval(report);
   const baseline = Number.isFinite(Number(report?.baselinePassRate))
     ? Number(report.baselinePassRate)
@@ -114,12 +124,16 @@ export function regressionGate(report, { minPassRate = 1, maxFailed = 0, maxPass
   const elapsedIncrease = Number(report?.baselineAverageElapsedMs) > 0
     ? current.averageElapsedMs - Number(report.baselineAverageElapsedMs)
     : 0;
+  const priorCost = Number(report?.baselineCostPerAcceptedUsd);
+  const costIncrease = Number.isFinite(priorCost) && priorCost > 0 && current.costPerAcceptedUsd !== null
+    ? current.costPerAcceptedUsd - priorCost : 0;
   return {
     pass: current.passRate >= Number(minPassRate)
       && current.failed <= Number(maxFailed)
       && passRateDrop <= Number(maxPassRateDrop)
       && tokenIncrease <= Number(maxAverageTokenIncrease)
-      && elapsedIncrease <= Number(maxAverageElapsedIncreaseMs),
+      && elapsedIncrease <= Number(maxAverageElapsedIncreaseMs)
+      && costIncrease <= Number(maxCostPerAcceptedIncreaseUsd),
     passRate: current.passRate,
     failed: current.failed,
     baselinePassRate: baseline,
@@ -128,6 +142,8 @@ export function regressionGate(report, { minPassRate = 1, maxFailed = 0, maxPass
     averageElapsedMs: current.averageElapsedMs,
     tokenIncrease,
     elapsedIncrease,
+    costPerAcceptedUsd: current.costPerAcceptedUsd,
+    costIncrease,
     rule: 'A change is promotable only when quality stays within the configured reliability and efficiency regression limits.'
   };
 }

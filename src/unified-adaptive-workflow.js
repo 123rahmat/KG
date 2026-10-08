@@ -21,6 +21,7 @@ import {
   recoveryDecision,
   summarizeEvidence
 } from './adaptive-decision-authority.js';
+import { composeOpenWorldDecision, validateOpenWorldGraph } from './open-world-task-graph.js';
 
 const text = value => String(value ?? '').trim();
 const clamp01 = value => Math.min(1, Math.max(0, Number.isFinite(Number(value)) ? Number(value) : 0));
@@ -184,6 +185,7 @@ export function buildUnifiedAdaptiveWorkflow({
   authorizedCapabilities = [],
   candidates = [],
   previousAction = null,
+  taskGraph = null,
   profile = null,
   surface = 'normal-chat'
 } = {}) {
@@ -254,6 +256,12 @@ export function buildUnifiedAdaptiveWorkflow({
     previousFailure: failedAttempts > 0,
     remainingBudgetRatio: Number(s.remainingBudgetRatio ?? 1)
   });
+  const durableGraph = validateOpenWorldGraph(taskGraph ?? {});
+  const openWorld = composeOpenWorldDecision({
+    goal: s.goal, situation: s, graph: durableGraph, candidates, acceptance: a,
+    availableCapabilities, authorizedCapabilities,
+    remainingBudgetRatio: s.remainingBudgetRatio ?? null
+  });
   const behavior = adaptiveBehaviorContract(p, {
     situation: { ...s, consequence: consequenceOf(s) },
     acceptance: a,
@@ -272,6 +280,8 @@ export function buildUnifiedAdaptiveWorkflow({
     profile: p,
     acceptance: a,
     authority,
+    taskGraph: durableGraph,
+    openWorld,
     behavior,
     surface: operatingSurface,
     modeController,
@@ -322,6 +332,7 @@ export function reassessUnifiedWorkflow(previous = {}, {
   candidates = [],
   availableCapabilities = [],
   authorizedCapabilities = [],
+  taskGraph = null,
   surface = null
 } = {}) {
   const prior = previous && typeof previous === 'object' ? previous : {};
@@ -353,6 +364,7 @@ export function reassessUnifiedWorkflow(previous = {}, {
     availableCapabilities,
     authorizedCapabilities,
     previousAction: prior.authority?.action ?? null,
+    taskGraph: taskGraph ?? prior.taskGraph ?? {},
     surface: text(surface) || text(prior.surface) || text(mergedSituation.surface) || 'normal-chat'
   });
   return {
@@ -364,6 +376,8 @@ export function reassessUnifiedWorkflow(previous = {}, {
       at: new Date().toISOString(),
       previousAction: prior.authority?.action ?? null,
       actionChanged: prior.authority?.action !== next.authority.action,
+      openWorldActionChanged: prior.openWorld?.action !== next.openWorld.action,
+      graphRevisionChanged: prior.taskGraph?.revision !== next.taskGraph.revision,
       deescalated: Number(next.authority.pressure) < Number(prior.authority?.pressure ?? 2),
       reason: next.authority.reason
     }
