@@ -9,12 +9,17 @@ import { classifyAttachmentSet } from './documents.js';
 
 const text = value => String(value ?? '').trim();
 const CODE = /\b(?:code|coding|program|programming|debug|debugging|refactor|repository|repo|pull request|branch|commit|function|class|bug|stack trace|compile|test suite|unit test|typescript|javascript|python|rust|golang|java|sql|api|backend|frontend|software|app|application|website|web app|github|simulation|simulate|simulating|computational model|numerical model)\b|\b[\w-]+\.(?:py|js|mjs|cjs|ts|tsx|jsx|go|rs|java|kt|c|cc|cpp|h|hpp|cs|rb|php|swift|sql|sh|html|css|json)\b/i;
-const CURRENT_FACTS = /\b(?:latest|today|current|currently|right now|this week|live|recent|news|price|prices|rate|rates|weather|scores?)\b/i;
 const CODE_PROJECT_SCOPE = /\b(?:repository|repo|codebase|project|code workspace|github|pull request|branch|commit|multi[- ]file|multiple files|whole app|whole application|service|backend|frontend|api|deployment|deploy)\b/i;
 const CODE_SINGLE_SCOPE = /\b(?:function|method|class|variable|snippet|script|single file|this file|one file|small fix|small change|edit this file|fix this file|explain this code|review this code|run this script|test this file|small program|utility script)\b/i;
 const EXPLICIT_CODE = /\b(?:switch|move|open|use|take me to|continue in|work in)\s+(?:the\s+)?(?:code|coding)(?:\s+workspace)?\b|\b(?:code|coding)\s+workspace\b/i;
 const EXPLICIT_RESEARCH = /\b(?:switch|move|open|use|take me to|continue in|work in)\s+(?:the\s+)?research(?:\s+workspace)?\b|\b(?:research|deep research)\s+workspace\b/i;
 const MEDIUM_ANALYSIS = /\b(?:explain|compare|analy[sz]e|solve|calculate|derive|show|teach|why|how|which|evaluate|recommend|suggest|summari[sz]e|interpret|design|visual|poster|logo|diagram|presentation)\b/i;
+// Normal Chat handles ordinary tutoring/current-fact requests; dedicated
+// Research is for evidence-heavy projects, not every factual lookup.
+const DEEP_RESEARCH_SCOPE = /\b(?:deep research|systematic review|literature review|thesis|dissertation|academic paper|research paper|meta-analysis|research project|comprehensive research|peer-reviewed studies|source[- ]by[- ]source|compare (?:credible|multiple|primary) sources|verify (?:the )?citations)\b/i;
+const SOURCE_HEAVY_RESEARCH = /\b(?:research|investigate)\b.{0,160}\b(?:sources|citations|papers|studies|evidence|literature)\b/i;
+const EVERYDAY_LEARNING = /^(?:(?:please|could you|can you|help me)\s+)*(?:explain|teach|show|learn|study|solve|prove|derive|outline|describe|compare|what|why|how|give an? (?:explanation|overview|lesson))\b/i;
+const BUSINESS_LEARNING = /\b(?:business plan|business strategy|marketing plan|financial forecast|business model|lesson plan|curriculum|course plan|study plan|learning roadmap|business case|case study|education(?:al)? plan)\b/i;
 
 const aliases = Object.freeze({ chat:'normal-chat', visual:'normal-chat', design:'normal-chat', 'normal-chat':'normal-chat', code:'code', research:'research' });
 const normalizeSurfaceId = value => aliases[text(value).toLowerCase()] ?? 'normal-chat';
