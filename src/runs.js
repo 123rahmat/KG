@@ -1221,7 +1221,6 @@ export class RunStore {
         const priorUnified = run.adaptation?.unifiedAdaptiveWorkflow ?? {};
         const priorEvidence = Array.isArray(priorUnified?.evidence?.items) ? priorUnified.evidence.items : [];
         const currentEvidence = result.evidence === null || result.evidence === undefined ? [] : [result.evidence];
-        const allEvidence = [...priorEvidence, ...currentEvidence];
         const persistedVerify = target.type === 'deliver'
           ? tasks.find(item =>
               item.type === 'verify'
@@ -1229,6 +1228,15 @@ export class RunStore {
               && item.evidence?.verdict?.verdict === 'pass'
             )
           : null;
+        // The only source of real-world verification authority is a persisted,
+        // criterion-checked verification task, not a generated confidence claim.
+        const verifiedReceipt = persistedVerify ? [{
+          kind: 'verified',
+          state: 'verified',
+          verdict: persistedVerify.evidence.verdict,
+          provenance: { source: 'server-recorded-verification', taskId: persistedVerify.id }
+        }] : [];
+        const allEvidence = [...priorEvidence, ...currentEvidence, ...verifiedReceipt];
         const verifiedEarlier = persistedVerify != null
           || priorUnified.acceptance?.verificationSatisfied === true;
         const completionWorkflow = reassessUnifiedWorkflow(priorUnified, {
@@ -2228,7 +2236,8 @@ export class RunStore {
     // still requires verification. Enforce the invariant from server-owned
     // persisted state rather than trusting the candidate transition.
     const verificationRequiredForDelivery = run.adaptation?.acceptanceContract?.verificationRequired === true
-      || run.adaptation?.unifiedAdaptiveWorkflow?.acceptance?.verificationRequired === true;
+      || run.adaptation?.unifiedAdaptiveWorkflow?.acceptance?.verificationRequired === true
+      || run.adaptation?.unifiedAdaptiveWorkflow?.outcomeContract?.controls?.verificationRequired === true;
     const passingVerificationRecorded = run.adaptation?.acceptanceContract?.verificationSatisfied === true
       || run.adaptation?.unifiedAdaptiveWorkflow?.acceptance?.verificationSatisfied === true
       || tasks.some(item => item.type === 'verify'
