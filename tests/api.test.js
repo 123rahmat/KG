@@ -1416,9 +1416,16 @@ test('a capability found on reassessment is governed like any other, and two nev
     const firstTool = approved.body.next;
     assert.equal(approved.body.tasks.find(task => task.id === firstTool).type, 'tool');
 
-    // Stand in for the tool having run, and for a reassessment the model
-    // proposed after it; this test is about what the reassessment adds.
-    await pool.query("UPDATE run_tasks SET status = 'complete', evidence = '{\"recorded\":true}' WHERE run_id = $1 AND id = $2", [run.id, firstTool]);
+    // Stand in for a completed tool with an observable execution receipt.
+    // A generic "recorded" flag alone is not adequate evidence for a
+    // newly proposed capability under the evidence-first admission policy.
+    await pool.query(
+      "UPDATE run_tasks SET status = 'complete', evidence = $3::jsonb WHERE run_id = $1 AND id = $2",
+      [run.id, firstTool, JSON.stringify({
+        executionReceipt: { id: 'fixture-execution-receipt' },
+        result: { status: 'completed', exitCode: 0 }
+      })]
+    );
     await pool.query(
       `INSERT INTO run_tasks (run_id, id, position, type, status, depends_on, requires, purpose, metadata)
        VALUES ($1, 'reassess', 100, 'reassess', 'pending', $2::jsonb, '["reasoning"]'::jsonb, 'Reassess the situation.', '{}'::jsonb)`,
