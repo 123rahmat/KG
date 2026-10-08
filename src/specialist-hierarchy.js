@@ -30,13 +30,13 @@ const RESEARCH = Object.freeze({
 export function codeExpertFocus(subsystem = {}, goal = '') {
   const paths = unique([...(subsystem?.roots ?? []), ...(subsystem?.files ?? [])]).join(' ').toLowerCase();
   const objective = string(goal).toLowerCase();
-  if (/(?:^|[\/._-])(auth|security|identity|credential)(?:[\/._-]|$)/.test(paths)) return 'security';
-  if (/(?:^|[\/._-])(test|tests|spec|specs|e2e|qa)(?:[\/._-]|$)/.test(paths)) return 'testing';
-  if (/(?:^|[\/._-])(database|db|schema|migration|storage)(?:[\/._-]|$)/.test(paths)) return 'storage';
-  if (/(?:^|[\/._-])(ui|ux|design|components|views|screens)(?:[\/._-]|$)/.test(paths)) return 'ui-ux';
-  if (/(?:^|[\/._-])(frontend|client|web|styles|css)(?:[\/._-]|$)/.test(paths)) return 'frontend';
-  if (/(?:^|[\/._-])(backend|server|api|routes|services)(?:[\/._-]|$)/.test(paths)) return 'backend';
-  if (/(?:^|[\/._-])(infra|deploy|docker|ci|ops)(?:[\/._-]|$)/.test(paths)) return 'infrastructure';
+  if (/(?:^|[/._-])(auth|security|identity|credential)(?:[/._-]|$)/.test(paths)) return 'security';
+  if (/(?:^|[/._-])(test|tests|spec|specs|e2e|qa)(?:[/._-]|$)/.test(paths)) return 'testing';
+  if (/(?:^|[/._-])(database|db|schema|migration|storage)(?:[/._-]|$)/.test(paths)) return 'storage';
+  if (/(?:^|[/._-])(ui|ux|design|components|views|screens)(?:[/._-]|$)/.test(paths)) return 'ui-ux';
+  if (/(?:^|[/._-])(frontend|client|web|styles|css)(?:[/._-]|$)/.test(paths)) return 'frontend';
+  if (/(?:^|[/._-])(backend|server|api|routes|services)(?:[/._-]|$)/.test(paths)) return 'backend';
+  if (/(?:^|[/._-])(infra|deploy|docker|ci|ops)(?:[/._-]|$)/.test(paths)) return 'infrastructure';
   if (/\b(ui|ux|accessibility)\b/.test(objective) && /\b(layout|component|screen|interface)\b/.test(objective)) return 'ui-ux';
   return 'general';
 }
