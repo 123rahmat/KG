@@ -97,7 +97,16 @@ function boundedWindows(content, targetLines, radius, maxChars) {
   for (const [start,end] of ranges) {
     const section = source.slice(start-1,end).map((value,offset) => String(start+offset).padStart(5,' ') + ' | ' + value).join('\n');
     const candidate = output ? output + '\n...\n' + section : section;
-    if (candidate.length > maxChars) break;
+    if (candidate.length > maxChars) {
+      // Minified files and generated sources can contain a single enormous
+      // line. Never silently drop the changed file: retain a bounded preview
+      // with an explicit truncation marker instead of an empty result.
+      if (!output && maxChars > 24) {
+        const marker = '\\n[excerpt truncated; use targeted file read for more]';
+        return candidate.slice(0, Math.max(0, maxChars - marker.length)) + marker;
+      }
+      break;
+    }
     output = candidate;
   }
   return output;
