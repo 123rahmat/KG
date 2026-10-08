@@ -28,7 +28,11 @@ function shouldUseCodeWorkspace(value, attachments, actions=[]) {
   if (EXPLICIT_CODE.test(value) || profile.kind==='code' || kinds(attachments).includes('code-project')) return true;
   if (!CODE.test(value)) return false;
   if (CODE_PROJECT_SCOPE.test(value) || profile.codeFiles?.some(name=>/(?:package\.json|pyproject\.toml|Cargo\.toml|go\.mod|Dockerfile|Makefile|requirements\.txt)$/i.test(name))) return true;
-  if (names(attachments).length===1 || CODE_SINGLE_SCOPE.test(value)) return false;
+  // Several small scripts still fit Normal Chat's bounded sandbox. Do not
+  // mistake an attachment count for an entire repository project.
+  if (names(attachments).length <= 10 && !CODE_PROJECT_SCOPE.test(value)
+      && profile.kind !== 'code') return false;
+  if (CODE_SINGLE_SCOPE.test(value)) return false;
   return actions.some(a=>['create','transform','execute'].includes(text(a).toLowerCase()));
 }
 

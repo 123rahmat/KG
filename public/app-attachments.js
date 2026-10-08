@@ -89,6 +89,9 @@ function renderAttachments() {
       })
     ].filter(Boolean));
   }));
+  // Optional workspace suggestions react to attached files without moving
+  // the conversation or uploading anything before the user presses Send.
+  syncAdaptiveWorkspace();
 }
 
 export function addAttachments(fileList) {

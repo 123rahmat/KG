@@ -32,6 +32,9 @@ test('repository and multi-file engineering route to Code while micro code can s
   }).surface, 'normal-chat');
   assert.equal(classifySurfaceBoundary('Fix these Python files and run the tests.', {
     activeSurface:'normal-chat', flags:{code:true}, actions:['transform','execute'], attachments:[{name:'a.py'},{name:'b.py'}]
+  }).surface, 'normal-chat');
+  assert.equal(classifySurfaceBoundary('Refactor the complete repository project.', {
+    activeSurface:'normal-chat', flags:{code:true}, actions:['transform','execute'], attachments:[{name:'a.py'},{name:'b.py'}]
   }).surface, 'code');
 });
 

@@ -8,6 +8,7 @@
 import { state, $, element, button } from './ui-core.js';
 import { taskLensFor, contextualSuggestions } from './task-lens.js';
 import { agentActivitySnapshot } from './agent-activity.js';
+import { normalChatCapabilities } from './normal-chat-capabilities.js';
 
 const SURFACE_META = {
   runs: { label: 'Normal Chat', icon: 'chat', kind: 'normal-chat' },
@@ -106,6 +107,38 @@ function draftNextRequest(suggestion) {
   composer.value = existing ? existing + '\n' + suggestion : suggestion;
   composer.dispatchEvent(new Event('input', { bubbles: true }));
   composer.focus({ preventScroll: false });
+}
+
+function normalChatToolStrip(data) {
+  if (data.workspace !== 'normal-chat') return null;
+  const draft = text($('goal')?.value);
+  const pending = Array.isArray(state.attachments) ? state.attachments : [];
+  const previous = Array.isArray(data.run?.adaptation?.attachments)
+    ? data.run.adaptation.attachments : [];
+  const info = normalChatCapabilities({
+    goal: draft || data.run?.goal || '',
+    attachments: pending.length ? pending : previous,
+    executionTargets: state.executionConfig?.targets ?? [],
+    currentSurface: data.workspace
+  });
+  const items = [];
+  if (info.fileCount > 0) {
+    items.push(element('span', { class: 'normal-chat-tool-tag', text:
+      info.fileCount + ' file' + (info.fileCount === 1 ? '' : 's') + ' · preview and work here' }));
+  }
+  if (info.showSandbox) {
+    items.push(element('span', { class: 'normal-chat-tool-tag', text:
+      info.sandboxReady ? 'Isolated code sandbox available on demand'
+        : 'Code sandbox not configured · code runs unavailable' }));
+  }
+  if (info.suggestedWorkspace) {
+    items.push(element('span', { class: 'normal-chat-switch-description', text: info.suggestion }));
+    items.push(button('Use ' + (info.suggestedWorkspace === 'code' ? 'Code' : 'Research') + ' workspace',
+      () => dispatchSurface(info.suggestedWorkspace), 'normal-chat-switch-action small'));
+  }
+  return items.length ? element('div', {
+    class: 'normal-chat-tool-strip', 'aria-label': 'Optional file and workspace tools'
+  }, items) : null;
 }
 
 function adaptiveNextActions(data) {
@@ -884,6 +917,7 @@ export function renderAdaptiveWorkspace(host, mode = 'chat') {
       ])
     ]),
     controls,
+    normalChatToolStrip(data),
     adaptiveNextActions(data)
   );
   if (focus) focus.focus({ preventScroll: true });
@@ -914,4 +948,14 @@ export function syncAdaptiveWorkspace() {
     tab.dataset.adaptiveNeeded = String(active);
     tab.title = active ? SURFACE_META[name].label + ' · needed for this situation' : SURFACE_META[name].label;
   }
+}
+
+// Update only the lightweight Normal Chat suggestions while the person types.
+// This never starts a model call or alters the current workspace.
+if (typeof document !== 'undefined') {
+  document.addEventListener('input', event => {
+    if (event.target?.id === 'goal' && state.activeSurface === 'normal-chat') {
+      renderAdaptiveWorkspace($('adaptiveWorkspaceBar'), 'chat');
+    }
+  });
 }

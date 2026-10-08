@@ -4461,3 +4461,30 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
 .work-agent-row strong{min-width:0;overflow-wrap:anywhere;text-transform:capitalize}
 .work-agent-row .work-agent-summary{grid-column:1/-1;line-height:1.45;overflow-wrap:anywhere}
 @media(max-width:520px){.work-agent-row{grid-template-columns:1fr}.work-agent-row .work-agent-summary{grid-column:1}}
+
+/* Normal Chat reveals real file and sandbox capabilities only when useful. */
+.normal-chat-tool-strip {
+  display:flex;align-items:center;flex-wrap:wrap;gap:7px;
+  max-width:100%;padding:4px 0;color:var(--muted);
+}
+.normal-chat-tool-tag {
+  display:inline-flex;align-items:center;max-width:100%;padding:5px 9px;
+  border:1px solid var(--line);border-radius:999px;background:var(--soft);
+  font-size:.72rem;line-height:1.4;overflow-wrap:anywhere;
+}
+.normal-chat-switch-description {
+  flex:1 1 220px;min-width:0;font-size:.72rem;line-height:1.45;
+}
+.normal-chat-switch-action {
+  flex:none;border-color:var(--line-strong);font-size:.73rem;
+}
+.normal-chat-switch-action:focus-visible {
+  outline:2px solid var(--accent);outline-offset:3px;
+}
+@media (max-width:760px) {
+  .normal-chat-tool-strip { align-items:flex-start;gap:6px; }
+  .normal-chat-switch-description {flex-basis:100%;}
+}
+@media (prefers-reduced-motion:reduce) {
+  .normal-chat-tool-strip * { transition:none; }
+}

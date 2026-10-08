@@ -33,6 +33,31 @@ flowchart TD
 
 **Adaptive specialization varies by workspace:** Normal Chat uses a direct-first, minimum-sufficient response policy. Code adds task-specific architect/implementer/debugger/test/security specialists when complexity warrants them. Research adds independent source-discovery, analyst and critic roles when they can meaningfully improve evidence coverage. Difficulty alone never authorizes parallel work; the controller needs a declared independent-work opportunity and the server scheduler must enforce task dependencies and conflicts. Low budgets reduce optional panels, and satisfied acceptance criteria stop further expansion. See [three-workspace adaptive policy](docs/WORKSPACE_ADAPTIVE_POLICY.md).
 
+## Normal Chat: files, previews and an on-demand sandbox
+
+Normal Chat can handle a **single file or a small set of files together**
+(up to 10 files per message in the browser client, each up to 5 MB):
+documents, tables, images, code and lightweight transformations.
+Selected attachments remain scoped to the current message; outputs can be
+reviewed through the shared artifact preview (images, PDFs and extracted
+text/table summaries). A preview is never proof that a file was executed.
+
+**Sandbox execution is optional and server governed.** When the separate
+sandbox runner is configured, code tasks can use an isolated temporary
+container to check/run code and tests, including small multi-file scripts,
+and produce downloadable result files. The UI reflects **configured**
+sandbox availability rather than inventing execution success.
+The execution phase has no network, restricted filesystem writes, resource
+limits, and no access to the host environment; see
+[Sandbox and tool guide](docs/SANDBOX_AND_TOOL_FORGE.md).
+No sandbox is started for ordinary conversation.
+
+When the user's request becomes repository-scale engineering or thesis/source
+heavy research, Normal Chat **suggests** Code or Research as an optional
+workspace. A suggestion does not send a message, move the attachments, or grant
+tool permissions. The user can continue lightweight multi-file work in Normal
+Chat; project-scale execution continues under existing server-side policies.
+
 ## Dynamic task decomposition and parallel execution
 
 **KG should split a task into smaller goals only when doing so is more likely to improve quality, speed, recoverability or verification than it costs in extra coordination.** One Gemini call should remain the default when sufficient.
