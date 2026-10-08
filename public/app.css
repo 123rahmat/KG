@@ -4753,3 +4753,17 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
 @media (prefers-reduced-motion: reduce) {
   .md .md-flow-step { animation: none; transition: none; }
 }
+
+
+/* Compact public-facing step explanation; never displays model scratch work. */
+.work-phase-note {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  border-inline-start: 2px solid var(--accent);
+  padding: 5px 10px;
+  margin: 2px 0;
+  color: var(--ink-2);
+}
+.work-phase-note strong { font-size: .74rem; font-weight: 650; }
+.work-phase-note .small { font-size: .72rem; line-height: 1.45; overflow-wrap: anywhere; }
