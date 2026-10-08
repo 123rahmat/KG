@@ -23,8 +23,8 @@ export function inspectZipManifest(entries, limits = ZIP_LIMITS) {
     const directory = typeof name === 'string' && name.endsWith('/');
     const pathParts = directory ? parts.slice(0, -1) : parts;
     const normalized = typeof name === 'string' ? name.normalize('NFC').toLowerCase() : '';
-    if (typeof name !== 'string' || !name || name.includes('\\\\')
-        || name.includes('\\0') || name.startsWith('/')
+    if (typeof name !== 'string' || !name || name.includes('\\')
+        || name.includes('\0') || name.startsWith('/')
         || /^[A-Za-z]:/.test(name)
         || pathParts.some(part => part === '..' || part === '.' || part === '')
         || names.has(normalized)) {
