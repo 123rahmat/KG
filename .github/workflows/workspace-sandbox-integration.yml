@@ -8,6 +8,10 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/workspace-sandbox-integration.yml'
+      - 'src/tool-forge.js'
+      - 'tests/tool-forge-auth.test.js'
+      - 'src/sandbox.js'
+      - 'tests/sandbox*.test.js'
 
 permissions:
   contents: read
