@@ -2406,6 +2406,25 @@ export class RunStore {
     );
     if (!run) return null;
     const tasks = await loadTasks(client, run.id);
+    // Replan, repair, stop and legacy paths can change task rows without
+    // passing through the ordinary advance checkpoint. Every authorized read
+    // therefore reflects the real persisted task table, never a stale UI
+    // projection. This does not mutate the DB or grant any new authority.
+    const unified = run.adaptation?.unifiedAdaptiveWorkflow;
+    if (unified) {
+      const graph = projectPersistedTaskGraph(tasks, unified.taskGraph);
+      const synchronized = {
+        ...unified, taskGraph: graph,
+        openWorld: composeOpenWorldDecision({
+          goal: run.goal, situation: run.situation ?? {}, graph,
+          acceptance: unified.acceptance ?? {}
+        })
+      };
+      return present({
+        ...run,
+        adaptation: { ...run.adaptation, unifiedAdaptiveWorkflow: synchronized }
+      }, tasks);
+    }
     return present(run, tasks);
   }
 }

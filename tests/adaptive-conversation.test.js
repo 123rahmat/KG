@@ -176,6 +176,10 @@ test('three workspace runs expose their persisted task graph on creation and aft
         assert.equal(nextGraph?.authoritative, 'server-run-tasks');
         assert.equal(nextGraph?.total, after.tasks.length);
         assert.ok(nextGraph.revision > graph.revision);
+        const refresh = await call('GET', `/api/runs/${run.id}`, auth);
+        assert.equal(refresh.status, 200);
+        assert.deepEqual(refresh.body.adaptation?.unifiedAdaptiveWorkflow?.taskGraph,
+          nextGraph, 'An authorized read must agree with the persisted checkpoint');
         for (const item of after.tasks) {
           const node = nextGraph.nodes.find(part => part.id === item.id);
           assert.equal(node?.status, item.status, item.id);
