@@ -4684,3 +4684,72 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
   border:1px solid var(--line);
   border-radius:var(--radius-sm);
 }
+
+
+/* Deliberate, accessible linear process diagrams in answer content. */
+.md .md-flow {
+  margin: 12px 0 16px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--softer);
+  max-width: 100%;
+  min-width: 0;
+}
+.md .md-flow-caption {
+  font-size: .72rem;
+  font-weight: 650;
+  letter-spacing: .01em;
+  color: var(--muted);
+  margin-bottom: 9px;
+}
+.md .md-flow-steps {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+}
+.md .md-flow-step {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+  gap: 9px;
+  padding: 9px 11px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: .84rem;
+}
+.md .md-flow-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  background: var(--soft);
+  color: var(--ink-2);
+  font-size: .7rem;
+  font-weight: 700;
+}
+.md .md-flow-label { min-width: 0; overflow-wrap: anywhere; }
+.md .md-flow-step:not(:last-child)::after {
+  content: '↓';
+  flex-basis: 100%;
+  color: var(--muted);
+  text-align: center;
+  font-size: .78rem;
+  line-height: 1;
+  margin-bottom: -9px;
+  transform: translateY(9px);
+}
+.md .md-flow-step:not(:last-child) { margin-bottom: 15px; }
+@media (prefers-reduced-motion: reduce) {
+  .md .md-flow-step { animation: none; transition: none; }
+}
