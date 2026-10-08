@@ -11,7 +11,9 @@ export function parseFlowDiagram(raw) {
   if (typeof raw !== 'string' || !raw.trim() || raw.length > 1600) return null;
   const lines = raw.replace(/\r\n?/g, '\n').split('\n').map(line => line.trim()).filter(Boolean);
   if (!lines.length || lines.length > 12 || lines.some(line => /^(?:graph|flowchart|sequenceDiagram|classDiagram|digraph|subgraph|%%|---)/i.test(line))) return null;
-  if (lines.some(line => /[<>{}[\]|]/.test(line))) return null;
+  // Only syntax delimiters may contain an angle bracket: a valid '->'
+  // must not be rejected as HTML, while markup or other syntax remains code.
+  if (lines.some(line => /[<>{}[\]|]/.test(line.replaceAll('->', '').replaceAll('→', '')))) return null;
   const hasArrow = lines.some(line => line.includes('->') || line.includes('→'));
   if (hasArrow && lines.length !== 1) return null;
   const nodes = hasArrow
