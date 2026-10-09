@@ -68,7 +68,7 @@ export function specialistTopology({
   let reason = 'task-value-justified';
   if (budgetKnown && budget < 0.45) {
     agents = budget < 0.25 ? Math.min(agents,1)
-      : Math.max(1,Math.min(agents,Math.floor(agents * budget / 0.45)));
+      : Math.max(1,Math.min(agents,Math.floor(agents * budget / 0.65)));
     reason = budget < 0.25 ? 'conserve-scarce-budget' : 'bounded-by-remaining-budget';
   }
   const canParallelize = !highRisk && agents > 1 && budget >= 0.25
