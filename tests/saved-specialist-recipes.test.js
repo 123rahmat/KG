@@ -82,7 +82,8 @@ test('verified learning is scoped to user/workspace, deduplicated by run and cap
   assert.deepEqual(observed[0].args.slice(0,2),['workspace-a','person-a']);
   assert.equal(observed[0].args[6],'run-a');
   assert.match(observed[0].sql,/ANY\(saved_specialist_recipes\.observed_run_ids\)/);
-  assert.match(observed[0].sql,/cardinality\(saved_specialist_recipes\.observed_run_ids\)>=1/);
+  assert.match(observed[0].sql,/cardinality\(saved_specialist_recipes\.observed_run_ids\)/);
+  assert.match(observed[0].sql,/cardinality\(saved_specialist_recipes\.failed_run_ids\)\+1/);
 });
 
 test('saved recipes can be explicitly forgotten only in their own scope',async()=>{
