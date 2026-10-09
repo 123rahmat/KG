@@ -412,7 +412,7 @@ const DEFINITIONS = {
     ],
     [
       "academic-peer-review-response",
-      "reviewer response|respond to reviewers|peer review comments|revise and resubmit",
+      "reviewer response|response to reviewers|respond to reviewers|point by point response|peer review comments|revise and resubmit",
       "reviewer-matrix,point-by-point-response,evidence-plan,manuscript-changes,disagreement-handling,professional-tone,tracked-revision,verification"
     ],
     [
