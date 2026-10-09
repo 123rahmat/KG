@@ -29,12 +29,12 @@ const OPERATIONAL = {
   'source-research':['normal-chat','code','research'],
   'file-inspection':['normal-chat','code','research'],
   'sandbox-test':['code','normal-chat','research'],
-  'sandbox-execution':['code','normal-chat'],
-  'dependency-installation':['code','normal-chat'],
+  'sandbox-execution':['normal-chat','code','research'],
+  'dependency-installation':['normal-chat','code','research'],
   'terminal-session':['code'],
-  'terminal-command':['code'],
-  'ui-preview':['code','normal-chat'],
-  'code-change':['code','normal-chat']
+  'terminal-command':['normal-chat','code','research'],
+  'ui-preview':['normal-chat','code','research'],
+  'code-change':['normal-chat','code','research']
 };
 const capability = {
   'specialist-consultation':'advisory-specialist',
@@ -49,27 +49,32 @@ const capability = {
   'code-change':'file-write'
 };
 export function normalizeAgentResourceRequests(raw=[], {
-  surface='normal-chat',parentRole='',childId='',runId='',taskId='',limit=3
+  surface='normal-chat',parentRole='',childId='',runId='',taskId='',limit=8
 }={}) {
  const permitted = ['normal-chat','code','research'].includes(surface) ? surface:'normal-chat';
- const source = Array.isArray(raw) ? raw.slice(0,12) : [];
+ const source = Array.isArray(raw) ? raw.slice(0,32) : [];
  const seen = new Set(),out = [];
- const max=Math.max(0,Math.min(4,Number.isFinite(Number(limit))?Math.floor(Number(limit)):3));
+ const max=Math.max(0,Math.min(12,Number.isFinite(Number(limit))?Math.floor(Number(limit)):8));
  for(const r of source) {
   if(out.length>=max)break;
   if(!r||typeof r!=='object'||Array.isArray(r))continue;
   const kind=clip(r.kind,45).toLowerCase();
-  if(!KINDS.has(kind)||!OPERATIONAL[kind].includes(permitted)||seen.has(kind))continue;
+  if(!KINDS.has(kind)||!OPERATIONAL[kind].includes(permitted))continue;
   const why=safeLabel(r.reason);
   if(why.length<8)continue;
   const maybePaths=Array.isArray(r.paths)?r.paths:[];
   const paths=maybePaths.slice(0,8).filter(pathSafe).filter(p=>!SENSITIVE.test(p))
     .map(p=>clip(p,160)).slice(0,4);
-  // Reject raw shell, package-manager commands, tool arguments, URLs and
-  // executable payloads. Never persist or relay them into a runner.
-  seen.add(kind);
+  // Requests are intent-only. Never forward raw shell commands, scripts,
+  // installer flags, tokens or environment variables from agent output.
+  if(['command','script','argv','args','environment','env','token','secret','url','input']
+      .some(field=>Object.hasOwn(r,field)))continue;
+  const safePaths=[...new Set(paths)];
+  const key=JSON.stringify([kind,why.slice(0,220),safePaths]);
+  if(seen.has(key))continue;
+  seen.add(key);
   out.push(Object.freeze({
-    kind,reason:why.slice(0,220),paths:Object.freeze([...new Set(paths)]),
+    kind,reason:why.slice(0,220),paths:Object.freeze(safePaths),
     parentRole:safeId(parentRole),childId:safeId(childId),
     runId:clip(runId,100),taskId:clip(taskId,100),
     requiredCapability:capability[kind],
@@ -91,11 +96,13 @@ export function summarizeDelegationRequests(requests=[],{limit=8}={}) {
  const seen=new Set(),result=[];
  for(const item of (Array.isArray(requests)?requests:[]).slice(0,20)){
    if(!item||!KINDS.has(item.kind)||item.executionAuthorized===true)continue;
-   const key=[item.kind,item.parentRole,item.childId].join(':');
+   const key=JSON.stringify([item.kind,item.parentRole,item.childId,item.reason,item.paths??[]]);
    if(seen.has(key))continue;
    seen.add(key);
    result.push(Object.freeze({
      kind:item.kind,reason:clip(item.reason,220),
+     paths:Object.freeze(Array.isArray(item.paths)?item.paths.slice(0,4):[]),
+     runId:clip(item.runId,100),taskId:clip(item.taskId,100),
      parentRole:clip(item.parentRole,84),childId:clip(item.childId,84),
      state:item.state,
      capability:item.requiredCapability,
