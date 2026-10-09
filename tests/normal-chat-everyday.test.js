@@ -75,7 +75,7 @@ test('Normal Chat escalates reasoning depth without routing or recruiting automa
     assert.equal(p.domain,domain,goal);
     assert.equal(p.reasoningDepth,depth,goal);
     assert.equal(p.toolPolicy,'just-in-time-authorized-only');
-    assert.equal(p.agentPolicy,'one-model-first-recruit-only-when-useful');
+    assert.equal(p.agentPolicy,'single-primary-model-no-specialist-recruitment');
     assert.equal(p.suggestedTransition,null);
     assert.equal(p.serverAuthorityRequired,true);
   }
