@@ -6,12 +6,12 @@
 export const RESOURCE_REQUEST_KINDS = Object.freeze([
   'specialist-consultation', 'source-research', 'file-inspection',
   'sandbox-test', 'sandbox-execution', 'dependency-installation',
-  'terminal-session', 'ui-preview', 'code-change'
+  'terminal-session', 'terminal-command', 'ui-preview', 'code-change'
 ]);
 const KINDS = new Set(RESOURCE_REQUEST_KINDS);
 const TERM = new Set(['terminal-session']);
 const RESTRICTED = new Set([
-  'sandbox-test','sandbox-execution','dependency-installation','terminal-session','code-change'
+  'sandbox-test','sandbox-execution','dependency-installation','terminal-session','terminal-command','code-change'
 ]);
 const normalize = value => String(value ?? '').trim();
 const clip = (value,max=160) => normalize(value).slice(0,max);
@@ -28,10 +28,11 @@ const OPERATIONAL = {
   'specialist-consultation': ['normal-chat','code','research'],
   'source-research':['normal-chat','code','research'],
   'file-inspection':['normal-chat','code','research'],
-  'sandbox-test':['code','normal-chat'],
+  'sandbox-test':['code','normal-chat','research'],
   'sandbox-execution':['code','normal-chat'],
   'dependency-installation':['code','normal-chat'],
   'terminal-session':['code'],
+  'terminal-command':['code'],
   'ui-preview':['code','normal-chat'],
   'code-change':['code','normal-chat']
 };
@@ -43,6 +44,7 @@ const capability = {
   'sandbox-execution':'code-execution',
   'dependency-installation':'package-install',
   'terminal-session':'interactive-terminal',
+  'terminal-command':'sandboxed-command',
   'ui-preview':'sandboxed-ui-preview',
   'code-change':'file-write'
 };
