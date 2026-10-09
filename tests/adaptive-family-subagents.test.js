@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SPECIALIST_FAMILIES } from '../src/adaptive-specialist-focus.js';
 import {
-  familyPlaybook,selectFamilySubagents,childProbeMessages,
+  familyPlaybook,selectFamilySubagents,
   normalizeChildProbe,runBoundedFamilyChildProbes
 } from '../src/adaptive-family-subagents.js';
 import { agentMessages } from '../src/multi-agent.js';
