@@ -18,6 +18,12 @@ open questions and citations. Independent specialist lanes may execute in
 parallel under the existing conflict, budget and task ownership rules.
 Neither specialists nor the browser own completion decisions.
 
+Two **optional visual-review specialties** are part of the existing bounded
+agent scheduler, not a second execution system: Code reviews actual authorized
+UI screenshots and responsive regressions; Research checks figures, tables,
+units, data provenance and uncertainty. These agents never manufacture
+screenshots, measurements or execution receipts.
+
 One Gemini/Vertex boundary routes efficient and stronger calls by actual task
 requirements. Reducing optional model calls, reusing scoped context, and
 stopping at acceptance are preferred to fixed multi-agent chains. Lightweight
