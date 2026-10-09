@@ -978,6 +978,8 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
               // Which tools the AI used, and what it proposed for approval.
               ...(execution.toolLog?.length ? { tools: execution.toolLog } : {}),
               ...(execution.multiAgent ? { multiAgent: execution.multiAgent } : {}),
+              ...(execution.reusedSpecialistIds?.length
+                ? { reusedSpecialistIds: execution.reusedSpecialistIds } : {}),
               // How many memories from earlier chats this step used.
               ...(execution.remembered ? { remembered: execution.remembered } : {}),
               ...(execution.skillsUsed?.length ? { skillsUsed: execution.skillsUsed } : {}),
@@ -1003,6 +1005,14 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
             principalId: req.principal.id, workspaceId: req.scope.workspaceId,
             action: 'specialist.learning.failed', target: run.id, outcome: 'warning',
             detail: { code: error?.code ?? 'recipe-write-failed' },
+            requestId: req.requestId
+          }));
+      } else if (task.type === 'verify' && execution.verdict?.verdict === 'fail') {
+        await savedSpecialists.observeFailedReuse(req.scope, run, { verifiedFailure: true })
+          .catch(error => audit?.record({
+            principalId: req.principal.id, workspaceId: req.scope.workspaceId,
+            action: 'specialist.evaluation.failed', target: run.id, outcome: 'warning',
+            detail: { code: error?.code ?? 'recipe-evaluation-failed' },
             requestId: req.requestId
           }));
       }
@@ -2062,6 +2072,8 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       unrecordedUsage: answer.unrecordedUsage,
       usageBudget: answer.usageBudget,
       multiAgent: multiAgent.brief ?? null,
+      // Usage markers are server-derived; they do not certify the old recipe.
+      reusedSpecialistIds: reusableSpecialists.map(item => item.id).slice(0,3),
 
       toolLog: answer.toolLog ?? [],
       // Only skills selected for this exact task receive this task's outcome.
