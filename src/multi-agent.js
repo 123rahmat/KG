@@ -2746,6 +2746,17 @@ export async function runAdaptiveAgentPanel({
       })
       : {findings:[],modelCalls:0};
     familyChildCallSlots -= nested.modelCalls;
+    // Child work is visible only after the model actually returned a valid
+    // finding. Nothing here counts as parent-task verification or file edits.
+    for (const observation of nested.findings) {
+      agentStates.push({
+        role: 'child:' + jobs[0].role + ':' + observation.subagent,
+        parentRole: jobs[0].role, subagent: true,
+        specialty: observation.subagent.replaceAll('-', ' '),
+        status: 'complete', summary: observation.summary,
+        verification: 'unverified-advisory', wave: waveIndex
+      });
+    }
     const results = await executeAgentLaneWaves({
       lanePlan, jobs, maxParallel: effectiveMaxParallel, signal,
       execute: async job => {
