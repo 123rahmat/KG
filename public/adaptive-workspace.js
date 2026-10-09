@@ -705,25 +705,56 @@ function researchSource(source, scope) {
 /** Only observed specialist outcomes are shown; no guessed agents or waves. */
 function specialistProjectSection(run, workspace) {
   const recorded = agentActivitySnapshot(run);
+  const progress = workspaceProgressPanel(run, workspace);
   const area = workspace === 'code' ? 'agents' : 'team';
   const roles = recorded.roles.slice(-8);
+  const groups = recorded.groups.slice(-8);
   const description = roles.length
-    ? 'Saved specialist findings. The main workflow still owns edits, sources and verification.'
+    ? 'Only saved specialist findings appear below. Parent workflow execution and verification are separate.'
     : workspace === 'code'
       ? 'Small code changes can use a single agent. Specialist reviews appear here if they actually run.'
       : 'Independent research and citation reviews appear here if they actually run.';
   return element('section', workspaceArea(workspace, area, 'deep-workspace-card detail-card'), [
     element('div', { class: 'deep-workspace-card-head' }, [
-      element('span', { class: 'mono', text: workspace === 'code' ? 'ENGINEERING SPECIALISTS' : 'RESEARCH SPECIALISTS' }),
+      element('span', { class: 'mono', text: workspace === 'code' ? 'ADAPTIVE ENGINEERING TEAM' : 'ADAPTIVE RESEARCH TEAM' }),
       element('span', { class: 'small muted', text: roles.length + ' recorded' })
     ]),
+    progress.focus ? element('div', { class: 'workspace-agent-current', 'aria-label': 'Current task focus' }, [
+      element('span', { class: 'small muted', text: 'Current task' }),
+      element('strong', { text: progress.focus }),
+      element('span', { class: 'small muted', text: 'Specialists adapt to this task when justified; no automatic team is implied.' })
+    ]) : null,
+    recorded.sourceTask ? element('div', { class: 'workspace-agent-source', 'aria-label': 'Task that produced specialist results' }, [
+      element('span', { class: 'small muted', text: 'Recorded specialist work for' }),
+      element('strong', { class: 'small', text: recorded.sourceTask.title }),
+      element('span', { class: 'small muted', text: recorded.sourceTask.status || 'recorded' })
+    ]) : null,
     element('p', { class: 'small muted', text: description }),
-    roles.length ? element('div', { class: 'workspace-detail-list' }, roles.map(item =>
-      element('div', { class: 'workspace-detail-row' }, [
-        element('strong', { text: item.role.replaceAll('-', ' ') }),
-        element('span', { class: 'small muted', text: item.status +
-          (item.wave ? ' · wave ' + item.wave : '') }),
-        item.summary ? element('span', { class: 'small muted', text: item.summary }) : null
+    groups.length ? element('div', { class: 'workspace-agent-groups', 'aria-label': 'Observed subsystem teams' }, [
+      element('strong', { class: 'small', text: 'Subsystems with recorded specialist work' }),
+      ...groups.map(group => element('div', { class: 'workspace-agent-group' }, [
+        element('div', { class: 'workspace-agent-group-heading' }, [
+          element('strong', { text: group.label }),
+          element('span', { class: 'small muted', text: group.agentCount + ' specialist' + (group.agentCount === 1 ? '' : 's') +
+            ' · advisory ' + group.status.replaceAll('-', ' ') +
+            (group.iterations ? ' · cycle ' + group.iterations : '') })
+        ]),
+        group.needed.length ? element('p', { class: 'small muted', text: 'Needed capabilities: ' + group.needed.join(', ').replaceAll('-', ' ') +
+          ' · not proof these tools ran' }) : null
+      ].filter(Boolean)))
+    ]) : null,
+    roles.length ? element('div', { class: 'workspace-detail-list workspace-agent-contributions', 'aria-label': 'Recorded specialist contributions' }, roles.map(item =>
+      element('div', { class: 'workspace-detail-row workspace-agent-contribution' }, [
+        element('div', { class: 'workspace-agent-contribution-head' }, [
+          element('strong', { text: item.role.replaceAll('-', ' ') }),
+          element('span', { class: 'small muted', text: item.status +
+            (item.wave ? ' · wave ' + item.wave : '') +
+            (item.iteration ? ' · cycle ' + item.iteration : '') })
+        ]),
+        item.specialty && item.specialty.toLowerCase() !== item.role.replaceAll('-', ' ').toLowerCase()
+          ? element('span', { class: 'small muted', text: item.specialty }) : null,
+        item.subsystemId ? element('span', { class: 'small muted', text: 'Subsystem · ' + item.subsystemId }) : null,
+        item.summary ? element('span', { class: 'small workspace-agent-finding', text: item.summary }) : null
       ].filter(Boolean))
     )) : null,
     recorded.observedParallel ? element('p', { class: 'small muted',
