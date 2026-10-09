@@ -1792,7 +1792,10 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
 
     // The same bounded advisory library reaches the primary model and any
     // justified specialists; it does not add agents or provider calls.
-    const multiAgent = await runAdaptiveAgentPanel({
+    const multiAgent = isNormalConversation
+      ? {enabled:false,decision:{enabled:false,reason:'direct-conversation-no-agent-recruitment'},
+         brief:null,agents:[],findings:[],arbiter:null}
+      : await runAdaptiveAgentPanel({
       run,
       task,
       basePayload: payload,
