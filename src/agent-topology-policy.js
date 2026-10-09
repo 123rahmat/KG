@@ -45,11 +45,13 @@ export function specialistTopology({
   const ratio = specialistBudgetRatio(remainingBudgetRatio);
   const budgetKnown = ratio !== null;
   const budget = ratio ?? 1;
-  const workspaceCeiling = highRisk && advancedBuild ? 11
-    : normalizedMode === 'always' ? 11
-    : workspace === 'normal-chat' ? 3 : 5;
-  const ceiling = Math.min(11, positiveInt(maxAgents, 6), workspaceCeiling);
-  const target = Math.min(ceiling, positiveInt(proposedAgents, 1));
+  // maxAgents is a trusted task/provider compute allowance, not a predefined
+  // team size. The work itself determines how much of it to recruit.
+  const ceiling = positiveInt(maxAgents, 6);
+  const independent = clamp(independentWork);
+  let target = Math.min(ceiling, positiveInt(proposedAgents, 1));
+  if (normalizedMode === 'auto' && clamp(pressure) < 0.25
+      && independent < 0.2 && !advancedBuild) target = 1;
   const qualityGate = highRisk ? 'independent-verification-required' : 'task-acceptance-required';
 
   if (normalizedMode === 'off') return Object.freeze({
@@ -64,17 +66,16 @@ export function specialistTopology({
   });
   let agents = target;
   let reason = 'task-value-justified';
-  if (budgetKnown && budget < 0.25) {
-    agents = Math.min(agents, 1);
-    reason = 'conserve-scarce-budget';
-  } else if (budgetKnown && budget < 0.45) {
-    agents = Math.min(agents, 2);
-    reason = 'bounded-by-remaining-budget';
+  if (budgetKnown && budget < 0.45) {
+    agents = Math.max(1,Math.min(agents,Math.floor(agents * budget / 0.45)));
+    reason = budget < 0.25 ? 'conserve-scarce-budget' : 'bounded-by-remaining-budget';
   }
-  const independent = clamp(independentWork);
   const canParallelize = !highRisk && agents > 1 && budget >= 0.25
     && (normalizedMode === 'always' || explicitParallel || independent >= 0.2);
-  const maxParallel = canParallelize ? Math.min(agents, workspace === 'normal-chat' ? 2 : workspace === 'code' ? 3 : 4) : 1;
+  const parallelDemand = normalizedMode === 'always' || explicitParallel
+    ? 0.35 + independent * 0.65 : independent;
+  const maxParallel = canParallelize
+    ? Math.min(agents, Math.max(1,Math.ceil(agents * parallelDemand))) : 1;
   return Object.freeze({
     mode: maxParallel > 1 ? 'parallel' : 'specialists',
     agents, maxParallel,
