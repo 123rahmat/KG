@@ -1435,7 +1435,12 @@ function codeWorkspacePanelRoles(run, task, subsystem, {
   }) : [];
   // A precise engineering specialty replaces only a generic *advisory*
   // slot. Keep the implementer and required test/security checks intact.
-  const targetedLead=directCodeLeads[0]?.role??null;
+  const specificLead=directCodeLeads.find(item=>item.scopeMatched)??directCodeLeads[0]??null;
+  // A specific owned source partition outranks an unrelated project-wide
+  // keyword when the panel has only two affordable roles.
+  const targetedLead=specificLead && (
+    nestedTeam.focus==='general'||specificLead.scopeMatched||width>=3
+  ) ? specificLead.role : null;
   if(signals.executable && width>=2 && targetedLead) addRequired(targetedLead);
   if (signals.executable && width >= 2 && nestedTeam.focus !== 'general') {
     if (!targetedLead || width>=3) addRequired(nestedTeam.leadRole);
