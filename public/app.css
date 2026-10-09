@@ -4885,3 +4885,25 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
     flex-direction: column;
   }
 }
+
+/* Server-recorded progress checkpoints: no speculative steps or fake percentages. */
+.work-checkpoints{min-width:0;margin-top:12px;padding-top:11px;border-top:1px solid var(--line)}
+.work-checkpoint-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:4px 12px;margin-bottom:9px}
+.work-checkpoint-head strong{font-size:.73rem}
+.work-checkpoint-rail{display:flex;gap:7px;max-width:100%;margin:0;padding:0 0 5px;list-style:none;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;scroll-snap-type:x proximity}
+.work-checkpoint-item{display:grid;grid-template-columns:10px minmax(0,1fr);column-gap:7px;row-gap:4px;align-content:start;flex:1 0 105px;min-width:105px;max-width:190px;padding:9px;border:1px solid var(--line);border-radius:10px;background:var(--softer);scroll-snap-align:start}
+.work-checkpoint-dot{width:8px;height:8px;margin-top:4px;border-radius:50%;background:var(--muted)}
+.work-checkpoint-text{font-size:.70rem;line-height:1.35;font-weight:600;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow-wrap:anywhere}
+.work-checkpoint-state{grid-column:2;font-size:.65rem;color:var(--muted)}
+.work-checkpoint-item[data-checkpoint-status="complete"] .work-checkpoint-dot{background:var(--ok)}
+.work-checkpoint-item[data-checkpoint-status="complete"] .work-checkpoint-state{color:var(--ok)}
+.work-checkpoint-item[data-checkpoint-status="running"] .work-checkpoint-dot,
+.work-checkpoint-item[data-checkpoint-next="true"] .work-checkpoint-dot{background:var(--accent)}
+.work-checkpoint-item[data-checkpoint-next="true"]{border-color:var(--accent)}
+.work-checkpoint-item[data-checkpoint-status="failed"] .work-checkpoint-dot,
+.work-checkpoint-item[data-checkpoint-status="blocked"] .work-checkpoint-dot{background:var(--bad)}
+.work-checkpoint-item[data-checkpoint-status="failed"] .work-checkpoint-state,
+.work-checkpoint-item[data-checkpoint-status="blocked"] .work-checkpoint-state{color:var(--bad)}
+.work-checkpoint-item[data-checkpoint-status="waiting"] .work-checkpoint-dot{background:var(--warn)}
+.work-checkpoints>p{margin:6px 0 0}
+@media(max-width:600px){.work-checkpoint-item{flex-basis:112px}.work-checkpoint-head{align-items:flex-start}}
