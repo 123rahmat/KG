@@ -266,7 +266,7 @@ export function activateSettingsSection(name) {
   if (activeName === 'usage') { renderUsageSection(); loadUsage(); }
   if (activeName === 'billing') renderBillingSection();
   if (activeName === 'security') renderSecuritySection();
-  if (activeName === 'policies') loadPolicyControls();
+  if (activeName === 'data') loadPolicyControls();
   if (activeName === 'workspace') { renderWorkspaceTools(); renderReports(); }
   if (activeName === 'schedules') { renderSchedules(); syncScheduleForm(); }
   if (activeName === 'personalization') { renderMemories(); renderSkillLearning(); renderSavedSpecialists(); }
