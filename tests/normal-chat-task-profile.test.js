@@ -45,7 +45,7 @@ test('file-backed chart task prioritizes attachments and visual preview', () => 
 test('task profiles never authorize tools or workspace transitions', () => {
   const profile = normalChatTaskProfile({ goal: 'Run code in terminal to edit multiple files', complexity: 1 });
   assert.equal(profile.toolPolicy, 'just-in-time-authorized-only');
-  assert.equal(profile.agentPolicy, 'one-model-first-recruit-only-when-useful');
+  assert.equal(profile.agentPolicy, 'single-primary-model-no-specialist-recruitment');
   assert.equal(profile.serverAuthorityRequired, true);
   assert.equal(profile.suggestedTransition, null);
   assert.ok(Object.isFrozen(profile.contextPriorities));
@@ -55,7 +55,7 @@ test('comparison requests suggest a table without forcing extra agents', () => {
   const profile = normalChatTaskProfile({ goal: 'Compare these options and trade-offs' });
   assert.equal(profile.presentation.mode, 'comparison');
   assert.equal(profile.presentation.showTableWhenUseful, true);
-  assert.equal(profile.agentPolicy, 'one-model-first-recruit-only-when-useful');
+  assert.equal(profile.agentPolicy, 'single-primary-model-no-specialist-recruitment');
 });
 
 test('educational reasoning suggests worked examples', () => {
