@@ -810,6 +810,20 @@ function specialistProjectSection(run, workspace) {
         item.summary ? element('span', { class: 'small workspace-agent-finding', text: item.summary }) : null
       ].filter(Boolean))
     )) : null,
+    recorded.delegationRequests?.length
+      ? element('details', { class: 'workspace-resource-requests' }, [
+        element('summary', { class: 'small',
+          text: 'Specialist resource requests · ' + recorded.delegationRequests.length + ' proposed' }),
+        element('p', { class: 'small muted', text:
+          'Requests are not actions. Sandbox execution, dependency installation and terminal use still require the existing policy and approval workflow.' }),
+        ...recorded.delegationRequests.map(request =>
+          element('div', { class: 'workspace-resource-request' }, [
+            element('strong', { class: 'small', text: request.kind.replaceAll('-', ' ') }),
+            element('span', { class: 'small muted', text: request.status
+              + (request.state === 'manual-user-terminal-only' ? ' · terminal is user-controlled' : '') }),
+            element('span', { class: 'small', text: request.reason })
+          ]))
+      ]) : null,
     recorded.observedParallel ? element('p', { class: 'small muted',
       text: 'Parallel specialist waves were recorded for this task.' }) : null,
     recorded.adaptations.length ? element('div', {
