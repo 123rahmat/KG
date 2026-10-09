@@ -46,8 +46,10 @@ export function matchReusableSpecialists(records=[], {goal='',surface='normal-ch
   if(!wanted.size)return [];
   return (Array.isArray(records)?records:[])
     .filter(item=>item?.surface===surface
-      && ['observed','reusable'].includes(item?.status)
-      && (!item?.expiresAt || Number.isFinite(Date.parse(item.expiresAt)) && Date.parse(item.expiresAt)>Date.now()))
+      && item?.status==='reusable'
+      && Number(item?.verifiedExamples ?? 0)>=2
+      && item?.expiresAt && Number.isFinite(Date.parse(item.expiresAt))
+      && Date.parse(item.expiresAt)>Date.now())
     .map(item=>{
       const terms = Array.isArray(item.terms) ? item.terms.slice(0,8) : [];
       const overlap=terms.filter(t=>wanted.has(t)).length;
@@ -60,6 +62,7 @@ export function matchReusableSpecialists(records=[], {goal='',surface='normal-ch
       id:bounded(item.id,80),surface,
       description:bounded(item.description,160),
       status:item.status,verifiedExamples:cap(item.verifiedExamples,8),
+      recipeVersion:1,source:'repeated-server-verified-runs',
       authority:'advisory-only',
       requiresFreshVerification:true,
       mayExecuteTools:false,
