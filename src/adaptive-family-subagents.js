@@ -177,7 +177,7 @@ export function selectFamilySubagents({surface='normal-chat',goal='',role='',sit
  const focusEvidence=Array.isArray(observedFindings)?observedFindings.slice(-6):[];
  const observedFailure=focusEvidence.some(f=>f?.recommendation==='revise'||f?.recommendation==='stop');
  const verificationNeeded=severity.changed||observedFailure||crossTriggers.test.test(request)
-    ||taskKind==='verify'||taskKind==='test';
+    ||(severity.highRisk && valid==='code') || taskKind==='verify'||taskKind==='test';
  const researchNeeded=severity.uncertain||crossTriggers.research.test(request)
     ||focusEvidence.some(f=>f?.recommendation==='investigate');
  const budget=clamp(finite(remainingBudgetRatio,1),0,1);
@@ -223,7 +223,9 @@ export function selectFamilySubagents({surface='normal-chat',goal='',role='',sit
     default:'within-existing-authorized-agent-call',
     extraModelChildAllowed:callsAllowed,
     extraModelChildLimit:callsAllowed
-      ? (active.length===3 && severity.uncertain && severity.complex && budget>=0.8 ? 2 : 1) : 0,
+      ? Math.min(active.filter(x=>x.priority==='supporting'
+          && ['investigate','verify'].includes(x.operation)).length,
+        active.length===3 && severity.uncertain && severity.complex && budget>=0.8 ? 2 : 1) : 0,
     requiresParentBudget:true, parentOwnsVerification:true,
     readOnly:true, independentReadOnly:independent,
     parallelOnlyWhenIndependent:independent,
