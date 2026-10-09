@@ -53,7 +53,7 @@ export function matchReusableSpecialists(records=[], {goal='',surface='normal-ch
     .map(item=>{
       const terms = Array.isArray(item.terms) ? item.terms.slice(0,8) : [];
       const overlap=terms.filter(t=>wanted.has(t)).length;
-      return {item,overlap,score:overlap*5+(item.status==='reusable'?2:0)};
+      return {item,overlap,score:overlap*5+2-Math.min(6,Math.max(0,Number(item.failedExamples)||0)*3)};
     })
     .filter(x=>x.overlap>0)
     .sort((a,b)=>b.score-a.score||a.item.id.localeCompare(b.item.id))
@@ -68,6 +68,21 @@ export function matchReusableSpecialists(records=[], {goal='',surface='normal-ch
       mayExecuteTools:false,
       maySpawnAgents:false
     }));
+}
+
+/** Work usage provenance is recorded by the server when it generates a result. */
+export function usedRecipeIdsFromRun(run={}){
+  const ids=new Set();
+  for(const task of (Array.isArray(run?.tasks)?run.tasks:[]).slice(-32)){
+    const evidence=task?.evidence;
+    if(!evidence || typeof evidence!=='object'
+       || evidence.kind !== 'observed' || !evidence.provider) continue;
+    for(const id of (Array.isArray(evidence.reusedSpecialistIds)
+      ? evidence.reusedSpecialistIds:[]).slice(0,3)){
+      if(typeof id==='string' && /^[a-z][a-z0-9_-]{3,79}$/.test(id)) ids.add(id);
+    }
+  }
+  return [...ids].slice(0,4);
 }
 
 export class SavedSpecialistRecipeStore {
@@ -87,6 +102,7 @@ export class SavedSpecialistRecipeStore {
     const {rows}=await this.pool.query(
       `SELECT recipe_id AS id, surface, description, terms, status,
               cardinality(observed_run_ids) AS "verifiedExamples",
+              cardinality(failed_run_ids) AS "failedExamples",
               expires_at AS "expiresAt", updated_at AS "updatedAt"
          FROM saved_specialist_recipes
         WHERE workspace_id=$1 AND principal_id=$2 AND status <> 'retired'
@@ -120,9 +136,10 @@ export class SavedSpecialistRecipeStore {
                 ELSE array_append(saved_specialist_recipes.observed_run_ids,$7)
               END,
               status = CASE
-                WHEN saved_specialist_recipes.status='reusable'
-                  OR ($7<>ALL(saved_specialist_recipes.observed_run_ids)
-                      AND cardinality(saved_specialist_recipes.observed_run_ids)>=1)
+                WHEN saved_specialist_recipes.status='reusable' THEN 'reusable'
+                WHEN $7<>ALL(saved_specialist_recipes.observed_run_ids)
+                  AND cardinality(saved_specialist_recipes.observed_run_ids)
+                    >= cardinality(saved_specialist_recipes.failed_run_ids)+1
                 THEN 'reusable' ELSE 'observed' END,
               last_verified_at=now(),expires_at=now()+interval '120 days',
               updated_at=now()
@@ -134,6 +151,39 @@ export class SavedSpecialistRecipeStore {
       if(result[0])rows.push(result[0]);
     }
     return rows;
+  }
+  /**
+   * Only a server-observed failed verification of work that actually received
+   * a reused recipe can penalize it; unrelated failures cannot.
+   * Two distinct failed runs demote reusable -> observed.
+   */
+  async observeFailedReuse(scope,run,{verifiedFailure=false}={}){
+    if(!verifiedFailure || !scope?.workspaceId || !scope?.principalId || !run?.id
+      || !(await this.optedIn(scope))) return [];
+    const ids=usedRecipeIdsFromRun(run);
+    const updated=[];
+    for(const id of ids){
+      const {rows}=await this.pool.query(
+        `UPDATE saved_specialist_recipes
+            SET failed_run_ids = CASE
+                  WHEN $5=ANY(failed_run_ids) THEN failed_run_ids
+                  WHEN cardinality(failed_run_ids)>=8
+                    THEN failed_run_ids[2:8] || ARRAY[$5]::text[]
+                  ELSE array_append(failed_run_ids,$5)
+                END,
+                status=CASE
+                  WHEN $5<>ALL(failed_run_ids) AND cardinality(failed_run_ids)>=1
+                    THEN 'observed'
+                  ELSE status END,
+                updated_at=now()
+          WHERE workspace_id=$1 AND principal_id=$2
+            AND surface=$3 AND recipe_id=$4 AND status <> 'retired'
+          RETURNING recipe_id AS id, status`,
+        [scope.workspaceId,scope.principalId,workspace(run),id,run.id]
+      );
+      if(rows[0]) updated.push(rows[0]);
+    }
+    return updated;
   }
   async forget(scope,{id='',surface='normal-chat'}={}){
     if(!scope?.workspaceId || !scope?.principalId || !SURFACES.has(surface)
