@@ -19,6 +19,9 @@ const TEXT_TYPES = new Set([
 const DOCUMENT_FORMATS = new Set(['docx', 'xlsx', 'pptx', 'csv', 'text', 'pdf', 'image', 'json', 'project', 'bundle']);
 
 const text = value => String(value ?? '').trim();
+// Ignore late extraction responses after another file is selected or the
+// preview is closed. A slow DOCX/PDF must never replace the newer file.
+let activePreviewTicket = 0;
 
 function contentTypeOf(object = {}) {
   return text(object.contentType).split(';')[0].toLowerCase();
@@ -67,6 +70,10 @@ function formatPreviewMeta(object) {
 function textPreview(payload) {
   const wrapper = element('div', { class: 'artifact-text-preview' });
   if (payload.format) wrapper.append(element('div', { class: 'artifact-preview-kicker small muted', text: payload.format.toUpperCase() + ' preview' }));
+  if (['docx','pptx','xlsx'].includes(text(payload.format).toLowerCase())) {
+    wrapper.append(element('p', { class: 'small muted',
+      text: 'Readable text and table sample, not a pixel-perfect Office rendering. Open the original to confirm exact layout, charts and typography.' }));
+  }
   if (payload.pages) wrapper.append(element('div', { class: 'small muted', text: payload.pages + ' page' + (payload.pages === 1 ? '' : 's') }));
   if (payload.slides) wrapper.append(element('div', { class: 'small muted', text: payload.slides + ' slide' + (payload.slides === 1 ? '' : 's') }));
   const value = text(payload.text);
@@ -100,7 +107,7 @@ function textPreview(payload) {
   return wrapper;
 }
 
-async function populate(object) {
+async function populate(object, ticket) {
   const dialog = previewDialog();
   const body = $('artifactPreviewBody');
   const title = $('artifactPreviewTitle');
@@ -121,7 +128,7 @@ async function populate(object) {
     return;
   }
 
-  if (DIRECT_MEDIA.has(contentTypeOf(object)) || kind === 'pdf') {
+  if (DIRECT_MEDIA.has(contentTypeOf(object))) {
     const src = downloadUrl('/api/objects/' + encodeURIComponent(object.id) + '/content?preview=1');
     if (kind === 'image') {
       const image = element('img', { class: 'artifact-preview-image', src, alt: 'Preview of ' + titleFor(object), decoding: 'async' });
@@ -136,7 +143,13 @@ async function populate(object) {
   }
 
   try {
+    body.append(element('p', {
+      class: 'small muted artifact-preview-loading', role: 'status',
+      text: 'Preparing a safe read-only preview…'
+    }));
     const payload = await api('GET', '/api/objects/' + encodeURIComponent(object.id) + '/preview');
+    if (ticket !== activePreviewTicket) return;
+    body.replaceChildren();
     if (kind === 'html') {
       const frame = createStaticHtmlFrame(payload.text, 'Static structure of ' + titleFor(object));
       const preview = element('section', { class: 'artifact-preview-html' }, [
@@ -154,6 +167,8 @@ async function populate(object) {
       body.append(textPreview(payload));
     }
   } catch (error) {
+    if (ticket !== activePreviewTicket) return;
+    body.replaceChildren();
     body.append(element('div', { class: 'artifact-preview-empty' }, [
       element('strong', { text: 'Preview could not be generated.' }),
       element('p', { class: 'muted small', text: error.message || 'Download the original file or attach it to chat.' })
@@ -164,9 +179,13 @@ async function populate(object) {
 export async function openArtifactPreview(object) {
   const dialog = previewDialog();
   if (!dialog || !object?.id) return;
-  await populate(object);
-  if (typeof dialog.showModal === 'function') dialog.showModal();
-  else dialog.hidden = false;
+  const ticket = ++activePreviewTicket;
+  // Open before awaiting potentially expensive document extraction, so the
+  // user sees an immediate response rather than an unresponsive Preview chip.
+  if (typeof dialog.showModal === 'function') {
+    if (!dialog.open) dialog.showModal();
+  } else dialog.hidden = false;
+  await populate(object,ticket);
 }
 
 export function previewButton(object, label = 'Preview') {
@@ -198,6 +217,6 @@ export function initArtifactPreview() {
   const dialog = previewDialog();
   const close = $('artifactPreviewClose');
   close?.addEventListener('click', () => dialog?.close());
-  dialog?.addEventListener('close', () => clearDialog(dialog));
+  dialog?.addEventListener('close', () => { activePreviewTicket++; clearDialog(dialog); });
   dialog?.addEventListener('cancel', () => clearDialog(dialog));
 }
