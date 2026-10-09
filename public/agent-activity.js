@@ -4,6 +4,15 @@ const array = value => Array.isArray(value) ? value : [];
 const positive = value => Number.isInteger(value) && value > 0 ? value : null;
 
 export function agentActivitySnapshot(run) {
+  const surface=String(run?.surface||run?.adaptation?.primarySurface||'').trim().toLowerCase();
+  // User-facing everyday chat is not an agentic workspace. Suppress stale
+  // activity inherited from older runs, not merely the recruiter itself.
+  if(['normal-chat','chat','visual','design'].includes(surface)){
+    return {roles:[],groups:[],sourceTask:null,completed:0,active:[],
+      mode:'direct',maxParallel:1,
+      reason:'direct-conversation-no-agent-recruitment',
+      waves:0,observedParallel:false,adaptations:[],delegationRequests:[]};
+  }
   const tasks = array(run?.tasks);
   const sourceTask = [...tasks].reverse().find(task => task?.evidence?.multiAgent) ?? null;
   const multi = sourceTask?.evidence?.multiAgent ?? run?.adaptation?.multiAgent ?? null;
