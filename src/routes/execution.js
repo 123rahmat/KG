@@ -1653,7 +1653,9 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     if (task.type !== 'verify' && Array.isArray(brief.successCriteria)) {
       brief.successCriteria = brief.successCriteria.filter(item => item !== GENERIC_CRITERION);
     }
-    const reusableSpecialists = task.type === 'verify' ? [] :
+    const isNormalConversation=['normal-chat','chat','visual','design']
+      .includes(text(run.surface || run.adaptation?.primarySurface || 'normal-chat').toLowerCase());
+    const reusableSpecialists = task.type === 'verify' || isNormalConversation ? [] :
       await savedSpecialists.suggest(scope ?? currentDbScope(), {
         goal: run.goal,
         surface: run.surface || run.adaptation?.primarySurface || 'normal-chat',
@@ -1715,12 +1717,14 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         blackboardPresent: Boolean(blackboard),
         codeIntelligencePresent: Boolean(codeIntelligence),
         subsystemPlanPresent: Boolean(subsystemPlan),
-        multiAgentEligible: Boolean(run.adaptation?.parallel)
+        multiAgentEligible: !isNormalConversation && Boolean(run.adaptation?.parallel)
       },
       chat: run.adaptation?.unifiedWorkContext?.chat ?? {
         conversationId: run.conversationId ?? null,
         memory: { scope: run.conversationId ? 'conversation' : 'unavailable', alwaysOn: Boolean(run.conversationId), crossChat: 'user-controlled' },
-        multiAgent: { mode: config.agents?.multiAgent ?? 'auto', maxAgents: config.agents?.maxAgents ?? 11, adaptive: true, serverOrchestrated: true, advisoryOnly: true }
+        multiAgent: { mode: isNormalConversation ? 'off' : config.agents?.multiAgent ?? 'auto',
+          maxAgents: isNormalConversation ? 1 : config.agents?.maxAgents ?? 11,
+          adaptive: !isNormalConversation, serverOrchestrated: true, advisoryOnly: true }
       },
       workspace: run.adaptation?.unifiedWorkContext?.workspace ?? null,
       // Deterministic code intelligence: symbols, dependencies and tests are computed server-side,
