@@ -200,3 +200,59 @@ test('real Code panel model calls receive scoped adaptive work without any new p
   assert.ok(result.waves.every(w => w.lifecycle.verificationPassed === false));
   assert.ok(result.allocation.subsystemPanels.every(s => s.adaptiveWork?.authority?.executionOwner === 'parent-run'));
 });
+
+
+test('observed backend test failure recruits a scoped debugger rather than an unassigned child agent', async () => {
+  const project = {
+    revisionId: 'failure-rev', contentHash: 'failure-hash', scale: 'small',
+    fileCount: 2,
+    files: [{ path: 'src/backend/api.js', bytes: 100 },
+      { path: 'src/backend/api.test.js', bytes: 70, test: true }],
+    dependencies: [], totals: { bytes: 170, dependencies: 0 },
+    hierarchy: { scale: 'small', root: { path: '', depth: 0, fileCount: 2,
+      bytes: 170, digest: 'failure-root' } }
+  };
+  const observed = [];
+  await runAdaptiveAgentPanel({
+    run: {
+      id: 'backend-failure', surface: 'code', goal: 'Repair failing API tests',
+      situation: { risk: 'low' }, adaptation: { scale: 'small' },
+      maxTokens: 100000, tokensUsed: 0
+    },
+    task: { id: 'build-code', type: 'code' },
+    basePayload: {
+      goal: 'Repair failing API tests',
+      task: { id: 'build-code', type: 'code' },
+      workspace: { projectId: 'backend', revisionId: 'failure-rev',
+        paths: project.files.map(item => item.path) },
+      codeIntelligence: {
+        project, files: project.files,
+        failure: { status: 'failed', exitCode: 1, failedTests: ['api integration'] }
+      }
+    },
+    selection: {}, primaryModelId: 'google:gemini-3.8-flash',
+    config: { agents: { multiAgent: 'always', maxAgents: 3 } },
+    canSpend: async () => true,
+    modelCaller: async messages => {
+      const body = JSON.parse(messages[1].content);
+      observed.push(body);
+      return {
+        text: JSON.stringify({ recommendation: 'proceed',
+          summary: 'Diagnose the failing API test.', confidence: 0.94,
+          explanation: 'A patch remains for parent execution.',
+          risks: [], unknowns: [], actions: [], evidence: [] }),
+        provider: 'google', model: 'google:gemini-3.8-flash', usage: null
+      };
+    }
+  });
+  const debuggerCall = observed.find(body =>
+    body.specialistAssignment?.role === 'debugger');
+  assert.ok(debuggerCall, 'an observed failed test must recruit a debugger');
+  assert.equal(debuggerCall.specialistAssignment.maySpawnAgents, false);
+  assert.equal(debuggerCall.specialistAssignment.authority, 'advisory-only');
+  assert.equal(debuggerCall.specialistAssignment.adaptiveWork.evidence.observedFailure, true);
+  assert.equal(debuggerCall.specialistAssignment.adaptiveWork.authority.agentMayRunTools, false);
+  assert.equal(debuggerCall.specialistAssignment.scope.files.some(path =>
+    path.endsWith('/api.js')), true);
+  assert.equal(debuggerCall.workspacePanel.lifecycle.testsRequireRealParentExecution, true);
+});
