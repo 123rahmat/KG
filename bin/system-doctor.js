@@ -234,11 +234,12 @@ check('agent-resource-owner-scope',
     && /checkTaskPolicy/.test(resourceBroker),
   'only authenticated run owners request tools, and tool admission is never mistaken for execution');
 check('agent-child-execution-bounded',
-  /maxExtraCalls=2/.test(familyAgents)
-    && /maxParallel=1/.test(familyAgents)
+  /maxExtraCalls=0/.test(familyAgents)
+    && /usageGate/.test(familyAgents)
     && /await Promise\.allSettled/.test(familyAgents)
-    && /maySpawnAgents:false/.test(familyAgents),
-  'child specialist probes are limited, read-only, cancelable and non-recursive');
+    && /maySpawnAgents:false/.test(familyAgents)
+    && /taskSpecificSubagentNeeds/.test(familyAgents),
+  'child specialist probes adapt to task evidence, are parent-budgeted, cancelable and non-recursive');
 check('agent-lane-ordered-evidence',
   /executeAgentLaneWaves/.test(multiAgent)
     && /scheduled\.size !== byId\.size/.test(agentLanes)
