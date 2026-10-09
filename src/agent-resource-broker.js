@@ -50,7 +50,8 @@ export function bindAgentResourceScope({run,task,scope}={}) {
     allowed:true,authority:'server-only',principalId,workspaceId,
     runId:run.id,taskId:text(task?.id)||null,
     surface:SURFACES.has(run.surface)?run.surface:'normal-chat',
-    limits:Object.freeze({maxRequestedResources:8,maxParallelModelChildren:2}),
+    // These are request/compute admission budgets, not preset team sizes.
+    limits:Object.freeze({maxRequestedResources:8}),
     // No token, shell, credential, or arbitrary tool grant is minted here.
     mayGrantTools:false,mayAssumeOtherIdentity:false
   });
@@ -68,13 +69,18 @@ export function admitAgentResourceRequest({
   if(!identity.allowed)return identity;
   const kind=text(request?.kind);
   if(!Object.hasOwn(RESOURCE_TO_TOOLS,kind))return denial('invalid-resource','Unknown requested resource.');
-  const allowedBySurface=identity.surface==='code'
-    || (!['terminal-session'].includes(kind)
-        && !(['sandbox-execution','dependency-installation'].includes(kind)
-             && identity.surface==='research'));
-  if(kind==='terminal-command' && identity.surface!=='code')
-    return denial('workspace-resource-blocked','One-shot agent command requests are limited to the Code workspace sandbox.');
-  if(!allowedBySurface)return denial('workspace-resource-blocked','This resource is unavailable for this workspace.');
+  // All three workspaces use the same isolated sandbox proposal pathway.
+  // Workspace identity is NOT a privilege: actual execution still depends on
+  // the run's active capabilities, policies, tool readiness and approval.
+  if(text(request?.runId) && text(request.runId)!==identity.runId)
+    return denial('resource-run-mismatch','A resource request cannot cross runs.');
+  if(text(request?.taskId) && text(request.taskId)!==identity.taskId)
+    return denial('resource-task-mismatch','A resource request cannot cross tasks.');
+  // A tool request is an intent, never arbitrary commands, scripts or
+  // executable arguments supplied by an untrusted model or child agent.
+  if(['command','script','argv','args','environment','env','token','secret','url','input']
+    .some(key=>Object.hasOwn(request??{},key)))
+    return denial('untrusted-executable-payload','Agent requests cannot supply executable input or credentials.');
   const policy=checkTaskPolicy(run,task??{id:'',type:'respond'});
   if(!policy.allowed)return denial(policy.code,policy.reason);
   const requestedPaths=(Array.isArray(request?.paths)?request.paths:[]).slice(0,8);
