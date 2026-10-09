@@ -4,6 +4,14 @@ Kindgleam is an adaptive AI application for everyday work, software projects and
 
 The system starts with the smallest useful action. It adds investigation, tools, execution or advisory specialists when current evidence and the user's goal justify them. RunStore owns task state, permissions and completion; a model or browser cannot authorize its own work.
 
+## Agentic domains and application entry points
+
+Code and Research are the **two specialist multi-agent domains**. Normal Chat
+remains a non-agent direct entry point for everyday conversation, not another
+domain controller. All three UI entry points use the **same** authorized runtime;
+there is no parallel execution authority. See
+[the two-domain delivery contract](docs/TWO_DOMAIN_DELIVERY.md).
+
 ## Application workspaces
 
 | Workspace | What people use it for | Application behavior |
@@ -48,6 +56,14 @@ This is a feedback relationship, not a required sequence of reasoning phases. Th
 | Safe view of current work | [src/persisted-task-projection.js](src/persisted-task-projection.js), [src/open-world-task-graph.js](src/open-world-task-graph.js) |
 
 The graph projection is a bounded, read-only view of persisted tasks and proposed actions. It does not dispatch tools, queue work or accept model-reported completion. The [canonical architecture guide](docs/ARCHITECTURE.md) explains these boundaries and the application services.
+
+Code and Research display saved progress as it happens and a terminal outcome
+summary grounded in recorded execution, changed paths, citations and
+verification; they do not turn planned tests into passing tests. Both expose
+a user-approved **Screenshot UI** action: the browser asks the user to choose
+a tab, captures one PNG frame, stops screen sharing and attaches the image as
+an unsent chat draft. This requires HTTPS/localhost and is not an automated
+sandbox-browser screenshot or a claim that code was executed.
 
 ## Efficient work and reliable outcomes
 

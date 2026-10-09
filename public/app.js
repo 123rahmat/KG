@@ -22,6 +22,7 @@ import { initSettingsWindow } from './app-settings-window.js';
 import { initWorkspaceSources } from './workspace-sources.js';
 import { initTerminal } from './terminal.js';
 import { initArtifactPreview } from './artifact-preview.js';
+import { captureSelectedTab } from './workspace-screenshot.js';
 import { initProjectHub, loadProjects } from './app-projects.js';
 import { executionContextKey, executionContextCurrent } from './execution-context.js';
 
@@ -1450,6 +1451,22 @@ $('adaptiveCreateStrip')?.addEventListener('click', event => {
   setCreateMode(chip.dataset.createMode, { seed: true });
 });
 
+// A capture is a single user-selected tab frame, attached only after browser
+// permission. It is never represented as a model-generated UI screenshot.
+document.addEventListener('kindgleam:capture-workspace-ui', async () => {
+  if (!canEdit()) return;
+  try {
+    const file = await captureSelectedTab();
+    const before = state.attachments.length;
+    addAttachments([file]);
+    if (state.attachments.length > before) notify('runNotice', 'ok',
+      'Screenshot captured from your selected tab and attached to the next message. It has not been sent yet.');
+  } catch (error) {
+    notify('runNotice', 'warn',
+      error?.name === 'NotAllowedError' ? 'Screen capture was cancelled or denied.'
+        : error?.message || 'Screen capture failed. You can attach a screenshot instead.');
+  }
+});
 $('attachBtn').addEventListener('click', () => $('attachInput').click());
 $('attachCodeInput')?.addEventListener('click', () => $('attachInput')?.click());
 $('voiceBtn').addEventListener('click', toggleVoiceInput);

@@ -11,6 +11,7 @@ import { agentActivitySnapshot } from './agent-activity.js';
 import { workspaceCapabilities } from './normal-chat-capabilities.js';
 import { workspaceProgressPanel, recordedCheckpointTrail } from './work-progress-panels.js';
 import { liveWorkFocus } from './live-work-focus.js';
+import { workspaceOutcomeSummary } from './workspace-outcomes.js';
 
 const SURFACE_META = {
   runs: { label: 'Normal Chat', icon: 'chat', kind: 'normal-chat' },
@@ -860,6 +861,28 @@ function workspaceActivitySection(run, workspace) {
   ].filter(Boolean));
 }
 
+function outcomeSummaryCard(run, domain) {
+  const outcome = workspaceOutcomeSummary(run, domain);
+  if (!outcome) return null;
+  return element('section', {
+    class: 'deep-workspace-card workspace-outcome-card',
+    'aria-label': domain === 'code' ? 'Coding work outcome' : 'Research work outcome'
+  }, [
+    element('div', { class: 'deep-workspace-card-head' }, [
+      element('span', { class: 'mono', text: 'RECORDED OUTCOME' }),
+      element('span', { class: 'small muted', text: outcome.state })
+    ]),
+    element('strong', { text: outcome.title }),
+    element('ul', { class: 'workspace-outcome-facts' },
+      outcome.facts.map(fact => element('li', { class: 'small', text: fact }))),
+    ...outcome.notes.map(note => element('p', { class: 'small muted', text: note }))
+  ]);
+}
+
+function requestScreenshot() {
+  document.dispatchEvent(new Event('kindgleam:capture-workspace-ui'));
+}
+
 function codeWorkspaceProject(data) {
   const run = data.run;
   const view = workspaceWorkView(run);
@@ -904,6 +927,7 @@ function codeWorkspaceProject(data) {
     ]),
     workspaceNavigation('code', [['overview', 'Overview'], ['activity', 'Activity'], ['files', 'Files'], ['changes', 'Changes'], ['tests', 'Tests'], ['agents', 'Specialists']]),
     element('div', workspaceArea('code', 'overview', 'deep-workspace-grid'), [
+      ...(workspaceOutcomeSummary(run, 'code') ? [outcomeSummaryCard(run, 'code')] : []),
       element('section', { class: 'deep-workspace-card project-card' }, [
         element('div', { class: 'deep-workspace-card-head' }, [
           element('span', { class: 'mono', text: 'PROJECT' }),
@@ -970,6 +994,7 @@ function codeWorkspaceProject(data) {
       button('GitHub project', () => $('openProjectSources')?.click(), 'small'),
       button('ZIP / code file', () => $('attachCodeInput')?.click(), 'small'),
       button('Terminal', () => $('openTerminal')?.click(), 'small'),
+      button('Screenshot UI', requestScreenshot, 'small'),
       button('Review changes', () => openWorkspaceArea('changes'), 'primary small')
     ])
   ];
@@ -1011,6 +1036,7 @@ function researchWorkspaceProject(data) {
     ]),
     workspaceNavigation('research', [['overview', 'Overview'], ['activity', 'Activity'], ['sources', 'Sources'], ['evidence', 'Evidence'], ['gaps', 'Gaps'], ['team', 'Team']]),
     element('div', workspaceArea('research', 'overview', 'deep-workspace-grid'), [
+      ...(workspaceOutcomeSummary(run, 'research') ? [outcomeSummaryCard(run, 'research')] : []),
       element('section', { class: 'deep-workspace-card project-card' }, [
         element('div', { class: 'deep-workspace-card-head' }, [
           element('span', { class: 'mono', text: 'SOURCE SET' }),
@@ -1078,6 +1104,7 @@ function researchWorkspaceProject(data) {
       button('Search + gather', () => $('goal')?.focus({ preventScroll: false }), 'primary small'),
       button('Review sources', () => openWorkspaceArea('sources'), 'small'),
       button('Review evidence', () => openWorkspaceArea('evidence'), 'small'),
+      button('Screenshot UI', requestScreenshot, 'small'),
       button('Add research direction', () => $('goal')?.focus({ preventScroll: false }), 'small')
     ])
   ];
