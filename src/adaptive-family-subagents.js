@@ -9,6 +9,7 @@
 import { SPECIALIST_FAMILIES, specialistFocusFor } from './adaptive-specialist-focus.js';
 import { parseJsonObject } from './structured.js';
 import { normalizeAgentResourceRequests } from './agent-resource-delegation.js';
+import { specialistBudgetRatio } from './agent-topology-policy.js';
 
 const SURFACES = new Set(['normal-chat', 'code', 'research']);
 const clean = value => String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -220,7 +221,8 @@ export function selectFamilySubagents({surface='normal-chat',goal='',role='',sit
     ||(severity.highRisk && valid==='code') || taskKind==='verify'||taskKind==='test';
  const researchNeeded=severity.uncertain||crossTriggers.research.test(request)
     ||focusEvidence.some(f=>f?.recommendation==='investigate');
- const budget=clamp(finite(remainingBudgetRatio,1),0,1);
+ // Unknown budget telemetry must not be interpreted as zero resources.
+ const budget=specialistBudgetRatio(remainingBudgetRatio) ?? 1;
  const goalTokens=tokens(request);
  const prior=FAMILY_GUIDANCE[family]?.priority??[];
  const ranked=playbook.children.map((x,i)=>({x,i,score:childScore(x.id,goalTokens,request,prior,severity)}))
