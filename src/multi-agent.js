@@ -1842,10 +1842,16 @@ async function runCodeWorkspaceAgentPanels({
               subsystemPlan: scopedSubsystemPlan(subsystemPlanContext, job.subsystem),
               subsystemWork: job.subsystemWork,
               codeIntelligence: scopedCodeIntelligence(basePayload?.codeIntelligence, job.subsystem),
-              specialistAssignment: specialistRemit(codeSpecialistTeam(job.subsystem, {
-                goal: basePayload?.goal, maxRoles: maxAgents,
-                remainingBudgetRatio: remainingBudgetRatio(), risk: run?.situation?.risk
-              }), job.role),
+              // The role and its scoped work policy must come from the
+              // same observation cycle. Never send a stale first-iteration
+              // policy alongside current failure evidence.
+              specialistAssignment: specialistRemit({
+                ...codeSpecialistTeam(job.subsystem, {
+                  goal: basePayload?.goal, maxRoles: maxAgents,
+                  remainingBudgetRatio: remainingBudgetRatio(), risk: run?.situation?.risk
+                }),
+                workPolicy: job.workPolicy
+              }, job.role),
               workspacePanel: {
                 mode: 'unified-adaptive-code-panel',
                 panelId: job.panelId,
