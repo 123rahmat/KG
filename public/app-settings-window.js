@@ -50,6 +50,60 @@ async function renderSkillLearning() {
     ]);
   }));
 }
+/** Server-owned, opt-in specialist library. No source code or secrets in UI. */
+async function renderSavedSpecialists() {
+  const list = $('savedSpecialistList');
+  if (!list) return;
+  if (!state.settings.crossChatMemory) {
+    list.replaceChildren(element('li', { class: 'muted small',
+      text: 'Cross-chat learning is off. Enable “Use memory across chats” to save and reuse verified expertise.' }));
+    return;
+  }
+  const result = await api('GET', '/api/specialists/saved').catch(() => null);
+  if (!result) {
+    list.replaceChildren(element('li', { class: 'muted small',
+      text: 'Saved specialists are unavailable right now.' }));
+    return;
+  }
+  const records = Array.isArray(result?.specialists) ? result.specialists : [];
+  if (!records.length) {
+    list.replaceChildren(element('li', { class: 'muted small',
+      text: 'No verified specialist recipes saved in this workspace yet.' }));
+    return;
+  }
+  list.replaceChildren(...records.slice(0, 20).map(item => {
+    const id = String(item?.id || '').slice(0, 80);
+    const surface = ['normal-chat', 'code', 'research'].includes(item?.surface) ? item.surface : 'normal-chat';
+    const status = item.status === 'reusable' ? 'Reusable after repeated verification' : 'Observed · awaiting more verification';
+    const count = Math.max(0, Number(item.verifiedExamples) || 0);
+    const description = String(item.description || id).slice(0, 160);
+    const children = [
+      element('span', { class: 'action-icon' }, [svgIcon('sparkle')]),
+      element('span', { class: 'memory-text' }, [
+        element('strong', { text: description }),
+        element('span', { class: 'small muted', text: surface + ' · ' + status + ' · ' + count + ' verified runs' })
+      ])
+    ];
+    if (['admin', 'editor'].includes(state.role) && id) {
+      children.push(element('button', {
+        type: 'button', class: 'ghost small danger-text', text: 'Forget',
+        'aria-label': 'Forget saved specialist ' + id,
+        onclick: async () => {
+          if (!confirm('Forget this saved specialization?')) return;
+          try {
+            await api('DELETE', '/api/specialists/saved/' + encodeURIComponent(id)
+              + '?surface=' + encodeURIComponent(surface));
+            await renderSavedSpecialists();
+          } catch {
+            list.prepend(element('li', { class: 'muted small',
+              text: 'Could not forget the specialist. Check your permissions and retry.' }));
+          }
+        }
+      }));
+    }
+    return element('li', { class: 'memory-item' }, children);
+  }));
+}
 function renderCapabilities() {
   const can = capabilities();
   const rows = [
@@ -215,7 +269,7 @@ export function activateSettingsSection(name) {
   if (activeName === 'policies') loadPolicyControls();
   if (activeName === 'workspace') { renderWorkspaceTools(); renderReports(); }
   if (activeName === 'schedules') { renderSchedules(); syncScheduleForm(); }
-  if (activeName === 'personalization') { renderMemories(); renderSkillLearning(); }
+  if (activeName === 'personalization') { renderMemories(); renderSkillLearning(); renderSavedSpecialists(); }
   if (activeName === 'mail') renderMailSection().catch(error => notify('mailNotice', 'bad', error.message));
 }
 // Resetting asks on the button itself: a second click within a few seconds.
@@ -235,6 +289,7 @@ export function initSettingsWindow() {
     if (entry[1] === 'share' && !state.chat.runs.length) $('shareRun').checked = state.settings.share;
     if (entry[1] === 'consent' && state.settings.consent) state.chat.consent = true;
     if (entry[1] === 'voiceInput' || entry[1] === 'voiceLanguage') setupVoiceInput();
+    if (entry[1] === 'crossChatMemory') renderSavedSpecialists();
   });
   $('openSettings').addEventListener('click', openSettings);
   $('usageRing').addEventListener('click', () => { openSettings(); activateSettingsSection('usage'); });
@@ -243,6 +298,7 @@ export function initSettingsWindow() {
   $('settingsFiles').addEventListener('click', () => { $('settings').close(); selectTab('objects'); });
   $('settingsActivity').addEventListener('click', () => { $('settings').close(); selectTab('audit'); });
   $('skillLearningRefresh')?.addEventListener('click', renderSkillLearning);
+  $('savedSpecialistRefresh')?.addEventListener('click', renderSavedSpecialists);
   $('skillLearningClear')?.addEventListener('click', async () => {
     if (!confirm('Forget all learned work patterns for this workspace?')) return;
     await guard(async () => {
