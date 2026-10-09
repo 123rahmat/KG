@@ -108,22 +108,22 @@ export function summarizeDelegationRequests(requests=[],{limit=8}={}) {
 
 /**
  * Fairly assign scarce child model slots across already approved parent jobs.
- * Round robin one child per eligible parent before allowing any second child;
+ * Round robin one child per eligible parent before allowing further children;
  * task-family relevance and observed uncertainty determine eligibility.
  * No child model is called by this pure function.
  */
 export function distributeSubagentCapacity({
- jobs=[],globalLimit=2,maxParallel=1,needForRole=()=>0,servedRoles=[]
+ jobs=[],globalLimit=0,maxParallel=1,needForRole=()=>0,servedRoles=[]
 }={}) {
- const limit=Math.max(0,Math.min(2,Number.isFinite(Number(globalLimit))?Math.floor(Number(globalLimit)):0));
- const concurrency=Math.max(1,Math.min(8,Number.isFinite(Number(maxParallel))?Math.floor(Number(maxParallel)):1));
+ const limit=Math.max(0,Number.isFinite(Number(globalLimit))?Math.floor(Number(globalLimit)):0);
+ const concurrency=Math.max(1,Number.isFinite(Number(maxParallel))?Math.floor(Number(maxParallel)):1);
  const already = new Set(Array.isArray(servedRoles)?servedRoles:[]);
  const unique=new Set(),eligible=[];
  for(const job of (Array.isArray(jobs)?jobs:[])) {
    const role=clip(job?.role,84);
    if(!role || unique.has(role) || !job?.modelId)continue;
    unique.add(role);
-   const need = Math.max(0,Math.min(2,Number(needForRole(job))||0));
+   const need = Math.max(0,Math.floor(Number(needForRole(job))||0));
    if(need) eligible.push({job,role,need,allocated:0,previous:already.has(role)});
  }
  eligible.sort((a,b)=>Number(a.previous)-Number(b.previous));
