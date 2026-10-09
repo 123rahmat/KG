@@ -514,12 +514,18 @@ export function renderWorkStatus(run) {
     stageDetail(run, panel, view),
     background.activity.roles.length ? element('details', { class: 'work-agent-details' }, [
       element('summary', { class: 'small', text: 'Specialist contributions · ' + background.activity.roles.length + ' recorded' }),
+      background.activity.sourceTask ? element('p', { class: 'small muted', text:
+        'Task · ' + background.activity.sourceTask.title }) : null,
       element('p', { class: 'small muted', text: background.activity.observedParallel
         ? 'Independent specialist work ran in parallel where allowed. These are saved results, not a live activity claim.'
         : 'Saved advisory findings. The main workflow remains responsible for execution and verification.' }),
       ...background.activity.roles.slice(-8).map(agent => element('div', { class: 'work-agent-row' }, [
         element('strong', { class: 'small', text: agent.role.replace(/-/g, ' ') }),
         element('span', { class: 'small muted', text: agent.status + (agent.wave ? ' · wave ' + agent.wave : '') }),
+        agent.specialty && agent.specialty.toLowerCase() !== agent.role.replaceAll('-', ' ').toLowerCase()
+          ? element('span', { class: 'small work-agent-summary muted', text: agent.specialty }) : null,
+        agent.subsystemId ? element('span', { class: 'small work-agent-summary muted', text:
+          'Subsystem · ' + agent.subsystemId }) : null,
         agent.summary ? element('span', { class: 'small work-agent-summary', text: agent.summary }) : null
       ].filter(Boolean)))
     ]) : null,
