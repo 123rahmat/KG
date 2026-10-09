@@ -20,7 +20,7 @@ test('all 85 families register main agents and keep their eight distinct subagen
 });
 test('scoped main agents do not activate from an unrelated or empty request',()=>{
   assert.ok(familyMainAgentMatch('code-ui-engineering-lead',{surface:'code',
-    goal:'Build a responsive UI component',task:{type:'code'}} >= .89);
+    goal:'Build a responsive UI component',task:{type:'code'}}) >= .89);
   assert.equal(familyMainAgentMatch('code-ui-engineering-lead',{
     surface:'normal-chat',goal:'Build a responsive UI component'}),0);
   assert.equal(familyMainAgentMatch('chat-thinking-reasoning-lead',{
