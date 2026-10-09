@@ -23,7 +23,7 @@ import { modelForStep, resolveModelSelection } from '../model-routing.js';
 import { compileExecutionCapabilityPlan } from '../capability-compiler.js';
 import { effortForAdaptiveDepth, adaptiveExecutionBudgetStatus, toolsForTask, adaptiveStepScope } from '../adaptive-control.js';
 import { adaptiveBehaviorContract, adaptiveEffortProfile } from '../adaptive-efficiency.js';
-import { checkTaskPolicy } from '../policy-gate.js';
+import { checkTaskPolicy, checkConnectionPolicy } from '../policy-gate.js';
 import { executionSafetyGate } from '../adaptive-safety.js';
 import { situationGovernanceExecutionGate } from '../situation-governance.js';
 import { systemPromptFor, situationBrief, previousAttempts, normalizeVerdict, GENERIC_CRITERION } from '../reasoning-context.js';
@@ -511,10 +511,12 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
             run
           });
         }
-        if (!planPolicyAllows(run, 'builtin-research', 'medium')
-            || !dataPolicyAllows(run, run.adaptation?.dataClasses ?? ['user-content'], 'model-provider', {
-              explicitConsent: req.body?.approved === true
-            })) {
+        if (!checkConnectionPolicy(run, {
+          target: 'builtin-research', risk: 'medium',
+          dataClasses: run.adaptation?.dataClasses ?? ['user-content'],
+          destination: 'model-provider',
+          explicitConsent: req.body?.approved === true
+        }).allowed) {
           return res.status(403).json({
             error: 'The active governance policy denies provider-backed web research.',
             code: 'research-policy-denied',
@@ -618,10 +620,12 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
             run
           });
         }
-        if (!planPolicyAllows(run, executionDecision.target, 'high')
-            || !dataPolicyAllows(run, run.adaptation?.dataClasses ?? ['workspace-content'], 'execution-runner', {
-            explicitConsent: req.body?.approved === true || executionDecision?.target === 'local'
-          })) {
+        if (!checkConnectionPolicy(run, {
+          target: executionDecision.target, risk: 'high',
+          dataClasses: run.adaptation?.dataClasses ?? ['workspace-content'],
+          destination: 'execution-runner',
+          explicitConsent: req.body?.approved === true || executionDecision?.target === 'local'
+        }).allowed) {
           return res.status(403).json({
             error: 'The active governance policy denies the selected execution target.',
             code: 'execution-target-policy-denied',
@@ -1750,9 +1754,12 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     });
     const beforeCall = async ({ modelId }) => {
       await recheckPolicy?.();
-      if (!modelPolicyAllows(run, modelId, 'medium') || !dataPolicyAllows(run, run.adaptation?.dataClasses ?? ['user-content'], 'model-provider', {
+      if (!checkConnectionPolicy(run, {
+        model: modelId, risk: 'medium',
+        dataClasses: run.adaptation?.dataClasses ?? ['user-content'],
+        destination: 'model-provider',
         explicitConsent: explicitConsent || run.adaptation?.privacy?.consent?.modelProvider === true
-      })) throw new PolicyError('Current policy denies this model call or data transfer.', 'policy-blocked', 403);
+      }).allowed) throw new PolicyError('Current policy denies this model call or data transfer.', 'policy-blocked', 403);
     };
     // Backups obey the same rules: governance, and a model an admin turned off.
     const allowBackup = () => false;
