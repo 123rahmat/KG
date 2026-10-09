@@ -37,7 +37,7 @@ export function sandboxActionPreview(input) {
 }
 
 registerTools([{
-  name:'code.run',
+  name:'sandbox.execute',
   title:'Isolated code sandbox',
   description:'Run a supported code or test job in an ephemeral, network-isolated container after user approval. Dependencies are validated and installed in a separate restricted phase. This never opens a terminal session.',
   input:{language:'python | javascript | go | rust | java | c | cpp',
@@ -84,7 +84,7 @@ registerTools([{
       token,timeoutMs:SANDBOX_TIMEOUT_MS,
       beforeCall:async()=>{
         ctx.signal?.throwIfAborted();
-        await ctx.beforeRunner({tool:'code.run'});
+        await ctx.beforeRunner({tool:'sandbox.execute'});
       }
     });
     return output;
