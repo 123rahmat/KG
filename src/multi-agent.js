@@ -23,7 +23,7 @@ import { specialistWaveDecision } from './specialist-wave-policy.js';
 import { taskSpecialization } from './task-specialization.js';
 import { DOMAIN_SPECIALISTS, domainSpecialistMatch } from './domain-specialists.js';
 import { taskSpecialistCandidates, taskSpecialistForRole } from './task-specialist-factory.js';
-import { codeSpecialistTeam, researchSpecialistTeams, specialistRemit } from './specialist-hierarchy.js';
+import { codeSpecialistTeam, codeSpecialistLeadsFor, researchSpecialistTeams, specialistRemit } from './specialist-hierarchy.js';
 import { subsystemWorkPolicy } from './subsystem-work-policy.js';
 import { executeAgentLaneWaves } from './agent-lane-executor.js';
 import { specialistFocusFor } from './adaptive-specialist-focus.js';
@@ -684,7 +684,8 @@ export function rolesFor(run, task, {
     .map(([, role]) => role);
 
   for (const role of [...new Set(requiredRoles)]) {
-    if (roles.length >= targetCount || roles.includes(role)) break;
+    if (roles.length >= targetCount) break;
+    if (roles.includes(role)) continue;
     const candidate = candidates.find(item => item.role === role);
     if (!candidate) continue;
     roles.push(role);
@@ -1429,15 +1430,22 @@ function codeWorkspacePanelRoles(run, task, subsystem, {
     goal, maxRoles: width, remainingBudgetRatio: remainingSpecialistBudget(run),
     risk: run?.situation?.risk
   });
+  const directCodeLeads = width>=2 ? codeSpecialistLeadsFor(subsystem,{
+    goal:goal??run?.goal,task,limit:Math.max(1,width-1)
+  }) : [];
+  // A precise engineering specialty replaces only a generic *advisory*
+  // slot. Keep the implementer and required test/security checks intact.
+  const targetedLead=directCodeLeads[0]?.role??null;
+  if(signals.executable && width>=2 && targetedLead) addRequired(targetedLead);
   if (signals.executable && width >= 2 && nestedTeam.focus !== 'general') {
-    addRequired(nestedTeam.leadRole);
+    if (!targetedLead || width>=3) addRequired(nestedTeam.leadRole);
     addRequired('implementer');
   }
   // Executable work starts with the smallest role that can improve the
   // current decision. Architecture and implementation are complementary, not
   // mandatory separate calls on every small task.
   if (signals.executable && (nestedTeam.focus === 'general' || width < 2)) {
-    addRequired(width >= 2 ? 'architect' : 'implementer');
+    if(!targetedLead || width<2) addRequired(width >= 2 ? 'architect' : 'implementer');
     if (width >= 2) addRequired('implementer');
     if (width >= 3 && (signals.unknowns >= 0.08 || signals.evidenceDiversity >= 0.08)) {
       addRequired('researcher');
@@ -1469,6 +1477,9 @@ function codeWorkspacePanelRoles(run, task, subsystem, {
   if (signals.backendFocus && signals.executable) addRequired('backend-engineer');
   if (signals.securityFocus) addRequired('security-reviewer');
   if (signals.performanceFocus) addRequired('performance-reviewer');
+  // Keep remaining explicit distinct specialists for wider warranted panels.
+  if(width>=4) for(const match of directCodeLeads.slice(1,Math.max(1,width-2)))
+    addRequired(match.role);
   // An uncommon coding specialty can be formed from explicit requirements
   // without requiring a new hard-coded role. Its task scope remains advisory;
   // implementation and acceptance checks still use owned Code Workspace lanes.
