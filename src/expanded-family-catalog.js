@@ -125,7 +125,7 @@ const DEFINITIONS = {
     ],
     [
       "systematic-review-methods",
-      "systematic review protocol|prisma|meta-analysis method|scoping review protocol",
+      "systematic review protocol|systematic review|prisma|meta-analysis method|scoping review protocol",
       "protocol,inclusion-criteria,search-strategy,screening,risk-of-bias,evidence-tables,heterogeneity,reporting"
     ],
     [
