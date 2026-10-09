@@ -46,6 +46,9 @@ export async function checkControls(browser, url) {
       renderUsageLimitLock(); document.dispatchEvent(new Event('kindgleam:composer-state'));
       openSettings(); activateSettingsSection('data');
     });
+    // The unified Privacy & Policy tab keeps advanced controls collapsed by
+    // default. Exercise the actual disclosure instead of filling hidden fields.
+    await page.locator('details.settings-policy-details > summary').click();
     assert.equal(await page.locator('#createRun').isDisabled(), true, 'quota refresh cannot unlock a viewer');
     assert.equal(await page.locator('#goal').isDisabled(), true);
     await page.waitForFunction(() => !document.getElementById('policySave').disabled);
