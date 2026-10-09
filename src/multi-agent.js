@@ -22,6 +22,7 @@ import { remainingSpecialistBudget, specialistTopology } from './agent-topology-
 import { specialistWaveDecision } from './specialist-wave-policy.js';
 import { taskSpecialization } from './task-specialization.js';
 import { DOMAIN_SPECIALISTS, domainSpecialistMatch } from './domain-specialists.js';
+import { taskSpecialistCandidates, taskSpecialistForRole } from './task-specialist-factory.js';
 import { codeSpecialistTeam, researchSpecialistTeams, specialistRemit } from './specialist-hierarchy.js';
 import { subsystemWorkPolicy } from './subsystem-work-policy.js';
 import { executeAgentLaneWaves } from './agent-lane-executor.js';
@@ -528,13 +529,20 @@ function roleUtility(role, run, task, progress = {}, precomputed = null) {
 function roleCandidates(run, task, progress = {}, precomputed = null) {
   const controller = controllerForSurface(run?.surface || run?.adaptation?.primarySurface || 'normal-chat');
   const preferred = new Set(controller.roles);
-  return Object.keys(ROLE_CATALOG)
+  const catalog = Object.keys(ROLE_CATALOG)
     .map(role => ({
       role,
       utility: roleUtility(role, run, task, progress, precomputed)
         + (preferred.has(role) ? 0.12 : 0)
-    }))
-    .sort((a, b) => b.utility - a.utility || a.role.localeCompare(b.role));
+    }));
+  // User/task-defined gaps may introduce main-agent specialties that did not
+  // exist when the catalog was written. They use the SAME model scheduler.
+  const completed = new Set(progress?.completedRoles??[]);
+  const additional = (precomputed?.dynamicSpecialists??[]).map(candidate=>({
+    role:candidate.role,
+    utility:completed.has(candidate.role)?0:0.91
+  }));
+  return [...catalog,...additional].sort((a,b)=>b.utility-a.utility||a.role.localeCompare(b.role));
 }
 
 export function rolesFor(run, task, {
@@ -606,8 +614,18 @@ export function rolesFor(run, task, {
     allocation: { topology, targetAgents: 0, selectedAgents: 0, reason: topology.reason }
   };
   targetCount = Math.min(targetCount, topology.agents);
+  const dynamicSpecialists = taskSpecialistCandidates({
+    surface:selectedSurface,goal:selectedGoal,task,
+    situation:run?.situation??{},maxCandidates:maximum
+  });
+  if (dynamicSpecialists.length >= 2) {
+    // Distinct, uncovered explicit requirements justify a wider task team,
+    // but provider/model budget limits still decide what may actually run.
+    targetCount=Math.min(maximum,Math.max(targetCount,dynamicSpecialists.length));
+  }
+  targetCount=Math.min(targetCount,topology.agents);
   const observedSignals = observedPanelSignals(progress);
-  const precomputedSignals = { signals, observed: observedSignals };
+  const precomputedSignals = { signals, observed: observedSignals, dynamicSpecialists };
   const candidates = roleCandidates(run, task, progress, precomputedSignals);
   const roles = [];
   const utilities = {};
@@ -647,6 +665,7 @@ export function rolesFor(run, task, {
     [signals.frontendFocus && signals.executable, 'frontend-engineer', 1.8],
     [signals.backendFocus && signals.executable, 'backend-engineer', 1.8],
     ...matchingLeads.map(item=>[true,item.role,1.65 + item.score * 0.12]),
+    ...dynamicSpecialists.map(item=>[true,item.role,1.62]),
     [signals.flags.ideation, 'idea-explorer', 1.7],
     [signals.visualWork && !signals.frontendFocus, 'visual-designer', 1.6],
     [signals.performanceFocus, 'performance-reviewer', 1.5],
@@ -848,8 +867,13 @@ function scopedSubsystemPlan(plan, subsystem) {
   };
 }
 
-function rolePrompt(role) {
-  const definition = ROLE_CATALOG[role] ?? ROLE_CATALOG.critic;
+function rolePrompt(role,basePayload={}) {
+  const temporary = taskSpecialistForRole(role,{
+    surface:basePayload?.specialistSurface??basePayload?.surface??'normal-chat',
+    goal:basePayload?.goal??'',task:basePayload?.task??{},
+    situation:basePayload?.situation??{},maxCandidates:64
+  });
+  const definition = ROLE_CATALOG[role] ?? temporary ?? ROLE_CATALOG.critic;
   return [
     `You are the ${role} agent in an adaptive multi-agent system.`,
     definition.purpose,
@@ -886,7 +910,7 @@ export function agentMessages(role, basePayload) {
     task: basePayload?.task
   });
   return [
-    { role: 'system', content: rolePrompt(role) },
+    { role: 'system', content: rolePrompt(role,basePayload) },
     {
       role: 'user',
       content: JSON.stringify({
