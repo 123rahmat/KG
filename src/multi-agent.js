@@ -403,6 +403,14 @@ function targetAgentCount(pressure, maxAgents) {
 
 export function multiAgentDecision(run, task, { mode = 'auto', progress = {} } = {}) {
   const normalizedMode = MULTI_AGENT_MODES.includes(mode) ? mode : 'auto';
+  const explicitSurface=String(run?.surface||run?.adaptation?.primarySurface||'').trim().toLowerCase();
+  // Product boundary: Normal Chat is direct Gemini reasoning, never an
+  // advisory multi-agent workspace, even when the user requests deep thought
+  // or a deployment is configured with MULTI_AGENT=always.
+  if(['normal-chat','chat','visual','design'].includes(explicitSurface)) {
+    return {enabled:false,reason:'direct-conversation-no-agent-recruitment',
+      pressure:0,maturity:null,adaptiveAuthority:{authority:'server-owned',action:'direct'}};
+  }
   const controller = controllerForSurface(run?.surface || run?.adaptation?.primarySurface || 'normal-chat');
   const basePressure = decisionPressure(run, task, progress);
   const maturity = run?.adaptation?.effortProfile?.maturity ?? realWorldMaturity({
@@ -2569,6 +2577,14 @@ export async function runAdaptiveAgentPanel({
   signal
 } = {}) {
   signal?.throwIfAborted();
+  const selectedSurface=String(run?.surface||run?.adaptation?.primarySurface||basePayload?.surface||'').trim().toLowerCase();
+  if(['normal-chat','chat','visual','design'].includes(selectedSurface)) {
+    // No agent waves, arbitration, independent child calls or terminal
+    // recruitment for conversational reasoning. The primary model retains
+    // its tool/retrieval and verification capabilities via the parent route.
+    return {enabled:false,decision:{enabled:false,reason:'direct-conversation-no-agent-recruitment'},
+      brief:null,agents:[],findings:[],arbiter:null};
+  }
   const mode = config?.agents?.multiAgent ?? 'auto';
   const maxAgents = Math.max(1, Math.min(MAX_MULTI_AGENT_SPECIALISTS, Number(config?.agents?.maxAgents) || DEFAULT_MULTI_AGENT_MAX_AGENTS));
   const providerParallelCap = Math.max(
