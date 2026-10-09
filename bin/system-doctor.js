@@ -208,6 +208,54 @@ check('postgres-service-image-pinned', /postgres:16-alpine@sha256:[0-9a-f]{64}/.
 
 check('usage-aggregation-bounded', /FILTER \(WHERE created_at >/.test(await read('src/usage.js')) && !/const \{ rows: globalUsageRows \}/.test(await read('src/usage.js')), 'quota checks use indexed database aggregates instead of loading the full rolling ledger into memory');
 
+
+/* Unified adaptive multi-agent conformance: one parent-owned runtime, one
+ * resource authority, task-bound expertise, and evidence-only progress. */
+const specialistFamilies = await read('src/adaptive-specialist-focus.js');
+const familyAgents = await read('src/adaptive-family-subagents.js');
+const resourceBroker = await read('src/agent-resource-broker.js');
+const agentActivity = await read('public/agent-activity.js');
+const agentLanes = await read('src/agent-lane-executor.js');
+const topologyPolicy = await read('src/agent-topology-policy.js');
+const taskMatrix = await read('bin/adaptive-task-matrix.js');
+check('adaptive-specialist-catalog-single-source',
+  /export const SPECIALIST_FAMILIES/.test(specialistFamilies)
+    && /SPECIALIST_FAMILIES/.test(familyAgents)
+    && /selectFamilySubagents/.test(multiAgent),
+  'all user-facing specialist families are task-selected within the existing parent orchestrator');
+check('adaptive-specialist-budget-single-policy',
+  /specialistBudgetRatio\(remainingBudgetRatio\)/.test(familyAgents)
+    && /export function specialistBudgetRatio/.test(topologyPolicy),
+  'unknown and exhausted budgets have consistent meaning across parent and subagents');
+check('agent-resource-owner-scope',
+  /bindAgentResourceScope/.test(resourceBroker)
+    && /owner-mismatch/.test(resourceBroker)
+    && /executionAuthorized:\s*false/.test(resourceBroker)
+    && /checkTaskPolicy/.test(resourceBroker),
+  'only authenticated run owners request tools, and tool admission is never mistaken for execution');
+check('agent-child-execution-bounded',
+  /maxExtraCalls=2/.test(familyAgents)
+    && /maxParallel=1/.test(familyAgents)
+    && /await Promise\.allSettled/.test(familyAgents)
+    && /maySpawnAgents:false/.test(familyAgents),
+  'child specialist probes are limited, read-only, cancelable and non-recursive');
+check('agent-lane-ordered-evidence',
+  /executeAgentLaneWaves/.test(multiAgent)
+    && /scheduled\.size !== byId\.size/.test(agentLanes)
+    && /await Promise\.allSettled/.test(agentLanes),
+  'subsystems use one shared validated dependency scheduler that drains peers');
+check('agent-ui-persisted-truth',
+  /sourceIsCurrent/.test(agentActivity)
+    && /sourceTask\?\.status === 'running'/.test(agentActivity)
+    && /sourceTask\?\.evidence\?\.multiAgent/.test(agentActivity)
+    && /executed===false/.test(agentActivity),
+  'agent UI never presents old findings or proposed resources as live execution');
+check('three-workspace-agent-eval-release-gate',
+  /eval:adaptive-matrix/.test(pkg.scripts?.verify ?? '')
+    && /npm run eval:adaptive-matrix/.test(ci)
+    && /modelResponsesGenerated:false/.test(taskMatrix),
+  'CI and Verify exercise adaptive graph decisions and label deterministic checks honestly');
+
 const failed = checks.filter(item => !item.ok);
 const passed = checks.length - failed.length;
 console.log(`Kindgleam system doctor: ${passed}/${checks.length} checks passed.`);
