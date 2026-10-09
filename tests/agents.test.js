@@ -117,24 +117,35 @@ function scenario(env, { reviewerVerdict }) {
   }) };
 }
 
-test('AGENTS_REVIEW=always: a disagreeing second agent fails work the first verifier passed', async () => {
+test('AGENTS_REVIEW=always cannot start a dissenting reviewer in direct Normal Chat', async () => {
   const s = scenario({ AGENTS_REVIEW: 'always' }, { reviewerVerdict: { verdict: 'fail', problems: ['States no units'] } });
   await s.run();
   assert.equal(s.calls.verifier, 1);
-  assert.equal(s.calls.reviewer, 1);
-  const verdict = s.outcome.verify?.evidence?.verdict ?? s.outcome.verify?.verdict;
-  assert.equal(verdict?.verdict, 'fail');
-  assert.ok(verdict.problems.some(problem => problem.startsWith('Independent review:')));
-  assert.equal(verdict.review.status, 'failed');
-});
-
-test('an agreeing second agent keeps the pass', async () => {
-  const s = scenario({ AGENTS_REVIEW: 'always' }, { reviewerVerdict: { verdict: 'pass', problems: [] } });
-  await s.run();
-  assert.equal(s.calls.reviewer, 1);
+  assert.equal(s.calls.reviewer, 0);
   const verdict = s.outcome.verify?.evidence?.verdict ?? s.outcome.verify?.verdict;
   assert.equal(verdict?.verdict, 'pass');
-  assert.equal(verdict.review.status, 'agreed');
+  assert.equal(verdict.review, undefined);
+});
+
+test('AGENTS_REVIEW=always retains the first verified chat result without extra agent calls', async () => {
+  const s = scenario({ AGENTS_REVIEW: 'always' }, { reviewerVerdict: { verdict: 'pass', problems: [] } });
+  await s.run();
+  assert.equal(s.calls.reviewer, 0);
+  const verdict = s.outcome.verify?.evidence?.verdict ?? s.outcome.verify?.verdict;
+  assert.equal(verdict?.verdict, 'pass');
+  assert.equal(verdict.review, undefined);
+});
+
+test('independent review is eligible only inside Coding and Research', () => {
+  const eligible = { workflow:'full',adaptation:{scale:'complex'},situation:{risk:'low'},attempt:1 };
+  for(const surface of ['code','research']){
+    assert.equal(reviewDecision({...eligible,surface},{mode:'always'}).review,true,surface);
+  }
+  assert.deepEqual(reviewDecision({...eligible,surface:'normal-chat'},{mode:'always'}),
+    {review:false,reason:'direct-conversation-no-agent-recruitment'});
+  const rejected = mergeReview(passing,{verdict:'fail',problems:['Missing units']});
+  assert.equal(rejected.verdict,'fail');
+  assert.equal(rejected.review.status,'failed');
 });
 
 test('small work under the default setting, and AGENTS_REVIEW=off, cost no second call', async () => {
