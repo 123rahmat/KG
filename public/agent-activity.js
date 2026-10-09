@@ -10,15 +10,28 @@ export function agentActivitySnapshot(run) {
   const allocation = multi?.allocation ?? {};
   // Only explicitly recorded agent proposals appear; never infer that tools
   // are installed, resources are allocated or terminal sessions are open.
+  const admissions = new Map(array(multi?.resourceAdmissions)
+    .filter(item=>item && item.executed===false)
+    .slice(0,8).map(item=>[safe(item.kind,48)+':'+safe(item.parentRole,80),item]));
   const delegationRequests = array(multi?.resourceRequests ?? allocation?.resourceRequests)
     .filter(item=>item && item.status==='proposal-only' && item.ran===false)
-    .slice(0,8).map(item=>({
-      kind:safe(item.kind,48),reason:safe(item.reason,220),
-      parentRole:safe(item.parentRole,80),
-      childId:safe(item.childId,84),
-      state:safe(item.state,65),
-      status:'Proposed · not executed'
-    }));
+    .slice(0,8).map(item=>{
+      const kind=safe(item.kind,48);
+      const parentRole=safe(item.parentRole,80);
+      const admitted=admissions.get(kind+':'+parentRole);
+      const state=safe(admitted?.status || item.state,65);
+      return {
+        kind,reason:safe(item.reason,220),
+        parentRole,childId:safe(item.childId,84),
+        state,
+        status: state==='read-only-tool-available' ? 'Read-only tool available · not executed'
+          : state==='awaiting-user-approval' ? 'Approval required · not executed'
+          : state==='parent-executor-required' ? 'Parent executor required · not executed'
+          : state==='parent-schedules-advisory' ? 'Specialist consultation proposed'
+          : state==='manual-user-action' ? 'User-controlled terminal only'
+          : admitted?.code ? 'Unavailable · '+safe(admitted.code,48) : 'Proposed · not executed'
+      };
+    });
   const states = array(multi?.agentStates).length ? multi.agentStates : array(multi?.agents);
   const roles = states.filter(item => item?.role && item.role !== 'arbiter'
     && item.role !== 'integration-arbiter')
