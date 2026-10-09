@@ -392,7 +392,11 @@ export async function runBoundedFamilyChildProbes({
     }
   }
   const findings=[];
+  let tokensConsumed=0;
   for(const item of results){
+    const usage=item.raw?.usage??{};
+    tokensConsumed+=Math.max(0,Number(usage.inputTokens)||0)
+      +Math.max(0,Number(usage.outputTokens)||0);
     const parsed=item.raw && !item.raw.incomplete
       ? normalizeChildProbe(parseJsonObject(item.raw.text),plan,item.child.id,{runId:run?.id,taskId:task?.id}):null;
     if(parsed)findings.push(parsed);
@@ -402,5 +406,6 @@ export async function runBoundedFamilyChildProbes({
       finding:parsed??null,errorCode:parsed?null:(item.error??'child-inconclusive')
     });
   }
-  return {plan,findings,modelCalls:results.length,reason:'bounded-advisory-probes'};
+  return {plan,findings,modelCalls:results.length,
+    tokensConsumed,reason:'bounded-advisory-probes'};
 }
