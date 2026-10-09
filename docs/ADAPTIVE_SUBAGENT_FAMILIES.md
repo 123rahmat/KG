@@ -23,6 +23,27 @@ The registered specialist families are **starting vocabularies**, not fixed suba
   actual recorded child findings indented below their parent, explicitly as
   advisory, without faking future or current activity.
 
+## Activated Coding specialties
+
+The available Coding registry now provides **33 distinct main-agent family
+definitions with eight seed subagent specialties apiece** (264 possible
+seed lenses, not 264 active model calls). Examples include UI, UX, frontend,
+backend, API, database, security, accessibility, testing, data-pipeline
+engineering, data management, identity/access, file rendering, AI integration,
+devops, reliability, desktop/mobile and performance.
+
+Code subsystem selection uses the actual scoped files and task goal to
+differentiate `src/ui/`, `src/ux/`, identity/session modules, data governance
+and file-preview/rendering modules. Subagents are picked from specific
+requirements and observed gaps; unused specialties retire at wave boundaries.
+Previously unknown requirements can also introduce a temporary advisory main
+role or subagent lens. No agent creates an unauthorized tool, installation,
+sandbox, new workspace or proof of completed testing.
+
+Normal Chat uses **zero recruited main agents and zero recruited subagents**.
+It retains the primary Gemini model with adaptive reasoning effort, authorized
+file/image/document previews, and normal tool/verification boundaries.
+
 ## Example: UI and UX on real work
 
 For a responsive application feature:
@@ -48,8 +69,8 @@ The same pattern applies to every other specialist family:
   with real migration and data-integrity checks under the parent.
 - Testing/debugging: select reproduction, contract test, regression and
   root-cause work after observed changes or failures, not in a fixed loop.
-- Education/Normal Chat: focus level, examples and comprehension, and skip
-  unneeded multi-agent work.
+- Education/Normal Chat: use the primary Gemini model for level, examples,
+  comprehension and deep reasoning; do not recruit main or child agents.
 - Research: source discovery, study quality, methods, evidence cross-checking,
   synthesis and citations with provenance/uncertainty; never fabricate sources.
 - New unfamiliar domains: an ephemeral role assignment may use these lenses
