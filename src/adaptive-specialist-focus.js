@@ -142,7 +142,7 @@ export function specialistFocusFor({surface='normal-chat',goal='',role='',maxSub
     const phrase = normalize(family);
     const keywordHits = children.reduce((count, sub) => count + (request.includes(normalize(sub)) ? 1 : 0), 0);
     const matched = KEYWORDS[family]?.test(request) ? 3 : 0;
-    const roleMatch = ROLE_HINTS[roleId] === family ? 4 : 0;
+    const roleMatch = ROLE_HINTS[roleId] === family ? 12 : 0;
     return {family,children,score:roleMatch + matched + keywordHits * 2 + (request.includes(phrase) ? 2 : 0)};
   }).sort((a,b)=>b.score-a.score || a.family.localeCompare(b.family));
   const choice = scored[0]?.score > 0 ? scored[0] : scored.find(item=>item.family===FALLBACK[workspace]);
