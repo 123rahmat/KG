@@ -15,34 +15,34 @@ const sample={language:'python',source:'print(1+1)',tests:''};
 
 test('one-shot sandbox tool is discoverable in every workspace when configured',()=>{
  for(const surface of ['normal-chat','code','research']){
-   const context={config,run:mkRun(surface),task,scope:owner,allowedTools:['code.run']};
-   const item=toolCatalog(context).find(tool=>tool.name==='code.run');
+   const context={config,run:mkRun(surface),task,scope:owner,allowedTools:['sandbox.execute']};
+   const item=toolCatalog(context).find(tool=>tool.name==='sandbox.execute');
    assert.equal(item.ready,true,surface);
    assert.equal(item.sideEffect,true,surface);
    assert.equal(sandboxActionPreview(sample).language,'python');
  }
- const disabled=toolCatalog({config:{runners:{}},allowedTools:['code.run']})
-    .find(item=>item.name==='code.run');
+ const disabled=toolCatalog({config:{runners:{}},allowedTools:['sandbox.execute']})
+    .find(item=>item.name==='sandbox.execute');
  assert.equal(disabled.ready,false);
 });
 
 test('sandbox action is proposed but cannot run inside the regular model tool loop',async()=>{
  const proposals=[];
  const ctx={config,run:mkRun('normal-chat'),task,scope:owner,
-   allowedTools:['code.run'],propose:async action=>{
+   allowedTools:['sandbox.execute'],propose:async action=>{
      proposals.push(action);return {id:'user-approval-1'};
    }};
- const r=await useTool('code.run',sample,ctx);
+ const r=await useTool('sandbox.execute',sample,ctx);
  assert.equal(r.proposed,true);
  assert.equal(r.actionId,'user-approval-1');
- assert.equal(proposals[0].tool,'code.run');
+ assert.equal(proposals[0].tool,'sandbox.execute');
  assert.equal(proposals[0].input.language,'python');
  assert.equal(r.executed,undefined);
 });
 
 test('sandbox tool refuses direct execution without the real parent policy callback',async()=>{
- const ctx={config,run:mkRun('code'),task,scope:owner,allowedTools:['code.run']};
- const tool=toolNamed('code.run',ctx);
+ const ctx={config,run:mkRun('code'),task,scope:owner,allowedTools:['sandbox.execute']};
+ const tool=toolNamed('sandbox.execute',ctx);
  const result=await tool.run(sample,ctx);
  assert.equal(result.code,'sandbox-policy-recheck-required');
  assert.equal(result.executed,false);
@@ -53,8 +53,8 @@ test('sandbox tool runs only validated structured jobs and with scoped parent ch
  let policyChecks=0;
  const run=mkRun('research');
  const ctx={
-   config,run,task,scope:owner,allowedTools:['code.run'],beforeRunner:async({tool})=>{
-     policyChecks++;assert.equal(tool,'code.run');
+   config,run,task,scope:owner,allowedTools:['sandbox.execute'],beforeRunner:async({tool})=>{
+     policyChecks++;assert.equal(tool,'sandbox.execute');
    },
    fetchImpl:async(_endpoint,options)=>{
      const posted=JSON.parse(options.body);
@@ -67,7 +67,7 @@ test('sandbox tool runs only validated structured jobs and with scoped parent ch
      }),{status:200,headers:{'content-type':'application/json'}});
    }
  };
- const tool=toolNamed('code.run',ctx);
+ const tool=toolNamed('sandbox.execute',ctx);
  const result=await tool.run(sample,ctx);
  assert.equal(result.executed,true);
  assert.equal(result.status,'completed');
