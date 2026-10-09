@@ -18,6 +18,10 @@ Academic writing specialists are not proposed until source/evidence state actual
 
 Normal Chat can handle up to ten selected attachments in one request under the current client limit. It retains conversation continuity, direct answers, file analysis, previews and bounded code execution through an **already-configured** sandbox. Sandbox status in the UI is informational; it does not grant tool authorization. Complex code/research can prompt an *optional* workspace switch without moving the chat or losing attached files.
 
+## Situation-specific recruitment
+
+Within each main agent, the family seed skills are augmented by task-specific requirements and observed gaps. No preset number of subagents is required. Independent model-powered children are still authorized and budgeted by the parent, while a simple request uses only the minimum justified expertise. More specialist families may advise the same task when their separate contributions are relevant.
+
 ## Operational invariants
 
 - Hierarchy depth is capped at two advisory levels.
