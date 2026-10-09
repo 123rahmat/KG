@@ -1873,8 +1873,10 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         availableTools:maybeToolContext ? toolCatalog(maybeToolContext)
           .filter(item=>item.ready).map(item=>item.name) : []
       });
-      payload = { ...payload,
-        multiAgent: { ...multiAgent.brief, resourceAdmissions:triaged } };
+      // Persist the reviewed admission states with the same bounded agent
+      // brief; never present a proposal as completed sandbox work.
+      multiAgent.brief.resourceAdmissions = triaged;
+      payload = { ...payload, multiAgent: multiAgent.brief };
       messages[1].content = JSON.stringify(payload);
     }
     const reasonHasScopedTool = task.type === 'reason'
