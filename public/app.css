@@ -4835,3 +4835,53 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
   .adaptive-running-buttons { width: 100%; justify-content: flex-end; }
   .work-observed-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }
+
+
+/* Task-matched specialist visibility — presentation of persisted evidence only. */
+.workspace-agent-current,
+.workspace-agent-source {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--soft);
+}
+.workspace-agent-current { border-inline-start: 3px solid var(--accent); }
+.workspace-agent-current strong,
+.workspace-agent-source strong { overflow-wrap: anywhere; font-size: .86rem; }
+.workspace-agent-groups { display: grid; gap: 8px; min-width: 0; }
+.workspace-agent-groups > strong { font-size: .81rem; }
+.workspace-agent-group {
+  border-inline-start: 2px solid var(--line);
+  padding: 6px 10px;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.workspace-agent-group-heading,
+.workspace-agent-contribution-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 3px 10px;
+  min-width: 0;
+}
+.workspace-agent-group-heading strong,
+.workspace-agent-contribution-head strong {
+  text-transform: capitalize;
+  overflow-wrap: anywhere;
+}
+.workspace-agent-group p { margin: 0; overflow-wrap: anywhere; }
+.workspace-agent-contributions { display: grid; gap: 7px; }
+.workspace-agent-contribution { min-width: 0; }
+.workspace-agent-finding { line-height: 1.5; overflow-wrap: anywhere; }
+@media (max-width: 580px) {
+  .workspace-agent-current, .workspace-agent-source { padding: 9px; }
+  .workspace-agent-contribution-head, .workspace-agent-group-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
