@@ -20,8 +20,8 @@ const cases=[
 ];
 test('Coding has distinct main-agent families for UI, UX, APIs, backend, data, DB, identity, files and security',()=>{
  const summary=familyMainAgentStats();
- assert.equal(summary.code.mainAgents,33);
- assert.equal(summary.code.subagents,33*8);
+ assert.equal(summary.code.mainAgents,63);
+ assert.equal(summary.code.subagents,63*8);
  for(const [family,path,goal,focus] of cases){
    const role='code-'+family+'-lead';
    assert.ok(FAMILY_MAIN_AGENTS[role],role);
