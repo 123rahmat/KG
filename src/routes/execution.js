@@ -17,13 +17,14 @@ import { workspaceTools, listWorkspaceTools } from '../tool-forge.js';
 import { memoriesFor } from '../memory.js';
 import '../tools/finance.js';
 import { usagePolicyPrompt, blockedTopicsFrom, guardAnswer, recordRefusal } from '../safety.js';
-import { toolNamed } from '../toolbox.js';
+import { toolNamed, toolCatalog } from '../toolbox.js';
 import { currentDbScope } from '../db.js';
 import { modelForStep, resolveModelSelection } from '../model-routing.js';
 import { compileExecutionCapabilityPlan } from '../capability-compiler.js';
 import { effortForAdaptiveDepth, toolsForTask, adaptiveStepScope } from '../adaptive-control.js';
 import { adaptiveBehaviorContract, adaptiveEffortProfile } from '../adaptive-efficiency.js';
 import { checkTaskPolicy, checkConnectionPolicy } from '../policy-gate.js';
+import { bindAgentResourceScope, triageAgentResourceRequests } from '../agent-resource-broker.js';
 import { executionSafetyGate } from '../adaptive-safety.js';
 import { situationGovernanceExecutionGate } from '../situation-governance.js';
 import { systemPromptFor, situationBrief, previousAttempts, normalizeVerdict, GENERIC_CRITERION } from '../reasoning-context.js';
@@ -278,6 +279,8 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
 
   async function toolContext(run, task, scope, signal) {
     const workScope = scope ?? currentDbScope();
+    const agentResourceScope = bindAgentResourceScope({run,task,scope:workScope});
+    if (!agentResourceScope.allowed) throw new PolicyError(agentResourceScope.reason, agentResourceScope.code, 403);
     const selectedTools = Array.isArray(run.adaptation?.resourcePlan?.selected?.tools)
       ? run.adaptation.resourcePlan.selected.tools
       : [];
@@ -305,7 +308,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       ...approvedTools.map(tool => tool.name)
     ])];
     return {
-      config, signal, objects, scope: workScope, pool, run, task, scheduler,
+      config, signal, objects, scope: workScope, agentResourceScope, pool, run, task, scheduler,
       fetchImpl: signal ? (url, options = {}) => {
         signal.throwIfAborted();
         return fetchImpl(url, { ...options, signal: AbortSignal.any([signal, ...(options.signal ? [options.signal] : [])]) });
@@ -361,6 +364,15 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     await (async () => {
       const run = await runs.get(req.scope, req.params.id);
       if (!run) return res.status(404).json({ error: 'Run not found', code: 'no-run' });
+      // Sharing a conversation is never an implicit delegation of its owner's
+      // sandbox, credentials, private attachments or paid agent resources.
+      // Viewing shared content is separate from executing the owner's task.
+      if (run.workspaceId !== req.scope.workspaceId || run.principalId !== req.principal.id) {
+        return res.status(403).json({
+          error: 'A shared conversation cannot execute agents or resources as another user.',
+          code: 'agent-owner-required'
+        });
+      }
       const policyBaseline = run.governance;
       const recheckPolicy = () => refreshPolicy(run, req.scope, req.principal.id, req.body, { baseline: policyBaseline });
       if (run.state === 'blocked') {
@@ -1844,6 +1856,20 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       bindToolPolicy(maybeToolContext, recheckPolicy, explicitConsent);
       maybeToolContext.beforeCall = beforeCall;
       maybeToolContext.usageGate = usageGate;
+    }
+    // Triage actual specialist resource proposals against the *current*
+    // authenticated user and task. This is only guidance to the owning
+    // parent; actual tools still pass their own policy and approval gates.
+    if (multiAgent.brief?.resourceRequests?.length) {
+      const triaged = triageAgentResourceRequests({
+        run,task,scope,
+        requests:multiAgent.brief.resourceRequests,
+        availableTools:maybeToolContext ? toolCatalog(maybeToolContext)
+          .filter(item=>item.ready).map(item=>item.name) : []
+      });
+      payload = { ...payload,
+        multiAgent: { ...multiAgent.brief, resourceAdmissions:triaged } };
+      messages[1].content = JSON.stringify(payload);
     }
     const reasonHasScopedTool = task.type === 'reason'
       && maybeToolContext?.allowedTools?.some(name => !PERSONAL_TOOLS.includes(name));
