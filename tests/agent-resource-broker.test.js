@@ -97,3 +97,32 @@ test('underlying tool execution refuses mismatched run identity before accessing
   });
   assert.equal(result.code,'owner-mismatch');
 });
+
+test('one-shot terminal commands are requests for approved sandbox tools, never PTY grants',()=>{
+  const request={kind:'terminal-command',reason:'Run the authorized repository test suite in an isolated sandbox'};
+  const blocked=admitAgentResourceRequest({run,task:plan,scope:owner,request,availableTools:ready});
+  assert.equal(blocked.code,'approval-required');
+  const admitted=admitAgentResourceRequest({run,task:plan,scope:owner,
+    request,availableTools:ready,approved:true});
+  assert.equal(admitted.status,'parent-executor-required');
+  assert.deepEqual(admitted.toolNames,['code.run']);
+  assert.equal(admitted.executionAuthorized,false);
+  assert.equal(admitted.executed,false);
+  const research={...run,surface:'research'};
+  assert.equal(admitAgentResourceRequest({run:research,task:plan,scope:owner,
+    request,availableTools:ready,approved:true}).code,'workspace-resource-blocked');
+  assert.equal(admitAgentResourceRequest({run,task:plan,
+    scope:{...owner,principalId:'bob'},request,availableTools:ready,approved:true}).code,'owner-mismatch');
+});
+test('research may propose approved sandbox checks, not arbitrary execution or installs',()=>{
+  const research={...run,surface:'research'};
+  const testOnly=admitAgentResourceRequest({run:research,task:plan,scope:owner,
+    request:{kind:'sandbox-test'},availableTools:ready,approved:true});
+  assert.equal(testOnly.status,'parent-executor-required');
+  assert.equal(testOnly.executed,false);
+  for(const kind of ['sandbox-execution','dependency-installation','terminal-command']){
+    const denied=admitAgentResourceRequest({run:research,task:plan,scope:owner,
+      request:{kind},availableTools:ready,approved:true});
+    assert.equal(denied.code,'workspace-resource-blocked',kind);
+  }
+});
