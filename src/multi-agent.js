@@ -1040,7 +1040,10 @@ function panelEarlyConvergence({ run, task, findings = [], iteration = 1 } = {})
   if (findings.length < 2) return { stop: false, reason: 'insufficient-independent-evidence' };
   const signals = observedPanelSignals({ findings });
   const retrying = Number(run?.attempt ?? 1) > 1 || Boolean(run?.situation?.failure || run?.situation?.error);
-  const highStake = HIGH_STAKES.has(text(run?.situation?.risk).toLowerCase());
+  const highStake = HIGH_STAKES.has(text(run?.situation?.risk).toLowerCase())
+    || ['high','critical','regulated'].includes(text(run?.situation?.risk).toLowerCase())
+    || run?.situation?.externalSideEffect===true
+    || run?.situation?.irreversible===true;
   // Self-reported confidence must not suppress investigation of unresolved
   // risks or unknowns. This only stops optional advisory calls; independent
   // parent verification remains the source of completion truth.
