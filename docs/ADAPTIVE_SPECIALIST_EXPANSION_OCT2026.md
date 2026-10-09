@@ -4,14 +4,14 @@ One task-scoped orchestrator serves **Normal Chat, Code and Research**. No new b
 
 ## Available expertise
 
-| Workspace | Main-agent families | Available subagent lenses |
+| Workspace | Main-agent families | Seed subagent lenses |
 | --- | ---: | ---: |
 | Normal Chat | 30 | 240 |
 | Code | 30 | 240 |
 | Research | 25 | 200 |
 | **Total** | **85** | **680** |
 
-The original 55 families remain; 30 additional families with eight specialist subagent lenses each were registered. Each family now also has a main-agent lead role. These numbers describe available expertise, not concurrent model instances or proof that every possible future task has a prewritten role.
+The original 55 families remain; 30 additional families with eight specialist subagent lenses each were registered. Each family now also has a main-agent lead role. These numbers describe the seed catalog, not an execution ceiling, concurrently running instances, or every possible future task specialty. Task-specific advisory lenses are generated from real requirements and observed gaps when needed.
 
 New chat capabilities include meeting coordination, negotiation, personal automation, team collaboration, household planning, presentations, spreadsheet modeling, localization, customer support and visual communication.
 
@@ -21,8 +21,8 @@ New Research capabilities include causal inference, reproducibility, questionnai
 
 ## Recruitment and execution
 
-- A family main agent enters the existing role selector only when the goal matches its workspace specialty. A simple chat remains direct-first.
-- Within a main-agent call, the family picks one to three relevant subagent lenses. Extra independent child model calls are exceptional, budget- and evidence-gated, and advisory only.
+- Multiple relevant family leads can join the same task when evidence supports distinct specialties. A simple chat remains direct-first; a complex task does not have a predetermined main-agent team size.
+- Each main agent begins with a seed vocabulary and recruits additional task-specific advisory subagents for actual acceptance criteria, outputs, unresolved questions and risks. There is **no fixed one-to-three or eight-subagent active roster**. Most share the parent model call; separately invoked read-only probes require trusted budgets and model admission.
 - The existing dependency/conflict-aware scheduler controls parallel waves. Scoped peer handoffs accept only completed work from the same task/run and never grant tools or constitute verified evidence.
 - All resource requests go to the existing authenticated server-owned broker. Code agents may propose a one-shot terminal-command via the isolated code.run sandbox, but an interactive user PTY is never delegated. Research may propose explicit sandbox testing; full execution and installs remain restricted.
 - Sandboxed execution, packages, file mutations and external connectors still require actual tool readiness, policy checks and any required user authorization. A resource admission is not an execution receipt.
