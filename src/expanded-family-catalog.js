@@ -97,6 +97,21 @@ const DEFINITIONS = {
       "ingestion,schema-evolution,data-quality,lineage,backfills,orchestration,privacy-boundary,cost-check"
     ],
     [
+      "data-management-engineering",
+      "data management|data governance|data lifecycle|data stewardship|data catalog|data retention|data access policy",
+      "data-contracts,data-validation,data-quality,data-lineage,retention-policy,access-controls,import-export,recovery-checks"
+    ],
+    [
+      "identity-access-engineering",
+      "identity management|identity provider|authentication flow|single sign-on|sso|multi-tenant access|rbac|oauth|session management",
+      "authentication-flows,authorization-model,session-lifecycle,tenant-isolation,credential-handling,identity-federation,negative-tests,audit-events"
+    ],
+    [
+      "file-rendering-engineering",
+      "file preview|document rendering|pdf rendering|office conversion|thumbnail generation|media processing|file upload|document viewer",
+      "file-type-detection,safe-extraction,render-isolation,office-fidelity,preview-fallbacks,upload-validation,accessibility-review,format-regression-tests"
+    ],
+    [
       "protocol-interoperability",
       "mcp protocol|a2a protocol|websocket protocol|protocol integration",
       "schema,handshake,authorization,message-routing,backpressure,compatibility,conformance,retry-strategy"
