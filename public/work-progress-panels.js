@@ -22,6 +22,37 @@ const STATUSES = Object.freeze({
   pending: 'Queued', queued: 'Queued', waiting: 'Waiting', blocked: 'Blocked'
 });
 
+/** Compact, truthful timeline. Recorded count is NOT total work estimated. */
+export function recordedCheckpointTrail(run, { maxMarkers = 8 } = {}) {
+  const tasks = tasksOf(run);
+  const limit = Number.isFinite(Number(maxMarkers))
+    ? Math.max(1, Math.min(12, Math.floor(Number(maxMarkers)))) : 8;
+  const terminal = ['complete', 'failed', 'blocked', 'exhausted', 'iterate'].includes(run?.state);
+  const selected = terminal ? null : tasks.find(task => task?.id === run?.next);
+  const markers = tasks.slice(-limit).map(task => {
+    const rawStatus = safe(task?.status, 24).toLowerCase();
+    const status = ['complete','failed','skipped','running','pending','queued','waiting','blocked']
+      .includes(rawStatus) ? rawStatus : 'pending';
+    const next = Boolean(selected && selected === task);
+    return Object.freeze({
+      label: safe(task?.metadata?.title || LABELS[task?.id] || LABELS[task?.type]
+        || task?.purpose || task?.id || 'Work step', 120),
+      status,
+      statusLabel: next && ['pending','queued'].includes(status)
+        ? 'Up next' : STATUSES[status] || 'Recorded',
+      next
+    });
+  });
+  return Object.freeze({
+    markers: Object.freeze(markers),
+    recordedCount: tasks.length,
+    hiddenCount: Math.max(0, tasks.length - markers.length),
+    completedCount: tasks.filter(task => task?.status === 'complete').length,
+    failedCount: tasks.filter(task => ['failed', 'blocked'].includes(task?.status)).length,
+    explanation: 'These are saved workflow steps, not a fixed plan or a percentage estimate.'
+  });
+}
+
 export function workspaceProgressPanel(run, workspace = 'normal-chat') {
   const mode = ['code', 'research'].includes(workspace) ? workspace : 'normal-chat';
   const tasks = tasksOf(run);
