@@ -97,6 +97,6 @@ export function initPolicyControls() {
   $('policyReload').addEventListener('click', loadPolicyControls);
   $('policySave').addEventListener('click', savePolicyControls);
   document.addEventListener('kindgleam:scope-state', () => {
-    if (document.querySelector('.settings-section.active')?.dataset.settingsSection === 'policies') loadPolicyControls();
+    if (document.querySelector('.settings-section.active')?.dataset.settingsSection === 'data') loadPolicyControls();
   });
 }
