@@ -10,6 +10,9 @@
  */
 const SURFACES = new Set(['normal-chat', 'code', 'research']);
 const BLOCKED = /(?:password|passwd|secret|token|credential|private|api[-_]?key|email|phone|address|contact|session|account|auth[-_]?cookie|bearer|passport|credit[-_]?card|ssn)/i;
+// Capability IDs are model-influenced, so never persist imperative text
+// that could be reintroduced as an instruction in another conversation.
+const INSTRUCTION_ID = /(?:^|[-_])(?:ignore|override|jailbreak|instructions?|system-prompt|developer-prompt|bypass|exfiltrate|disable|execute|shell|steal|sudo)(?:[-_]|$)/i;
 const COMMON = new Set(['new','unknown','unfamiliar','task','specialist','capability','dynamic','generic','create','user','the','and','for','with','from']);
 const bounded = (v,n) => String(v ?? '').slice(0,n);
 const workspace = run => SURFACES.has(run?.surface) ? run.surface
@@ -25,7 +28,8 @@ export function compileRecipeCandidates(run = {}) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
     // Never use model-proposed instructions/status/tools/URLs in a saved recipe.
     const id = bounded(entry.id,81).toLowerCase();
-    if(!/^[a-z][a-z0-9_-]{3,79}$/.test(id) || BLOCKED.test(id) || seen.has(id)) continue;
+    if(!/^[a-z][a-z0-9_-]{3,79}$/.test(id)
+      || BLOCKED.test(id) || INSTRUCTION_ID.test(id) || seen.has(id)) continue;
     const terms = words(id).slice(0,8);
     if (terms.length < 1) continue;
     seen.add(id);
