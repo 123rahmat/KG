@@ -70,8 +70,14 @@ test('agent topology preserves specialization without creating separate model st
 
     assert.equal(plan.workspace, workspace);
     assert.ok(plan.workspacePolicy);
-    assert.ok(plan.agents.length >= 1);
-    assert.ok(plan.agents.every(agent => agent.model === 'google:gemini-3.8-flash'));
+    if (workspace==='normal-chat') {
+      assert.equal(plan.mode,'direct');
+      assert.deepEqual(plan.agents,[]);
+      assert.equal(plan.agentCount,0);
+    } else {
+      assert.ok(plan.agents.length >= 1);
+      assert.ok(plan.agents.every(agent => agent.model === 'google:gemini-3.8-flash'));
+    }
     assert.ok(plan.maxParallel >= 1 && plan.maxParallel <= 3);
   }
 });
