@@ -5,7 +5,7 @@ import { agentMessages, rolesFor } from '../src/multi-agent.js';
 
 test('Code selects subsystem-specific experts from real paths, not generic headcount', () => {
   for(const [path,focus,role] of [
-    ['src/ui/components','ui-ux','ux-designer'],
+    ['src/ui/components','ui','code-ui-engineering-lead'],
     ['src/frontend','frontend','frontend-engineer'],
     ['src/backend','backend','backend-engineer'],
     ['src/auth','security','security-reviewer'],
@@ -24,11 +24,11 @@ test('Code selects subsystem-specific experts from real paths, not generic headc
 
 test('Small Code change stays cheap; complex teams have strict specialist caps', () => {
   const sub={id:'ui',roots:['src/ui'],files:['src/ui/app.tsx']};
-  assert.deepEqual(codeSpecialistTeam(sub,{remainingBudgetRatio:.1}).roles,['ux-designer']);
+  assert.deepEqual(codeSpecialistTeam(sub,{remainingBudgetRatio:.1}).roles,['code-ui-engineering-lead']);
   assert.equal(codeSpecialistTeam(sub,{remainingBudgetRatio:.36}).roles.length,2);
   assert.ok(codeSpecialistTeam(sub,{maxRoles:100}).roles.length<=4);
   assert.equal(codeSpecialistTeam(sub,{risk:'high-impact',independent:true}).parallelEligible,false);
-  const remit=specialistRemit(codeSpecialistTeam(sub),'ux-designer');
+  const remit=specialistRemit(codeSpecialistTeam(sub),'code-ui-engineering-lead');
   assert.equal(remit.maySpawnAgents,false);
   assert.equal(remit.scope.files[0],'src/ui/app.tsx');
   assert.equal(specialistRemit(codeSpecialistTeam(sub),'unknown-role'),null);
@@ -89,7 +89,7 @@ test('unknown budgets preserve task-specific Code and Research breadth', () => {
     const team = codeSpecialistTeam({ id: 'ui', roots: ['src/ui'] }, {
       maxRoles: 3, remainingBudgetRatio
     });
-    assert.deepEqual(team.roles, ['ux-designer', 'frontend-engineer', 'test-engineer']);
+    assert.deepEqual(team.roles, ['code-ui-engineering-lead', 'frontend-engineer', 'accessibility-auditor']);
     const hierarchy = researchSpecialistTeams({
       goal: 'Write a thesis methodology using quantitative results',
       researchState: { sourceCount: 4 }, remainingBudgetRatio
