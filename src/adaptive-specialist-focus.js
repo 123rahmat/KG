@@ -134,6 +134,25 @@ export function specialistCatalogStats() {
     workspace, { families:Object.keys(entries).length, subskills:Object.values(entries).reduce((sum, subs) => sum + subs.length, 0) }
   ])));
 }
+/**
+ * Rank every evidenced family, not just the best one. Multiple families can
+ * contribute to a complex task; unrelated fallback families have score zero.
+ * This is pure metadata and never starts model calls.
+ */
+export function specialistFamilyMatches({surface='normal-chat',goal=''}={}) {
+  const workspace = SPECIALIST_FAMILIES[surface] ? surface : 'normal-chat';
+  const request = normalize(goal).slice(0,2000);
+  return Object.freeze(Object.entries(SPECIALIST_FAMILIES[workspace])
+    .map(([family,children]) => {
+      const keyword = KEYWORDS[family]?.test(request) || EXTRA_SPECIALIST_KEYWORDS[family]?.test(request);
+      const direct = request.includes(normalize(family));
+      const subskillHits = children.reduce((n,subskill) =>
+        n + (request.includes(normalize(subskill)) ? 1 : 0), 0);
+      return Object.freeze({family,score:(keyword ? 3 : 0) + (direct ? 2 : 0) + 2*subskillHits});
+    })
+    .filter(item=>item.score>0)
+    .sort((a,b)=>b.score-a.score || a.family.localeCompare(b.family)));
+}
 export function specialistFocusFor({surface='normal-chat',goal='',role='',maxSubskills=2}={}) {
   const workspace = SPECIALIST_FAMILIES[surface] ? surface : 'normal-chat';
   const entries = SPECIALIST_FAMILIES[workspace];
