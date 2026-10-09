@@ -9,7 +9,7 @@ import { state, $, element, button, canEdit } from './ui-core.js';
 import { taskLensFor, contextualSuggestions } from './task-lens.js';
 import { agentActivitySnapshot } from './agent-activity.js';
 import { workspaceCapabilities } from './normal-chat-capabilities.js';
-import { workspaceProgressPanel } from './work-progress-panels.js';
+import { workspaceProgressPanel, recordedCheckpointTrail } from './work-progress-panels.js';
 import { liveWorkFocus } from './live-work-focus.js';
 
 const SURFACE_META = {
@@ -402,6 +402,35 @@ function stageDetail(run, panel, view) {
   return detail;
 }
 
+/** At-a-glance checkpoints from persisted work. No hidden or speculative stages. */
+function checkpointTrailView(run) {
+  const trail = recordedCheckpointTrail(run);
+  if (trail.recordedCount < 2) return null;
+  const summary = trail.completedCount + ' completed · ' + trail.recordedCount + ' recorded'
+    + (trail.failedCount ? ' · ' + trail.failedCount + ' needs attention' : '');
+  return element('section', {
+    class: 'work-checkpoints', 'aria-label': 'Recorded task checkpoints'
+  }, [
+    element('div', { class: 'work-checkpoint-head' }, [
+      element('strong', { class: 'small', text: 'Task checkpoints' }),
+      element('span', { class: 'small muted', text: summary })
+    ]),
+    element('ol', { class: 'work-checkpoint-rail' }, trail.markers.map(marker =>
+      element('li', {
+        class: 'work-checkpoint-item', 'data-checkpoint-status': marker.status,
+        'data-checkpoint-next': String(marker.next),
+        'aria-label': marker.label + ' · ' + marker.statusLabel,
+        title: marker.label + ' · ' + marker.statusLabel
+      }, [
+        element('span', { class: 'work-checkpoint-dot', 'aria-hidden': 'true' }),
+        element('span', { class: 'work-checkpoint-text', text: marker.label }),
+        element('span', { class: 'work-checkpoint-state', text: marker.statusLabel })
+      ]))),
+    trail.hiddenCount ? element('p', { class: 'small muted',
+      text: 'Showing the latest ' + trail.markers.length + ' of ' + trail.recordedCount + ' recorded steps.' }) : null
+  ].filter(Boolean));
+}
+
 export function renderWorkStatus(run) {
   const tasks = Array.isArray(run?.tasks) ? run.tasks : [];
   if (!tasks.length) return null;
@@ -482,6 +511,7 @@ export function renderWorkStatus(run) {
       element('span', { class: 'small', text: background.permission })
     ]) : null,
     meter,
+    checkpointTrailView(run),
     realActivityDetails(run, focus),
     panel.stageContext && !view.terminal
       ? element('div', { class: 'work-phase-note', 'aria-label': 'Current task explanation' }, [
