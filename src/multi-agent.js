@@ -837,7 +837,7 @@ function rolePrompt(role) {
 export function agentMessages(role, basePayload) {
   const specialtyFocus = specialistFocusFor({
     surface: basePayload?.specialistSurface ?? basePayload?.surface ?? 'normal-chat',
-    goal: basePayload?.goal, role, maxSubskills: 2
+    goal: basePayload?.goal, role
   });
   const familySubagents = selectFamilySubagents({
     surface: specialtyFocus.workspace,
@@ -845,8 +845,7 @@ export function agentMessages(role, basePayload) {
     situation: basePayload?.situation ?? {},
     task: basePayload?.task ?? {},
     observedFindings: basePayload?.observedFindings ?? [],
-    remainingBudgetRatio: basePayload?.familyBudgetRatio ?? 1,
-    maxActive: 3
+    remainingBudgetRatio: basePayload?.familyBudgetRatio ?? 1
   });
   const openWorldAssignment = compileOpenWorldSpecialistBrief({
     surface: specialtyFocus.workspace,
@@ -2524,9 +2523,12 @@ export async function runAdaptiveAgentPanel({
     await recordBlackboard({ run, task, blackboard });
   }
   let tokensSpent = 0;
-  // A child does not get an independent run budget. At most two read-only
-  // model probes are admitted across the entire generic specialist panel.
-  let familyChildCallSlots = 2;
+  // Child advisory probes share the parent reservation and provider limits.
+  // The configured task compute budget, not a fixed pair of child workers,
+  // determines how many distinct evidence-gated probes can be recruited.
+  const childBudgetConfigured = Number(config?.agents?.maxChildCalls);
+  let familyChildCallSlots = Number.isFinite(childBudgetConfigured) && childBudgetConfigured >= 0
+    ? Math.floor(childBudgetConfigured) : maxAgents;
   const familyChildServedRoles = new Set();
   const familyDelegationRequests = [];
   let familyChildCallsUsed = 0;
@@ -2768,7 +2770,7 @@ export async function runAdaptiveAgentPanel({
           modelCaller,modelId:entry.job.modelId,config,fetchImpl,
           usageGate,dataAllowed,canSpend,signal,recordUsage,recordAgent,
           waveIndex,maxExtraCalls:entry.maxExtraCalls,
-          maxParallel:Math.min(2,effectiveMaxParallel),
+          maxParallel:effectiveMaxParallel,
           budgetRatio:remainingBudgetRatio()
         })
       })));
