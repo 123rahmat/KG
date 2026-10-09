@@ -624,7 +624,6 @@ export function rolesFor(run, task, {
     allocation: { topology, targetAgents: 0, selectedAgents: 0, reason: topology.reason }
   };
   targetCount = Math.min(targetCount, topology.agents);
-  targetCount=Math.min(targetCount,topology.agents);
   const observedSignals = observedPanelSignals(progress);
   const precomputedSignals = { signals, observed: observedSignals, dynamicSpecialists };
   const candidates = roleCandidates(run, task, progress, precomputedSignals);
@@ -1462,11 +1461,23 @@ function codeWorkspacePanelRoles(run, task, subsystem, {
   if (signals.backendFocus && signals.executable) addRequired('backend-engineer');
   if (signals.securityFocus) addRequired('security-reviewer');
   if (signals.performanceFocus) addRequired('performance-reviewer');
+  // An uncommon coding specialty can be formed from explicit requirements
+  // without requiring a new hard-coded role. Its task scope remains advisory;
+  // implementation and acceptance checks still use owned Code Workspace lanes.
+  const codeGapSpecialists = taskSpecialistCandidates({
+    surface:'code',goal:goal??run?.goal,task,
+    situation:run?.situation??{},maxCandidates:width
+  });
+  if (width>=3 && (signals.unknowns>=0.08 || iteration>1)){
+    for(const specialist of codeGapSpecialists.slice(0,Math.max(0,width-2)))
+      addRequired(specialist.role);
+  }
 
   const candidates = ['frontend-engineer', 'backend-engineer', 'implementer', 'test-engineer', 'critic', 'debugger', 'security-reviewer', 'performance-reviewer',
     'analyst', 'strategist',
     ...Object.keys(DOMAIN_SPECIALISTS)]
     .map(role => ({ role, utility: roleUtility(role, run, task, progress) }))
+    .concat(codeGapSpecialists.map(item=>({role:item.role,utility:0.91})))
     .sort((a, b) => b.utility - a.utility || a.role.localeCompare(b.role));
 
   const roles = [];
