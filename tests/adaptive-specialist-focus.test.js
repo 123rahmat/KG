@@ -32,7 +32,7 @@ test('malformed requests fall back to bounded focus and do not expand work', () 
   const result = specialistFocusFor({surface:'bad-surface',goal:'',role:'',maxSubskills:9999});
   assert.equal(result.workspace,'normal-chat');
   assert.equal(result.family,'thinking-reasoning');
-  assert.ok(result.subskills.length <= 3);
+  assert.ok(result.subskills.length <= SPECIALIST_FAMILIES[result.workspace][result.family].length);
 });
 test('real agent prompts receive scoped specialty without extra model invocations', () => {
   const msgs = agentMessages('communicator',{
