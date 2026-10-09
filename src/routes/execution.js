@@ -40,6 +40,7 @@ import { workspaceContentHash } from '../code-workspace.js';
 import { compileCodeContext, isCodeTask } from '../context-compiler.js';
 import { RagStore } from '../rag.js';
 import { loadSelectedSkills, SkillLearningStore, skillContextSignature, skillPlanForSelectedSkills } from '../skills.js';
+import { SavedSpecialistRecipeStore } from '../saved-specialist-recipes.js';
 import { BlackboardStore } from '../blackboard.js';
 import { buildSubsystemPlan, compactSubsystemPlan } from '../subsystem-orchestrator.js';
 import { evaluatePolicy, policyAllows } from '../core.js';
@@ -208,6 +209,19 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     : null;
 
   const skillLearning = new SkillLearningStore(pool);
+  const savedSpecialists = new SavedSpecialistRecipeStore(pool);
+
+  // A user's future-specialty library is optional and scoped to the same
+  // principal/workspace as the run. No shared workspace-wide inference.
+  app.get('/api/specialists/saved', scoped('viewer'), route(async (req, res) => {
+    res.json({ specialists: await savedSpecialists.list(req.scope) });
+  }));
+  app.delete('/api/specialists/saved/:id', scoped('editor'), route(async (req, res) => {
+    const removed = await savedSpecialists.forget(req.scope, {
+      id: text(req.params.id), surface: text(req.query.surface || 'normal-chat')
+    });
+    res.json({ removed });
+  }));
 
   /** What tools may use in a step: the person's files and scope, and a way to propose actions. */
   function selectedAttachmentNames(run) {
@@ -979,6 +993,20 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         externalExecution: Boolean(managedReceipt)
       });
 
+      // Save only generalized capability IDs from a server-recorded passing
+      // verification, never an unverified agent recommendation.
+      if (task.type === 'verify' && !taskFailed
+          && execution.verdict?.verdict === 'pass'
+          && advanced?.tasks?.some(row => row.id === task.id && row.status === 'complete')) {
+        await savedSpecialists.observeVerified(req.scope, run, { verified: true })
+          .catch(error => audit?.record({
+            principalId: req.principal.id, workspaceId: req.scope.workspaceId,
+            action: 'specialist.learning.failed', target: run.id, outcome: 'warning',
+            detail: { code: error?.code ?? 'recipe-write-failed' },
+            requestId: req.requestId
+          }));
+      }
+
       const runSkills = (Array.isArray(execution?.skillsUsed) ? execution.skillsUsed : [])
         .map(item => String(item ?? '').trim()).filter(Boolean);
       const learningOutcome = taskFailed ? 'failure' : 'success';
@@ -1732,10 +1760,18 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     // Backups obey the same rules: governance, and a model an admin turned off.
     const allowBackup = () => false;
 
+    // Lookup only when a step can use advice; querying the existing database
+    // never invokes another model or grants a tool.
+    const reusableSpecialists = task.type === 'verify' ? [] :
+      await savedSpecialists.suggest(scope ?? currentDbScope(), {
+        goal: run.goal,
+        surface: run.surface || run.adaptation?.primarySurface || 'normal-chat',
+        limit: 3
+      }).catch(() => []);
     const multiAgent = await runAdaptiveAgentPanel({
       run,
       task,
-      basePayload: payload,
+      basePayload: { ...payload, reusableSpecialists },
       selection,
       primaryModelId: effectiveModelId,
       config,
