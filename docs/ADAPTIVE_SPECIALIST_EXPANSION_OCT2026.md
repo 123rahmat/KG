@@ -33,3 +33,19 @@ New Research capabilities include causal inference, reproducibility, questionnai
 ## Production evidence required
 
 Catalog coverage, pure selection logic and policy tests are not proof of deployed agent correctness. GitHub CI, actual Vertex model calls, database migration/restoration, sandbox isolation, cross-user access tests, load/failure tests and measured quality/cost/latency remain necessary release gates.
+
+
+## Situation-specific recruitment supervisor and resource lifecycle
+
+The shared `src/situational-recruitment-supervisor.js` controller reconciles **both the agent team and the resource plan** at safe wave boundaries in Normal Chat, Research, and the Code subsystem engine. It is a task-scoped supervisor role within the existing orchestrator, not another privileged LLM service or a separate workflow.
+
+- **Recruit** only policy-selected main agents and situation-specific subagent lenses justified by this wave's goal, acceptance criteria, and evidence gaps.
+- **Bring required resources** from parent/child recommendations: source research, file inspection, isolated sandbox tests, execution, temporary package dependencies and one-shot sandbox commands. Requests remain scoped to the authenticated run, task and proposing parent/child. Different same-kind needs can coexist.
+- **De-recruit** main agents and child lenses after their work settles and the next wave no longer needs them; never cancel in-flight work based on an advisory finding.
+- **De-recruit resource requests** when parent-owned task acceptance is satisfied, the optional budget is exhausted or an independently recorded, server-authored resolution explicitly identifies the request. Merely saying a test passed is *not* resolution evidence.
+- **Resource truth**: recruiting a resource means recording a bounded *proposal*, not actually allocating a container, installing dependencies, granting shell access, or marking work verified. Executable operations require a user-approved `sandbox.execute` action, permission/policy rechecks, a configured hardened sandbox runner, and real execution receipts. The legacy `code.run` tool remains unchanged; `sandbox.execute` is a dedicated approval-only action so the normal code execution path is not shadowed.
+- **Automatic cleanup**: disposable sandbox runtime execution cleans up its own containers after completion. No agent receives the interactive human terminal/PTY, host shell, credentials, or unrestricted network.
+
+The runtime reports `recruitmentSupervisor`, wave-scoped recruitment/retirement activity, and pending `resourceRequests` in the existing panel brief, never pretending that proposals are actual tool use. An explicit recorded resource-resolution ID is an input to the pure reconciliation contract; the system must obtain such IDs from its trusted parent execution/receipt path, not model output, before removing a still-needed approval request mid-task.
+
+This is an architectural and integration change, not evidence of production-ready live Gemini execution.
