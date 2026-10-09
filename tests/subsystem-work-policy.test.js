@@ -207,7 +207,7 @@ test('observed backend test failure recruits a scoped debugger rather than an un
     revisionId: 'failure-rev', contentHash: 'failure-hash', scale: 'small',
     fileCount: 2,
     files: [{ path: 'src/backend/api.js', bytes: 100 },
-      { path: 'src/backend/api.test.js', bytes: 70, test: true }],
+      { path: 'src/backend/service.js', bytes: 70 }],
     dependencies: [], totals: { bytes: 170, dependencies: 0 },
     hierarchy: { scale: 'small', root: { path: '', depth: 0, fileCount: 2,
       bytes: 170, digest: 'failure-root' } }
