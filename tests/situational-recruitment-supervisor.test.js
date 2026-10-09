@@ -72,6 +72,15 @@ test('agents and subagents can request several kinds of resources, not execution
  assert.equal(done.lifecycle.releaseProposals.length,5);
  assert.equal(done.lifecycle.externalToolsExecuted,false);
  assert.equal(done.lifecycle.sandboxSessionsCreated,false);
+ const midTask=reconcileTaskRecruitment({
+   ...scope,desiredRoles:['security-reviewer'],
+   completedRoles:['frontend-engineer'],requests:team.resources,
+   resolvedResourceIds:[afterWave.resources[0].id],
+   previous:afterWave
+ });
+ assert.equal(midTask.resources.length,4,'recorded resource resolution retires only that need');
+ assert.deepEqual(midTask.lifecycle.releaseProposals,[afterWave.resources[0].id]);
+ assert.ok(midTask.resources.every(r=>r.executionAuthorized===false));
 });
 
 test('invalid source, foreign scope and executable payloads cannot enter resource recruitment',()=>{
