@@ -1675,6 +1675,7 @@ async function runCodeWorkspaceAgentPanels({
   const agentStates = [];
   const waves = [];
   const subsystemMessages = [];
+  const subsystemEconomy = [];
   let recruitmentState = null;
   const recruitmentHistory = [];
   let subsystemState = new Map(subsystemPlan.subsystems.map(item => [item.id, {
@@ -1827,6 +1828,8 @@ async function runCodeWorkspaceAgentPanels({
           subsystemEconomy.budgetKnown && subsystemEconomy.budgetRatio < 0.25
             || subsystemEconomy.failed > 0 ? 1 : providerParallelCap);
       const batch = ready.slice(0, maxPanels);
+      const tokensAtPanelStart=tokensSpent;
+      const priorPanelFindings=allFindings.slice();
       const jobs = [];
 
       for (const subsystem of batch) {
@@ -2246,9 +2249,18 @@ async function runCodeWorkspaceAgentPanels({
       });
       recruitmentHistory.push(recruitmentState.lifecycle);
       const waveIndex = waves.length;
+      const waveEconomy=agentWaveEconomy({
+        before:priorPanelFindings,after:allFindings,
+        wave:results.filter(item=>item.parsed).map(item=>item.parsed),
+        tokens:tokensSpent-tokensAtPanelStart,
+        elapsedMs:Math.max(0,...results.map(item=>Number(item.elapsedMs)||0)),
+        modelCalls:results.length
+      });
+      subsystemEconomy.push(waveEconomy);
       const waveRecord = {
         index: waveIndex,
         recruitmentSupervisor:recruitmentSummary(recruitmentState),
+        qualityEconomy:waveEconomy,
         type: 'code-workspace-subsystem-panels',
         specialistAdaptation: jobs.length ? {
           action: panelWidth > basePanelWidth ? 'recruit'
@@ -2465,6 +2477,7 @@ async function runCodeWorkspaceAgentPanels({
       specialistsCompleted: agentStates.filter(item => item.status === 'complete' && item.role !== 'arbiter').length,
       specialistsUnavailable: agentStates.filter(item => item.status === 'unavailable').length,
       parallelWaves: waves.filter(wave => wave.parallel).length,
+      qualityEconomy:subsystemEconomy.slice(-Math.max(1,waves.length)),
       principle: 'Use the smallest live topology and specialist depth that can produce sufficient evidence.'
     },
     codingEconomy: {
