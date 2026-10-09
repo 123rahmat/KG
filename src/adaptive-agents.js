@@ -260,6 +260,21 @@ export function decideAgentTopology({
   const workspaceId = text(workspace).toLowerCase() || 'normal-chat';
   const workspaceRoles = WORKSPACE_ROLE_PREFERENCES[workspaceId] ?? WORKSPACE_ROLE_PREFERENCES['normal-chat'];
   const workspacePolicy = WORKSPACE_AGENT_POLICY[workspaceId] ?? WORKSPACE_AGENT_POLICY['normal-chat'];
+  if(['normal-chat','chat','visual','design'].includes(workspaceId)){
+    const computePolicy=workspaceComputePolicy({
+      surface:'normal-chat',complexity,uncertainty,risk,
+      previousFailure:retrying,remainingBudgetRatio:budget.remainingBudgetRatio
+    });
+    return {
+      version:1,mode:'direct',agentCount:0,maxParallel:1,
+      reason:'direct-conversation-no-agent-recruitment',
+      agents:[],waves:[],integrationRequired:false,workspace:'normal-chat',
+      workspacePolicy,computePolicy,modelPolicy:'adaptive-primary-model',
+      humanGovernance:humanGovernance??null,
+      authority:{serverOwned:true,proposalOnly:true,modelCannotAuthorize:true,
+        modelCannotGrantCapabilities:true}
+    };
+  }
   const sourceTasks = uniqueTasks(tasks).filter(task => text(task.type) !== 'respond' || tasks.length > 1);
   const independentWork = sourceTasks.length > 1 ? Math.min(1, 0.45 + sourceTasks.length * 0.12) : 0;
   const computePolicy = workspaceComputePolicy({
