@@ -60,3 +60,17 @@ test('handoffs are injected into existing prompt as data, not system authority',
   assert.equal(payload.peerHandoffs[0].to,'communicator');
   assert.match(payload.peerHandoffPolicy,/grant no tools/);
 });
+
+test('cross-wave peer messages reject stale, pending, unavailable, or other-run findings',()=>{
+  const messages=peerHandoffsFor({runId:'current-run',taskId:'current-task',toRole:'analyst',
+    findings:[
+      {role:'pending',summary:'not finished',status:'running'},
+      {role:'bad',summary:'unavailable',status:'unavailable'},
+      {role:'old',summary:'other task',status:'complete',runId:'current-run',taskId:'old-task'},
+      {role:'foreign',summary:'other run',status:'complete',runId:'foreign-run',taskId:'current-task'},
+      {role:'scoped',summary:'Ready for next dependent agent',status:'complete',
+        runId:'current-run',taskId:'current-task'}
+    ]});
+  assert.deepEqual(messages.map(message=>message.from),['scoped']);
+  assert.equal(messages[0].authorizesTools,false);
+});
