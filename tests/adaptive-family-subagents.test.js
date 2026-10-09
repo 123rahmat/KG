@@ -71,6 +71,18 @@ test('low remaining budget suppresses extra children and narrows task scope',()=
  assert.equal(p.active.length,1);
  assert.equal(p.executionPolicy.extraModelChildLimit,0);
 });
+test('unknown child budget telemetry preserves optional expertise but measured exhaustion contracts it',()=>{
+ const known=selectFamilySubagents(tech);
+ for (const budget of [null,undefined,'',' ',NaN,Infinity]) {
+   const selected=selectFamilySubagents({...tech,remainingBudgetRatio:budget});
+   assert.deepEqual(selected.active.map(child=>child.id),known.active.map(child=>child.id));
+   assert.equal(selected.executionPolicy.extraModelChildAllowed,known.executionPolicy.extraModelChildAllowed);
+ }
+ const exhausted=selectFamilySubagents({...tech,remainingBudgetRatio:0});
+ assert.equal(exhausted.active.length,1);
+ assert.equal(exhausted.executionPolicy.extraModelChildAllowed,false);
+});
+
 test('real specialist prompts carry family instructions as data not tool authority',()=>{
  const messages=agentMessages('frontend-engineer',{
   goal:'Build accessible responsive UI and test components',
