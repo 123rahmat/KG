@@ -21,7 +21,7 @@ import { toolNamed } from '../toolbox.js';
 import { currentDbScope } from '../db.js';
 import { modelForStep, resolveModelSelection } from '../model-routing.js';
 import { compileExecutionCapabilityPlan } from '../capability-compiler.js';
-import { effortForAdaptiveDepth, adaptiveExecutionBudgetStatus, toolsForTask, adaptiveStepScope } from '../adaptive-control.js';
+import { effortForAdaptiveDepth, toolsForTask, adaptiveStepScope } from '../adaptive-control.js';
 import { adaptiveBehaviorContract, adaptiveEffortProfile } from '../adaptive-efficiency.js';
 import { checkTaskPolicy, checkConnectionPolicy } from '../policy-gate.js';
 import { executionSafetyGate } from '../adaptive-safety.js';
