@@ -279,13 +279,13 @@ export function normalizeChildProbe(value={},plan={},childId=null){
  */
 export async function runBoundedFamilyChildProbes({
   run={}, task={}, role='', goal='', surface='normal-chat', situation={},
-  modelCaller, modelId, config, fetchImpl, usageGate=null,
+  modelCaller, modelId, config, fetchImpl, usageGate=null, observedFindings=[],
   canSpend=async()=>false, dataAllowed=false, signal,
   recordUsage=async()=>{}, recordAgent=async()=>{},
   waveIndex=0, maxExtraCalls=2, maxParallel=1, budgetRatio=1
 }={}){
   const plan=selectFamilySubagents({
-    surface,goal,role,situation,task,remainingBudgetRatio:budgetRatio
+    surface,goal,role,situation,task,observedFindings,remainingBudgetRatio:budgetRatio
   });
   const count=clamp(maxExtraCalls,0,2);
   const supported=(plan.active??[]).filter(x=>x.priority==='supporting'
