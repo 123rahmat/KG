@@ -7,22 +7,15 @@ Normal Chat / Coding / Research workspaces, its existing specialists, Gemini
 model boundary, authorization checks, tool registry, task evidence and resource
 budgets. There is **no second agent engine**.
 
-The 55 specialist families are capability domains. Every family owns eight
-defined child expertise lenses (440 in total), but the number of *active*
-subskills is **1–3 per current task**, not eight. Most subskills run in the
-parent's already-authorized model call, so there is no extra model cost merely
-for having them available.
+The registered specialist families are **starting vocabularies**, not fixed subagent rosters. Each catalog family supplies eight reusable seed lenses, and every parent can also derive as many distinct situation-specific advisory lenses as are supported by the task's requirements, acceptance criteria, requested outputs and observed evidence gaps. The active count is **not fixed** at one, three, eight, or any other preset roster size. Most lenses share their parent's already-authorized model call, so additional expertise does not automatically create extra model cost.
 
 **Implementation**:
 - `src/adaptive-specialist-focus.js` — authoritative family/subskill catalog.
-- `src/adaptive-family-subagents.js` — 55 distinct family objectives, domain
+- `src/adaptive-family-subagents.js` — family objectives, domain
   checks, related-family consultation options, child selection and exceptional
   bounded read-only independent model checks.
 - `src/multi-agent.js` — parent agent gets its currently selected family
-  subskills; an observed high-value gap can trigger at most **two extra
-  child calls per generic specialist panel**, not per family. Child calls use
-  exactly the same authorized model, usage reservation, model-call policy and
-  audit callbacks as parent agents.
+  subskills; independent child calls are admitted based on task evidence, the trusted task compute allowance, provider concurrency, and the same usage reservations and audit callbacks as parent agents. No unbounded recursive recruitment occurs.
 - `src/subsystem-orchestrator.js` and the existing code-specialist iteration
   continue to manage parallel Coding work: ownership, dependencies and patch
   integration remain with the parent. New family lenses do not mutate files.
@@ -65,15 +58,8 @@ The same pattern applies to every other specialist family:
 ## Dynamic admission and communication
 
 - **Simple task**: one lens inside the primary model call. No child calls.
-- **Compound, unfamiliar, high-stakes or observed-failure task**: at most
-  three lenses for a selected parent role, chosen from task intent and
-  observed evidence, and a research/test/debug checkpoint where warranted.
-- **Separate child model work**: only within an already justified specialist
-  panel; only for independent, read-only evidence or verification review;
-  requires real `usageGate`, `dataAllowed`, `canSpend` approval and budget
-  ratio. The panel caps extra calls at two. Parallelism is restricted by the
-  existing provider concurrency and workspace lane logic. Failure/cancellation
-  drains started calls before the parent workflow proceeds.
+- **Compound, unfamiliar, high-stakes or observed-failure task**: recruit the skills justified by current acceptance criteria, required capabilities and verified gaps. Skills may come from a seed family or a task-specific lens. Do not recruit a standard-size team to fill arbitrary slots.
+- **Separate child model work**: only for independent read-only investigation or verification inside a justified specialist panel, with active `usageGate`, `dataAllowed`, `canSpend` and sufficient remaining budget. A trusted per-task child-call allowance, provider concurrency, and wave scheduling constrain actual invocations, not a preset subagent count.
 - **Messages**: task scoped and untrusted. Child findings reach only their
   parent specialist before the parent model call. They do not create tools,
   permissions, real test passes, new workspaces or approved changes.
