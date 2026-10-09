@@ -7,6 +7,7 @@
  */
 import { $, element, button, downloadUrl, api } from './ui-core.js';
 import { tablePreviewModel } from './table-preview-model.js';
+import { isHtmlSource, createStaticHtmlFrame } from './static-html-preview.js';
 
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 const DIRECT_MEDIA = new Set([...IMAGE_TYPES, 'application/pdf']);
@@ -32,8 +33,9 @@ export function previewKind(object = {}) {
   const type = contentTypeOf(object);
   const ext = extensionOf(object);
   if (IMAGE_TYPES.has(type)) return 'image';
+  if (isHtmlSource(object)) return 'html';
   if (type === 'application/pdf' || ext === 'pdf') return 'pdf';
-  if (TEXT_TYPES.has(type) || ['txt', 'md', 'json', 'csv', 'js', 'mjs', 'ts', 'tsx', 'jsx', 'py', 'css', 'html', 'xml', 'sql', 'sh', 'yaml', 'yml'].includes(ext)) return 'text';
+  if (TEXT_TYPES.has(type) || ['txt', 'md', 'json', 'csv', 'js', 'mjs', 'ts', 'tsx', 'jsx', 'py', 'css', 'xml', 'sql', 'sh', 'yaml', 'yml', 'svg', 'scss', 'less', 'vue', 'svelte', 'astro', 'cjs', 'go', 'rs', 'java', 'kt', 'swift', 'php', 'rb', 'toml', 'log'].includes(ext)) return 'text';
   if (DOCUMENT_FORMATS.has(text(object.format).toLowerCase()) || ['docx', 'xlsx', 'pptx'].includes(ext)) return 'document';
   if (['zip', 'tar', 'gz'].includes(ext) || /zip|archive/i.test(type)) return 'document';
   return null;
@@ -135,7 +137,22 @@ async function populate(object) {
 
   try {
     const payload = await api('GET', '/api/objects/' + encodeURIComponent(object.id) + '/preview');
-    body.append(textPreview(payload));
+    if (kind === 'html') {
+      const frame = createStaticHtmlFrame(payload.text, 'Static structure of ' + titleFor(object));
+      const preview = element('section', { class: 'artifact-preview-html' }, [
+        element('p', { class: 'small muted', text:
+          'Static HTML structure only. Scripts, stylesheets, images, forms and network access are blocked. An interactive UI needs a separately isolated build preview.' }),
+        frame,
+        element('details', { class: 'artifact-preview-html-source' }, [
+          element('summary', { text: 'View HTML source' }),
+          element('pre', { class: 'artifact-preview-pre', text: String(payload.text ?? '') })
+        ]),
+        payload.truncated ? element('p', { class: 'small muted', text: 'File preview was truncated. Download the original for all content.' }) : null
+      ].filter(Boolean));
+      body.append(preview);
+    } else {
+      body.append(textPreview(payload));
+    }
   } catch (error) {
     body.append(element('div', { class: 'artifact-preview-empty' }, [
       element('strong', { text: 'Preview could not be generated.' }),
