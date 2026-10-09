@@ -61,6 +61,24 @@ const FAMILY_GUIDANCE = Object.freeze({
   "evidence-synthesis": {objective:"Combine supported findings without erasing disagreement or limitations",checks:["evidence map","weight and provenance","conflicting claims","confidence calibration"],neighbors:["evidence-verification","reporting-citations"]},
   "reporting-citations": {objective:"Communicate research with traceable claims and fit-for-purpose artifacts",checks:["claim-source map","citation format","limitations","tables and figures fidelity"],neighbors:["evidence-verification","evidence-synthesis"]},
   "data-source-engineering": {objective:"Ingest research data with explicit schema, provenance and reproducibility",checks:["source licenses and authority","data schema and quality","lineage and privacy","repeatable extraction"],neighbors:["quantitative-analysis","source-discovery"]},
+  'data-management-engineering': {
+    objective:'Manage application data lifecycle without confusing it with raw database schema or ETL work',
+    checks:['data contracts and validation','provenance and data quality','retention and access controls','safe import/export and recovery'],
+    neighbors:['database-engineering','backend-engineering','security-engineering','data-pipelines'],
+    priority:['data-contracts','data-validation','data-quality','data-lineage','retention-policy','access-controls','import-export','recovery-checks']
+  },
+  'identity-access-engineering': {
+    objective:'Protect authenticated sessions and tenant boundaries while keeping login and authorization usable',
+    checks:['session and identity lifecycle','role-based and object-level permissions','negative access tests','audit and credential protection'],
+    neighbors:['security-engineering','backend-engineering','api-engineering','database-engineering'],
+    priority:['authentication-flows','authorization-model','session-lifecycle','tenant-isolation','identity-federation','negative-tests']
+  },
+  'file-rendering-engineering': {
+    objective:'Give users accurate and safe file extraction, preview and conversion with explicit fidelity limitations',
+    checks:['file type and content validation','isolated format decoding','preview fallback and accessibility','no active content or unauthorized egress'],
+    neighbors:['ui-engineering','backend-engineering','security-engineering','testing-quality'],
+    priority:['file-type-detection','safe-extraction','render-isolation','office-fidelity','preview-fallbacks','format-regression-tests']
+  },
   'ui-engineering': {
     objective:'Accessible, visually coherent components that match actual user flows',
     checks:['responsive viewport behavior','semantic and keyboard interaction','empty, loading and error states','visual consistency against real screenshots or design evidence'],
