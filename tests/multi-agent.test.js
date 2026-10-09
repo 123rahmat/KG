@@ -786,7 +786,7 @@ test('normal-chat ZIP projects use exactly one adaptive coding panel', async () 
   assert.equal(calls.every(item => item.body.subsystemWork?.subsystem?.id), true);
   assert.equal(calls.every(item => item.body.workspacePanel.engine === 'unified-adaptive-code-panel-v1'), true);
   assert.equal(calls.every(item => item.body.workspacePanel.topology === 'single-project'), true);
-  assert.equal(calls.every(item => item.body.workspacePanel.lifecycle.coverage.includes('research')), true);
+  assert.equal(calls.every(item => item.body.workspacePanel.lifecycle.available.includes('research')), true);
   assert.equal(calls.every(item => item.body.workspacePanel.communication.internal === 'independent-first-then-typed-summary'), true);
   assert.equal(calls.every(item => item.body.codeIntelligence.files.length === 80), true);
   assert.equal(calls.every(item => item.body.subsystemPlan.subsystems.length === 1), true);
