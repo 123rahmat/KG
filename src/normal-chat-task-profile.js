@@ -66,7 +66,7 @@ export function normalChatTaskProfile({
     contextPriorities: Object.freeze(priorities),
     verification: verify ? 'check-observable-claims-and-artifacts' : 'sufficient-and-clear',
     toolPolicy: 'just-in-time-authorized-only',
-    agentPolicy: 'one-model-first-recruit-only-when-useful',
+    agentPolicy: 'single-primary-model-no-specialist-recruitment',
     suggestedTransition: null,
     serverAuthorityRequired: true
   });
