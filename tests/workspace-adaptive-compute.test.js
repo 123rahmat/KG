@@ -90,9 +90,10 @@ test('When acceptance is verified, do not recruit more agents or expand work', (
 
 test('Normal Chat can still adapt for difficult tasks without a separate brain', () => {
   const c=mode('normal-chat',{situation:{independentWork:.8}});
-  assert.equal(c.decision.recruitSpecialist,true);
-  assert.equal(c.decision.parallelIndependentWork,true);
-  assert.ok(c.compute.maxParallel <= 2);
+  assert.equal(c.decision.recruitSpecialist,false);
+  assert.equal(c.decision.parallelIndependentWork,false);
+  assert.equal(c.compute.recommendedAgents,1);
+  assert.equal(c.compute.maxParallel,1);
   assert.match(c.principle,/one shared state/i);
 });
 
@@ -101,7 +102,7 @@ test('unknown compute budgets retain scoped expertise without false conservation
     for (const remainingBudgetRatio of [null, undefined, '', ' ', NaN, Infinity]) {
       const c = mode(surface, { remainingBudgetRatio });
       assert.equal(c.compute.budgetMode, 'normal');
-      assert.equal(c.decision.recruitSpecialist, true);
+      assert.equal(c.decision.recruitSpecialist, surface !== 'normal-chat');
       assert.equal(c.decision.reduceEffort, false);
     }
   }
