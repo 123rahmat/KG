@@ -1903,6 +1903,7 @@ async function runCodeWorkspaceAgentPanels({
               // bounded subsystem remit as a default expert; do not widen
               // permissions or let the specialist recruit child agents.
               specialistSurface: 'code',
+              familyBudgetRatio: remainingBudgetRatio(),
               discoveredCapabilities: run?.capabilities?.discovered ?? [],
               situation: basePayload?.situation ?? run?.situation ?? {},
               specialistAssignment: scopedCodeSpecialistRemit(
@@ -2762,6 +2763,7 @@ export async function runAdaptiveAgentPanel({
         subsystemPlan: scopedSubsystemPlan(subsystemPlanContext, job.subsystem),
         subsystemWork: job.subsystemWork,
         specialistSurface: run?.surface || run?.adaptation?.primarySurface || 'normal-chat',
+        familyBudgetRatio: remainingBudgetRatio(),
         discoveredCapabilities: run?.capabilities?.discovered ?? [],
         situation: basePayload?.situation ?? run?.situation ?? {},
         peerHandoffs: peerHandoffsFor({
