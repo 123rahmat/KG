@@ -27,7 +27,10 @@ export function peerHandoffsFor({runId,taskId,toRole,findings=[],maxMessages=3,s
   const out = [];
   for (const item of [...(Array.isArray(findings) ? findings : [])].reverse()) {
     if (out.length >= limit) break;
-    if (!item || item.status === 'failed' || item.verified === false && item.summary == null) continue;
+    if (!item || (item.status && item.status !== 'complete') ||
+        (item.runId && bounded(item.runId,120) !== bounded(runId,120)) ||
+        (item.taskId && bounded(item.taskId,120) !== bounded(taskId,120)) ||
+        (item.verified === false && item.summary == null)) continue;
     // Subsystem-local findings cannot leak to general panels.
     if (item.subsystemId || item.projectRevision || item.externalScope) continue;
     const source = bounded(item.role,90);
