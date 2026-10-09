@@ -31,7 +31,7 @@ export function familyMainAgentMatch(role, { surface = 'normal-chat', goal = '',
   if (!match || match.score < 3) return 0;
   const kind = String(task?.type ?? '').toLowerCase();
   const taskId = String(task?.id ?? '').toLowerCase();
-  const fit = Math.min(0.98, 0.58 + match.score * 0.06);
+  const fit = Math.min(0.98, 0.74 + match.score * 0.055);
   return agent.bestFor.includes(kind) || agent.bestFor.includes(taskId)
     ? fit : Math.max(0,fit - 0.07);
 }
