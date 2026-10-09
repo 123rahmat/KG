@@ -17,7 +17,7 @@
     "test": "node --test",
     "lint": "eslint .",
     "doctor": "node bin/system-doctor.js",
-    "verify": "npm run check && npm run doctor && npm run eval:skills && npm run lint && npm test",
+    "verify": "npm run check && npm run doctor && npm run eval:skills && npm run eval:adaptive-matrix && npm run lint && npm test",
     "check": "node bin/check-source.js",
     "backup": "node bin/backup.js",
     "restore": "node bin/restore.js",
