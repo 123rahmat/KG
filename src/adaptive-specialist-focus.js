@@ -1,3 +1,4 @@
+import { EXTRA_SPECIALIST_FAMILIES, EXTRA_SPECIALIST_KEYWORDS } from './expanded-family-catalog.js';
 /**
  * Kindgleam task-scoped sub-specialty guidance.
  * This is advisory metadata, not an agent scheduler or authorization service.
@@ -68,8 +69,8 @@ const DEFINITIONS = {
 };
 export const SPECIALIST_FAMILIES = Object.freeze(Object.fromEntries(
   Object.entries(DEFINITIONS).map(([workspace, entries]) => [
-    workspace, Object.freeze(Object.fromEntries(Object.entries(entries).map(
-      ([family, values]) => [family, Object.freeze(values.split('|'))]
+    workspace, Object.freeze(Object.fromEntries(Object.entries({...entries,...(EXTRA_SPECIALIST_FAMILIES[workspace] ?? {})}).map(
+      ([family, values]) => [family, Object.freeze(Array.isArray(values) ? values : values.split('|'))]
     )))
   ])
 ));
@@ -144,7 +145,7 @@ export function specialistFocusFor({surface='normal-chat',goal='',role='',maxSub
   const scored = Object.entries(entries).map(([family, children]) => {
     const phrase = normalize(family);
     const keywordHits = children.reduce((count, sub) => count + (request.includes(normalize(sub)) ? 1 : 0), 0);
-    const matched = KEYWORDS[family]?.test(request) ? 3 : 0;
+    const matched = KEYWORDS[family]?.test(request) || EXTRA_SPECIALIST_KEYWORDS[family]?.test(request) ? 3 : 0;
     const roleMatch = ROLE_HINTS[roleId] === family || hintedFamily === family ? 12 : 0;
     return {family,children,score:roleMatch + matched + keywordHits * 2 + (request.includes(phrase) ? 2 : 0)};
   }).sort((a,b)=>b.score-a.score || a.family.localeCompare(b.family));
