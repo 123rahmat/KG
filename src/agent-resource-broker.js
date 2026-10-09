@@ -15,12 +15,12 @@ const RESOURCE_TO_TOOLS = Object.freeze({
   'source-research': ['web.search','web.fetch','mcp.discover'],
   'ui-preview': ['file.read'],
   'specialist-consultation': [],
-  'sandbox-test': ['code.run'],
-  'sandbox-execution': ['code.run'],
-  'dependency-installation': ['code.run'],
+  'sandbox-test': ['sandbox.execute'],
+  'sandbox-execution': ['sandbox.execute'],
+  'dependency-installation': ['sandbox.execute'],
   'code-change': ['file.edit','artifact.create'],
   'terminal-session': [],
-  'terminal-command': ['code.run']
+  'terminal-command': ['sandbox.execute']
 });
 const MUTATIONS = new Set(['sandbox-test','sandbox-execution','dependency-installation','code-change','terminal-session','terminal-command']);
 const SURFACES = new Set(['normal-chat','code','research']);
