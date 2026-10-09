@@ -1485,6 +1485,12 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
   }
 
   async function reason(run, task, { managedTarget = null, explicitConsent = false, executionId = null, scope = null, signal, recheckPolicy } = {}) {
+    // Read permissions on a workspace-shared conversation must not become
+    // authorization to launch model agents, private RAG, tools or runners
+    // under a different person's stored run identity.
+    const resourceScope = bindAgentResourceScope({run,task,scope:scope ?? currentDbScope()});
+    if (!resourceScope.allowed)
+      throw new PolicyError(resourceScope.reason, resourceScope.code, 403);
     let ragResults = [];
     // RAG is evidence retrieval, not a mandatory prelude to every answer.
     // Routine turns avoid retrieval cost and unrelated prior-work context.
