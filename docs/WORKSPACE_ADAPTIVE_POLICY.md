@@ -8,7 +8,7 @@ These are *profiles*, not independent brains or mandatory agent teams.
 
 | Surface | Fast path | When to specialize | Safe parallel work | Verification |
 | --- | --- | --- | --- | --- |
-| Normal Chat | Direct Gemini, relevant chat/artifact context | Material uncertainty, complex file/visual task, or verified quality need | Optional independent read-only investigation (max 2 advisory lanes) | User intent, factual claims and relevant artifacts |
+| Normal Chat | Direct Gemini, selected files and conversation context | Never recruit main agents or subagents; increase primary reasoning effort and use permitted tools when useful | No advisory agent lanes | User intent, factual claims, file extraction and artifact integrity |
 | Code | Single scoped editor for small changes | Repository architecture, debugging, testing, review, security, performance | Independently scoped analysis and disjoint file/revision lanes (up to policy/provider caps) | Exact revision, diff, targeted tests, execution receipts |
 | Research | One scoped evidence investigation | Independent source comparison, disagreements, unanswered material questions | Independent evidence/source lanes with source deduplication and bounded search (up to policy/provider caps) | Claim-to-source provenance, contradictions, freshness, uncertainty |
 
@@ -21,22 +21,30 @@ separate determination that requires a nonzero, task-supplied independence
 signal. The work scheduler remains responsible for actual dependencies,
 write-set conflicts, ownership, permissions and provider concurrency.
 
-- Under 25% remaining optional budget, every workspace recommends just one
-  model/agent at a time; the required server verification floor remains.
+- Normal Chat has zero recruited agents at every optional budget level, including when
+  settings request an always-on panel. It retains one primary reasoning model,
+  on-demand file previews and policy-controlled tool calls.
+- Below 25% remaining optional budget, Coding and Research recommend just one
+  specialist model call at a time; required server verification still applies.
 - A budget below 45% limits optional specialist breadth to two.
 - High-impact and other designated high-risk work is serialized at the
   advisory compute-policy level as well as at authorization boundaries.
 - Once the trusted acceptance contract is satisfied, the controller does not
   recommend hiring more specialists or expanding parallel work.
-- An explicit `multiAgent=always` selection can still request a bounded panel;
-  specialist allocation, provider limits, cancellation and server authorization
-  stay authoritative, and the parallel scheduler still rejects conflicts.
+- An explicit `multiAgent=always` selection can request a bounded panel only
+  in Coding and Research; it cannot override direct-chat isolation. Specialist
+  allocation, provider limits, cancellation, approvals and lane conflict checks
+  remain authoritative.
 
 ## Examples
 
-**Normal Chat:** summarize one document directly; read an attached image with
-existing tools; only recruit a critic when a complex/high-stakes answer needs
-additional checking. Do not force a move into Code/Research for simple work.
+**Normal Chat:** summarize or edit an authorized document; inspect an attached
+image; preview PDF/image/HTML and text/table extracts where supported. Complex
+reasoning raises primary-model effort or uses an authorized tool but never
+recruits a critic or subagent. Office previews are extracted text and table
+samples, not guaranteed pixel-perfect Word/PowerPoint/Excel rendering.
+Static HTML previews do not execute scripts or fetch styles/assets.
+Interactive applications require a separately isolated build/runtime preview.
 
 **Code:** inspect backend and test ownership independently; use engineering
 specialists for authentication, implementation and regression review; serialize
