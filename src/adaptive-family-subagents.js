@@ -7,6 +7,7 @@
  * read-only, parent-budgeted and independently labeled as unverified.
  */
 import { SPECIALIST_FAMILIES, specialistFocusFor } from './adaptive-specialist-focus.js';
+import { parseJsonObject } from './structured.js';
 
 const SURFACES = new Set(['normal-chat', 'code', 'research']);
 const clean = value => String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -221,7 +222,8 @@ export function selectFamilySubagents({surface='normal-chat',goal='',role='',sit
   executionPolicy:Object.freeze({
     default:'within-existing-authorized-agent-call',
     extraModelChildAllowed:callsAllowed,
-    extraModelChildLimit:callsAllowed?1:0,
+    extraModelChildLimit:callsAllowed
+      ? (active.length===3 && severity.uncertain && severity.complex && budget>=0.8 ? 2 : 1) : 0,
     requiresParentBudget:true, parentOwnsVerification:true,
     readOnly:true, independentReadOnly:independent,
     parallelOnlyWhenIndependent:independent,
@@ -231,9 +233,9 @@ export function selectFamilySubagents({surface='normal-chat',goal='',role='',sit
 }
 
 /** A separate, isolated child advisory call is exceptional, bounded and cheap. */
-export function childProbeMessages(plan,{goal='',task={},situation={}}={}){
+export function childProbeMessages(plan,{goal='',task={},situation={},childId=null}={}){
  const child=(plan?.active??[]).find(x=>x.priority==='supporting' &&
-   ['investigate','verify'].includes(x.operation));
+   ['investigate','verify'].includes(x.operation) && (!childId || x.id===childId));
  if(!child)return null;
  return [
   {role:'system',content:
@@ -249,12 +251,12 @@ export function childProbeMessages(plan,{goal='',task={},situation={}}={}){
   })}
  ];
 }
-export function normalizeChildProbe(value={},plan={}){
+export function normalizeChildProbe(value={},plan={},childId=null){
  if(!value||typeof value!=='object'||Array.isArray(value))return null;
  const trimArray=v=>Array.isArray(v)?v.slice(0,4).filter(x=>typeof x==='string')
    .map(x=>short(x,220)):[];
  const child=(plan?.active??[]).find(x=>x.priority==='supporting' &&
-  ['investigate','verify'].includes(x.operation));
+  ['investigate','verify'].includes(x.operation) && (!childId || x.id===childId));
  if(!child||!short(value.summary,280))return null;
  return Object.freeze({
   family:plan.family,subagent:child.id,summary:short(value.summary,280),
@@ -264,4 +266,79 @@ export function normalizeChildProbe(value={},plan={}){
   status:'unverified-advisory',evidenceVerified:false,
   toolCallsPerformed:0,authority:'none'
  });
+}
+
+
+/**
+ * Opt-in, evidence-triggered, real read-only child model calls inside an
+ * ALREADY authorized parent agent panel. Never an uncontrolled recursion.
+ *
+ * Model use is limited to two distinct independent read-only probes per
+ * existing parent panel, guarded by the SAME usageGate/provider policies.
+ * If authorization, reservation, capacity, or evidence is absent, skip.
+ */
+export async function runBoundedFamilyChildProbes({
+  run={}, task={}, role='', goal='', surface='normal-chat', situation={},
+  modelCaller, modelId, config, fetchImpl, usageGate=null,
+  canSpend=async()=>false, dataAllowed=false, signal,
+  recordUsage=async()=>{}, recordAgent=async()=>{},
+  waveIndex=0, maxExtraCalls=2, maxParallel=1, budgetRatio=1
+}={}){
+  const plan=selectFamilySubagents({
+    surface,goal,role,situation,task,remainingBudgetRatio:budgetRatio
+  });
+  const count=clamp(maxExtraCalls,0,2);
+  const supported=(plan.active??[]).filter(x=>x.priority==='supporting'
+    && ['investigate','verify'].includes(x.operation));
+  if(typeof modelCaller!=='function' || !modelId || !usageGate
+     || dataAllowed!==true || plan.executionPolicy.extraModelChildAllowed!==true
+     || !count || !supported.length || config?.agents?.subagents==='off'){
+    return {plan,findings:[],modelCalls:0,reason:'not-justified-or-not-authorized'};
+  }
+  // No extra model call without active budget admission. The provider's
+  // reservation gate remains authoritative for concurrent calls.
+  if(!(await canSpend()))return {plan,findings:[],modelCalls:0,reason:'budget-blocked'};
+  const selected=supported.slice(0,Math.min(count,plan.executionPolicy.extraModelChildLimit));
+  const batchLimit=clamp(maxParallel,1,2);
+  const results=[];
+  for(let start=0;start<selected.length;start+=batchLimit){
+    signal?.throwIfAborted();
+    const batch=selected.slice(start,start+batchLimit);
+    const settled=await Promise.allSettled(batch.map(async child=>{
+      signal?.throwIfAborted();
+      const messages=childProbeMessages(plan,{goal,task,situation,childId:child.id});
+      if(!messages)return {child,raw:null,error:'not-applicable'};
+      const raw=await modelCaller(messages,{
+        config,fetchImpl,modelId,usageGate,usageSource:'multi-agent-subagent',
+        allowBackup:()=>false,effort:'medium',json:true,
+        maxOutputTokens:400,signal
+      });
+      if(raw?.usage && !raw.usageRecorded){
+        await recordUsage(raw.usage,raw.provider,raw.model);
+      }
+      return {child,raw};
+    }));
+    signal?.throwIfAborted();
+    for(let i=0;i<settled.length;i++){
+      const item=settled[i];
+      if(item.status==='rejected'){
+        const error=item.reason;
+        if(signal?.aborted || error?.name==='AbortError' || error?.status===403
+          || error?.status===401 || error?.status===429)throw error;
+        results.push({child:batch[i],raw:null,error:'subagent-unavailable'});
+      }else results.push(item.value);
+    }
+  }
+  const findings=[];
+  for(const item of results){
+    const parsed=item.raw && !item.raw.incomplete
+      ? normalizeChildProbe(parseJsonObject(item.raw.text),plan,item.child.id):null;
+    if(parsed)findings.push(parsed);
+    await recordAgent({
+      run,task,waveIndex,role:'child:'+role+':'+item.child.id,
+      modelId:item.raw?.model??modelId,state:parsed?'complete':'failed',
+      finding:parsed??null,errorCode:parsed?null:(item.error??'child-inconclusive')
+    });
+  }
+  return {plan,findings,modelCalls:results.length,reason:'bounded-advisory-probes'};
 }
