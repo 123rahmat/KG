@@ -30,7 +30,7 @@ test('every subsystem has access to a complete adaptive toolbox without a fixed 
 
 test('Code specialty comes from the actual file-level subsystem rather than a permanent team', () => {
   for (const [root, expected] of [
-    ['src/ui','ux-designer'], ['src/frontend','frontend-engineer'],
+    ['src/ui','code-ui-engineering-lead'], ['src/frontend','frontend-engineer'],
     ['src/backend','backend-engineer'], ['src/auth','security-reviewer'],
     ['src/db/migrations','backend-engineer'],
     ['tests/api','test-engineer']
