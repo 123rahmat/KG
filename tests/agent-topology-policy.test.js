@@ -20,7 +20,7 @@ test('advanced high-risk engineering work scales specialists but serializes exec
 
 test('ordinary conversation does not scale merely because an agent count is configured', () => {
   const r = specialistTopology({ mode: 'auto', surface: 'normal-chat', proposedAgents: 11, maxAgents: 11 });
-  assert.equal(r.agents, 3);
+  assert.equal(r.agents, 1);
   assert.equal(r.maxParallel, 1);
 });
 
