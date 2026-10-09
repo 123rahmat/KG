@@ -563,6 +563,24 @@ export function rolesFor(run, task, {
   if (task?.id === 'build-code' && task?.metadata?.buildPlan !== true && !highStakeBuild) {
     targetCount = Math.min(targetCount, 2);
   }
+  // An observed task can need several distinct domain leads. These are
+  // selected from all evidence-matched families, not one winning category.
+  const signals = taskSignals(run, task, progress);
+  const selectedSurface = run?.surface || run?.adaptation?.primarySurface || 'normal-chat';
+  const selectedGoal = String(progress?.goal ?? run?.goal ?? '');
+  const matchingLeads = Object.keys(DOMAIN_SPECIALISTS)
+    .filter(role => role.endsWith('-lead'))
+    .map(role => ({role,score:domainSpecialistMatch(role,{
+      surface:selectedSurface,goal:selectedGoal,task
+    })}))
+    .filter(item => item.score >= 0.75)
+    .sort((a,b)=>b.score-a.score || a.role.localeCompare(b.role));
+  // Compute allowance remains server-configured. Within that allowance the
+  // specialist roster grows with actual distinct expertise, not a fixed team.
+  if (matchingLeads.length >= 2) {
+    targetCount = Math.min(maximum,Math.max(targetCount,
+      matchingLeads.length + (signals.executable ? 1 : 0)));
+  }
   if (advancedBuildPlan && highStakeBuild) {
     targetCount = maximum;
   } else if (disagreement) {
@@ -570,7 +588,6 @@ export function rolesFor(run, task, {
     // panels remain available when task pressure or explicit advanced work justifies them.
     targetCount = Math.min(maximum, Math.max(targetCount, 4));
   }
-  const signals = taskSignals(run, task, progress);
   const topology = specialistTopology({
     surface: run?.surface || run?.adaptation?.primarySurface || 'normal-chat',
     mode: normalizedMode,
@@ -617,6 +634,7 @@ export function rolesFor(run, task, {
     [signals.retrying && signals.executable, 'debugger', 2],
     [signals.frontendFocus && signals.executable, 'frontend-engineer', 1.8],
     [signals.backendFocus && signals.executable, 'backend-engineer', 1.8],
+    ...matchingLeads.map(item=>[true,item.role,1.65 + item.score * 0.12]),
     [signals.flags.ideation, 'idea-explorer', 1.7],
     [signals.visualWork && !signals.frontendFocus, 'visual-designer', 1.6],
     [signals.performanceFocus, 'performance-reviewer', 1.5],
