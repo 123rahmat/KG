@@ -6,24 +6,20 @@ to a running Kindgleam, answered by the real model, and checks each one.
 
 ## Run it
 
-1. Start Kindgleam with a real model:
-   `AI_PROVIDER=google AI_API_KEY=… AI_MODEL=gemini-3.8-flash npm start` (Gemini is the only provider).
-   Start the sandbox runner too if you want the code tests
-   (see `SANDBOX_AND_TOOL_FORGE.md`); without it those tests are skipped.
+1. Complete the [local development setup](../README.md#local-development), including PostgreSQL, migration and bootstrap. Configure `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` and an explicit temporary `VERTEX_ACCESS_TOKEN` for local development, then start with `node --env-file=.env server.js`. A supported hosted environment can use Google metadata-server authentication. `AI_API_KEY` is not the Vertex authentication setting, and local ADC files are not loaded by this runtime. Model selection uses the approved catalog through `VERTEX_MODEL`.
+   Start the sandbox runner too if you want the execution scenarios (see [sandbox setup](SANDBOX_AND_TOOL_FORGE.md)); without it those scenarios are reported as skipped.
 2. Sign in as a **test account** and copy its API key or session token and
    the workspace id.
 3. Run:
 
 ```
-EVAL_URL=http://127.0.0.1:8080 EVAL_TOKEN=… EVAL_WORKSPACE=… npm run eval:live
+EVAL_URL=http://127.0.0.1:3000 EVAL_TOKEN=… EVAL_WORKSPACE=… npm run eval:live
 ```
 
-`EVAL_ONLY=safety,research` runs only some areas or scenario ids.
-Each line shows PASS or FAIL, the flow it chose, tokens, seconds and the
+`EVAL_ONLY=safety,research` runs only some areas or scenario ids. A filter matching no scenarios fails instead of reporting an empty successful run.
+Each line shows PASS, FAIL or SKIP, the flow it chose, tokens, seconds and the
 tools it used, then what was wrong. The full report, with each answer, is
-written to `live-eval-report.json`. It spends real tokens (a full run is
-usually well under 200k) and saves one memory and one proposed reminder in
-the test account.
+written to `live-eval-report.json`. It spends real tokens and creates test-account state, including memory and a proposed reminder. Token usage depends on the deployed model and workflow; inspect the report rather than assuming a fixed budget.
 
 ## What is checked
 
@@ -65,3 +61,7 @@ A failure is a real finding. Usually it means one of:
 Fix the planner, the prompts or the tool descriptions, then run the failed
 scenarios again with `EVAL_ONLY`. The same harness runs in the test suite
 with a stand-in model (`tests/live-eval.test.js`), so the checks stay correct.
+
+## Limits of this evaluation
+
+The harness checks workflow choices, tool use, selected answer patterns, basic source presence and verification status. It does not verify that every cited passage supports its claim, execute every generated code sample, or grade a thesis. A passing report therefore does not establish comprehensive reasoning, autonomous coding or academic quality. Add representative coding acceptance tasks and manual claim-to-source review before relying on a deployment for those purposes. Report skipped scenarios alongside passed and failed ones.

@@ -10,7 +10,7 @@ The system starts with the smallest useful action. It adds investigation, tools,
 | --- | --- | --- |
 | Normal Chat | Daily conversation, learning, demanding reasoning, business planning, writing, design and lightweight file work | Adaptive reasoning depth, scoped attachments, artifact previews and authorized tools; optional configured sandbox execution |
 | Code | Repository-scale engineering | GitHub project sources, indexed context, revision-checked patches, durable project sessions, verification and an optional isolated terminal |
-| Research | Investigation and source-heavy work | Source provenance, evidence gaps, conflicting findings and scoped investigator/analyst/critic assistance |
+| Research | Investigation and source-heavy work | Claim citations, evidence gaps, conflicting findings and task-matched research, paper and thesis specialists |
 
 One conversation continues across these three workspaces. Each has its own controller policy and scoped task context, with a shared runtime enforcing permissions, budgets and verification. Mixed tasks use the capabilities they need. Task-aware suggestion banners appear across all three workspaces, even without attached files. Complex coding suggests Code, investigation suggests Research, and clearly lightweight new work can suggest Normal Chat. The switch button preserves the draft and selected files; switching remains an optional user action.
 
@@ -59,6 +59,26 @@ Skills provide relevant procedures and required evidence. Memory recall is autho
 
 Actual quality and efficiency are measured as accepted outcomes, tokens, cost, latency and recoverability. A deterministic policy test does not establish live Gemini answer quality or production readiness.
 
+## Research, papers and thesis work
+
+Research supports literature investigation, proposal and chapter planning, methodology review, statistical reasoning, academic editing, bibliography checks and point-by-point reviewer responses. The [task-matched specialist catalog](src/expanded-family-catalog.js) supplies relevant procedures when the task and available budget justify assistance. Specialist registration is a capability description; it does not establish academic output quality.
+
+The [research workspace](src/research-workspace.js) keeps up to 40 source records, 80 findings and 20 history entries. Findings can cite source objects through `sources` or canonical references through `sourceKeys`. Source records supporting retained findings take priority over uncited sources. If the limit still removes a required record, the finding records `missingSourceKeys` and the workspace stays `needs-evidence`. Each finding stores up to 12 distinct citation references; exceeding that limit sets `sourceReferenceOverflow` and also requires evidence. Uncited findings also require evidence. The coverage fields `uncitedEvidenceCount` and `incompleteProvenanceCount` expose these limits. This bounded workspace is not a complete thesis bibliography archive; keep the full source collection separately.
+
+`evidence-backed` means retained findings have recorded source links and no recorded gaps or conflicts. It does not establish that a source is authentic, supports the claim, or has been independently reviewed. Before using a thesis claim, check the original passage, bibliographic metadata, methodology and limitations. Running code or statistical analyses requires a configured execution target and recorded results.
+
+## What establishes quality
+
+| Goal | Existing support | Evidence still needed for a deployment |
+| --- | --- | --- |
+| Everyday chat and reasoning | One primary model, adaptive effort, conversation context, authorized tools and scoped attachments | Live answer accuracy, follow-up consistency and reasoning benchmarks |
+| Coding and system building | Repository context, revision-protected patches, real test execution and bounded repairs | Independent model-generated fixes across representative repositories, with unchanged acceptance tests |
+| Research and thesis work | Task-matched procedures, claim/source continuity, gaps and conflicts | Source authenticity, claim-to-passage accuracy, reproducible analysis and academic review |
+
+The [coding smoke fixture](docs/CODING_PRODUCTION_VALIDATION.md) runs real tests around a predetermined patch. It verifies patching and execution contracts, not independent model coding ability. The [live evaluation harness](docs/LIVE_EVALUATION.md) checks representative requests against a running deployment; its basic pattern and source-presence checks do not replace coding benchmarks or a thesis citation audit. Empty reports cannot pass the evaluation promotion gate, and an `EVAL_ONLY` filter matching no scenarios is rejected.
+
+For a release, complete source, lint, database, browser, isolation and operational checks; then run credentialed provider and live evaluations. Compare accepted outcomes, citation accuracy, token usage, cost and latency against a recorded baseline. Skipped, cancelled or unavailable checks provide no passing evidence.
+
 ## Local development
 
 Use Node.js 22 or newer, npm, PostgreSQL and a C++ build toolchain if your platform needs to build `node-pty`. Docker Compose can provide the development database. Configuration is validated from process environment; the application does not automatically load `.env`.
@@ -90,7 +110,7 @@ npm run eval:adaptive-matrix
 npm test
 ```
 
-`npm run verify` runs source checks, doctor, skill evaluation, lint and the complete test suite. Database-backed tests need `TEST_DATABASE_URL` pointing at a PostgreSQL identity that can create/drop isolated test databases. GitHub Actions provides this environment; keep it separate from production data.
+`npm run verify` runs source checks, doctor, skill evaluation, the adaptive matrix, lint and the complete test suite. Database-backed tests need `TEST_DATABASE_URL` pointing at a PostgreSQL identity that can create/drop isolated test databases. GitHub Actions provides this environment; keep it separate from production data.
 
 | Check | Evidence it provides |
 | --- | --- |

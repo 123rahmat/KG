@@ -217,12 +217,14 @@ export function judge(scenario, { created, run, steps }, { actions = [] } = {}) 
 
 /** Run the scenarios against one deployment. */
 export async function runLiveEval({ baseUrl, token, workspace, only = null, fetchImpl = fetch, onResult = () => {} }) {
+  const scenarios = SCENARIOS.filter(item => !only || only.includes(item.id) || only.includes(item.area));
+  if (!scenarios.length) throw new Error('No live evaluation scenarios match EVAL_ONLY. Use a documented scenario id or area.');
   const call = evalClient({ baseUrl, token, workspace, fetchImpl });
   const config = (await call('GET', '/api/execution/config')).body ?? {};
-  if (!config.reasoning?.configured) throw new Error('This deployment has no AI model configured (AI_PROVIDER and AI_API_KEY).');
+  if (!config.reasoning?.configured) throw new Error('This deployment has no AI model configured. Configure GOOGLE_CLOUD_PROJECT and Vertex authentication; see docs/LIVE_EVALUATION.md.');
   const sandbox = (config.targets ?? []).some(target => target.id === 'general-ai-sandbox' && target.configured);
   const results = [];
-  for (const scenario of SCENARIOS.filter(item => !only || only.includes(item.id) || only.includes(item.area))) {
+  for (const scenario of scenarios) {
     const started = Date.now();
     if (scenario.needs === 'sandbox' && !sandbox) {
       const result = { id: scenario.id, area: scenario.area, skipped: 'no sandbox on this deployment' };

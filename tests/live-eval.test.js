@@ -144,3 +144,11 @@ test('the judge reports what a careful person would notice', () => {
   ]);
   assert.deepEqual(judge(SCENARIOS.find(item => item.id === 'thin'), { created: { status: 400, body: { code: 'needs-input' } }, run: null, steps: [] }), []);
 });
+
+test('live evaluation rejects a filter that selects no scenarios', async () => {
+  await assert.rejects(runLiveEval({
+    baseUrl: 'https://example.invalid', token: 'test-token', workspace: 'test',
+    only: ['misspelled-area'],
+    fetchImpl: async () => jsonResponse({ reasoning: { configured: true }, targets: [] })
+  }), /No live evaluation scenarios/);
+});

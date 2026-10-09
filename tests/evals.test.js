@@ -8,3 +8,9 @@ test('evals can run cases concurrently and gate promotion', async () => {
   ], { concurrency: 2 });
   assert.equal(report.passRate, 1); assert.equal(regressionGate(report).pass, true);
 });
+test('promotion requires at least one evaluated result', () => {
+  assert.equal(regressionGate({ results: [] }).pass, false);
+  assert.equal(regressionGate({}).pass, false);
+  assert.equal(regressionGate(null).pass, false);
+  assert.equal(regressionGate({ results: [] }, { minPassRate: 0 }).pass, false);
+});

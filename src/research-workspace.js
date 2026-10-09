@@ -84,7 +84,7 @@ export function normalizeResearchSource(source, index = 0) {
   };
 }
 
-export function normalizeResearchSources(input = []) {
+export function normalizeResearchSources(input = [], { limit = RESEARCH_WORKSPACE_LIMITS.maxSources } = {}) {
   const source = Array.isArray(input) ? input : [];
   const out = [];
   const seen = new Set();
@@ -94,7 +94,7 @@ export function normalizeResearchSources(input = []) {
     seen.add(normalized.key);
     out.push(normalized);
   }
-  return out.slice(0, RESEARCH_WORKSPACE_LIMITS.maxSources);
+  return out.slice(0, limit);
 }
 
 function sourceInputs(evidence, citations, toolLog) {
@@ -107,7 +107,8 @@ function sourceInputs(evidence, citations, toolLog) {
       ...(Array.isArray(item?.citations) ? item.citations : [])
     ]) : [])
   ];
-  return normalizeResearchSources(all);
+  // The workspace applies its cap after prioritizing cited records.
+  return normalizeResearchSources(all, { limit: Infinity });
 }
 
 function normalizeEvidenceItem(item, sourcesByKey) {
@@ -118,13 +119,20 @@ function normalizeEvidenceItem(item, sourcesByKey) {
   if (!item || typeof item !== 'object') return null;
   const summary = clip(item.summary ?? item.finding ?? item.text ?? item.claim);
   if (!summary) return null;
-  const rawSources = Array.isArray(item.sources) ? item.sources : Array.isArray(item.sourceKeys) ? item.sourceKeys : [];
-  const sourceKeys = normalizeResearchSources(rawSources)
-    .map(source => source.key)
-    .filter(key => sourcesByKey.has(key))
-    .slice(0, 12);
+  // Canonical keys are references, not URLs to normalize a second time.
+  const references = [...new Set([
+    ...normalizeResearchSources(Array.isArray(item.sources) ? item.sources : [], { limit: Infinity }).map(source => source.key),
+    ...(Array.isArray(item.sourceKeys) ? item.sourceKeys : []).map(key => clip(key, 2200)),
+    ...(Array.isArray(item.missingSourceKeys) ? item.missingSourceKeys : []).map(key => clip(key, 2200))
+  ].filter(Boolean))];
+  const sourceReferenceOverflow = references.length > 12 || item.sourceReferenceOverflow === true;
+  const boundedReferences = references.slice(0, 12);
+  const sourceKeys = boundedReferences.filter(key => sourcesByKey.has(key));
+  const missingSourceKeys = boundedReferences.filter(key => !sourcesByKey.has(key));
   const id = text(item.id) || null;
-  return { id, summary, sourceKeys };
+  return { id, summary, sourceKeys,
+    ...(missingSourceKeys.length ? { missingSourceKeys } : {}),
+    ...(sourceReferenceOverflow ? { sourceReferenceOverflow } : {}) };
 }
 
 function normalizeEvidence(evidence, sources) {
@@ -186,17 +194,27 @@ export function createResearchWorkspaceState({
   for (const source of [...currentSources, ...previousSources]) {
     if (!sourceMap.has(source.key)) sourceMap.set(source.key, source);
   }
-  const sourceSet = [...sourceMap.values()].slice(0, RESEARCH_WORKSPACE_LIMITS.maxSources);
+  const availableSources = [...sourceMap.values()];
   const sourceKeys = new Set(currentSources.map(source => source.key));
-  const currentEvidence = normalizeEvidence(evidence, sourceSet);
-  const previousEvidence = Array.isArray(previous?.evidenceLedger) ? previous.evidenceLedger : [];
+  const currentEvidence = normalizeEvidence(evidence, availableSources);
+  const previousEvidence = normalizeEvidence({ findings: previous?.evidenceLedger }, availableSources);
   const evidenceMap = new Map();
   for (const item of [...currentEvidence, ...previousEvidence]) {
     const key = item?.id ? `id:${item.id}` : `summary:${text(item?.summary).toLowerCase()}`;
     if (key !== 'summary:' && !evidenceMap.has(key)) evidenceMap.set(key, item);
     else if (key === 'summary:' + text(item?.summary).toLowerCase() && !evidenceMap.has(key)) evidenceMap.set(key, item);
   }
-  const evidenceLedger = [...evidenceMap.values()].slice(0, RESEARCH_WORKSPACE_LIMITS.maxEvidence);
+  const retainedEvidence = [...evidenceMap.values()].slice(0, RESEARCH_WORKSPACE_LIMITS.maxEvidence);
+  // Prefer metadata supporting retained claims over newly collected, uncited sources.
+  const referencedKeys = new Set(retainedEvidence.flatMap(item => item.sourceKeys));
+  const sourceSet = [
+    ...availableSources.filter(source => referencedKeys.has(source.key)),
+    ...availableSources.filter(source => !referencedKeys.has(source.key))
+  ].slice(0, RESEARCH_WORKSPACE_LIMITS.maxSources);
+  const retainedSourcesByKey = new Map(sourceSet.map(source => [source.key, source]));
+  const evidenceLedger = retainedEvidence.map(item => normalizeEvidenceItem(item, retainedSourcesByKey));
+  const uncitedEvidenceCount = evidenceLedger.filter(item => !item.sourceKeys.length).length;
+  const incompleteProvenanceCount = evidenceLedger.filter(item => item.missingSourceKeys?.length || item.sourceReferenceOverflow).length;
   const gaps = stringList(
     evidence?.evidenceGaps,
     evidence?.unresolvedQuestions,
@@ -221,7 +239,7 @@ export function createResearchWorkspaceState({
       .update(activeQuestion).digest('hex').slice(0, 24);
   const status = conflicts.length
     ? 'needs-resolution'
-    : gaps.length || sourceSet.length === 0
+    : gaps.length || sourceSet.length === 0 || uncitedEvidenceCount || incompleteProvenanceCount
       ? 'needs-evidence'
       : evidenceLedger.length
         ? 'evidence-backed'
@@ -240,7 +258,7 @@ export function createResearchWorkspaceState({
       : { mode: 'new', parentId: null },
     sourceSet,
     sourceCount: sourceSet.length,
-    currentTurnSourceKeys: [...sourceKeys].slice(0, RESEARCH_WORKSPACE_LIMITS.maxSources),
+    currentTurnSourceKeys: [...sourceKeys].filter(key => retainedSourcesByKey.has(key)),
     evidenceLedger,
     evidenceCount: evidenceLedger.length,
     unresolvedQuestions: gaps.slice(0, RESEARCH_WORKSPACE_LIMITS.maxQuestions),
@@ -249,7 +267,9 @@ export function createResearchWorkspaceState({
       currentTurnSources: currentSources.length,
       currentTurnEvidence: currentEvidence.length,
       provenancePresent: currentSources.length > 0,
-      hasEvidence: evidenceLedger.length > 0
+      hasEvidence: evidenceLedger.length > 0,
+      uncitedEvidenceCount,
+      incompleteProvenanceCount
     },
     status,
     history,

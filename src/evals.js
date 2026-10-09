@@ -128,7 +128,7 @@ export function regressionGate(report, { minPassRate = 1, maxFailed = 0, maxPass
   const costIncrease = Number.isFinite(priorCost) && priorCost > 0 && current.costPerAcceptedUsd !== null
     ? current.costPerAcceptedUsd - priorCost : 0;
   return {
-    pass: current.passRate >= Number(minPassRate)
+    pass: current.total > 0 && current.passRate >= Number(minPassRate)
       && current.failed <= Number(maxFailed)
       && passRateDrop <= Number(maxPassRateDrop)
       && tokenIncrease <= Number(maxAverageTokenIncrease)
