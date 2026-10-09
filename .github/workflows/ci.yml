@@ -27,6 +27,7 @@ jobs:
       - run: npm run lint
       - run: npm run doctor
       - run: npm run eval:skills
+      - run: npm run eval:adaptive-matrix
       # Audit the complete dependency graph, including build/test tooling. A
       # compromised development dependency can still execute in CI and poison
       # artifacts or source before production packaging.
