@@ -12,7 +12,7 @@ const run={
   adaptation:{safety:{decision:'allow',care:[]},dataClasses:['user-content']},
   governance:{status:'unconfigured'}
 };
-const ready=['file.read','data.analyze','code.run','web.fetch','file.edit','artifact.create'];
+const ready=['file.read','data.analyze','sandbox.execute','web.fetch','file.edit','artifact.create'];
 
 test('the authenticated run owner gets a resource scope without new tool permissions',()=>{
   const v=bindAgentResourceScope({run,task:plan,scope:owner});
@@ -87,7 +87,7 @@ test('all workspaces may request sandbox execution but receive no direct grant',
       const accepted=admitAgentResourceRequest({run:candidate,task:plan,scope:owner,
         request,availableTools:ready,approved:true});
       assert.equal(accepted.status,'parent-executor-required',surface+'/'+kind);
-      assert.deepEqual(accepted.toolNames,['code.run']);
+      assert.deepEqual(accepted.toolNames,['sandbox.execute']);
       assert.equal(accepted.executionAuthorized,false);
       assert.equal(accepted.executed,false);
     }
@@ -116,7 +116,7 @@ test('one-shot terminal commands are requests for approved sandbox tools, never 
   const admitted=admitAgentResourceRequest({run,task:plan,scope:owner,
     request,availableTools:ready,approved:true});
   assert.equal(admitted.status,'parent-executor-required');
-  assert.deepEqual(admitted.toolNames,['code.run']);
+  assert.deepEqual(admitted.toolNames,['sandbox.execute']);
   assert.equal(admitted.executionAuthorized,false);
   assert.equal(admitted.executed,false);
   const research={...run,surface:'research'};
