@@ -44,13 +44,13 @@ export const SURFACE_INTELLIGENCE_PROFILES=Object.freeze({
   'normal-chat':Object.freeze({
     id:'normal-chat-intelligence', maturity:'adaptive-general', priority:'speed-first, then depth',
     contextStrategy:'minimum-sufficient-context', planningStrategy:'single-next-step',
-    agentStrategy:'direct-first; add specialists only when they materially improve the result',
+    agentStrategy:'direct-primary-model-only; deepen reasoning and use authorized tools without recruiting agentic roles',
     parallelStrategy:'parallelize independent read-only work only when latency benefit exceeds coordination cost',
     verificationStrategy:'verify when claims, files, tools, transformations or stakes justify it',
     continuityStrategy:'preserve conversation and artifact context without forced escalation',
-    costStrategy:'prefer the minimum-sufficient model tier, one agent by default, and bounded context; escalate only when quality, uncertainty, verification or risk can change the outcome',
+    costStrategy:'one primary model with adaptive reasoning effort and bounded context; call authorized tools only when needed, without advisory-agent overhead',
     qualityStrategy:'clarity, usefulness, correct context selection, honest uncertainty',
-    preferredRoles:Object.freeze(['communicator','analyst','researcher','critic','visual-designer'])
+    preferredRoles:Object.freeze([])
   }),
   code:Object.freeze({
     id:'code-intelligence', maturity:'deep-engineering', priority:'correctness and safe change, with critical-path speed',
@@ -105,13 +105,13 @@ export const SURFACE_WORKSPACE_CONTRACTS=Object.freeze({
     objective:'Act as the general adaptive operating mode for work that does not require the dedicated Code or Research workspace.',
     contextPolicy:'Use the active conversation plus only files, memory, images and external context that materially improve the current request.',
     toolPolicy:'Use tools just in time. Files, visuals, artifacts and lightweight creation stay capabilities here, never separate workspaces.',
-    agentPolicy:'Use one executor by default and recruit advisory specialists only when independent value exceeds coordination cost.',
+    agentPolicy:'Use direct Gemini reasoning without recruited main agents, subagents, arbiter or separate reviewer; tools and verification remain available.',
     verificationPolicy:'Verify claims or produced content when stakes, uncertainty, tools or user intent justify it.',
     creationPolicy:'Writing, planning, analysis, file/image understanding, visual/design work, presentations and bounded single-file code stay here.',
     escalationPolicy:'Escalate to Code for repository/project/multi-file engineering and to Research for source-heavy evidence work.',
     uiPolicy:'Keep chat central and reveal only controls, progress and permissions relevant to the current task.',
     selectionPolicy:'Default workspace; switch only to Code or Research when the task genuinely needs their durable specialized state.',
-    sharedIntelligence:true, adaptiveAgents:true, adaptiveTools:true, adaptiveVerification:true
+    sharedIntelligence:true, adaptiveAgents:false, adaptiveTools:true, adaptiveVerification:true
   }),
   code:Object.freeze({
     id:'code',label:'Code Workspace',mode:'repository-engineering',
@@ -139,7 +139,7 @@ export const SURFACE_WORKSPACE_CONTRACTS=Object.freeze({
   })
 });
 export const SURFACE_POLICY=Object.freeze({version:SURFACE_POLICY_VERSION,surfaces:Object.freeze({
-  'normal-chat':{id:'normal-chat',maxDepth:'adaptive',heavyAutonomy:'adaptive',deepCode:false,deepResearch:false,sharedIntelligence:true,adaptiveAgents:true,adaptiveTools:true,adaptiveVerification:true,richMultimodal:true,lightweightCreation:true,design:true,visualCanvas:true,presentationCreation:true,contract:SURFACE_WORKSPACE_CONTRACTS['normal-chat'],intelligenceProfile:SURFACE_INTELLIGENCE_PROFILES['normal-chat']},
+  'normal-chat':{id:'normal-chat',maxDepth:'adaptive',heavyAutonomy:false,deepCode:false,deepResearch:false,sharedIntelligence:true,adaptiveAgents:false,adaptiveTools:true,adaptiveVerification:true,richMultimodal:true,lightweightCreation:true,design:true,visualCanvas:true,presentationCreation:true,contract:SURFACE_WORKSPACE_CONTRACTS['normal-chat'],intelligenceProfile:SURFACE_INTELLIGENCE_PROFILES['normal-chat']},
   code:{id:'code',maxDepth:'deep',heavyAutonomy:true,deepCode:true,deepResearch:false,richMultimodal:true,contract:SURFACE_WORKSPACE_CONTRACTS.code,intelligenceProfile:SURFACE_INTELLIGENCE_PROFILES.code},
   research:{id:'research',maxDepth:'deep',heavyAutonomy:true,deepCode:false,deepResearch:true,richMultimodal:true,contract:SURFACE_WORKSPACE_CONTRACTS.research,intelligenceProfile:SURFACE_INTELLIGENCE_PROFILES.research}
 })});
@@ -167,5 +167,5 @@ export function surfaceRuntimePolicy(surface='normal-chat'){return SURFACE_POLIC
 export function normalChatAllowsTask({goal='',taskType='',flags={},attachments=[]}={}){
   const boundary=classifySurfaceBoundary(goal,{flags,attachments});
   if(boundary.surface!=='normal-chat') return {allowed:false,boundary,reason:boundary.reason};
-  return {allowed:true,boundary,taskType:text(taskType)||'respond',richMultimodal:true,maxDepth:'adaptive',lightweightCreation:true,design:true,visualCanvas:true,presentationCreation:true,agents:'shared-adaptive-and-justified'};
+  return {allowed:true,boundary,taskType:text(taskType)||'respond',richMultimodal:true,maxDepth:'adaptive',lightweightCreation:true,design:true,visualCanvas:true,presentationCreation:true,agents:'not-recruited-direct-reasoning'};
 }
