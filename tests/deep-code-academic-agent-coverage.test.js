@@ -106,3 +106,56 @@ test('Simple and complex Normal Chat never invokes an agent even if specialized 
  assert.equal(out.enabled,false);
  assert.equal(calls,0);
 });
+
+test('a real complex Code Workspace subsystem recruits the precise billing specialty',async()=>{
+ const files=Array.from({length:18},(_,i)=>({
+   path:'src/billing/invoice-'+i+'.js',bytes:100,test:i===17
+ }));
+ const project={
+   revisionId:'billing-rev-1',contentHash:'billing-hash-1',
+   scale:'large',fileCount:18,files,dependencies:[],
+   totals:{bytes:1800,dependencies:0},
+   hierarchy:{scale:'large',
+     root:{path:'',depth:0,fileCount:18,bytes:1800,digest:'billing-root'},
+     directories:[{path:'',depth:0,fileCount:18,bytes:1800,digest:'root'},
+       {path:'src/billing',depth:2,fileCount:18,bytes:1800,digest:'billing'}]
+   }
+ };
+ const seen=[];
+ const run={id:'billing-run',surface:'code',goal:'Implement subscription billing checkout',
+   situation:{complexity:.94,uncertainty:.72,risk:'medium',
+     successCriteria:['Billing is correct and idempotent']},
+   adaptation:{scale:'advanced'},maxTokens:150000,attempt:1};
+ const task={id:'build-code',type:'code',metadata:{buildPlan:true}};
+ const out=await runAdaptiveAgentPanel({
+   run,task,basePayload:{
+     surface:'code',goal:run.goal,task,
+     situation:run.situation,
+     workspace:{projectId:'billing-project',revisionId:'billing-rev-1',paths:files.map(f=>f.path)},
+     codeIntelligence:{project,files}
+   },selection:{
+     planModelIds:['google:gemini-3.8-flash'],
+     enabledModelIds:['google:gemini-3.8-flash'],
+     configuredModelIds:['google:gemini-3.8-flash']
+   },
+   primaryModelId:'google:gemini-3.8-flash',
+   config:{agents:{multiAgent:'always',maxAgents:6,parallel:'off'}},
+   canSpend:async()=>true,
+   modelCaller:async(messages,options)=>{
+     const system=messages[0].content;
+     seen.push(system);
+     return {
+       text:JSON.stringify({recommendation:'proceed',summary:'Scoped billing contract requires review',
+         confidence:.95,risks:[],unknowns:[],actions:[],evidence:[]}),
+       provider:'google',model:options.modelId,usage:null
+     };
+   }
+ });
+ assert.equal(out.enabled,true);
+ assert.ok(out.allocation.subsystemPanels.length>=1);
+ assert.ok(out.allocation.subsystemPanels.some(p=>
+   p.roles.includes('code-billing-payments-engineering-lead')),
+ JSON.stringify(out.allocation.subsystemPanels.map(p=>p.roles)));
+ assert.ok(seen.some(system=>system.includes('code-billing-payments-engineering-lead')));
+ assert.ok(out.allocation.subsystemPanels.every(p=>p.roles.length<=6));
+});
