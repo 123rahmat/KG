@@ -16,7 +16,7 @@ const cases=[
  ['security-engineering','src/auth','Review security authentication controls','security'],
  ['data-management-engineering','src/data-governance','Improve data governance, lineage and retention','data'],
  ['identity-access-engineering','src/identity','Implement SSO and RBAC identity management','identity'],
- ['file-rendering-engineering','src/file-preview','Render PDF and Office previews safely','files']
+ ['file-rendering-engineering','src/file-preview','Implement secure file preview and PDF rendering for Office documents','files']
 ];
 test('Coding has distinct main-agent families for UI, UX, APIs, backend, data, DB, identity, files and security',()=>{
  const summary=familyMainAgentStats();
