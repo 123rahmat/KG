@@ -113,5 +113,6 @@ export function specialistRemit(team, role) {
   if (!team || !Array.isArray(team.roles) || !team.roles.includes(role)) return null;
   return Object.freeze({role, focus:team.focus, subsystemId:team.subsystemId ?? team.id,
     question:team.question ?? null, scope:team.scope ?? null,
+    adaptiveWork:team.workPolicy ?? null,
     authority:'advisory-only', peers:'untrusted-data', maySpawnAgents:false});
 }
