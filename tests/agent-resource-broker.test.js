@@ -76,11 +76,22 @@ test('an agent cannot control a user terminal even when its parent approves a re
   assert.equal(answer.code,'user-terminal-only');
   assert.equal(answer.allowed,false);
 });
-test('research workspace does not receive a code sandbox by role confusion',()=>{
-  const candidate={...run,surface:'research'};
-  const answer=admitAgentResourceRequest({run:candidate,task:plan,scope:owner,
-    request:{kind:'sandbox-execution'},availableTools:ready,approved:true});
-  assert.equal(answer.code,'workspace-resource-blocked');
+test('all workspaces may request sandbox execution but receive no direct grant',()=>{
+  for(const surface of ['normal-chat','code','research']){
+    const candidate={...run,surface};
+    for(const kind of ['sandbox-test','sandbox-execution','dependency-installation','terminal-command']){
+      const request={kind,reason:'Isolated task-scoped verification with required tools'};
+      const pending=admitAgentResourceRequest({run:candidate,task:plan,scope:owner,
+        request,availableTools:ready});
+      assert.equal(pending.code,'approval-required',surface+'/'+kind);
+      const accepted=admitAgentResourceRequest({run:candidate,task:plan,scope:owner,
+        request,availableTools:ready,approved:true});
+      assert.equal(accepted.status,'parent-executor-required',surface+'/'+kind);
+      assert.deepEqual(accepted.toolNames,['code.run']);
+      assert.equal(accepted.executionAuthorized,false);
+      assert.equal(accepted.executed,false);
+    }
+  }
 });
 test('different principal cannot get resource proposals promoted via triage',()=>{
   const a=triageAgentResourceRequests({
@@ -110,19 +121,20 @@ test('one-shot terminal commands are requests for approved sandbox tools, never 
   assert.equal(admitted.executed,false);
   const research={...run,surface:'research'};
   assert.equal(admitAgentResourceRequest({run:research,task:plan,scope:owner,
-    request,availableTools:ready,approved:true}).code,'workspace-resource-blocked');
+    request,availableTools:ready,approved:true}).status,'parent-executor-required');
   assert.equal(admitAgentResourceRequest({run,task:plan,
     scope:{...owner,principalId:'bob'},request,availableTools:ready,approved:true}).code,'owner-mismatch');
 });
-test('research may propose approved sandbox checks, not arbitrary execution or installs',()=>{
+test('research can request sandbox work but cannot run it directly',()=>{
   const research={...run,surface:'research'};
   const testOnly=admitAgentResourceRequest({run:research,task:plan,scope:owner,
     request:{kind:'sandbox-test'},availableTools:ready,approved:true});
   assert.equal(testOnly.status,'parent-executor-required');
   assert.equal(testOnly.executed,false);
   for(const kind of ['sandbox-execution','dependency-installation','terminal-command']){
-    const denied=admitAgentResourceRequest({run:research,task:plan,scope:owner,
+    const submitted=admitAgentResourceRequest({run:research,task:plan,scope:owner,
       request:{kind},availableTools:ready,approved:true});
-    assert.equal(denied.code,'workspace-resource-blocked',kind);
+    assert.equal(submitted.status,'parent-executor-required',kind);
+    assert.equal(submitted.executed,false,kind);
   }
 });
