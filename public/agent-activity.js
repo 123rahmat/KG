@@ -13,6 +13,13 @@ export function agentActivitySnapshot(run) {
     && item.role !== 'integration-arbiter')
     .slice(-11).map(item => ({
       role: safe(item.role, 80),
+      kind: item.subagent === true || String(item.role).startsWith('child:') ? 'subagent' : 'specialist',
+      parentRole: safe(item.parentRole || (String(item.role).startsWith('child:')
+        ? String(item.role).split(':')[1] : ''), 80),
+      displayRole: safe(String(item.role).startsWith('child:')
+        ? String(item.role).split(':').slice(2).join(':').replaceAll('-', ' ')
+        : String(item.role).replaceAll('-', ' '), 100),
+      verification: item.subagent === true ? 'unverified-advisory' : '',
       specialty: safe(item.specialty || item.role.replaceAll('-', ' '), 110),
       subsystemId: safe(item.subsystemId, 110),
       taskId: safe(item.taskId || sourceTask?.id, 80),
