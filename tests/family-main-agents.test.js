@@ -43,10 +43,12 @@ test('main agents select own subagents but never self-grant tools',()=>{
     assert.ok(p.active.every(child=>!child.mayInvokeTools&&!child.maySpawnAgents));
   }
 });
-test('actual existing recruiter can choose a family main agent',()=>{
-  const run={surface:'normal-chat',goal:'Design a quiz with exam preparation and learning objectives',
+test('actual existing recruiter chooses coding family leads and never expands direct chat',()=>{
+  const run={surface:'code',goal:'Build an accessible responsive React UI component with layout and keyboard navigation',
     adaptation:{scale:'complex'},situation:{complexity:.9,risk:'low'},tasks:[]};
-  const result=rolesFor(run,{id:'plan',type:'plan'},{mode:'always',maxAgents:6});
-  assert.ok(result.roles.some(role=>role==='chat-education-lead'),result.roles.join(','));
+  const result=rolesFor(run,{id:'build-code',type:'code'},{mode:'always',maxAgents:6});
+  assert.ok(result.roles.some(role=>role==='code-ui-engineering-lead'),result.roles.join(','));
   assert.ok(result.agentCount<=6);
+  const chat=rolesFor({...run,surface:'normal-chat'}, {id:'respond',type:'respond'}, {mode:'always',maxAgents:6});
+  assert.equal(chat.agentCount,0);
 });
