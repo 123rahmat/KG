@@ -1,0 +1,43 @@
+/**
+ * Each specialist family can be selected as a task-scoped main agent.
+ * These are advisory roles, not autonomous services or execution grants.
+ */
+import { SPECIALIST_FAMILIES, specialistFocusFor } from './adaptive-specialist-focus.js';
+
+export const FAMILY_MAIN_AGENTS = Object.freeze(Object.fromEntries(
+  Object.entries(SPECIALIST_FAMILIES).flatMap(([surface, families]) =>
+    Object.entries(families).map(([family, subagents]) => {
+      const role = (surface === 'normal-chat' ? 'chat' : surface) + '-' + family + '-lead';
+      return [role, Object.freeze({
+        role, family, surface, workspaces: Object.freeze([surface]),
+        subagents, bestFor: Object.freeze(surface === 'code'
+          ? ['code','build-code','plan','implement','debug-code','test-code','verify-code','refactor-code']
+          : surface === 'research'
+            ? ['research','investigate','analyze','plan','respond','verify','deliver']
+            : ['respond','plan','analyze','write','edit','deliver','transform','design']),
+        purpose: 'Coordinate bounded '+family.replaceAll('-',' ')+' reasoning within supplied evidence and the current task. Never claim tool use without a real execution receipt.'
+      })];
+    })
+  )
+));
+
+export function familyMainAgentMatch(role, { surface = 'normal-chat', goal = '', task = {} } = {}) {
+  const agent = FAMILY_MAIN_AGENTS[role];
+  if (!agent || agent.surface !== surface || !String(goal).trim()) return 0;
+  // Do not recruit a family merely because a fallback category exists.
+  const focus = specialistFocusFor({ surface, goal });
+  if (!focus.matched || focus.family !== agent.family) return 0;
+  const kind = String(task?.type ?? '').toLowerCase();
+  const taskId = String(task?.id ?? '').toLowerCase();
+  return agent.bestFor.includes(kind) || agent.bestFor.includes(taskId) ? 0.98 : 0.89;
+}
+
+export function familyMainAgentStats() {
+  return Object.freeze(Object.fromEntries(['normal-chat','code','research'].map(surface => {
+    const agents = Object.values(FAMILY_MAIN_AGENTS).filter(agent => agent.surface === surface);
+    return [surface, Object.freeze({
+      mainAgents: agents.length,
+      subagents: agents.reduce((sum, agent) => sum + agent.subagents.length, 0)
+    })];
+  })));
+}
