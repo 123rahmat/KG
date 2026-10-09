@@ -36,6 +36,11 @@ const HIGH_STAKES = new Set(['high-impact', 'physical']);
  * `reason` is always set so the choice is explainable and testable.
  */
 export function reviewDecision(run, { mode = 'auto' } = {}) {
+  // Independent reviewer agents are reserved for the two agentic workspaces.
+  // The primary model and parent verification policy still check risky chat.
+  const surface=String(run?.surface||run?.adaptation?.primarySurface||'').trim().toLowerCase();
+  if(['normal-chat','chat','visual','design'].includes(surface))
+    return {review:false,reason:'direct-conversation-no-agent-recruitment'};
   if (mode === 'off') return { review: false, reason: 'disabled' };
   const risk = run?.situation?.risk;
   // A person in crisis gets an immediate answer and a declined request
