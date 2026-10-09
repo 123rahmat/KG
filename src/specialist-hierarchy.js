@@ -16,10 +16,11 @@ const CODE = Object.freeze({
   'ui-ux': ['ux-designer','frontend-engineer','test-engineer','implementer'],
   frontend: ['frontend-engineer','ux-designer','test-engineer','implementer'],
   backend: ['backend-engineer','test-engineer','security-reviewer','implementer'],
+  api: ['api-engineer','backend-engineer','integration-tester','security-reviewer'],
   security: ['security-reviewer','backend-engineer','test-engineer','implementer'],
-  storage: ['backend-engineer','performance-reviewer','test-engineer','implementer'],
-  testing: ['test-engineer','debugger','critic','implementer'],
-  infrastructure: ['architect','security-reviewer','performance-reviewer','test-engineer'],
+  storage: ['backend-engineer','database-engineer','performance-reviewer','test-engineer'],
+  testing: ['test-engineer','integration-tester','debugger','implementer'],
+  infrastructure: ['architect','devops-engineer','reliability-engineer','security-reviewer'],
   general: ['architect','implementer','test-engineer','critic']
 });
 const RESEARCH = Object.freeze({
@@ -35,6 +36,7 @@ export function codeExpertFocus(subsystem = {}, goal = '') {
   const objective = string(goal).toLowerCase();
   if (/(?:^|[/._-])(auth|security|identity|credential)(?:[/._-]|$)/.test(paths)) return 'security';
   if (/(?:^|[/._-])(test|tests|spec|specs|e2e|qa)(?:[/._-]|$)/.test(paths)) return 'testing';
+  if (/(?:^|[/._-])(api|apis|endpoint|endpoints|graphql)(?:[/._-]|$)/.test(paths)) return 'api';
   if (/(?:^|[/._-])(database|db|schema|migration|storage)(?:[/._-]|$)/.test(paths)) return 'storage';
   if (/(?:^|[/._-])(ui|ux|design|components|views|screens)(?:[/._-]|$)/.test(paths)) return 'ui-ux';
   if (/(?:^|[/._-])(frontend|client|web|styles|css)(?:[/._-]|$)/.test(paths)) return 'frontend';
