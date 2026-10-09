@@ -6,12 +6,12 @@ import { selectFamilySubagents } from '../src/adaptive-family-subagents.js';
 import { domainSpecialistMatch } from '../src/domain-specialists.js';
 import { rolesFor } from '../src/multi-agent.js';
 
-test('all 55 families register main agents and keep their eight distinct subagents',()=>{
+test('all 85 families register main agents and keep their eight distinct subagents',()=>{
   const counts=familyMainAgentStats();
-  assert.deepEqual(counts['normal-chat'],{mainAgents:20,subagents:160});
-  assert.deepEqual(counts.code,{mainAgents:20,subagents:160});
-  assert.deepEqual(counts.research,{mainAgents:15,subagents:120});
-  assert.equal(Object.keys(FAMILY_MAIN_AGENTS).length,55);
+  assert.deepEqual(counts['normal-chat'],{mainAgents:30,subagents:240});
+  assert.deepEqual(counts.code,{mainAgents:30,subagents:240});
+  assert.deepEqual(counts.research,{mainAgents:25,subagents:200});
+  assert.equal(Object.keys(FAMILY_MAIN_AGENTS).length,85);
   for(const role of Object.values(FAMILY_MAIN_AGENTS)){
     assert.equal(role.subagents.length,8,role.role);
     assert.equal(new Set(role.subagents).size,8,role.role);
