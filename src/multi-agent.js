@@ -21,6 +21,7 @@ import { controllerForSurface } from './mode-controllers.js';
 import { remainingSpecialistBudget, specialistTopology } from './agent-topology-policy.js';
 import { specialistWaveDecision } from './specialist-wave-policy.js';
 import { taskSpecialization } from './task-specialization.js';
+import { DOMAIN_SPECIALISTS, domainSpecialistMatch } from './domain-specialists.js';
 import { codeSpecialistTeam, researchSpecialistTeams, specialistRemit } from './specialist-hierarchy.js';
 import { subsystemWorkPolicy } from './subsystem-work-policy.js';
 import { executeAgentLaneWaves } from './agent-lane-executor.js';
@@ -128,7 +129,9 @@ const ROLE_CATALOG = Object.freeze({
   'visual-reviewer': {
     purpose: 'Adversarially inspect a design result for visual defects, legibility, consistency, overlaps, asset integrity and output constraints.',
     bestFor: ['design', 'prototype', 'verify', 'reassess'],
-  }
+  },
+  ...Object.fromEntries(Object.entries(DOMAIN_SPECIALISTS).map(([role, item]) =>
+    [role, { purpose: item.purpose, bestFor: [...item.bestFor] }]))
 });
 
 function confidenceValue(value, fallback = 0.5) {
@@ -502,9 +505,14 @@ function roleUtility(role, run, task, progress = {}, precomputed = null) {
     'layout-designer': signals.visualWork ? 0.70 + signals.decomposition * 0.4 + signals.constraints * 0.04 : 0.02,
     'visual-reviewer': signals.visualWork ? 0.72 + (signals.retrying ? 0.18 : 0) + signals.recovery * 0.4 : 0.02
   }[role] ?? 0;
+  const domainUtility = domainSpecialistMatch(role, {
+    surface: run?.surface || run?.adaptation?.primarySurface || 'normal-chat',
+    goal: progress?.goal ?? run?.goal,
+    task
+  });
   const learningBoost = run?.adaptation?.learning?.caution === true
     && ['critic', 'debugger', 'test-engineer'].includes(role) ? 0.12 : 0;
-  return Math.max(0, Math.min(1.2, base + disagreementBoost + learningBoost - resolutionPenalty - (completed.has(role) ? 1 : 0)));
+  return Math.max(0, Math.min(1.2, Math.max(base, domainUtility) + disagreementBoost + learningBoost - resolutionPenalty - (completed.has(role) ? 1 : 0)));
 }
 
 function roleCandidates(run, task, progress = {}, precomputed = null) {
@@ -1349,7 +1357,8 @@ function codeWorkspacePanelRoles(run, task, subsystem, {
   if (signals.performanceFocus) addRequired('performance-reviewer');
 
   const candidates = ['frontend-engineer', 'backend-engineer', 'implementer', 'test-engineer', 'critic', 'debugger', 'security-reviewer', 'performance-reviewer',
-    'analyst', 'strategist']
+    'analyst', 'strategist',
+    ...Object.keys(DOMAIN_SPECIALISTS)]
     .map(role => ({ role, utility: roleUtility(role, run, task, progress) }))
     .sort((a, b) => b.utility - a.utility || a.role.localeCompare(b.role));
 
