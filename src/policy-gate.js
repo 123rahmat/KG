@@ -13,6 +13,7 @@
 import { executionSafetyGate } from './adaptive-safety.js';
 import { adaptiveExecutionBudgetStatus } from './adaptive-control.js';
 import { situationGovernanceExecutionGate } from './situation-governance.js';
+import { planPolicyAllows, modelPolicyAllows, dataPolicyDecision } from './http/policy.js';
 
 export const SIMPLE_POLICY_GATE_VERSION = '1';
 
@@ -86,5 +87,47 @@ export function taskPolicySummary(decision = {}) {
     denialCode: decision.allowed === false ? String(decision.code || 'policy-blocked') : null,
     boundary: 'safety + budget + privacy/authorization',
     authority: 'server-only'
+  });
+}
+
+/**
+ * One model/runner/connector authorization interface. Called immediately
+ * before a resource crosses a trust boundary; NEVER inferred from agent
+ * proposals or a prior run's cached permission.
+ *
+ * The existing authorization store and destination-aware privacy logic
+ * remain the enforcement engines behind this small shared interface.
+ */
+export function checkConnectionPolicy(run, {
+  target = '',
+  model = '',
+  risk = 'medium',
+  dataClasses = ['user-content'],
+  destination = 'model-provider',
+  explicitConsent = false,
+  connectionAuthorized = true
+} = {}) {
+  if (target && !planPolicyAllows(run, target, risk)) {
+    return denied('resource-policy-blocked', 403, 'This execution target is not allowed by the current policy.',
+      { target });
+  }
+  if (model && !modelPolicyAllows(run, model, risk)) {
+    return denied('model-policy-blocked', 403, 'This model is not allowed by the current policy.',
+      { model });
+  }
+  const privacy = dataPolicyDecision(run, dataClasses, destination, {
+    connectionAuthorized,
+    explicitConsent
+  });
+  if (!privacy.allowed) {
+    return denied('privacy-policy-blocked', 403,
+      'This data transfer is not authorized for the selected destination.',
+      { privacyReason: privacy.reason, destination });
+  }
+  return Object.freeze({
+    allowed: true, status: 200, code: 'allowed',
+    reason: 'The resource policy gate passed.',
+    detail: Object.freeze({ destination }),
+    version: SIMPLE_POLICY_GATE_VERSION
   });
 }
