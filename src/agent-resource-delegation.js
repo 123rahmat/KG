@@ -101,6 +101,7 @@ export function summarizeDelegationRequests(requests=[],{limit=8}={}) {
    seen.add(key);
    result.push(Object.freeze({
      kind:item.kind,reason:clip(item.reason,220),
+     ...(item.id?{resourceId:clip(item.id,64)}:{}),
      paths:Object.freeze(Array.isArray(item.paths)?item.paths.slice(0,4):[]),
      runId:clip(item.runId,100),taskId:clip(item.taskId,100),
      parentRole:clip(item.parentRole,84),childId:clip(item.childId,84),
