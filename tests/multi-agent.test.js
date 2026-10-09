@@ -614,10 +614,14 @@ test('Code Workspace gives every subsystem its own multi-agent panel with bounde
   assert.equal(new Set(calls.map(item => item.body.workspacePanel.panelId)).size, 2);
   assert.equal(calls.every(item => item.body.workspacePanel.mode === 'unified-adaptive-code-panel'), true);
   assert.equal(calls.every(item => item.body.workspacePanel.a2a.rawPeerFindingsHidden === true), true);
-  assert.equal(calls.every(item => item.body.workspacePanel.lifecycle.researchEveryCycle === true), true);
-  assert.equal(calls.every(item => item.body.workspacePanel.lifecycle.explanationEveryCycle === true), true);
-  assert.equal(calls.every(item => item.body.workspacePanel.lifecycle.replanEveryCycle === true), true);
-  assert.equal(result.waves.every(wave => wave.lifecycle?.research && wave.lifecycle?.explanation && wave.lifecycle?.replanning && wave.lifecycle?.verification), true);
+  assert.equal(calls.every(item => item.body.workspacePanel.lifecycle.available.includes('research')), true);
+  assert.equal(calls.every(item => item.body.workspacePanel.lifecycle.available.includes('debug')), true);
+  assert.equal(calls.every(item => item.body.workspacePanel.lifecycle.testsRequireRealParentExecution === true), true);
+  assert.equal(calls.every(item => item.body.workspacePanel.lifecycle.finalVerificationIsParentOwned === true), true);
+  assert.equal(calls.every(item => item.body.workspacePanel.adaptiveWork.authority.agentMayEdit === false), true);
+  assert.equal(result.waves.every(wave => wave.lifecycle?.testsExecuted === false
+    && wave.lifecycle?.verificationPassed === false
+    && wave.lifecycle?.communication === 'typed-a2a'), true);
   assert.equal(result.waves[0].lanePlan.waveCount, 1);
   assert.equal(result.waves[0].lanePlan.waves[0].parallel, true);
   assert.deepEqual(result.allocation.codingEconomy.panelCoverage, ['research', 'explain', 'replan', 'implement', 'test', 'critique', 'verify', 'handoff']);
