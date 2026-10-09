@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { codeExpertFocus, codeSpecialistTeam, researchSpecialistTeams, specialistRemit } from '../src/specialist-hierarchy.js';
+import { codeExpertFocus, codeSpecialistTeam, codeSpecialistLeadsFor, researchSpecialistTeams, specialistRemit } from '../src/specialist-hierarchy.js';
 import { agentMessages, rolesFor } from '../src/multi-agent.js';
 
 test('Code selects subsystem-specific experts from real paths, not generic headcount', () => {
@@ -97,4 +97,26 @@ test('unknown budgets preserve task-specific Code and Research breadth', () => {
     assert.deepEqual(hierarchy.teams.map(item => item.focus),
       ['literature', 'methodology', 'analysis', 'writing']);
   }
+});
+
+test('extended Code specialists join real subsystem panels only on matching task needs',()=>{
+ for(const [goal,expected] of [
+   ['Implement Stripe billing checkout and invoice system','code-billing-payments-engineering-lead'],
+   ['Build a full text search relevance system with Elasticsearch','code-search-index-engineering-lead'],
+   ['Implement an offline-first synchronization protocol','code-offline-first-app-engineering-lead'],
+   ['Create a rich Storybook component library with design tokens','code-design-system-components-lead'],
+   ['Review RLS policy for tenant isolation','code-multi-tenant-isolation-engineering-lead'],
+   ['Add a type-safe API client SDK','code-api-sdk-client-engineering-lead']
+ ]){
+   const matched=codeSpecialistLeadsFor({id:'feature'},{
+     goal,task:{id:'build-code',type:'code'},limit:5
+   });
+   assert.ok(matched.some(item=>item.role===expected),goal+': '+matched.map(x=>x.role).join(', '));
+ }
+ assert.deepEqual(codeSpecialistLeadsFor({id:'general'},{
+   goal:'Write a friendly greeting in normal prose'
+ }),[]);
+ assert.deepEqual(codeSpecialistLeadsFor({id:'billing'},{
+   goal:'Implement billing checkout',limit:0
+ }),[]);
 });
