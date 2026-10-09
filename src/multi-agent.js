@@ -590,6 +590,15 @@ export function rolesFor(run, task, {
     targetCount = Math.min(maximum,Math.max(targetCount,
       matchingLeads.length + (signals.executable ? 1 : 0)));
   }
+  const dynamicSpecialists = taskSpecialistCandidates({
+    surface:selectedSurface,goal:selectedGoal,task,
+    situation:run?.situation??{},maxCandidates:maximum
+  });
+  if (dynamicSpecialists.length >= 2) {
+    // Distinct, uncovered explicit requirements justify a wider task team,
+    // but provider/model budget limits still decide what may actually run.
+    targetCount=Math.min(maximum,Math.max(targetCount,dynamicSpecialists.length));
+  }
   if (advancedBuildPlan && highStakeBuild) {
     targetCount = maximum;
   } else if (disagreement) {
@@ -614,15 +623,6 @@ export function rolesFor(run, task, {
     allocation: { topology, targetAgents: 0, selectedAgents: 0, reason: topology.reason }
   };
   targetCount = Math.min(targetCount, topology.agents);
-  const dynamicSpecialists = taskSpecialistCandidates({
-    surface:selectedSurface,goal:selectedGoal,task,
-    situation:run?.situation??{},maxCandidates:maximum
-  });
-  if (dynamicSpecialists.length >= 2) {
-    // Distinct, uncovered explicit requirements justify a wider task team,
-    // but provider/model budget limits still decide what may actually run.
-    targetCount=Math.min(maximum,Math.max(targetCount,dynamicSpecialists.length));
-  }
   targetCount=Math.min(targetCount,topology.agents);
   const observedSignals = observedPanelSignals(progress);
   const precomputedSignals = { signals, observed: observedSignals, dynamicSpecialists };
