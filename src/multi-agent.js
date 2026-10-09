@@ -2097,18 +2097,25 @@ async function runCodeWorkspaceAgentPanels({
           state: subsystemState.get(subsystem.id)?.status ?? 'unknown',
           confidence: subsystemState.get(subsystem.id)?.confidence ?? 0,
           coverage: {
-            research: Boolean(subsystemState.get(subsystem.id)?.research),
+            // Actual advisory observations; parent-owned execution and final
+            // verification must not be claimed by a specialist panel.
+            research: (subsystemState.get(subsystem.id)?.roles ?? []).includes('researcher')
+              && Boolean(subsystemState.get(subsystem.id)?.research),
             explanation: Boolean(subsystemState.get(subsystem.id)?.explanation),
-            replan: Boolean(subsystemState.get(subsystem.id)?.replan),
-            verification: true
-          }
+            replan: subsystemState.get(subsystem.id)?.replan?.needed === true,
+            testExecuted: false,
+            verificationPassed: false
+          },
+          activatedCapabilities: subsystemState.get(subsystem.id)?.workPolicy?.activated ?? []
         })),
         lifecycle: {
-          research: true,
-          explanation: true,
-          replanning: true,
-          implementation: true,
-          verification: true,
+          research: jobs.some(job => job.role === 'researcher'),
+          explanation: results.some(item => Boolean(item.parsed?.explanation)),
+          replanning: batch.some(subsystem => subsystemState.get(subsystem.id)?.replan?.needed === true),
+          implementationAdvice: jobs.some(job => job.role === 'implementer'),
+          testsExecuted: false,
+          verificationPassed: false,
+          verificationAuthority: 'parent-workflow-only',
           communication: 'typed-a2a'
         },
         taskPressure: pressureMonitor
@@ -2289,6 +2296,7 @@ async function runCodeWorkspaceAgentPanels({
       earlyConvergence: true,
       disagreementRequiredForArbitration: true,
       panelCoverage: ['research', 'explain', 'replan', 'implement', 'test', 'critique', 'verify', 'handoff'],
+      coverageSemantics: 'available-capabilities-not-completed-stages',
       communicationProtocol: 'independent-specialists-plus-typed-panel-and-subsystem-handoffs'
     },
     subsystemPanels: subsystemPlan.subsystems.map(subsystem => {
@@ -2303,6 +2311,7 @@ async function runCodeWorkspaceAgentPanels({
           findings: state?.findings ?? []
         }),
         roles: state?.roles ?? [],
+        adaptiveWork: state?.workPolicy ?? null,
         unavailableRoles: state?.unavailableRoles ?? [],
         cycleComplete: state?.lastCycleComplete === true,
         confidence: state?.confidence ?? 0
