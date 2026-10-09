@@ -28,8 +28,8 @@ export function agentWaveEconomy({
  const previously=toSet(prev),now=toSet(result);
  const newly=[...now].filter(x=>!previously.has(x));
  const oldSummaries=uniqueSummary(prev),newSummaries=uniqueSummary(current);
- const duplicateSummaries=current.filter(item=>oldSummaries.has(norm(item.summary))).length
-   + Math.max(0,current.length-newSummaries.size);
+ const novelSummaries=[...newSummaries].filter(summary=>!oldSummaries.has(summary));
+ const duplicateSummaries=current.length-novelSummaries.length;
  const extra=Number.isFinite(Number(modelCalls))&&Number(modelCalls)>=0
    ? Math.floor(Number(modelCalls)):current.length;
  const tokenCount=Math.max(0,finite(tokens)),time=Math.max(0,finite(elapsedMs));
@@ -42,11 +42,12 @@ export function agentWaveEconomy({
    tokensPerAdvisoryFinding:current.length?Math.round(tokenCount/current.length):null,
    newDistinctAdvisoryNeeds:newly.length,
    duplicateAdvisorySummaries:duplicateSummaries,
+   newDistinctAdvisorySummaries:novelSummaries.length,
    advisoryDuplicationRatio:current.length?Number((duplicateSummaries/current.length).toFixed(3)):0,
    outstandingUnknowns:new Set(unknowns).size,
    outstandingRisks:new Set(risks).size,
    opinionDisagreement:recommendations.size>1,
-   valueObserved:newly.length>0||newSummaries.size>0,
+   valueObserved:newly.length>0||novelSummaries.length>0,
    verifiedResults:0, // valid receipts only come from the parent executor
    verificationStatus:'unverified-advisory',
    signalsAreAdvisory:true
