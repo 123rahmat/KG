@@ -14,6 +14,11 @@ const budget = n => specialistBudgetRatio(n) ?? 1;
 const highRisk = risk => ['critical','high','high-impact','physical','regulated'].includes(string(risk).toLowerCase());
 const CODE = Object.freeze({
   'ui-ux': ['ux-designer','frontend-engineer','test-engineer','implementer'],
+  ui: ['code-ui-engineering-lead','frontend-engineer','accessibility-auditor','test-engineer'],
+  ux: ['code-ux-engineering-lead','ux-designer','accessibility-auditor','test-engineer'],
+  data: ['code-data-management-engineering-lead','database-engineer','test-engineer','backend-engineer'],
+  identity: ['code-identity-access-engineering-lead','security-reviewer','backend-engineer','test-engineer'],
+  files: ['code-file-rendering-engineering-lead','security-reviewer','test-engineer','backend-engineer'],
   frontend: ['frontend-engineer','ux-designer','test-engineer','implementer'],
   backend: ['backend-engineer','test-engineer','security-reviewer','implementer'],
   api: ['api-engineer','backend-engineer','integration-tester','security-reviewer'],
@@ -34,7 +39,12 @@ const RESEARCH = Object.freeze({
 export function codeExpertFocus(subsystem = {}, goal = '') {
   const paths = unique([...(subsystem?.roots ?? []), ...(subsystem?.files ?? [])]).join(' ').toLowerCase();
   const objective = string(goal).toLowerCase();
-  if (/(?:^|[/._-])(auth|security|identity|credential)(?:[/._-]|$)/.test(paths)) return 'security';
+  if (/(?:^|[/._-])(identity|sso|session|access-control|rbac|oauth)(?:[/._-]|$)/.test(paths)) return 'identity';
+  if (/(?:^|[/._-])(file-preview|document-render|rendering|previews|file-conversion|uploads)(?:[/._-]|$)/.test(paths)) return 'files';
+  if (/(?:^|[/._-])(data-management|data-governance|data-quality|data-lineage|data-retention)(?:[/._-]|$)/.test(paths)) return 'data';
+  if (/(?:^|[/._-])(ux|user-experience|user-journey)(?:[/._-]|$)/.test(paths)) return 'ux';
+  if (/(?:^|[/._-])(ui|user-interface)(?:[/._-]|$)/.test(paths)) return 'ui';
+  if (/(?:^|[/._-])(auth|security|credential)(?:[/._-]|$)/.test(paths)) return 'security';
   if (/(?:^|[/._-])(test|tests|spec|specs|e2e|qa)(?:[/._-]|$)/.test(paths)) return 'testing';
   if (/(?:^|[/._-])(api|apis|endpoint|endpoints|graphql)(?:[/._-]|$)/.test(paths)) return 'api';
   if (/(?:^|[/._-])(database|db|schema|migration|storage)(?:[/._-]|$)/.test(paths)) return 'storage';
@@ -42,7 +52,11 @@ export function codeExpertFocus(subsystem = {}, goal = '') {
   if (/(?:^|[/._-])(frontend|client|web|styles|css)(?:[/._-]|$)/.test(paths)) return 'frontend';
   if (/(?:^|[/._-])(backend|server|api|routes|services)(?:[/._-]|$)/.test(paths)) return 'backend';
   if (/(?:^|[/._-])(infra|deploy|docker|ci|ops)(?:[/._-]|$)/.test(paths)) return 'infrastructure';
-  if (/\b(ui|ux|accessibility)\b/.test(objective) && /\b(layout|component|screen|interface)\b/.test(objective)) return 'ui-ux';
+  if (/\b(identity provider|multi-tenant access|sso|oauth|rbac)\b/.test(objective)) return 'identity';
+  if (/\b(file preview|document rendering|office conversion|media processing)\b/.test(objective)) return 'files';
+  if (/\b(data management|data governance|data quality|data retention)\b/.test(objective)) return 'data';
+  if (/\b(user experience|ux design|user journey|usability)\b/.test(objective)) return 'ux';
+  if (/\b(ui|accessibility)\b/.test(objective) && /\b(layout|component|screen|interface)\b/.test(objective)) return 'ui';
   return 'general';
 }
 function capRoles(roles, {remainingBudgetRatio=1, maxRoles=4} = {}) {
