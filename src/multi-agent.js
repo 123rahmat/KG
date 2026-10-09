@@ -29,6 +29,7 @@ import { executeAgentLaneWaves } from './agent-lane-executor.js';
 import { specialistFocusFor } from './adaptive-specialist-focus.js';
 import { selectFamilySubagents, runBoundedFamilyChildProbes } from './adaptive-family-subagents.js';
 import { reconcileTaskRecruitment, recruitmentSummary } from './situational-recruitment-supervisor.js';
+import { agentWaveEconomy, optionalAgentStopDecision } from './agent-quality-economy.js';
 import { normalizeAgentResourceRequests, summarizeDelegationRequests, distributeSubagentCapacity } from './agent-resource-delegation.js';
 import { peerHandoffsFor } from './agent-peer-handoffs.js';
 import { compileOpenWorldSpecialistBrief, openWorldResearchPriority } from './open-world-specialist-bridge.js';
@@ -1040,7 +1041,12 @@ function panelEarlyConvergence({ run, task, findings = [], iteration = 1 } = {})
   const signals = observedPanelSignals({ findings });
   const retrying = Number(run?.attempt ?? 1) > 1 || Boolean(run?.situation?.failure || run?.situation?.error);
   const highStake = HIGH_STAKES.has(text(run?.situation?.risk).toLowerCase());
-  if (!signals.disagreement && signals.confidence >= 0.86 && !retrying && !highStake) {
+  // Self-reported confidence must not suppress investigation of unresolved
+  // risks or unknowns. This only stops optional advisory calls; independent
+  // parent verification remains the source of completion truth.
+  const clean=findings.every(item=>item?.recommendation==='proceed'
+    && !(item?.risks?.length) && !(item?.unknowns?.length));
+  if (clean && !signals.disagreement && signals.confidence >= 0.86 && !retrying && !highStake) {
     return {
       stop: true,
       reason: 'independent-findings-converged-with-sufficient-confidence',
@@ -2628,6 +2634,7 @@ export async function runAdaptiveAgentPanel({
   const familyDelegationRequests = [];
   let recruitmentState = null;
   const recruitmentHistory = [];
+  const advisoryEconomy = [];
   let familyChildCallsUsed = 0;
   let familyChildParallelWaves = 0;
   const remainingBudgetRatio = () => run?.maxTokens === null || run?.maxTokens === undefined
@@ -2780,6 +2787,8 @@ export async function runAdaptiveAgentPanel({
       subsystemParallelMode ? readySubsystems.length : Number.MAX_SAFE_INTEGER
     ));
     const waveIndex = waves.length;
+    const tokenAtWaveStart=tokensSpent;
+    const preWaveFindings=findings.slice();
     const jobs = [];
 
     for (const role of waveRoles) {
@@ -2891,6 +2900,9 @@ export async function runAdaptiveAgentPanel({
     const childrenByRole = new Map();
     let childCallsThisWave = 0;
     for(const item of childResults) {
+      // Auxiliary model calls also spend tokens and count toward this task's
+      // adaptive budget. Parent-child calls share provider reservation gates.
+      tokensSpent+=Math.max(0,Number(item.outcome.tokensConsumed)||0);
       if(item.outcome.modelCalls)familyChildServedRoles.add(item.role);
       childCallsThisWave += item.outcome.modelCalls;
       childrenByRole.set(item.role,item.outcome.findings);
@@ -2996,9 +3008,18 @@ export async function runAdaptiveAgentPanel({
       });
     }
 
+    const waveEconomy=agentWaveEconomy({
+      before:preWaveFindings,after:findings,
+      wave:results.filter(item=>item.parsed).map(item=>item.parsed),
+      tokens:tokensSpent-tokenAtWaveStart,
+      elapsedMs:Math.max(0,...results.map(item=>Number(item.elapsedMs)||0)),
+      modelCalls:results.length+childCallsThisWave
+    });
+    advisoryEconomy.push(waveEconomy);
     const waveRecord = {
       index: waveIndex,
       roles: waveRoles,
+      qualityEconomy:waveEconomy,
       specialistAdaptation: specialistWave ? {
         action: specialistWave.action,
         reason: specialistWave.reason,
@@ -3102,11 +3123,17 @@ export async function runAdaptiveAgentPanel({
     recruitmentState=settledSupervisor;
     recruitmentHistory.push(settledSupervisor.lifecycle);
     const earlyStop = panelEarlyConvergence({ run, task, findings, iteration: allocationRounds });
-    earlyConvergence = earlyStop;
+    const marginalStop=optionalAgentStopDecision({
+      report:waveEconomy,previousReports:advisoryEconomy.slice(0,-1),
+      risk:run?.situation?.risk,failedRoles:failedRoles.length
+    });
+    earlyConvergence=marginalStop.stop?{
+      stop:true,reason:marginalStop.reason,evidenceOnly:true
+    }:earlyStop;
     // A generic panel without an explicit run-level token ceiling remains
     // one-at-a-time, but later serial waves are still allowed when the
     // adaptive floor requires more independent evidence.
-    if (earlyStop.stop) {
+    if (earlyConvergence.stop) {
       break;
     }
   }
@@ -3159,6 +3186,7 @@ export async function runAdaptiveAgentPanel({
       specialistsFailed: failedRoles.length,
       familyChildModelCalls: familyChildCallsUsed,
       familyChildParallelWaves,
+      qualityEconomy:advisoryEconomy.slice(-Math.max(1,waves.length)),
       resourceRequestsProposed:familyDelegationRequests.length,
       parallelWaves: waves.filter(wave => wave.parallel).length,
       serialWaves: waves.filter(wave => !wave.parallel).length,
