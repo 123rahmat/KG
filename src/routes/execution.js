@@ -23,6 +23,7 @@ import { modelForStep, resolveModelSelection } from '../model-routing.js';
 import { compileExecutionCapabilityPlan } from '../capability-compiler.js';
 import { effortForAdaptiveDepth, adaptiveExecutionBudgetStatus, toolsForTask, adaptiveStepScope } from '../adaptive-control.js';
 import { adaptiveBehaviorContract, adaptiveEffortProfile } from '../adaptive-efficiency.js';
+import { checkTaskPolicy } from '../policy-gate.js';
 import { executionSafetyGate } from '../adaptive-safety.js';
 import { situationGovernanceExecutionGate } from '../situation-governance.js';
 import { systemPromptFor, situationBrief, previousAttempts, normalizeVerdict, GENERIC_CRITERION } from '../reasoning-context.js';
@@ -380,44 +381,22 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       const task = run.tasks.find(item => item.id === run.next);
       if (!task) return res.status(409).json({ error: 'This run has no task ready to execute', code: 'no-next-task', run });
 
-      // Independent, model-free safety gate. The adaptive decision is checked
-      // again at the execution boundary so later task payloads cannot bypass
-      // the invariant established during planning.
-      const safetyGate = executionSafetyGate(run, task, {
+      // One compact entry gate for Normal Chat, Coding, and Research.
+      // It preserves the previous safety -> budget -> situation decision
+      // order and codes; consent, RLS and tool-specific approvals remain
+      // separately enforced at the real execution destination.
+      const gate = checkTaskPolicy(run, task, {
         blockedTopics: blockedTopicsFrom(config),
         payload: req.body?.payload ?? null
       });
-      if (!safetyGate.allowed) {
-        await recordBoundaryDenial(req, run, task, 'adaptive-safety-blocked', { category: safetyGate.category ?? null });
-        return res.status(422).json({
-          error: safetyGate.reason,
-          code: 'adaptive-safety-blocked',
-          category: safetyGate.category ?? null,
-          run
-        });
-      }
-      const adaptiveBudget = adaptiveExecutionBudgetStatus(run, task);
-      if (!adaptiveBudget.allowed) {
-        await recordBoundaryDenial(req, run, task, adaptiveBudget.code, {
-          completedExecutionStages: adaptiveBudget.completedExecutionStages ?? null,
-          maxExecutionStages: adaptiveBudget.maxExecutionStages ?? null,
-          completedToolCalls: adaptiveBudget.completedToolCalls ?? null,
-          maxToolCalls: adaptiveBudget.maxToolCalls ?? null
-        });
-        return res.status(409).json({
-          error: adaptiveBudget.reason,
-          code: adaptiveBudget.code,
-          adaptiveBudget,
-          run
-        });
-      }
-
-      const situationGate = situationGovernanceExecutionGate(run, task);
-      if (!situationGate.allowed) {
-        await recordBoundaryDenial(req, run, task, 'situation-governance-blocked', { reason: situationGate.reason });
-        return res.status(422).json({
-          error: situationGate.reason,
-          code: 'situation-governance-blocked',
+      if (!gate.allowed) {
+        await recordBoundaryDenial(req, run, task, gate.code, gate.detail);
+        return res.status(gate.status).json({
+          error: gate.reason,
+          code: gate.code,
+          ...(gate.code === 'adaptive-safety-blocked'
+            ? { category: gate.detail.category ?? null } : {}),
+          ...(gate.adaptiveBudget ? { adaptiveBudget: gate.adaptiveBudget } : {}),
           run
         });
       }
