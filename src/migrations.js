@@ -3171,4 +3171,15 @@ export const MIGRATIONS = [
         );
     `
   }
+  ,{
+    version: 79,
+    name: 'saved-specialist-verification-failures',
+    sql: `
+      ALTER TABLE saved_specialist_recipes
+        ADD COLUMN failed_run_ids TEXT[] NOT NULL DEFAULT '{}';
+      ALTER TABLE saved_specialist_recipes
+        ADD CONSTRAINT saved_specialist_recipe_failure_bounds
+          CHECK (cardinality(failed_run_ids) <= 8);
+    `
+  }
 ];
