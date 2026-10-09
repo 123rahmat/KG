@@ -27,6 +27,7 @@ import { subsystemWorkPolicy } from './subsystem-work-policy.js';
 import { executeAgentLaneWaves } from './agent-lane-executor.js';
 import { specialistFocusFor } from './adaptive-specialist-focus.js';
 import { selectFamilySubagents, runBoundedFamilyChildProbes } from './adaptive-family-subagents.js';
+import { reconcileTaskRecruitment, recruitmentSummary } from './situational-recruitment-supervisor.js';
 import { normalizeAgentResourceRequests, summarizeDelegationRequests, distributeSubagentCapacity } from './agent-resource-delegation.js';
 import { peerHandoffsFor } from './agent-peer-handoffs.js';
 import { compileOpenWorldSpecialistBrief, openWorldResearchPriority } from './open-world-specialist-bridge.js';
@@ -2560,6 +2561,8 @@ export async function runAdaptiveAgentPanel({
     ? Math.floor(childBudgetConfigured) : maxAgents;
   const familyChildServedRoles = new Set();
   const familyDelegationRequests = [];
+  let recruitmentState = null;
+  const recruitmentHistory = [];
   let familyChildCallsUsed = 0;
   let familyChildParallelWaves = 0;
   const remainingBudgetRatio = () => run?.maxTokens === null || run?.maxTokens === undefined
@@ -2674,9 +2677,21 @@ export async function runAdaptiveAgentPanel({
     });
     lastAllocation = allocationResult.allocation ?? lastAllocation;
 
-    const pendingRoles = allocationResult.roles.filter(role =>
-      !completedRoles.includes(role) && !failedRoles.includes(role)
-    );
+    // Reconcile whole-team demand at a safe wave boundary. No previous
+    // specialist or child is allowed to retain an implicit resource grant.
+    recruitmentState = reconcileTaskRecruitment({
+      runId:run?.id,taskId:task?.id,
+      surface:run?.surface || run?.adaptation?.primarySurface || 'normal-chat',
+      goal:basePayload?.goal ?? run?.goal,task,situation:run?.situation ?? {},
+      desiredRoles:allocationResult.roles,completedRoles,failedRoles,
+      findings,requests:[...familyDelegationRequests,...findings.flatMap(f=>f.resourceRequests??[])],
+      previous:recruitmentState,budgetRatio:observedRemainingRatio,
+      acceptanceSatisfied:run?.requirements?.completionReady===true
+        && run?.requirements?.verificationSatisfied===true,
+      mode,maxAgents,waveIndex:waves.length
+    });
+    recruitmentHistory.push(recruitmentState.lifecycle);
+    const pendingRoles = recruitmentState.activeRoles;
     // An allocation is a capacity target, not an instruction to exhaust every
     // role forever. Once the completed specialists satisfy the current target,
     // stop; only a newly justified expansion or failed slot can recruit more.
@@ -2841,6 +2856,7 @@ export async function runAdaptiveAgentPanel({
         // The requesting parent sees its own child findings. Peer parents
         // do not inherit unverified child claims or raw child outputs.
         subagentFindings: childrenByRole.get(job.role) || [],
+        recruitmentSupervisor:recruitmentSummary(recruitmentState),
         blackboard: specialistBlackboard,
         subsystemPlan: scopedSubsystemPlan(subsystemPlanContext, job.subsystem),
         subsystemWork: job.subsystemWork,
@@ -3007,6 +3023,19 @@ export async function runAdaptiveAgentPanel({
       }
     });
     lastAllocation = allocationResult.allocation ?? lastAllocation;
+    // Release stale proposals and advisory lenses AFTER this wave settles.
+    // Completed specialists no longer count as recruited active workers.
+    const settledSupervisor = reconcileTaskRecruitment({
+      runId:run?.id,taskId:task?.id,
+      surface:run?.surface||run?.adaptation?.primarySurface||'normal-chat',
+      goal:basePayload?.goal??run?.goal,task,situation:run?.situation??{},
+      desiredRoles:allocationResult.roles,completedRoles,failedRoles,findings,
+      requests:[...familyDelegationRequests,...findings.flatMap(f=>f.resourceRequests??[])],
+      previous:recruitmentState,budgetRatio:remainingBudgetRatio(),
+      mode,maxAgents,waveIndex:waves.length
+    });
+    recruitmentState=settledSupervisor;
+    recruitmentHistory.push(settledSupervisor.lifecycle);
     const earlyStop = panelEarlyConvergence({ run, task, findings, iteration: allocationRounds });
     earlyConvergence = earlyStop;
     // A generic panel without an explicit run-level token ceiling remains
@@ -3077,8 +3106,10 @@ export async function runAdaptiveAgentPanel({
     panelMode: singleNormalChatZipPanel ? 'normal-chat-zip-single-panel' : (subsystemPlan ? 'subsystem-panel-orchestration' : 'single-general-panel'),
     panelScope: singleNormalChatZipPanel ? 'entire-attached-zip-project' : null,
     subsystemMessages: blackboard?.subsystemMessages ?? [],
-    resourceRequests:summarizeDelegationRequests([
-      ...familyDelegationRequests, ...findings.flatMap(f=>f.resourceRequests ?? [])
+    recruitmentSupervisor:recruitmentSummary(recruitmentState),
+    recruitmentHistory:recruitmentHistory.slice(-Math.max(1,waves.length*2)),
+    resourceRequests:summarizeDelegationRequests(recruitmentState?.resources??[
+      ...familyDelegationRequests,...findings.flatMap(f=>f.resourceRequests??[])
     ],{limit:8})
   };
   const brief = buildBrief(findings, arbiter, finalDecision, agentStates, finalAllocation);
