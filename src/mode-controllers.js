@@ -194,7 +194,6 @@ export function buildModeControllerContract({
 } = {}) {
   const controller = controllerForSurface(surface);
   const normalizedRisk = text(risk) || 'medium';
-  const highPressure = clamp01(pressure / 4) >= 0.75;
   const highUncertainty = clamp01(uncertainty) >= 0.55;
   const complex = clamp01(complexity) >= 0.55;
   const limitedBudget = (specialistBudgetRatio(remainingBudgetRatio) ?? 1) < 0.25;
