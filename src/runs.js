@@ -444,8 +444,12 @@ export class RunStore {
       } : null,
       conversationId: conversation || null,
       multiAgent: {
-        mode: adaptiveControl?.multiAgentMode ?? adaptiveControl?.multiAgent ?? 'auto',
-        maxAgents: adaptiveControl?.maxAgents ?? adaptiveControl?.multiAgentMaxAgents ?? 11
+        // Conversation remains direct even if the user's/global profile
+        // requests "always" specialists. Code and Research keep that option.
+        mode: plannedSurface==='normal-chat' ? 'off'
+          : adaptiveControl?.multiAgentMode ?? adaptiveControl?.multiAgent ?? 'auto',
+        maxAgents: plannedSurface==='normal-chat' ? 1
+          : adaptiveControl?.maxAgents ?? adaptiveControl?.multiAgentMaxAgents ?? 11
       }
     });
     if (previousState) {
