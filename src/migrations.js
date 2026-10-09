@@ -3131,4 +3131,44 @@ export const MIGRATIONS = [
         );
     `
   }
+  ,{
+    version: 78,
+    name: 'scoped-reusable-specialist-recipes',
+    sql: `
+      -- Persist only generalized specialist blueprints, never raw chat,
+      -- model instructions, secrets or executable capability permissions.
+      CREATE TABLE saved_specialist_recipes (
+        workspace_id      TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        principal_id      TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+        surface           TEXT NOT NULL CHECK (surface IN ('normal-chat','code','research')),
+        recipe_id         TEXT NOT NULL CHECK (length(recipe_id) BETWEEN 4 AND 80),
+        description       TEXT NOT NULL CHECK (length(description) <= 160),
+        terms             TEXT[] NOT NULL DEFAULT '{}',
+        observed_run_ids  TEXT[] NOT NULL DEFAULT '{}',
+        status            TEXT NOT NULL DEFAULT 'observed'
+                          CHECK (status IN ('observed','reusable','retired')),
+        last_verified_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+        expires_at        TIMESTAMPTZ NOT NULL DEFAULT (now() + interval '120 days'),
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (workspace_id, principal_id, surface, recipe_id),
+        CHECK (cardinality(terms) <= 8),
+        CHECK (cardinality(observed_run_ids) <= 8)
+      );
+      CREATE INDEX saved_specialist_recipes_scope_idx
+        ON saved_specialist_recipes(workspace_id, principal_id, surface, status, expires_at DESC);
+
+      ALTER TABLE saved_specialist_recipes ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE saved_specialist_recipes FORCE ROW LEVEL SECURITY;
+      CREATE POLICY saved_specialist_recipes_scope_policy ON saved_specialist_recipes FOR ALL
+        USING (
+          workspace_id = current_setting('app.workspace_id', true)
+          AND principal_id = current_setting('app.principal_id', true)
+        )
+        WITH CHECK (
+          workspace_id = current_setting('app.workspace_id', true)
+          AND principal_id = current_setting('app.principal_id', true)
+        );
+    `
+  }
 ];
