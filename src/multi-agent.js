@@ -26,7 +26,7 @@ import { codeSpecialistTeam, researchSpecialistTeams, specialistRemit } from './
 import { subsystemWorkPolicy } from './subsystem-work-policy.js';
 import { executeAgentLaneWaves } from './agent-lane-executor.js';
 import { specialistFocusFor } from './adaptive-specialist-focus.js';
-import { selectFamilySubagents, childProbeMessages, normalizeChildProbe } from './adaptive-family-subagents.js';
+import { selectFamilySubagents, runBoundedFamilyChildProbes } from './adaptive-family-subagents.js';
 import { peerHandoffsFor } from './agent-peer-handoffs.js';
 import { compileOpenWorldSpecialistBrief, openWorldResearchPriority } from './open-world-specialist-bridge.js';
 
@@ -2513,6 +2513,9 @@ export async function runAdaptiveAgentPanel({
     await recordBlackboard({ run, task, blackboard });
   }
   let tokensSpent = 0;
+  // A child does not get an independent run budget. At most two read-only
+  // model probes are admitted across the entire generic specialist panel.
+  let familyChildCallSlots = 2;
   const remainingBudgetRatio = () => run?.maxTokens === null || run?.maxTokens === undefined
     ? 1
     : Math.max(0, Math.min(1, (Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent) / Math.max(1, Number(run.maxTokens))));
@@ -2724,6 +2727,24 @@ export async function runAdaptiveAgentPanel({
       lanes: jobs.map(job => job.lane),
       maxParallel: effectiveMaxParallel
     });
+    // Only the first eligible parent role may request an exceptional,
+    // read-only child probe in this wave. It runs under the exact same
+    // provider reservation and existing run budget as its parent agent.
+    // No precreated hierarchy of hundreds of active workers.
+    const nested = familyChildCallSlots > 0 && jobs[0]
+      ? await runBoundedFamilyChildProbes({
+        run, task, role: jobs[0].role, goal: basePayload?.goal || run?.goal,
+        surface: run?.surface || run?.adaptation?.primarySurface || 'normal-chat',
+        situation: run?.situation || basePayload?.situation || {},
+        observedFindings: findings,
+        modelCaller, modelId: jobs[0].modelId, config, fetchImpl,
+        usageGate, dataAllowed, canSpend, signal, recordUsage, recordAgent,
+        waveIndex, maxExtraCalls: familyChildCallSlots,
+        maxParallel: Math.min(2, effectiveMaxParallel),
+        budgetRatio: remainingBudgetRatio()
+      })
+      : {findings:[],modelCalls:0};
+    familyChildCallSlots -= nested.modelCalls;
     const results = await executeAgentLaneWaves({
       lanePlan, jobs, maxParallel: effectiveMaxParallel, signal,
       execute: async job => {
@@ -2734,6 +2755,9 @@ export async function runAdaptiveAgentPanel({
       const result = await modelCaller(agentMessages(job.role, {
         ...basePayload,
         harness,
+        // The requesting parent sees its own child findings. Peer parents
+        // do not inherit unverified child claims or raw child outputs.
+        subagentFindings: job.role === jobs[0]?.role ? nested.findings : [],
         blackboard: specialistBlackboard,
         subsystemPlan: scopedSubsystemPlan(subsystemPlanContext, job.subsystem),
         subsystemWork: job.subsystemWork,
