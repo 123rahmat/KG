@@ -4,6 +4,7 @@
  * an agent, executes a tool, grants permission, or authors a completion claim.
  */
 import { specialistBudgetRatio } from './agent-topology-policy.js';
+import { subsystemWorkPolicy } from './subsystem-work-policy.js';
 
 const string = x => String(x ?? '').trim();
 const unique = a => [...new Set((Array.isArray(a) ? a : []).map(string).filter(Boolean))];
@@ -56,6 +57,14 @@ export function codeSpecialistTeam(subsystem = {}, options = {}) {
     focus, roles, leadRole: roles[0] ?? null,
     scope: { roots: unique(subsystem?.roots).slice(0,8), files: unique(subsystem?.files).slice(0,30) },
     parallelEligible: !highRisk(options.risk) && options.independent === true,
+    workPolicy: subsystemWorkPolicy({
+      surface: 'code', focus, subsystem, goal: options.goal,
+      iteration: options.iteration ?? 1, findings: options.findings,
+      failure: options.failure, risk: options.risk, complexity: options.complexity,
+      uncertainty: options.uncertainty,
+      remainingBudgetRatio: options.remainingBudgetRatio,
+      independentWork: options.independent === true
+    }),
     authority: 'advisory-only', dispatch: 'parent-run-only',
     verification: 'real-diff-tests-and-server-approval'
   });
@@ -86,6 +95,12 @@ export function researchSpecialistTeams({goal='',researchState={},remainingBudge
       question:string(request.question).slice(0,260),
       roles, leadRole:roles[0] ?? null, depth:2,
       parallelEligible: !highRisk(risk) && request.independent && quota >= .45,
+      workPolicy: subsystemWorkPolicy({
+        surface: 'research', focus: request.focus,
+        subsystem: { id: request.focus + '-' + (i + 1) },
+        goal: request.question || goal, researchState,
+        remainingBudgetRatio, risk, independentWork: request.independent
+      }),
       status:'candidate-not-dispatched', verifiedSources:false,
       authority:'advisory-only'
     });
