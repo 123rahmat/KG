@@ -1,3 +1,4 @@
+import { FAMILY_MAIN_AGENTS, familyMainAgentMatch } from './family-main-agents.js';
 /**
  * Task-bound domain expertise for the existing adaptive agent scheduler.
  * This is a catalog of optional ADVISORY specialties, not permanent agents.
@@ -92,11 +93,17 @@ export const DOMAIN_SPECIALISTS = Object.freeze({
   'source-comparator': entry('Conflicting evidence analysis',
     'Compare source quality, publication dates, methodological differences and competing claims.',
     'Resolve source disagreements where possible and make unresolved uncertainty explicit.',
-    ['research'], /\b(conflicting sources|sources disagree|contradictory studies|compare sources|evidence conflict)\b/i, ['analyze','verify'])
+    ['research'], /\b(conflicting sources|sources disagree|contradictory studies|compare sources|evidence conflict)\b/i, ['analyze','verify']),
+  ...Object.fromEntries(Object.entries(FAMILY_MAIN_AGENTS).map(([role,a]) =>
+    [role,entry(a.family.replaceAll('-',' '),
+      'Offer bounded '+a.family.replaceAll('-',' ')+' advice under the current task authority.',
+      a.purpose,a.workspaces,/(?!)/,a.bestFor)]))
 });
 
 const validWorkspace = value => ['normal-chat','code','research'].includes(value) ? value : 'normal-chat';
 export function domainSpecialistMatch(role, { surface = 'normal-chat', goal = '', task = {} } = {}) {
+  const familyMatch = familyMainAgentMatch(role,{surface:validWorkspace(surface),goal,task});
+  if (familyMatch > 0) return familyMatch;
   const item = DOMAIN_SPECIALISTS[role];
   if (!item || !item.workspaces.includes(validWorkspace(surface))) return 0;
   const text = String(goal ?? '').slice(0, 2200);
