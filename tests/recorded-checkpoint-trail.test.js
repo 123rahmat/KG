@@ -58,3 +58,9 @@ test('max marker bound is enforced for malformed inputs', () => {
   assert.equal(recordedCheckpointTrail({tasks},{maxMarkers:100}).markers.length,12);
   assert.equal(recordedCheckpointTrail({tasks},{maxMarkers:-5}).markers.length,1);
 });
+
+test('missing server-selected next step never makes a nameless task active', () => {
+  const panel = recordedCheckpointTrail({state:'running',tasks:[{status:'pending'}]});
+  assert.equal(panel.markers[0].next,false);
+  assert.equal(panel.markers[0].statusLabel,'Queued');
+});
