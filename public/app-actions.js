@@ -10,6 +10,7 @@ import { growComposer, loadRuns, newChat, personalContext, renderThread, stopRun
 import { TERMINAL_STATES, autoDrive, copyText, governanceCard, isAutomatic, renderNextStep, resultText, runStatus, saveAnswer, stepsList, svgIcon, timeAgo, toolLabel } from './app.js';
 import { selectTab } from './app-account.js';
 import { renderWorkStatus, workPresentation } from './adaptive-workspace.js';
+import { workspaceOutcomeSummary } from './workspace-outcomes.js';
 import { artifactChip } from './artifact-preview.js';
 
 const actionsLoading = new Set();
@@ -782,6 +783,27 @@ function brainstormCard(run) {
 }
 
 
+function outcomeReceipt(run) {
+  // The server's saved run is the only evidence source. The selected UI tab
+  // cannot turn a chat answer into a verified coding/research result.
+  const domain = ['code', 'research'].includes(run?.surface) ? run.surface
+    : ['code', 'research'].includes(run?.adaptation?.primarySurface) ? run.adaptation.primarySurface : null;
+  const outcome = workspaceOutcomeSummary(run, domain);
+  if (!outcome) return null;
+  return element('section', {
+    class: 'workspace-outcome-receipt',
+    'aria-label': domain === 'code' ? 'Coding completion receipt' : 'Research completion receipt'
+  }, [
+    element('strong', { class: 'workspace-outcome-title', text: outcome.title }),
+    element('ul', { class: 'workspace-outcome-facts' },
+      outcome.facts.map(fact => element('li', { class: 'small', text: fact }))),
+    outcome.notes.length ? element('details', { class: 'workspace-outcome-caveats' }, [
+      element('summary', { class: 'small', text: 'Checks and remaining limitations' }),
+      ...outcome.notes.map(note => element('p', { class: 'small muted', text: note }))
+    ]) : null
+  ].filter(Boolean));
+}
+
 export function assistantMessage(run, active) {
   const parts = [];
   const text = resultText(run);
@@ -838,6 +860,8 @@ export function assistantMessage(run, active) {
   const context = parts.splice(0);
   if (run.workflow !== 'direct' || !text || run.state !== 'complete') parts.push(workStatusCard(run, context));
   if (text) parts.push(answerBlock(text));
+  const outcome = outcomeReceipt(run);
+  if (outcome) parts.push(outcome);
   const trail = toolTrail(run, text);
   if (trail) parts.push(trail);
   const proposals = actionCards(run);

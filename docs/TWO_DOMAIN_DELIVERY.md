@@ -30,8 +30,8 @@ project; model catalog entries alone do not prove API access.
 
 ## Presenting what actually happened
 
-Both agentic workspaces show an overview report **after a run reaches a
-terminal state**. It distinguishes saved completed/failed steps, authenticated
+Both agentic workspaces show an overview report and a compact receipt beside
+the final chat answer **after a run reaches a terminal state**. It distinguishes saved completed/failed steps, authenticated
 execution receipts, passing verification records, applied changed-path metadata
 and tracked research sources, evidence, open questions and conflicts. A proposed
 test is never labeled as successfully executed. The persisted task timeline and
