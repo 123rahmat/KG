@@ -1,5 +1,6 @@
 /**
- * Adaptive task-scoped subagents for all 55 Kindgleam specialist families.
+ * Task-scoped subagent selection for all registered specialist families and
+ * additional evidence-derived needs; families are seed vocabularies, not rosters.
  *
  * A family is expertise owned by an existing role, NOT another authority.
  * Always select only needed lenses. One child lens normally runs IN the parent
