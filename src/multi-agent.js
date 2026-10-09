@@ -1886,6 +1886,10 @@ async function runCodeWorkspaceAgentPanels({
         surface:singlePanel?'normal-chat':'code',
         goal:basePayload?.goal??run?.goal,task,situation:run?.situation??{},
         desiredRoles:jobs.map(j=>j.role),
+        // Keep pending resource proposals from previous finished subsystem
+        // specialists while the next independent panel is underway.
+        completedRoles:allFindings.map(f=>f.role)
+          .filter(role=>!jobs.some(job=>job.role===role)),
         findings:allFindings,requests:allFindings.flatMap(f=>f.resourceRequests??[]),
         previous:recruitmentState,budgetRatio:remainingBudgetRatio(),
         maxAgents,mode,waveIndex:waves.length
@@ -2205,7 +2209,7 @@ async function runCodeWorkspaceAgentPanels({
         runId:run?.id,taskId:task?.id,
         surface:singlePanel?'normal-chat':'code',
         goal:basePayload?.goal??run?.goal,task,situation:run?.situation??{},
-        desiredRoles:[],completedRoles:jobs.map(j=>j.role),
+        desiredRoles:[],completedRoles:allFindings.map(f=>f.role),
         findings:allFindings,requests:allFindings.flatMap(f=>f.resourceRequests??[]),
         previous:recruitmentState,budgetRatio:remainingBudgetRatio(),
         maxAgents,mode,waveIndex:waves.length
