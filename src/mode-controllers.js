@@ -13,8 +13,8 @@ const clamp01 = value => Math.min(1, Math.max(0, Number.isFinite(Number(value)) 
 
 const RUNTIME_PROFILES = Object.freeze({
   'normal-chat': Object.freeze({
-    agentCeiling: 3,
-    parallelCeiling: 2,
+    agentCeiling: 1,
+    parallelCeiling: 1,
     modelPolicy: 'efficient-first',
     contextBudget: 'minimum-sufficient',
     verificationBudget: 'targeted-unless-risk-or-artifact'
@@ -65,7 +65,7 @@ export function workspaceComputePolicy({
   const conserve = budget < 0.25;
 
   let recommendedAgents = key === 'normal-chat'
-    ? (pressure >= 0.78 ? 3 : pressure >= 0.52 ? 2 : 1)
+    ? 1 // one primary Gemini call, not one recruited specialist
     : key === 'code'
       ? (pressure >= 0.78 ? 4 : pressure >= 0.48 ? 3 : 1)
       : (pressure >= 0.72 ? 4 : pressure >= 0.42 ? 3 : 1);
@@ -110,14 +110,14 @@ const CONTROLLERS = Object.freeze({
     tools: Object.freeze({
       default: 'just-in-time',
       autonomy: 'bounded-adaptive',
-      specialistRule: 'Use no specialist for simple work; add one focused role only when it can materially improve the result.'
+      specialistRule: 'Never recruit agentic roles here. Use deeper primary-model reasoning, authorized tools, and verification when the task warrants it.'
     }),
     verification: Object.freeze({
       default: 'lightweight',
       strengthenWhen: Object.freeze(['claims-matter', 'artifact-created', 'file-transformed', 'tool-used', 'high-stakes'])
     }),
     success: 'The stated need is satisfied without unnecessary workspace escalation or work.',
-    roles: Object.freeze(['communicator', 'analyst', 'critic'])
+    roles: Object.freeze([])
   }),
 
   code: Object.freeze({
@@ -234,9 +234,10 @@ export function buildModeControllerContract({
     decision: {
       defaultAction: controller.mode === 'normal-chat' ? 'direct' : 'specialized-next-step',
       broadenContext: escalate,
-      recruitSpecialist: !acceptanceMet && compute.recommendedAgents > 1
-        && (controller.mode !== 'normal-chat' || escalate || highPressure),
-      parallelIndependentWork: !acceptanceMet && compute.maxParallel > 1,
+      recruitSpecialist: controller.mode !== 'normal-chat'
+        && !acceptanceMet && compute.recommendedAgents > 1,
+      parallelIndependentWork: controller.mode !== 'normal-chat'
+        && !acceptanceMet && compute.maxParallel > 1,
       reduceEffort: limitedBudget && !highUncertainty && !previousFailure,
       reuseVerifiedState: verified,
       stopWhenSatisfied: true
