@@ -2,6 +2,8 @@
  * A role becomes specialized for the user's current goal, not a permanent domain silo.
  * User content remains task data, never a source of new authority.
  */
+import { DOMAIN_SPECIALISTS } from './domain-specialists.js';
+
 const clean = (value, limit = 320) => String(value ?? '').trim().slice(0, limit);
 const unique = (items, limit) => [...new Set((Array.isArray(items) ? items : [])
   .map(item => clean(item, 220)).filter(Boolean))].slice(0, limit);
@@ -32,7 +34,9 @@ const ROLE_FOCUS = Object.freeze({
   'visual-designer': ['Visual implementation', 'Assess component design, composition and accessibility.'],
   'image-editor': ['Image treatment', 'Evaluate assets and editing requirements without claiming edits occurred.'],
   'layout-designer': ['Layout constraints', 'Assess geometry, responsive behavior and output dimensions.'],
-  'visual-reviewer': ['Visual verification', 'Find legibility, overlap and consistency defects using available evidence.']
+  'visual-reviewer': ['Visual verification', 'Find legibility, overlap and consistency defects using available evidence.'],
+  ...Object.fromEntries(Object.entries(DOMAIN_SPECIALISTS).map(([role, item]) =>
+    [role, [item.specialty, item.assignment]]))
 });
 
 export function taskSpecialization(role, payload = {}) {
