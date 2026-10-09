@@ -6,7 +6,7 @@ import { agentMessages } from '../src/multi-agent.js';
 test('V4 capability taxonomy is retained as advisory definitions', () => {
   const stats = specialistCatalogStats();
   assert.deepEqual(stats['normal-chat'], {families:30,subskills:240});
-  assert.deepEqual(stats.code, {families:30,subskills:240});
+  assert.deepEqual(stats.code, {families:33,subskills:264});
   assert.deepEqual(stats.research, {families:25,subskills:200});
   assert.equal(Object.isFrozen(SPECIALIST_FAMILIES), true);
 });
