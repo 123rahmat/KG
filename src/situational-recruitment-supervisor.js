@@ -37,7 +37,7 @@ function needFromFindings(findings) {
 export function reconcileTaskRecruitment({
   runId='',taskId='',surface='normal-chat',goal='',task={},situation={},
   desiredRoles=[],completedRoles=[],failedRoles=[],findings=[],requests=[],
-  previous=null,budgetRatio=null,acceptanceSatisfied=false,mode='auto',
+  resolvedResourceIds=[],previous=null,budgetRatio=null,acceptanceSatisfied=false,mode='auto',
   maxAgents=6,waveIndex=0
 }={}) {
   const run=str(runId),step=str(taskId),workspace=validSurface(surface);
@@ -66,6 +66,8 @@ export function reconcileTaskRecruitment({
   }
   // Resource demand remains visible for parent approval even after an
   // advisory parent has completed. It is not a live container reservation.
+  // Only the server-owned workflow may supply IDs with actual resolution evidence.
+  const resolved=new Set(unique(resolvedResourceIds));
   const resources=[],seen=new Set();
   if(!stop){
     for(const item of (Array.isArray(requests)?requests:[])){
@@ -83,7 +85,7 @@ export function reconcileTaskRecruitment({
       });
       if(!normalized.length)continue;
       const request=normalized[0],id=resourceKey(request);
-      if(seen.has(id))continue;
+      if(seen.has(id)||resolved.has(id))continue;
       seen.add(id);
       resources.push(Object.freeze({
         ...request,id,owner:request.childId?parentRole+':'+request.childId:parentRole,
