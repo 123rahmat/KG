@@ -22,6 +22,7 @@ import { screenToolInput, recordRefusal, blockedTopicsFrom } from './safety.js';
 import { isSensitiveWorkspacePath } from './workspace-path.js';
 import { listMcpTools, callMcpTool } from './mcp.js';
 import { policyAllows } from './core.js';
+import { bindAgentResourceScope } from './agent-resource-broker.js';
 
 const text = value => String(value ?? '').trim();
 const MAX_TOOL_CHARS = 30_000;
@@ -444,6 +445,14 @@ export function toolNamed(name, ctx = {}) {
 export async function useTool(name, input, ctx) {
   ctx?.signal?.throwIfAborted();
   const wanted = text(name);
+  // Defense in depth: even a wrongly constructed agent context cannot
+  // use a shared conversation to read or mutate the owner's private data.
+  if (ctx?.run) {
+    const auth = bindAgentResourceScope({
+      run:ctx.run,task:ctx.task,scope:ctx.scope
+    });
+    if (!auth.allowed) return { error:auth.reason, code:auth.code };
+  }
   await ctx?.beforeTool?.(wanted);
   if (ctx?.run?.governance && !policyAllows(ctx.run.governance, { tool: wanted })) {
     return { error: `The active governance policy denies the tool "${wanted}".`, code: 'policy-blocked' };
