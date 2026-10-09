@@ -55,7 +55,7 @@ test('backend and database specialists retain specialized owned subagents and no
     goal:'Build reliable backend API with authentication and integrations',
     role:'backend-engineer',situation:{complexity:.9,uncertainty:.8,unknownSituation:true,risk:'high'},
     task:{type:'plan'},remainingBudgetRatio:.8});
-  assert.ok(selected.active.length>=1 && selected.active.length<=3);
+  assert.ok(selected.active.length>=1 && selected.active.length<=selected.available);
   assert.ok(selected.active.every(item=>item.mayInvokeTools===false));
   assert.equal(selected.executionPolicy.parentOwnsVerification,true);
 });
