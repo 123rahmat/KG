@@ -9,9 +9,9 @@ import { rolesFor } from '../src/multi-agent.js';
 test('registered main-agent families each have eight scoped subagent lenses',()=>{
   const counts=familyMainAgentStats();
   assert.deepEqual(counts['normal-chat'],{mainAgents:30,subagents:240});
-  assert.deepEqual(counts.code,{mainAgents:33,subagents:264});
-  assert.deepEqual(counts.research,{mainAgents:25,subagents:200});
-  assert.equal(Object.keys(FAMILY_MAIN_AGENTS).length,88);
+  assert.deepEqual(counts.code,{mainAgents:63,subagents:504});
+  assert.deepEqual(counts.research,{mainAgents:57,subagents:456});
+  assert.equal(Object.keys(FAMILY_MAIN_AGENTS).length,150);
   for(const role of Object.values(FAMILY_MAIN_AGENTS)){
     assert.equal(role.subagents.length,8,role.role);
     assert.equal(new Set(role.subagents).size,8,role.role);
