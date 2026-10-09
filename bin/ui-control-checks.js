@@ -44,7 +44,7 @@ export async function checkControls(browser, url) {
       document.getElementById('landing').hidden = true; document.getElementById('app').hidden = false;
       window.controlsQA = { state, renderUsageLimitLock, loadPolicyControls, savePolicyControls, sendMessage };
       renderUsageLimitLock(); document.dispatchEvent(new Event('kindgleam:composer-state'));
-      openSettings(); activateSettingsSection('policies');
+      openSettings(); activateSettingsSection('data');
     });
     assert.equal(await page.locator('#createRun').isDisabled(), true, 'quota refresh cannot unlock a viewer');
     assert.equal(await page.locator('#goal').isDisabled(), true);
