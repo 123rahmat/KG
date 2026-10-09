@@ -1990,6 +1990,11 @@ async function runCodeWorkspaceAgentPanels({
             role: item.role,
             model: item.result?.model ?? item.modelId,
             status: 'complete',
+            summary: item.parsed.summary,
+            specialty: taskSpecialization(item.role, {
+              goal: basePayload?.goal, task,
+              workspacePanel: { ownedFiles: item.subsystem.files }
+            }).specialty,
             subsystemId: item.subsystem.id,
             panelId: item.panelId,
             iteration: item.iteration,
