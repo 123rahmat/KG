@@ -89,7 +89,8 @@ export function specialistWaveDecision({
     ? 0.35 + independent*0.65 : independent;
   const concurrencyCeiling = elevated || failed || budget < 0.25 ? 1
     : normalizedMode !== 'always' && independent < 0.35 ? 1
-      : Math.max(1,Math.ceil(Math.max(1,target)*concurrencyDemand));
+      : Math.max(normalizedMode === 'always' ? 2 : 1,
+        Math.ceil(Math.max(1,target)*concurrencyDemand));
   const maxParallel = Math.max(1, Math.min(Math.max(1, target), ceiling, concurrencyCeiling));
   return Object.freeze({
     action, reason, workspace: surface,
