@@ -552,9 +552,14 @@ export function renderWorkStatus(run) {
       element('p', { class: 'small muted', text: background.activity.observedParallel
         ? 'Independent specialist work ran in parallel where allowed. These are saved results, not a live activity claim.'
         : 'Saved advisory findings. The main workflow remains responsible for execution and verification.' }),
-      ...background.activity.roles.slice(-8).map(agent => element('div', { class: 'work-agent-row' }, [
-        element('strong', { class: 'small', text: agent.role.replace(/-/g, ' ') }),
-        element('span', { class: 'small muted', text: agent.status + (agent.wave ? ' · wave ' + agent.wave : '') }),
+      ...background.activity.roles.slice(-8).map(agent => element('div', {
+        class: 'work-agent-row' + (agent.kind === 'subagent' ? ' work-agent-child' : '')
+      }, [
+        element('strong', { class: 'small',
+          text: (agent.kind === 'subagent' ? '↳ ' : '') + (agent.displayRole || agent.role.replace(/-/g, ' ')) }),
+        element('span', { class: 'small muted',
+          text: (agent.kind === 'subagent' ? 'Subagent of ' + agent.parentRole.replaceAll('-', ' ') + ' · advisory' : agent.status)
+            + (agent.wave ? ' · wave ' + agent.wave : '') }),
         agent.specialty && agent.specialty.toLowerCase() !== agent.role.replaceAll('-', ' ').toLowerCase()
           ? element('span', { class: 'small work-agent-summary muted', text: agent.specialty }) : null,
         agent.subsystemId ? element('span', { class: 'small work-agent-summary muted', text:
@@ -789,10 +794,13 @@ function specialistProjectSection(run, workspace) {
       ].filter(Boolean)))
     ]) : null,
     roles.length ? element('div', { class: 'workspace-detail-list workspace-agent-contributions', 'aria-label': 'Recorded specialist contributions' }, roles.map(item =>
-      element('div', { class: 'workspace-detail-row workspace-agent-contribution' }, [
+      element('div', { class: 'workspace-detail-row workspace-agent-contribution'
+        + (item.kind === 'subagent' ? ' work-agent-child' : '') }, [
         element('div', { class: 'workspace-agent-contribution-head' }, [
-          element('strong', { text: item.role.replaceAll('-', ' ') }),
-          element('span', { class: 'small muted', text: item.status +
+          element('strong', { text: (item.kind === 'subagent' ? '↳ ' : '')
+            + (item.displayRole || item.role.replaceAll('-', ' ')) }),
+          element('span', { class: 'small muted', text:
+            (item.kind === 'subagent' ? 'Subagent of ' + item.parentRole.replaceAll('-', ' ') + ' · advisory' : item.status) +
             (item.wave ? ' · wave ' + item.wave : '') +
             (item.iteration ? ' · cycle ' + item.iteration : '') })
         ]),
