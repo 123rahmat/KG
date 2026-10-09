@@ -103,6 +103,7 @@ npm test
 ## Documentation
 
 - [Architecture and application services](docs/ARCHITECTURE.md)
+- [Simple adaptive workflow and one privacy/policy gate](docs/SIMPLE_ADAPTIVE_POLICY.md)
 - [Three-workspace adaptive policy](docs/WORKSPACE_ADAPTIVE_POLICY.md)
 - [Specialist dispatch and boundaries](docs/UNIFIED_ADAPTIVE_AGENTIC_ARCHITECTURE.md)
 - [Runtime state, cancellation and recovery](docs/UNIFIED_ADAPTIVE_RUNTIME.md)
