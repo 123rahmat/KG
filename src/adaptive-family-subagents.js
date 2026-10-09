@@ -10,6 +10,7 @@ import { SPECIALIST_FAMILIES, specialistFocusFor } from './adaptive-specialist-f
 import { parseJsonObject } from './structured.js';
 import { normalizeAgentResourceRequests } from './agent-resource-delegation.js';
 import { specialistBudgetRatio } from './agent-topology-policy.js';
+import { taskSpecificSubagentNeeds } from './situational-subagent-needs.js';
 
 const SURFACES = new Set(['normal-chat', 'code', 'research']);
 const clean = value => String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -204,75 +205,88 @@ export function familyPlaybook(surface,family){
  });
 }
 /**
- * Minimum-first allocation. A family owns 8 potential subagents, but only 1-3
- * are activated. Dynamic checkpoints are suggested, not added as fake stages.
+ * A family is an extensible seed vocabulary, never a fixed child roster.
+ * Relevant lenses and concrete observed requirements are composed for THIS
+ * task. Most work stays in the parent model call; independent calls require
+ * separate provider reservation, parent approval and remaining budget.
  */
 export function selectFamilySubagents({surface='normal-chat',goal='',role='',situation={},task={},
-  observedFindings=[],remainingBudgetRatio=1,maxActive=3}={}){
+  observedFindings=[],remainingBudgetRatio=1,maxActive=null}={}){
  const valid=SURFACES.has(surface)?surface:'normal-chat';
  const request=short(goal,2200);
  const family=chooseFamily(valid,request,role);
  const playbook=familyPlaybook(valid,family);
  const severity=group(situation);
  const taskKind=clean(task?.type||task?.id);
- const focusEvidence=Array.isArray(observedFindings)?observedFindings.slice(-6):[];
+ const focusEvidence=Array.isArray(observedFindings)?observedFindings.slice(-12):[];
  const observedFailure=focusEvidence.some(f=>f?.recommendation==='revise'||f?.recommendation==='stop');
  const verificationNeeded=severity.changed||observedFailure||crossTriggers.test.test(request)
     ||(severity.highRisk && valid==='code') || taskKind==='verify'||taskKind==='test';
  const researchNeeded=severity.uncertain||crossTriggers.research.test(request)
     ||focusEvidence.some(f=>f?.recommendation==='investigate');
- // Unknown budget telemetry must not be interpreted as zero resources.
+ // Telemetry missing is NOT the same as a measured zero.
  const budget=specialistBudgetRatio(remainingBudgetRatio) ?? 1;
  const goalTokens=tokens(request);
- const prior=FAMILY_GUIDANCE[family]?.priority??[];
- const ranked=playbook.children.map((x,i)=>({x,i,score:childScore(x.id,goalTokens,request,prior,severity)}))
+ const priority=FAMILY_GUIDANCE[family]?.priority??[];
+ const ranked=playbook.children.map((x,i)=>({x,i,score:childScore(x.id,goalTokens,request,priority,severity)}))
     .sort((a,b)=>b.score-a.score||a.i-b.i);
- let count=1;
- if((severity.uncertain||severity.complex||verificationNeeded||researchNeeded) && budget>=0.3)count=2;
- if(severity.complex && (severity.highRisk||severity.uncertain) && budget>=0.65)count=3;
- count=Math.min(count,clamp(maxActive,1,3)||1);
- // Keep a verification or evidence lens for truly observed gaps, rather than
- // blindly selecting the first three children in a fixed family catalog.
- const chosen=[ranked[0].x];
- const verification=ranked.find(x=>x.x.operation==='verify'&&!chosen.includes(x.x));
- const investigation=ranked.find(x=>x.x.operation==='investigate'&&!chosen.includes(x.x));
- if(count>1 && verificationNeeded && verification)chosen.push(verification.x);
- if(chosen.length<count && researchNeeded && investigation)chosen.push(investigation.x);
- for(const item of ranked) {
-    if(chosen.length>=count)break;
-    if(!chosen.includes(item.x))chosen.push(item.x);
+ const situational=taskSpecificSubagentNeeds({task,situation,observedFindings:focusEvidence});
+ const requestedLimit=maxActive===null || maxActive===undefined ? Infinity
+   : Math.max(1,Math.floor(Number(maxActive)||1));
+ const selected=[],ids=new Set();
+ const add=child=>{
+   if(!child||ids.has(child.id)||selected.length>=requestedLimit)return;
+   ids.add(child.id);selected.push(child);
+ };
+ // The first domain lens is the cheapest meaningful starting point.
+ add(ranked[0]?.x);
+ if(budget>=0.25){
+   // Required acceptance criteria and observed gaps are not restricted to the
+   // eight seed subskills; every distinct task need can introduce a new lens.
+   for(const child of situational)add(child);
+   if(budget>=0.45){
+     for(const candidate of ranked)if(candidate.score>=2)add(candidate.x);
+   }
+   if(verificationNeeded)add(ranked.find(item=>item.x.operation==='verify')?.x);
+   if(researchNeeded)add(ranked.find(item=>item.x.operation==='investigate')?.x);
+   if((severity.changed||observedFailure))add(ranked.find(item=>item.x.operation==='diagnose')?.x);
  }
- const checkpoints=[];
- if(researchNeeded)checkpoints.push({kind:'research',reason:'Evidence gaps or unfamiliar claims require investigation through an authorized source/tool'});
- if(verificationNeeded)checkpoints.push({kind:'testing',reason:'Propose objective checks; only actual executor receipts can verify work'});
- if(severity.changed||observedFailure)checkpoints.push({kind:'debugging',reason:'Observed failures require reproducible diagnosis and a targeted retest'});
- const active=chosen.map((child,i)=>Object.freeze({
+ // A low-budget parent may ask one integrated advisor, but never invent
+ // evidence or suppress the parent-owned required verification.
+ const active=selected.map((child,i)=>Object.freeze({
    ...child,priority:i===0?'primary':'supporting',modelInvocation:'shared-parent-by-default',
    isolatedFromSecrets:true,mayInvokeTools:false,maySpawnAgents:false,
-   requirement:playbook.objective
+   requirement:child.requirement??playbook.objective
  }));
- const independent=active.filter(x=>x.operation==='investigate'||x.operation==='verify').length>0
-   && active.length>=2;
- const callsAllowed=budget>=0.6 && (severity.uncertain||severity.highRisk||observedFailure)
+ const independent=active.length>1
+   && active.some(child=>child.priority==='supporting' && ['investigate','verify'].includes(child.operation));
+ const callsAllowed=budget>=0.6
+   && (severity.uncertain||severity.highRisk||observedFailure)
    && !['respond','deliver'].includes(taskKind) && independent;
+ const eligible=active.filter(child=>child.priority==='supporting'
+   && ['investigate','verify'].includes(child.operation));
+ const checkpoints=[];
+ if(researchNeeded)checkpoints.push({kind:'research',reason:'Evidence gaps require authorized investigation'});
+ if(verificationNeeded)checkpoints.push({kind:'testing',reason:'Objective checks require real parent executor receipts'});
+ if(severity.changed||observedFailure)checkpoints.push({kind:'debugging',reason:'Observed failures require diagnosis and targeted retesting'});
  return Object.freeze({
-  surface:valid,family,role:short(role,90),objective:playbook.objective,
-  active:Object.freeze(active), available:playbook.children.length,
-  checks:playbook.checks,
-  suggestedCheckpoints:Object.freeze(checkpoints.map(x=>Object.freeze(x))),
-  peerConsultations:playbook.neighbors,
-  executionPolicy:Object.freeze({
-    default:'within-existing-authorized-agent-call',
-    extraModelChildAllowed:callsAllowed,
-    extraModelChildLimit:callsAllowed
-      ? Math.min(active.filter(x=>x.priority==='supporting'
-          && ['investigate','verify'].includes(x.operation)).length,
-        active.length===3 && severity.uncertain && severity.complex && budget>=0.8 ? 2 : 1) : 0,
-    requiresParentBudget:true, parentOwnsVerification:true,
-    readOnly:true, independentReadOnly:independent,
-    parallelOnlyWhenIndependent:independent,
-    toolPermissions:'none', approvalExpansion:false
-  })
+   surface:valid,family,role:short(role,90),objective:playbook.objective,
+   active:Object.freeze(active),available:playbook.children.length+situational.length,
+   availableSeedSkills:playbook.children.length,
+   discoveredTaskSkills:situational.length,
+   checks:playbook.checks,
+   suggestedCheckpoints:Object.freeze(checkpoints.map(x=>Object.freeze(x))),
+   peerConsultations:playbook.neighbors,
+   executionPolicy:Object.freeze({
+     default:'within-existing-authorized-agent-call',
+     extraModelChildAllowed:callsAllowed,
+     extraModelChildLimit:callsAllowed?eligible.length:0,
+     requiresParentBudget:true,parentOwnsVerification:true,
+     readOnly:true,independentReadOnly:independent,
+     parallelOnlyWhenIndependent:independent,
+     toolPermissions:'none',approvalExpansion:false,
+     allocation:'requirement-and-evidence-driven; no fixed agent roster'
+   })
  });
 }
 
@@ -320,8 +334,8 @@ export function normalizeChildProbe(value={},plan={},childId=null,context={}){
  * Opt-in, evidence-triggered, real read-only child model calls inside an
  * ALREADY authorized parent agent panel. Never an uncontrolled recursion.
  *
- * Model use is limited to two distinct independent read-only probes per
- * existing parent panel, guarded by the SAME usageGate/provider policies.
+ * Each independent read-only probe is admitted by the SAME parent usage
+ * reservation and concurrency policies; no arbitrary child roster size.
  * If authorization, reservation, capacity, or evidence is absent, skip.
  */
 export async function runBoundedFamilyChildProbes({
@@ -329,12 +343,12 @@ export async function runBoundedFamilyChildProbes({
   modelCaller, modelId, config, fetchImpl, usageGate=null, observedFindings=[],
   canSpend=async()=>false, dataAllowed=false, signal,
   recordUsage=async()=>{}, recordAgent=async()=>{},
-  waveIndex=0, maxExtraCalls=2, maxParallel=1, budgetRatio=1
+  waveIndex=0, maxExtraCalls=0, maxParallel=1, budgetRatio=1
 }={}){
   const plan=selectFamilySubagents({
     surface,goal,role,situation,task,observedFindings,remainingBudgetRatio:budgetRatio
   });
-  const count=clamp(maxExtraCalls,0,2);
+  const count=Math.max(0,Math.floor(Number(maxExtraCalls)||0));
   const supported=(plan.active??[]).filter(x=>x.priority==='supporting'
     && ['investigate','verify'].includes(x.operation));
   if(typeof modelCaller!=='function' || !modelId || !usageGate
@@ -346,7 +360,7 @@ export async function runBoundedFamilyChildProbes({
   // reservation gate remains authoritative for concurrent calls.
   if(!(await canSpend()))return {plan,findings:[],modelCalls:0,reason:'budget-blocked'};
   const selected=supported.slice(0,Math.min(count,plan.executionPolicy.extraModelChildLimit));
-  const batchLimit=clamp(maxParallel,1,2);
+  const batchLimit=Math.max(1,Math.floor(Number(maxParallel)||1));
   const results=[];
   for(let start=0;start<selected.length;start+=batchLimit){
     signal?.throwIfAborted();
