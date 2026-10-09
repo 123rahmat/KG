@@ -8,6 +8,17 @@ export function agentActivitySnapshot(run) {
   const sourceTask = [...tasks].reverse().find(task => task?.evidence?.multiAgent) ?? null;
   const multi = sourceTask?.evidence?.multiAgent ?? run?.adaptation?.multiAgent ?? null;
   const allocation = multi?.allocation ?? {};
+  // Only explicitly recorded agent proposals appear; never infer that tools
+  // are installed, resources are allocated or terminal sessions are open.
+  const delegationRequests = array(multi?.resourceRequests ?? allocation?.resourceRequests)
+    .filter(item=>item && item.status==='proposal-only' && item.ran===false)
+    .slice(0,8).map(item=>({
+      kind:safe(item.kind,48),reason:safe(item.reason,220),
+      parentRole:safe(item.parentRole,80),
+      childId:safe(item.childId,84),
+      state:safe(item.state,65),
+      status:'Proposed · not executed'
+    }));
   const states = array(multi?.agentStates).length ? multi.agentStates : array(multi?.agents);
   const roles = states.filter(item => item?.role && item.role !== 'arbiter'
     && item.role !== 'integration-arbiter')
@@ -93,6 +104,7 @@ export function agentActivitySnapshot(run) {
     reason: safe(allocation.topology?.reason || multi?.decision?.reason || '', 100),
     waves: waves.length,
     observedParallel,
-    adaptations
+    adaptations,
+    delegationRequests
   };
 }
