@@ -1689,7 +1689,7 @@ async function runCodeWorkspaceAgentPanels({
   const agentStates = [];
   const waves = [];
   const subsystemMessages = [];
-  const subsystemEconomy = [];
+  const codeWaveEconomyReports = [];
   let recruitmentState = null;
   const recruitmentHistory = [];
   let subsystemState = new Map(subsystemPlan.subsystems.map(item => [item.id, {
@@ -2270,7 +2270,7 @@ async function runCodeWorkspaceAgentPanels({
         elapsedMs:Math.max(0,...results.map(item=>Number(item.elapsedMs)||0)),
         modelCalls:results.length
       });
-      subsystemEconomy.push(waveEconomy);
+      codeWaveEconomyReports.push(waveEconomy);
       const waveRecord = {
         index: waveIndex,
         recruitmentSupervisor:recruitmentSummary(recruitmentState),
@@ -2491,7 +2491,7 @@ async function runCodeWorkspaceAgentPanels({
       specialistsCompleted: agentStates.filter(item => item.status === 'complete' && item.role !== 'arbiter').length,
       specialistsUnavailable: agentStates.filter(item => item.status === 'unavailable').length,
       parallelWaves: waves.filter(wave => wave.parallel).length,
-      qualityEconomy:subsystemEconomy.slice(-Math.max(1,waves.length)),
+      qualityEconomy:codeWaveEconomyReports.slice(-Math.max(1,waves.length)),
       principle: 'Use the smallest live topology and specialist depth that can produce sufficient evidence.'
     },
     codingEconomy: {
