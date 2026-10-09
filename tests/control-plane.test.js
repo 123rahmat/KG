@@ -87,7 +87,7 @@ test('unknown workspace roles fail closed in the composer', async () => {
 });
 
 test('actual tool calls obey named tool policy, including changes at their boundary', async () => {
-  const ctx = { run: { governance: evaluatePolicy({ platform: {}, workspace: { deniedTools: ['math.*'] } }) } };
+  const ctx = { scope: { principalId: 'p1', workspaceId: 'w1' }, run: { id: 'r1', principalId: 'p1', workspaceId: 'w1', surface: 'normal-chat', governance: evaluatePolicy({ platform: {}, workspace: { deniedTools: ['math.*'] } }) } };
   const denied = await useTool('math.evaluate', { expression: '2 + 2' }, ctx);
   assert.equal(denied.code, 'policy-blocked');
   ctx.run.governance = evaluatePolicy({ platform: {} });
