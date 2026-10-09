@@ -1464,10 +1464,12 @@ function codeWorkspacePanelRoles(run, task, subsystem, {
   // An uncommon coding specialty can be formed from explicit requirements
   // without requiring a new hard-coded role. Its task scope remains advisory;
   // implementation and acceptance checks still use owned Code Workspace lanes.
-  const codeGapSpecialists = taskSpecialistCandidates({
+  // A tiny Code task retains its implementer/checker rather than spending
+  // its only model call on a generated advisory specialty.
+  const codeGapSpecialists = width>=3 ? taskSpecialistCandidates({
     surface:'code',goal:goal??run?.goal,task,
-    situation:run?.situation??{},maxCandidates:width
-  });
+    situation:run?.situation??{},maxCandidates:Math.max(0,width-2)
+  }) : [];
   if (width>=3 && (signals.unknowns>=0.08 || iteration>1)){
     for(const specialist of codeGapSpecialists.slice(0,Math.max(0,width-2)))
       addRequired(specialist.role);
