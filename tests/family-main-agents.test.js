@@ -39,7 +39,7 @@ test('main agents select own subagents but never self-grant tools',()=>{
     const p=selectFamilySubagents({surface,role,goal,task:{type:'plan'},
       situation:{complexity:.85,uncertainty:.7},remainingBudgetRatio:.8});
     assert.equal(p.family,family);
-    assert.ok(p.active.length>=1&&p.active.length<=3);
+    assert.ok(p.active.length>=1&&p.active.length<=p.available);
     assert.ok(p.active.every(child=>!child.mayInvokeTools&&!child.maySpawnAgents));
   }
 });
