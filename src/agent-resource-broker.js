@@ -142,6 +142,7 @@ export function triageAgentResourceRequests({run,task,scope,requests=[],availabl
     const outcome=admitAgentResourceRequest({run,task,scope,request,availableTools});
     results.push(Object.freeze({
       kind:text(request?.kind).slice(0,48),parentRole:text(request?.parentRole).slice(0,80),
+      ...(request?.resourceId?{resourceId:text(request.resourceId).slice(0,64)}:{}),
       status:outcome.status??(outcome.code==='approval-required'?'awaiting-user-approval':'blocked'),
       code:outcome.code??null,
       reason:text(outcome.reason).slice(0,200),
