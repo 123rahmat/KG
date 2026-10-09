@@ -22,6 +22,7 @@ import { remainingSpecialistBudget, specialistTopology } from './agent-topology-
 import { specialistWaveDecision } from './specialist-wave-policy.js';
 import { taskSpecialization } from './task-specialization.js';
 import { codeSpecialistTeam, researchSpecialistTeams, specialistRemit } from './specialist-hierarchy.js';
+import { subsystemWorkPolicy } from './subsystem-work-policy.js';
 import { executeAgentLaneWaves } from './agent-lane-executor.js';
 
 export const MULTI_AGENT_MODES = Object.freeze(['auto', 'always', 'off']);
@@ -1264,7 +1265,8 @@ function codeWorkspacePanelRoles(run, task, subsystem, {
   width,
   iteration = 1,
   findings = [],
-  goal = null
+  goal = null,
+  workPolicy = null
 } = {}) {
   const progress = {
     goal,
@@ -1279,6 +1281,15 @@ function codeWorkspacePanelRoles(run, task, subsystem, {
     if (!required.includes(role)) required.push(role);
   };
   const signals = taskSignals(run, task, progress);
+  const cycle = workPolicy ?? subsystemWorkPolicy({
+    surface: 'code', focus: 'general', subsystem, goal,
+    iteration, findings, failure: run?.situation?.executionFailure,
+    complexity: signals.implementationComplexity,
+    uncertainty: signals.unknowns,
+    remainingBudgetRatio: remainingSpecialistBudget(run),
+    risk: run?.situation?.risk
+  });
+  if (cycle.activities.debug.needed) addRequired('debugger');
 
   // The repository partition, not a fixed flat team, chooses UX/frontend,
   // backend, security, test or infrastructure expertise. A specialist cannot
@@ -1318,6 +1329,8 @@ function codeWorkspacePanelRoles(run, task, subsystem, {
     || iteration > 1
     || findings.some(item => ['revise', 'investigate', 'stop'].includes(text(item?.recommendation).toLowerCase()));
 
+  if (cycle.activities.plan.needed && width >= 3) addRequired('architect');
+  if (cycle.activities.research.needed && width >= 3) addRequired('researcher');
   if (needsValidation) addRequired('test-engineer');
   if (needsAdversarialReview) addRequired('critic');
   if (iteration > 1 && signals.executable) addRequired('debugger');
@@ -1700,12 +1713,25 @@ async function runCodeWorkspaceAgentPanels({
           maxAgents,
           Math.max(1, Math.floor(Math.max(1, effectiveMaxParallel) / Math.max(1, maxPanels)))
         );
+        const workPolicy = subsystemWorkPolicy({
+          surface: 'code', focus: codeSpecialistTeam(subsystem, { goal: basePayload?.goal }).focus,
+          subsystem, goal: basePayload?.goal, iteration,
+          findings: state?.findings ?? [],
+          failure: run?.situation?.executionFailure,
+          risk: run?.situation?.risk,
+          complexity: pressureMonitor.pressure,
+          uncertainty: run?.situation?.uncertainty ?? 0,
+          independentWork: ready.length > 1,
+          remainingBudgetRatio: remainingBudgetRatio()
+        });
         const roles = codeWorkspacePanelRoles(run, task, subsystem, {
           width,
           iteration,
           findings: state?.findings ?? [],
-          goal: basePayload?.goal
+          goal: basePayload?.goal,
+          workPolicy
         });
+        state.workPolicy = workPolicy;
         state.iteration = iteration;
         state.roles = [];
         state.unavailableRoles = [];
@@ -1749,6 +1775,7 @@ async function runCodeWorkspaceAgentPanels({
             subsystem,
             iteration,
             lane,
+            workPolicy,
             subsystemWork,
             panelId: `${subsystem.id}:i${iteration}`
           });
@@ -1820,6 +1847,7 @@ async function runCodeWorkspaceAgentPanels({
               workspacePanel: {
                 mode: 'unified-adaptive-code-panel',
                 panelId: job.panelId,
+                adaptiveWork: job.workPolicy,
                 subsystemId: job.subsystem.id,
                 iteration: job.iteration,
                 ownedFiles: job.subsystem.files,
@@ -1830,10 +1858,13 @@ async function runCodeWorkspaceAgentPanels({
                 engine: 'unified-adaptive-code-panel-v1',
                 lifecycle: {
                   cycle: job.iteration,
-                  coverage: ['research', 'explain', 'replan', 'implement', 'test', 'critique', 'verify', 'handoff'],
-                  researchEveryCycle: true,
-                  explanationEveryCycle: true,
-                  replanEveryCycle: true,
+                  available: job.workPolicy.available,
+                  activated: job.workPolicy.activated,
+                  researchOnlyWhenEvidenceIsMissing: true,
+                  planningOnlyWhenScopeRequiresIt: true,
+                  debugOnlyWhenFailureOrRepairIsObserved: true,
+                  testsRequireRealParentExecution: true,
+                  finalVerificationIsParentOwned: true,
                   iterationAdaptive: true
                 },
                 communication: {
