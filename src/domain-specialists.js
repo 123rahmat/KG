@@ -96,7 +96,7 @@ export const DOMAIN_SPECIALISTS = Object.freeze({
     ['research'], /\b(conflicting sources|sources disagree|contradictory studies|compare sources|evidence conflict)\b/i, ['analyze','verify']),
   ...Object.fromEntries(Object.entries(FAMILY_MAIN_AGENTS).map(([role,a]) =>
     [role,entry(a.family.replaceAll('-',' '),
-      'Offer bounded '+a.family.replaceAll('-',' ')+' advice under the current task authority.',
+      'Assess '+a.family.replaceAll('-',' ')+' for this task using specific expertise in '+a.subagents.slice(0,4).join(', ')+'. Identify the smallest workstream change, evidence gap or explicit verification check. Do not expand permissions.',
       a.purpose,a.workspaces,/(?!)/,a.bestFor)]))
 });
 
