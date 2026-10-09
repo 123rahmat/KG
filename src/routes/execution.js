@@ -16,6 +16,7 @@ import { RunActions, ActionError } from '../run-actions.js';
 import { workspaceTools, listWorkspaceTools } from '../tool-forge.js';
 import { memoriesFor } from '../memory.js';
 import '../tools/finance.js';
+import '../tools/sandbox-action.js';
 import { usagePolicyPrompt, blockedTopicsFrom, guardAnswer, recordRefusal } from '../safety.js';
 import { toolNamed, toolCatalog } from '../toolbox.js';
 import { currentDbScope } from '../db.js';
@@ -304,7 +305,10 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       ...(config.tools?.mcp?.servers?.length && ['tool', 'investigate'].includes(task.type)
         ? ['mcp.discover', 'mcp.call']
         : []),
-      ...(attachments.length ? ['file.read', 'data.analyze', 'code.run'] : []),
+      ...(attachments.length ? ['file.read', 'data.analyze'] : []),
+      // Sandbox requests are available to any workspace; approval, capability
+      // checks and an isolated configured runner govern actual execution.
+      ...(config.runners?.sandbox ? ['code.run'] : []),
       ...approvedTools.map(tool => tool.name)
     ])];
     return {
