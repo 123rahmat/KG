@@ -44,9 +44,9 @@ test('main agents select own subagents but never self-grant tools',()=>{
   }
 });
 test('actual existing recruiter chooses coding family leads and never expands direct chat',()=>{
-  const run={surface:'code',goal:'Build an accessible responsive React UI component with layout and keyboard navigation',
+  const run={surface:'code',goal:'Review UI design systems and responsive layout component patterns',
     adaptation:{scale:'complex'},situation:{complexity:.9,risk:'low'},tasks:[]};
-  const result=rolesFor(run,{id:'build-code',type:'code'},{mode:'always',maxAgents:6});
+  const result=rolesFor(run,{id:'plan',type:'plan'},{mode:'always',maxAgents:6});
   assert.ok(result.roles.some(role=>role==='code-ui-engineering-lead'),result.roles.join(','));
   assert.ok(result.agentCount<=6);
   const chat=rolesFor({...run,surface:'normal-chat'}, {id:'respond',type:'respond'}, {mode:'always',maxAgents:6});
