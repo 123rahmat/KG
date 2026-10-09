@@ -2517,6 +2517,8 @@ export async function runAdaptiveAgentPanel({
   // A child does not get an independent run budget. At most two read-only
   // model probes are admitted across the entire generic specialist panel.
   let familyChildCallSlots = 2;
+  let familyChildCallsUsed = 0;
+  let familyChildParallelWaves = 0;
   const remainingBudgetRatio = () => run?.maxTokens === null || run?.maxTokens === undefined
     ? 1
     : Math.max(0, Math.min(1, (Number(run.maxTokens) - Number(run.tokensUsed ?? 0) - tokensSpent) / Math.max(1, Number(run.maxTokens))));
@@ -2746,6 +2748,8 @@ export async function runAdaptiveAgentPanel({
       })
       : {findings:[],modelCalls:0};
     familyChildCallSlots -= nested.modelCalls;
+    familyChildCallsUsed += nested.modelCalls;
+    if (nested.modelCalls > 1 && effectiveMaxParallel > 1) familyChildParallelWaves++;
     // Child work is visible only after the model actually returned a valid
     // finding. Nothing here counts as parent-task verification or file edits.
     for (const observation of nested.findings) {
@@ -2851,7 +2855,10 @@ export async function runAdaptiveAgentPanel({
         maxParallel: specialistWave.maxParallel,
         verificationAuthority: specialistWave.verificationAuthority
       } : null,
-      parallel: lanePlan.waves.some(wave => (wave.lanes ?? []).length > 1),
+      parallel: lanePlan.waves.some(wave => (wave.lanes ?? []).length > 1)
+        || (nested.modelCalls > 1 && effectiveMaxParallel > 1),
+      childModelCalls: nested.modelCalls,
+      childFindings: nested.findings.length,
       lanePlan,
       completed: results.filter(item => item.parsed).map(item => item.role),
       failed: results.filter(item => !item.parsed).map(item => item.role)
@@ -2986,6 +2993,8 @@ export async function runAdaptiveAgentPanel({
       earlyConvergence,
       specialistsCompleted: completedRoles.length,
       specialistsFailed: failedRoles.length,
+      familyChildModelCalls: familyChildCallsUsed,
+      familyChildParallelWaves,
       parallelWaves: waves.filter(wave => wave.parallel).length,
       serialWaves: waves.filter(wave => !wave.parallel).length,
       principle: 'Spend additional model calls only when new evidence can materially change the verified outcome.'
