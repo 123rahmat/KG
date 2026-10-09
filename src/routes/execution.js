@@ -305,10 +305,10 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       ...(config.tools?.mcp?.servers?.length && ['tool', 'investigate'].includes(task.type)
         ? ['mcp.discover', 'mcp.call']
         : []),
-      ...(attachments.length ? ['file.read', 'data.analyze'] : []),
+      ...(attachments.length ? ['file.read', 'data.analyze', 'code.run'] : []),
       // Sandbox requests are available to any workspace; approval, capability
       // checks and an isolated configured runner govern actual execution.
-      ...(config.runners?.sandbox ? ['code.run'] : []),
+      ...(config.runners?.sandbox ? ['sandbox.execute'] : []),
       ...approvedTools.map(tool => tool.name)
     ])];
     return {
