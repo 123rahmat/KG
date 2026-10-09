@@ -153,7 +153,7 @@ export function specialistFamilyMatches({surface='normal-chat',goal=''}={}) {
     .filter(item=>item.score>0)
     .sort((a,b)=>b.score-a.score || a.family.localeCompare(b.family)));
 }
-export function specialistFocusFor({surface='normal-chat',goal='',role='',maxSubskills=2}={}) {
+export function specialistFocusFor({surface='normal-chat',goal='',role='',maxSubskills=null}={}) {
   const workspace = SPECIALIST_FAMILIES[surface] ? surface : 'normal-chat';
   const entries = SPECIALIST_FAMILIES[workspace];
   const request = normalize(goal).slice(0,2000);
@@ -174,7 +174,10 @@ export function specialistFocusFor({surface='normal-chat',goal='',role='',maxSub
   })).sort((a,b)=>b.score-a.score || choice.children.indexOf(a.subskill)-choice.children.indexOf(b.subskill));
   return Object.freeze({
     workspace, family:choice.family, matched:choice.score > 0,
-    subskills:Object.freeze(ranked.slice(0,Math.max(1,Math.min(3,Math.floor(Number(maxSubskills)||2)))).map(x=>x.subskill)),
+    subskills:Object.freeze((maxSubskills === null
+      ? (ranked.some(item=>item.score>0) ? ranked.filter(item=>item.score>0) : ranked.slice(0,1))
+      : ranked.slice(0,Math.max(1,Math.floor(Number(maxSubskills)||1))))
+      .map(item=>item.subskill)),
     role:roleId || null, authority:'advisory-only', scope:'current-task-only',
     delegation:'parent-controller-only', verification:'evidence-required',
     note:'The specialist is a bounded focus inside the current authorized agent call. No new agents or tools are spawned.'
