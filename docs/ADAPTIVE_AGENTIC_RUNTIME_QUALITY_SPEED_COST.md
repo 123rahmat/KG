@@ -2,6 +2,14 @@
 
 Implementation: existing **`KG/main`** runtime. This is a single orchestration path, NOT an independent second agent platform.
 
+## Product boundary: three interfaces, two agentic workspaces
+
+**Normal Chat** is a simple, general-purpose Gemini conversation for everyday life, education, business planning, file analysis, writing, visuals, and even challenging reasoning. It uses the primary model, adaptive reasoning effort, permitted just-in-time tools, and parent-owned verification **without recruiting specialist main agents, subagents, an arbiter or an independent reviewer**. No 'agents always' config overrides this boundary.
+
+**Coding Workspace** and **Research Workspace** are the only agentic workspaces. Both use the same shared task-intelligence kernel, optional specialist main agents, situation-derived subagent lenses, supervisor-based ongoing recruitment and retirement, A2A handoffs, sandbox and resource brokers, and quality/cost accounting. Small tasks can still use one primary execution path; expert teams appear only where they improve outcomes.
+
+This is a product/surface separation, not three independent AI engines. Workspace project states remain isolated, while general conversation can suggest opening a specialized workspace without secretly spawning a coding team.
+
 ## Actual execution contract
 
 1. **Understand user outcome first.** Context, actual constraints, acceptance criteria, workspace, risk, permissions and existing evidence determine whether one model reply is enough. Nothing mandates running an agent team.
@@ -16,7 +24,7 @@ Implementation: existing **`KG/main`** runtime. This is a single orchestration p
 | Request | Efficient default behavior | Quality protection |
 | --- | --- | --- |
 | Simple chat or familiar explanation | One primary reasoning response, no team fan-out | Explain uncertainty rather than fabricate evidence |
-| Multi-domain planning, education, business | Select the relevant specialist families and task-derived requirements; share the parent call unless independent review justifies more | Preserve actual criteria, contrast alternatives where needed |
+| Multi-domain planning, education, business in Normal Chat | One primary Gemini model with deeper internal reasoning and authorized tools as needed, **no role recruitment** | Preserve actual criteria, contrast alternatives and verify material claims without auxiliary agents |
 | Substantial coding | Scoped architecture/implementation/testing experts; independent subsystem panels on disjoint files; sandbox checks and package installs only through approved runners | Owners, source revisions, tests, code-change scope and receipts govern the result |
 | Complex research | Source/method/analysis specialist families or temporary task-specific leads; parallel only for genuinely independent evidence | Cite retrieved evidence; distinguish candidate claims from sourced, verified facts |
 | Ambiguous, failing or regulated work | Targeted investigation, debugging, independent criticism, or human control as consequences require | No high-confidence shortcut around verification or explicit approval |
@@ -33,7 +41,7 @@ Implementation: existing **`KG/main`** runtime. This is a single orchestration p
 
 ## Evaluation requirements before calling it production-ready
 
-Measure on representative Normal Chat, Coding and Research tasks, comparing the same model with a single-agent baseline and with adaptive recruitment:
+Measure Normal Chat as **direct reasoning with zero auxiliary model agents**, and compare agentic recruitment against a single-agent baseline **inside Code and Research only**. Track:
 
 - Correctness and acceptance-criterion coverage **with external or human-labeled ground truth**; never use model confidence as the sole quality label
 - Actual task completion and false-completion rate; sandbox test outcomes; unsupported citation rate; cross-user permission failures
