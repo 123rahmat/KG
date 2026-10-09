@@ -32,7 +32,7 @@ export const DOMAIN_SPECIALISTS = Object.freeze({
   'language-specialist': entry('Translation and language fidelity',
     'Check translation fidelity, register, idioms and audience requirements without adding unstated meaning.',
     'Review multilingual text and translations for faithful content and natural communication.',
-    ['normal-chat','research'], /\b(translat|localiz|multilingual|interpret.*language|grammar revision)\b/i, ['translate','write','edit']),
+    ['normal-chat','research'], /\b(translat(?:e|es|ed|ing|ion|ions|or)?|localiz(?:e|es|ed|ing|ation)?|multilingual|interpret.*language|grammar revision)\b/i, ['translate','write','edit']),
   'planning-analyst': entry('Practical planning and decisions',
     'Compare schedules, constraints and dependencies; surface only the decisions required by the user.',
     'Check practical plans for missing prerequisites and achievable steps.',
