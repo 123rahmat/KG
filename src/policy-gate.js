@@ -42,15 +42,18 @@ export function checkTaskPolicy(run, task, {
   );
 
   const budget = adaptiveExecutionBudgetStatus(run, task);
-  if (!budget.allowed) return denied(
-    budget.code || 'adaptive-budget-exhausted', 409, budget.reason,
-    {
-      completedExecutionStages: budget.completedExecutionStages ?? null,
-      maxExecutionStages: budget.maxExecutionStages ?? null,
-      completedToolCalls: budget.completedToolCalls ?? null,
-      maxToolCalls: budget.maxToolCalls ?? null
-    }
-  );
+  if (!budget.allowed) return Object.freeze({
+    ...denied(
+      budget.code || 'adaptive-budget-exhausted', 409, budget.reason,
+      {
+        completedExecutionStages: budget.completedExecutionStages ?? null,
+        maxExecutionStages: budget.maxExecutionStages ?? null,
+        completedToolCalls: budget.completedToolCalls ?? null,
+        maxToolCalls: budget.maxToolCalls ?? null
+      }
+    ),
+    adaptiveBudget: budget
+  });
 
   const situation = situationGovernanceExecutionGate(run, task, { external });
   if (!situation.allowed) return denied(
