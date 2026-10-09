@@ -26,7 +26,7 @@ export function specialistWaveDecision({
   const surface = ['normal-chat', 'code', 'research'].includes(workspace)
     ? workspace : 'normal-chat';
   const normalizedMode = ['auto', 'always', 'off'].includes(mode) ? mode : 'auto';
-  const ceiling = Math.max(1, Math.min(11, positive(maxAgents, 5)));
+  const ceiling = Math.max(1,positive(maxAgents, 5));
   const planned = Math.max(1, Math.min(ceiling, positive(plannedAgents)));
   const completed = Array.isArray(completedRoles) ? completedRoles.length : 0;
   const failed = Array.isArray(failedRoles) ? failedRoles.length : 0;
@@ -83,10 +83,13 @@ export function specialistWaveDecision({
   }
   // Never construe optional specialist confidence as parent-workflow verification.
   // The active wave must settle before this contract is consulted again.
+  // Independence and the provider's configured allowance determine
+  // concurrency; the catalog never imposes a per-workspace team width.
+  const concurrencyDemand = normalizedMode === 'always'
+    ? 0.35 + independent*0.65 : independent;
   const concurrencyCeiling = elevated || failed || budget < 0.25 ? 1
-    : normalizedMode !== 'always'
-      && independent < (surface === 'normal-chat' ? 0.7 : 0.35) ? 1
-      : surface === 'normal-chat' ? 2 : surface === 'code' ? 3 : 4;
+    : normalizedMode !== 'always' && independent < 0.35 ? 1
+      : Math.max(1,Math.ceil(Math.max(1,target)*concurrencyDemand));
   const maxParallel = Math.max(1, Math.min(Math.max(1, target), ceiling, concurrencyCeiling));
   return Object.freeze({
     action, reason, workspace: surface,
