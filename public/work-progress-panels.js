@@ -28,7 +28,9 @@ export function recordedCheckpointTrail(run, { maxMarkers = 8 } = {}) {
   const limit = Number.isFinite(Number(maxMarkers))
     ? Math.max(1, Math.min(12, Math.floor(Number(maxMarkers)))) : 8;
   const terminal = ['complete', 'failed', 'blocked', 'exhausted', 'iterate'].includes(run?.state);
-  const selected = terminal ? null : tasks.find(task => task?.id === run?.next);
+  const nextId = safe(run?.next, 120);
+  const selected = terminal || !nextId ? null
+    : tasks.find(task => safe(task?.id, 120) === nextId);
   const markers = tasks.slice(-limit).map(task => {
     const rawStatus = safe(task?.status, 24).toLowerCase();
     const status = ['complete','failed','skipped','running','pending','queued','waiting','blocked']
