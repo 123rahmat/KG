@@ -1106,7 +1106,9 @@ function buildBrief(findings, arbiter, decision, states = [], allocation = null)
       summary: item.summary,
       confidence: confidenceValue(item.confidence)
     })).slice(0, 3),
-    agentStates: states.slice(0, MAX_MULTI_AGENT_SPECIALISTS + 1),
+    // Parent and actually executed child findings must both survive the
+    // compact brief; no room is reserved for merely planned subskills.
+    agentStates: states.slice(-Math.min(16, MAX_MULTI_AGENT_SPECIALISTS + 4)),
     panelMode: allocation?.panelMode ?? 'single-general-panel',
     panelScope: allocation?.panelScope ?? null,
     panelEngine: allocation?.panelEngine ?? null,
