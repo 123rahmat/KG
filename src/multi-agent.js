@@ -627,8 +627,19 @@ export function rolesFor(run, task, {
         remainingBudgetRatio: remainingSpecialistBudget(run),
         risk: run?.situation?.risk
       }) : null;
+  // Preserve established domain experts when their task-specific signature
+  // strongly matches. Family leads complement them; they must not displace
+  // primary research methodology, accessibility, API or financial expertise.
+  const matchingDomainExperts = Object.keys(DOMAIN_SPECIALISTS)
+    .filter(role => !role.endsWith('-lead'))
+    .map(role=>({role,score:domainSpecialistMatch(role,{
+      surface:selectedSurface,goal:selectedGoal,task
+    })}))
+    .filter(item=>item.score>=0.95)
+    .sort((a,b)=>b.score-a.score || a.role.localeCompare(b.role));
   const requiredRoles = [
     ...((researchTeams?.teams ?? []).map((team, index) => [true, team.leadRole, 2.8 - index * .02])),
+    ...matchingDomainExperts.map(item=>[true,item.role,2.55+item.score*.1]),
     [openWorldResearchPriority(run, task) && !signals.executable, 'researcher', 1.9],
     [signals.securityFocus && signals.executable, 'security-reviewer', signals.stakes > 0 ? 3 : 2],
     [signals.retrying && signals.executable, 'debugger', 2],
