@@ -1133,6 +1133,7 @@ function buildBrief(findings, arbiter, decision, states = [], allocation = null)
     evidence,
     assumptions,
     resourceRequests:allocation?.resourceRequests ?? summarizeDelegationRequests(findings.flatMap(x=>x.resourceRequests ?? [])),
+    recruitmentSupervisor:allocation?.recruitmentSupervisor??null,
     implementationPlan: implementationFinding?.implementation ?? derivedImplementationPlan,
     consensus: arbiter ? arbiter.summary : null,
     arbiterRecommendation: arbiter?.recommendation ?? null,
@@ -1944,6 +1945,7 @@ async function runCodeWorkspaceAgentPanels({
             const result = await modelCaller(agentMessages(job.role, {
               ...basePayload,
               harness,
+              recruitmentSupervisor:recruitmentSummary(recruitmentState),
               blackboard: blackboard ?? basePayload?.blackboard ?? null,
               subsystemPlan: scopedSubsystemPlan(subsystemPlanContext, job.subsystem),
               subsystemWork: job.subsystemWork,
