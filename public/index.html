@@ -935,8 +935,7 @@
         <button type="button" class="settings-nav-item" data-settings-section="personalization"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-sparkle"/></svg></span><span>Personalization</span></button>
         <button type="button" class="settings-nav-item" data-settings-section="appearance"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-contrast"/></svg></span><span>Appearance</span></button>
         <button type="button" class="settings-nav-item" data-settings-section="voice"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-mic"/></svg></span><span>Voice</span></button>
-        <button type="button" class="settings-nav-item" data-settings-section="data"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-database"/></svg></span><span>Data controls</span></button>
-        <button type="button" class="settings-nav-item" data-settings-section="policies"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-sliders"/></svg></span><span>Policy controls</span></button>
+        <button type="button" class="settings-nav-item" data-settings-section="data"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-database"/></svg></span><span>Privacy & policy</span></button>
         <button type="button" class="settings-nav-item" data-settings-section="schedules"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-activity"/></svg></span><span>Schedules</span></button>
         <button type="button" class="settings-nav-item" data-settings-section="usage"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-gauge"/></svg></span><span>Usage</span></button>
         <button type="button" class="settings-nav-item" data-settings-section="billing"><span class="settings-nav-icon"><svg class="i" aria-hidden="true"><use href="#i-card"/></svg></span><span>Billing</span></button>
@@ -947,7 +946,7 @@
       </nav>
       <div class="settings-sidebar-foot">
         <span class="settings-status-dot"></span>
-        <span>Preferences save automatically; policies use Save</span>
+        <span>Preferences save automatically; advanced policies use Save</span>
       </div>
     </aside>
 
@@ -1053,21 +1052,9 @@
           </label>
         </section>
 
-        <section class="settings-group settings-section" data-settings-section="policies" data-settings-title="Policy controls" data-settings-description="Manage restrictions at your authorized scope and see which controls apply.">
-          <label>Policy scope<select id="policyLayer"><option value="user">Personal</option><option value="workspace">Workspace</option><option value="organization">Organization</option></select></label>
-          <p id="policyAuthority" class="small muted" aria-live="polite"></p>
-          <h3>Effective controls</h3>
-          <p id="policyEffective" class="small" aria-live="polite"></p>
-          <label class="settings-toggle-row"><span><strong>Require human approval</strong><small>New approval requirements pause existing work before its next step.</small></span><input id="policyApproval" type="checkbox" disabled></label>
-          <label>Run token cap<input id="policyTokens" type="number" min="0" step="1" placeholder="No local cap" disabled><span class="hint">Zero prevents further AI spending. Existing runs retain their tighter budget.</span></label>
-          <label>Blocked tools<textarea id="policyDeniedTools" rows="3" placeholder="One tool per line, for example code.run or mcp.*" disabled></textarea></label>
-          <details><summary>Additional restrictions</summary><label>Policy JSON<textarea id="policyAdvanced" rows="8" class="mono" spellcheck="false" disabled></textarea><span class="hint">Supported fields include allowedModels, deniedModels, allowedCapabilities, deniedCapabilities, allowedDataClasses, deniedDataClasses, allowedRiskClasses and deniedRiskClasses. Use arrays of names; * matches all names.</span></label></details>
-          <div class="row wrap"><button id="policySave" type="button" class="primary" disabled>Save policy</button><button id="policyReload" type="button">Reload policy</button></div>
-          <div id="policyNotice" class="notice" aria-live="polite" hidden></div>
-        </section>
-
-        <section class="settings-group settings-section" data-settings-section="data" data-settings-title="Data controls" data-settings-description="Control sharing, external context and local resilience.">
+        <section class="settings-group settings-section" data-settings-section="data" data-settings-title="Privacy & policy" data-settings-description="Manage consent, sharing, resource limits and authorized workspace policies.">
           <h3>Privacy & sharing</h3>
+          <p class="hint">You control how your data is shared. Agents use your selected workspace permissions; additional tools and outside actions require authorization.</p>
           <label class="settings-toggle-row"><span><strong>AI conversation consent</strong><small>Allow the AI to read your chats without asking each time.</small></span><input id="setConsent" type="checkbox"></label>
           <label class="settings-toggle-row"><span><strong>Share new chats</strong><small>Make new chats visible to your workspace.</small></span><input id="setShare" type="checkbox"></label>
           <div class="settings-toggle-row"><span><strong>Memory</strong><small>Each chat remembers its own conversation. Cross-chat memory is optional and user-controlled.</small></span><button type="button" class="ghost small" id="openMemorySettings">Manage memory</button></div>
@@ -1076,6 +1063,20 @@
           </label>
           <label class="settings-toggle-row"><span><strong>Offline queue</strong><small>Keep unsent work on this device and retry when you reconnect.</small></span><input id="setOfflineQueue" type="checkbox"></label>
           <div class="settings-info-card"><strong>Local-first resilience</strong><p>While offline, unsent text stays in this browser session and is not uploaded until a connection is available.</p></div>
+          <details class="settings-policy-details">
+            <summary>Advanced policy & resource limits</summary>
+            <p class="hint">These controls apply only where your account has permission. They never override privacy consent or platform safety requirements.</p>
+  <label>Policy scope<select id="policyLayer"><option value="user">Personal</option><option value="workspace">Workspace</option><option value="organization">Organization</option></select></label>
+            <p id="policyAuthority" class="small muted" aria-live="polite"></p>
+            <h3>Effective controls</h3>
+            <p id="policyEffective" class="small" aria-live="polite"></p>
+            <label class="settings-toggle-row"><span><strong>Require human approval</strong><small>New approval requirements pause existing work before its next step.</small></span><input id="policyApproval" type="checkbox" disabled></label>
+            <label>Run token cap<input id="policyTokens" type="number" min="0" step="1" placeholder="No local cap" disabled><span class="hint">Zero prevents further AI spending. Existing runs retain their tighter budget.</span></label>
+            <label>Blocked tools<textarea id="policyDeniedTools" rows="3" placeholder="One tool per line, for example code.run or mcp.*" disabled></textarea></label>
+            <details><summary>Additional restrictions</summary><label>Policy JSON<textarea id="policyAdvanced" rows="8" class="mono" spellcheck="false" disabled></textarea><span class="hint">Supported fields include allowedModels, deniedModels, allowedCapabilities, deniedCapabilities, allowedDataClasses, deniedDataClasses, allowedRiskClasses and deniedRiskClasses. Use arrays of names; * matches all names.</span></label></details>
+            <div class="row wrap"><button id="policySave" type="button" class="primary" disabled>Save policy</button><button id="policyReload" type="button">Reload policy</button></div>
+            <div id="policyNotice" class="notice" aria-live="polite" hidden></div>
+          </details>
           <h3 class="settings-subhead">Notifications</h3>
           <label class="settings-toggle-row"><span><strong>Workflow notifications</strong><small>Show progress and completion notices.</small></span><input id="setNotifications" type="checkbox"></label>
         </section>
