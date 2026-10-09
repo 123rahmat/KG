@@ -101,7 +101,13 @@ export function agentActivitySnapshot(run) {
     }
   }
 
-  const isLive = !['complete', 'failed', 'blocked', 'exhausted', 'iterate'].includes(run?.state);
+  // Persisted agent records from an earlier task may still carry a "running"
+  // status after the parent has advanced. Only the same currently-running
+  // task can produce active-agent UI. Never animate stale or orphaned records.
+  const sourceIsCurrent = sourceTask?.status === 'running'
+    && (!run?.next || run.next === sourceTask.id);
+  const isLive = sourceIsCurrent
+    && !['complete', 'failed', 'blocked', 'exhausted', 'iterate', 'waiting'].includes(run?.state);
   return {
     roles,
     groups,
