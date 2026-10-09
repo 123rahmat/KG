@@ -6,6 +6,7 @@
  * an already-authorized object.
  */
 import { $, element, button, downloadUrl, api } from './ui-core.js';
+import { tablePreviewModel } from './table-preview-model.js';
 
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 const DIRECT_MEDIA = new Set([...IMAGE_TYPES, 'application/pdf']);
@@ -72,12 +73,25 @@ function textPreview(payload) {
   if (Array.isArray(payload.tables) && payload.tables.length) {
     const tableSummary = element('div', { class: 'artifact-preview-tables stack' });
     for (const table of payload.tables.slice(0, 4)) {
-      const rows = Array.isArray(table.sample) ? table.sample : [];
-      if (!rows.length) continue;
+      const sample = tablePreviewModel(table);
+      if (!sample.rows.length || !sample.rows[0].length) continue;
+      const tableHead = sample.header.length ? element('thead', {},
+        element('tr', {}, sample.header.map(cell => element('th', { scope: 'col', text: cell })))) : null;
+      const tableBody = element('tbody', {}, sample.rows.map(row =>
+        element('tr', {}, row.map(cell => element('td', { text: cell })))));
       tableSummary.append(element('section', { class: 'artifact-preview-table' }, [
-        element('strong', { class: 'small', text: table.name || 'Table' }),
-        element('pre', { class: 'artifact-preview-pre compact', text: rows.map(row => Array.isArray(row) ? row.join(' | ') : JSON.stringify(row)).join('\n') })
-      ]));
+        element('strong', { class: 'small', text: sample.name }),
+        element('div', {
+          class: 'artifact-preview-table-scroll', role: 'region', tabindex: '0',
+          'aria-label': sample.name + ' · read-only table sample'
+        }, element('table', { class: 'artifact-preview-sample-table' },
+          [element('caption', { class: 'sr-only', text: sample.name + ' read-only preview' }),
+            tableHead, tableBody].filter(Boolean))),
+        sample.truncatedRows || sample.truncatedColumns
+          ? element('span', { class: 'small muted',
+            text: 'Preview limited to a sample of rows and columns. Download the file for complete data.' })
+          : null
+      ].filter(Boolean)));
     }
     if (tableSummary.childElementCount) wrapper.append(tableSummary);
   }
