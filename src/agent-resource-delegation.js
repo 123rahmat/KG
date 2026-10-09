@@ -15,13 +15,13 @@ const RESTRICTED = new Set([
 ]);
 const normalize = value => String(value ?? '').trim();
 const clip = (value,max=160) => normalize(value).slice(0,max);
-const safeLabel = value => clip(value).replace(/[\x00-\x1f\x7f]/g,' ');
+const safeLabel = value => clip(value).replace(/\p{Cc}/gu,' ');
 const safeId = value => clip(value,84).toLowerCase().replace(/[^a-z0-9_-]/g,'-');
 const pathSafe = path => typeof path==='string'
   && path.length<=160 && path.length>0
   && !path.startsWith('/') && !/^[a-z]:/i.test(path)
   && !path.split(/[\\/]+/).some(x=>x==='..'||x==='.')
-  && !/[\x00-\x1f]/.test(path)
+  && !/\p{Cc}/u.test(path)
   && !/\\/.test(path);
 const SENSITIVE = /(^|\/)(\.env|\.git|\.ssh|secrets?|credentials?|tokens?|private|id_rsa|\.npmrc|\.pypirc)(\/|\.|$)/i;
 const OPERATIONAL = {
