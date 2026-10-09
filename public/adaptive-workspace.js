@@ -441,6 +441,9 @@ export function renderWorkStatus(run) {
     stopping: state.stoppingRun === run.id
   });
   const snapshot = progressSnapshot(run);
+  const discoveredCapabilities = Array.isArray(run?.capabilities?.discovered)
+    ? run.capabilities.discovered.filter(item => item && typeof item === 'object')
+    : [];
   const background = backgroundSnapshot(run);
   const workspace = ['code', 'research'].includes(state.activeSurface) ? state.activeSurface : activeWorkspace(run);
   const panel = workspaceProgressPanel(run, workspace);
@@ -559,10 +562,16 @@ export function renderWorkStatus(run) {
         agent.summary ? element('span', { class: 'small work-agent-summary', text: agent.summary }) : null
       ].filter(Boolean)))
     ]) : null,
-    snapshot.conflicts || snapshot.gaps ? element('div', { class: 'work-progress-alerts' }, [
-      snapshot.conflicts ? element('span', { class: 'pill warn', text: snapshot.conflicts + ' evidence conflicts to resolve' }) : null,
-      snapshot.gaps ? element('span', { class: 'pill warn', text: snapshot.gaps + ' open research questions' }) : null
-    ].filter(Boolean)) : null,
+    snapshot.conflicts || snapshot.gaps || discoveredCapabilities.length
+      ? element('div', { class: 'work-progress-alerts', 'aria-label': 'Unresolved work and capability proposals' }, [
+        snapshot.conflicts ? element('span', { class: 'pill warn', text: snapshot.conflicts + ' evidence conflicts to resolve' }) : null,
+        snapshot.gaps ? element('span', { class: 'pill warn', text: snapshot.gaps + ' open research questions' }) : null,
+        discoveredCapabilities.length ? element('span', {
+          class: 'pill warn',
+          text: discoveredCapabilities.length + ' discovered capability proposal'
+            + (discoveredCapabilities.length === 1 ? '' : 's') + ' · not automatically enabled'
+        }) : null
+      ].filter(Boolean)) : null,
     !view.terminal && finished.length ? element('div', { class: 'work-recent-activity' }, finished.map(task => element('div', { class: 'work-activity-row ' + taskTone(task) }, [
       element('span', { class: 'work-activity-mark', text: task.status === 'complete' ? '✓' : task.status === 'failed' ? '!' : '−', 'aria-hidden': 'true' }),
       element('span', { class: 'small', text: taskLabel(task) }),
