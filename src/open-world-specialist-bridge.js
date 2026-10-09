@@ -102,8 +102,10 @@ export function openWorldResearchPriority(run = {}, task = {}) {
   const situation = run?.situation ?? {};
   const candidates = safeArray(run?.capabilities?.discovered)
     .filter(x => x && typeof x === 'object' && !Array.isArray(x));
-  const taskType = clip(task?.type || task?.id, 40).toLowerCase();
-  if (!['understand', 'discover', 'discover-capabilities', 'investigate', 'reassess', 'plan'].includes(taskType)) return false;
+  const eligible = new Set(['understand', 'discover', 'discover-capabilities', 'investigate', 'reassess', 'plan']);
+  const taskType = clip(task?.type, 40).toLowerCase();
+  const taskId = clip(task?.id, 40).toLowerCase();
+  if (!eligible.has(taskType) && !eligible.has(taskId)) return false;
   return situation.unknownSituation === true
     || candidates.length > 0
     || (situation.investigationNeeded === true && situation.externalData?.hasExternalDataNeed === true);
