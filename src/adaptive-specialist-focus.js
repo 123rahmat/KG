@@ -138,11 +138,14 @@ export function specialistFocusFor({surface='normal-chat',goal='',role='',maxSub
   const entries = SPECIALIST_FAMILIES[workspace];
   const request = normalize(goal).slice(0,2000);
   const roleId = String(role ?? '').toLowerCase();
+  const roleFamilyMatch = roleId.match(/^(?:chat|code|research)-(.+)-lead$/);
+  const hintedFamily = roleFamilyMatch?.[1] && Object.hasOwn(entries,roleFamilyMatch[1])
+    ? roleFamilyMatch[1] : null;
   const scored = Object.entries(entries).map(([family, children]) => {
     const phrase = normalize(family);
     const keywordHits = children.reduce((count, sub) => count + (request.includes(normalize(sub)) ? 1 : 0), 0);
     const matched = KEYWORDS[family]?.test(request) ? 3 : 0;
-    const roleMatch = ROLE_HINTS[roleId] === family ? 12 : 0;
+    const roleMatch = ROLE_HINTS[roleId] === family || hintedFamily === family ? 12 : 0;
     return {family,children,score:roleMatch + matched + keywordHits * 2 + (request.includes(phrase) ? 2 : 0)};
   }).sort((a,b)=>b.score-a.score || a.family.localeCompare(b.family));
   const choice = scored[0]?.score > 0 ? scored[0] : scored.find(item=>item.family===FALLBACK[workspace]);
@@ -150,7 +153,7 @@ export function specialistFocusFor({surface='normal-chat',goal='',role='',maxSub
     subskill, score:request.includes(normalize(subskill)) ? 2 : 0
   })).sort((a,b)=>b.score-a.score || choice.children.indexOf(a.subskill)-choice.children.indexOf(b.subskill));
   return Object.freeze({
-    workspace, family:choice.family,
+    workspace, family:choice.family, matched:choice.score > 0,
     subskills:Object.freeze(ranked.slice(0,Math.max(1,Math.min(3,Math.floor(Number(maxSubskills)||2)))).map(x=>x.subskill)),
     role:roleId || null, authority:'advisory-only', scope:'current-task-only',
     delegation:'parent-controller-only', verification:'evidence-required',
