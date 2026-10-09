@@ -4,6 +4,8 @@
  * an agent, executes a tool, grants permission, or authors a completion claim.
  */
 import { specialistBudgetRatio } from './agent-topology-policy.js';
+import { EXTRA_SPECIALIST_FAMILIES } from './expanded-family-catalog.js';
+import { familyMainAgentMatch } from './family-main-agents.js';
 import { subsystemWorkPolicy } from './subsystem-work-policy.js';
 
 const string = x => String(x ?? '').trim();
@@ -64,6 +66,30 @@ function capRoles(roles, {remainingBudgetRatio=1, maxRoles=4} = {}) {
   const width = r < .25 ? 1 : r < .45 ? 2 : limit(maxRoles,4,6);
   return unique(roles).slice(0,width);
 }
+/**
+ * Project-scoped matching of the extended engineering family catalog.
+ * A role is merely nominated: panel allocation, budget, and execution policy
+ * determine whether it is called. Match explicit feature need, then prefer
+ * an owned subsystem's naming context when available.
+ */
+export function codeSpecialistLeadsFor(subsystem = {}, {goal='',task={},limit=4} = {}) {
+  const scope=unique([subsystem?.id,...(subsystem?.roots??[]),...(subsystem?.files??[])])
+    .join(' ').slice(0,1300);
+  const target=string(goal).slice(0,1500);
+  const ceiling=Math.max(0,Math.min(8,Math.floor(Number(limit)||0)));
+  if (!ceiling || !target) return Object.freeze([]);
+  const matches=Object.keys(EXTRA_SPECIALIST_FAMILIES.code).map(family=>{
+    const role='code-'+family+'-lead';
+    const scoped=scope?familyMainAgentMatch(role,{surface:'code',goal:scope,task}):0;
+    const requested=familyMainAgentMatch(role,{surface:'code',goal:target,task});
+    return {role,score:Math.max(scoped?scoped+.1:0,requested),scopeMatched:scoped>0};
+  }).filter(item=>item.score>=.89)
+    .sort((a,b)=>b.score-a.score||a.role.localeCompare(b.role))
+    .slice(0,ceiling)
+    .map(item=>Object.freeze(item));
+  return Object.freeze(matches);
+}
+
 export function codeSpecialistTeam(subsystem = {}, options = {}) {
   const focus = codeExpertFocus(subsystem, options.goal);
   const roles = capRoles(CODE[focus], options);
