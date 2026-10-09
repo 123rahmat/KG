@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { multiAgentDecision,rolesFor,runAdaptiveAgentPanel } from '../src/multi-agent.js';
 import { reviewDecision } from '../src/agents.js';
 import { decideAgentTopology } from '../src/adaptive-agents.js';
-import { workspaceComputePolicy,buildModeControllerContract } from '../src/mode-controllers.js';
+import { buildModeControllerContract } from '../src/mode-controllers.js';
 import { normalChatTaskProfile } from '../src/normal-chat-task-profile.js';
 import { surfaceRuntimePolicy } from '../src/surface-policy.js';
 import { taskSpecialistCandidates } from '../src/task-specialist-factory.js';
