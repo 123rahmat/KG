@@ -1261,6 +1261,15 @@ function codeWorkspacePanelWidth(run, task, maxAgents, iteration = 1, {
   return Math.min(CODE_WORKSPACE_MAX_PANEL_AGENTS, maxAgents, desired);
 }
 
+function scopedCodeSpecialistRemit(subsystem, assignedRole, workPolicy, options = {}) {
+  const team = codeSpecialistTeam(subsystem, options);
+  return specialistRemit({
+    ...team,
+    roles: [...new Set([...team.roles, assignedRole])],
+    workPolicy
+  }, assignedRole);
+}
+
 function codeWorkspacePanelRoles(run, task, subsystem, {
   width,
   iteration = 1,
@@ -1845,13 +1854,16 @@ async function runCodeWorkspaceAgentPanels({
               // The role and its scoped work policy must come from the
               // same observation cycle. Never send a stale first-iteration
               // policy alongside current failure evidence.
-              specialistAssignment: specialistRemit({
-                ...codeSpecialistTeam(job.subsystem, {
+              // The parent already selected this role from observed work.
+              // Give a dynamically recruited debugger/researcher the same
+              // bounded subsystem remit as a default expert; do not widen
+              // permissions or let the specialist recruit child agents.
+              specialistAssignment: scopedCodeSpecialistRemit(
+                job.subsystem, job.role, job.workPolicy, {
                   goal: basePayload?.goal, maxRoles: maxAgents,
                   remainingBudgetRatio: remainingBudgetRatio(), risk: run?.situation?.risk
-                }),
-                workPolicy: job.workPolicy
-              }, job.role),
+                }
+              ),
               workspacePanel: {
                 mode: 'unified-adaptive-code-panel',
                 panelId: job.panelId,
