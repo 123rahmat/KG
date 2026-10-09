@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  compileRecipeCandidates, matchReusableSpecialists, SavedSpecialistRecipeStore
+  compileRecipeCandidates, matchReusableSpecialists, usedRecipeIdsFromRun, SavedSpecialistRecipeStore
 } from '../src/saved-specialist-recipes.js';
 
 const scope={workspaceId:'workspace-a',principalId:'person-a'};
@@ -92,4 +92,46 @@ test('saved recipes can be explicitly forgotten only in their own scope',async()
   assert.equal(await store.forget(scope,{id:'rare-spectroscopy-workflow',surface:'research'}),true);
   assert.deepEqual(statements[0].args,['workspace-a','person-a','research','rare-spectroscopy-workflow']);
   assert.equal(await store.forget(scope,{id:'bad id',surface:'research'}),false);
+});
+
+test('a failed verification only affects specialties recorded in prior model execution',()=>{
+  const ids=usedRecipeIdsFromRun({
+    tasks:[
+      {id:'respond',evidence:{kind:'observed',provider:'google',
+        reusedSpecialistIds:['rare-spectroscopy-workflow','rare-spectroscopy-workflow']}},
+      {id:'manual',evidence:{kind:'observed',reusedSpecialistIds:['another-recipe']}},
+      {id:'verify',evidence:{kind:'verified',provider:'google',
+        reusedSpecialistIds:['should-not-count']}}
+    ]
+  });
+  assert.deepEqual(ids,['rare-spectroscopy-workflow']);
+});
+
+test('distinct verification failures trigger a bounded downgrade, not tool execution',async()=>{
+  const writes=[];
+  const pool={query:async(sql,args)=>{
+    if(sql.includes('user_preferences'))return {rows:[{enabled:true}]};
+    writes.push({sql,args});
+    return {rows:[{id:args[3],status:'observed'}]};
+  }};
+  const store=new SavedSpecialistRecipeStore(pool);
+  const run={id:'failed-run-17',surface:'research',tasks:[{
+    evidence:{kind:'observed',provider:'google',
+      reusedSpecialistIds:['rare-spectroscopy-workflow']}
+  }]};
+  assert.deepEqual(await store.observeFailedReuse(scope,run,{verifiedFailure:false}),[]);
+  assert.equal(writes.length,0);
+  const rows=await store.observeFailedReuse(scope,run,{verifiedFailure:true});
+  assert.equal(rows.length,1);
+  assert.match(writes[0].sql,/cardinality\(failed_run_ids\)>=1/);
+  assert.match(writes[0].sql,/ANY\(failed_run_ids\)/);
+  assert.deepEqual(writes[0].args.slice(0,3),['workspace-a','person-a','research']);
+  assert.equal(writes[0].args[4],'failed-run-17');
+});
+
+test('single observed recipe does not gain authority from context',()=>{
+  const records=[{id:'rare-spectroscopy-workflow',surface:'research',
+    status:'observed',terms:['spectroscopy'],verifiedExamples:1,
+    expiresAt:'2999-01-01T00:00:00Z'}];
+  assert.deepEqual(matchReusableSpecialists(records,{goal:'spectroscopy',surface:'research'}),[]);
 });
