@@ -712,7 +712,7 @@ test('adaptive parallel capacity contracts when the remaining budget is thin', a
   assert.equal(result.allocation.efficiency.parallelWaves, 0);
 });
 
-test('normal-chat ZIP projects use exactly one adaptive coding panel', async () => {
+test('normal-chat project attachments do not silently recruit Coding agents', async () => {
   const calls = [];
   const project = {
     revisionId: 'zip-rev-1',
@@ -758,7 +758,7 @@ test('normal-chat ZIP projects use exactly one adaptive coding panel', async () 
   };
 
   const result = await runAdaptiveAgentPanel({
-    run: run({ adaptation: { scale: 'advanced' } }),
+    run: run({ surface: 'normal-chat', adaptation: { scale: 'advanced' } }),
     task: { id: 'build-code', type: 'code' },
     basePayload: {
       goal: 'Improve the uploaded system',
@@ -773,24 +773,11 @@ test('normal-chat ZIP projects use exactly one adaptive coding panel', async () 
     modelCaller: fakeModel
   });
 
-  assert.equal(result.brief.panelMode, 'normal-chat-zip-single-panel');
-  assert.equal(result.brief.panelScope, 'entire-attached-zip-project');
-  assert.ok(result.allocation.subsystemPlan);
-  assert.equal(result.allocation.panelMode, 'normal-chat-zip-single-panel');
-  assert.equal(result.allocation.panelScope, 'entire-attached-zip-project');
-  assert.equal(result.allocation.panelEngine, 'unified-adaptive-code-panel-v1');
-  assert.equal(result.allocation.subsystemPanels.length, 1);
-  assert.equal(result.waves.length >= 1, true);
-  assert.equal(new Set(result.waves.flatMap(wave => wave.roles)).size, result.waves.flatMap(wave => wave.roles).length);
-  assert.equal(calls.every(item => item.body.subsystemPlan?.subsystems?.length === 1), true);
-  assert.equal(calls.every(item => item.body.subsystemWork?.subsystem?.id), true);
-  assert.equal(calls.every(item => item.body.workspacePanel.engine === 'unified-adaptive-code-panel-v1'), true);
-  assert.equal(calls.every(item => item.body.workspacePanel.topology === 'single-project'), true);
-  assert.equal(calls.every(item => item.body.workspacePanel.lifecycle.available.includes('research')), true);
-  assert.equal(calls.every(item => item.body.workspacePanel.communication.internal === 'independent-first-then-typed-summary'), true);
-  assert.equal(calls.every(item => item.body.codeIntelligence.files.length === 80), true);
-  assert.equal(calls.every(item => item.body.subsystemPlan.subsystems.length === 1), true);
-  assert.equal(result.brief.findings.every(item => item.role !== 'subsystem-worker'), true);
+  assert.equal(result.enabled, false);
+  assert.equal(result.decision.reason,'direct-conversation-no-agent-recruitment');
+  assert.equal(result.brief,null);
+  assert.deepEqual(result.agents,[]);
+  assert.equal(calls.length,0,'Coding workers are only recruited in the dedicated workspace');
 });
 
 test('coding panels stop at the adaptive ceiling when evidence never converges', async () => {
