@@ -3182,4 +3182,74 @@ export const MIGRATIONS = [
           CHECK (cardinality(failed_run_ids) <= 8);
     `
   }
+  ,{
+    version: 80,
+    name: 'agent-execution-owner-write-isolation',
+    sql: `
+      -- Workspace sharing is a READ/visibility choice, not authority for
+      -- another member to manufacture, overwrite or delete an agent's
+      -- execution history. The worker runs with the owner's principal scope.
+      DROP POLICY IF EXISTS run_agents_scope_policy ON run_agents;
+      DROP POLICY IF EXISTS run_agents_read_policy ON run_agents;
+      DROP POLICY IF EXISTS run_agents_owner_insert ON run_agents;
+      DROP POLICY IF EXISTS run_agents_owner_update ON run_agents;
+      DROP POLICY IF EXISTS run_agents_owner_delete ON run_agents;
+      CREATE POLICY run_agents_read_policy ON run_agents FOR SELECT USING (
+        EXISTS (SELECT 1 FROM runs r WHERE r.id = run_agents.run_id
+          AND r.workspace_id = current_setting('app.workspace_id', true)
+          AND (r.principal_id = current_setting('app.principal_id', true)
+            OR r.visibility = 'workspace'))
+      );
+      CREATE POLICY run_agents_owner_insert ON run_agents FOR INSERT WITH CHECK (
+        EXISTS (SELECT 1 FROM runs r WHERE r.id = run_agents.run_id
+          AND r.workspace_id = current_setting('app.workspace_id', true)
+          AND r.principal_id = current_setting('app.principal_id', true))
+      );
+      CREATE POLICY run_agents_owner_update ON run_agents FOR UPDATE USING (
+        EXISTS (SELECT 1 FROM runs r WHERE r.id = run_agents.run_id
+          AND r.workspace_id = current_setting('app.workspace_id', true)
+          AND r.principal_id = current_setting('app.principal_id', true))
+      ) WITH CHECK (
+        EXISTS (SELECT 1 FROM runs r WHERE r.id = run_agents.run_id
+          AND r.workspace_id = current_setting('app.workspace_id', true)
+          AND r.principal_id = current_setting('app.principal_id', true))
+      );
+      CREATE POLICY run_agents_owner_delete ON run_agents FOR DELETE USING (
+        EXISTS (SELECT 1 FROM runs r WHERE r.id = run_agents.run_id
+          AND r.workspace_id = current_setting('app.workspace_id', true)
+          AND r.principal_id = current_setting('app.principal_id', true))
+      );
+
+      DROP POLICY IF EXISTS run_waves_scope_policy ON run_waves;
+      DROP POLICY IF EXISTS run_waves_read_policy ON run_waves;
+      DROP POLICY IF EXISTS run_waves_owner_insert ON run_waves;
+      DROP POLICY IF EXISTS run_waves_owner_update ON run_waves;
+      DROP POLICY IF EXISTS run_waves_owner_delete ON run_waves;
+      CREATE POLICY run_waves_read_policy ON run_waves FOR SELECT USING (
+        EXISTS (SELECT 1 FROM runs r WHERE r.id = run_waves.run_id
+          AND r.workspace_id = current_setting('app.workspace_id', true)
+          AND (r.principal_id = current_setting('app.principal_id', true)
+            OR r.visibility = 'workspace'))
+      );
+      CREATE POLICY run_waves_owner_insert ON run_waves FOR INSERT WITH CHECK (
+        EXISTS (SELECT 1 FROM runs r WHERE r.id = run_waves.run_id
+          AND r.workspace_id = current_setting('app.workspace_id', true)
+          AND r.principal_id = current_setting('app.principal_id', true))
+      );
+      CREATE POLICY run_waves_owner_update ON run_waves FOR UPDATE USING (
+        EXISTS (SELECT 1 FROM runs r WHERE r.id = run_waves.run_id
+          AND r.workspace_id = current_setting('app.workspace_id', true)
+          AND r.principal_id = current_setting('app.principal_id', true))
+      ) WITH CHECK (
+        EXISTS (SELECT 1 FROM runs r WHERE r.id = run_waves.run_id
+          AND r.workspace_id = current_setting('app.workspace_id', true)
+          AND r.principal_id = current_setting('app.principal_id', true))
+      );
+      CREATE POLICY run_waves_owner_delete ON run_waves FOR DELETE USING (
+        EXISTS (SELECT 1 FROM runs r WHERE r.id = run_waves.run_id
+          AND r.workspace_id = current_setting('app.workspace_id', true)
+          AND r.principal_id = current_setting('app.principal_id', true))
+      );
+    `
+  }
 ];
