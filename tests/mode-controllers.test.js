@@ -52,14 +52,16 @@ test('server run planning persists only the three workspace controllers', async 
   });
 });
 
-test('visual specialists can still be recruited inside NormalChat', async () => {
+test('Normal Chat visuals use the direct model even with always-agents configured', async () => {
   const {rolesFor}=await import('../src/multi-agent.js');
   const run={surface:'normal-chat',goal:'Create and refine a product launch visual and layout',
     situation:{complexity:.8,uncertainty:.7,risk:'medium',successCriteria:['legible','coherent']},
     adaptation:{scale:'complex',effortProfile:{maturity:{pressure:.8}}},attempt:1,
     capabilities:{required:['image-generation']}};
   const result=rolesFor(run,{id:'design',type:'design',metadata:{}},{mode:'always',maxAgents:5});
-  assert.ok(result.roles.some(role=>['art-director','visual-designer','image-editor','layout-designer','visual-reviewer'].includes(role)));
+  assert.deepEqual(result.roles,[]);
+  assert.equal(result.agentCount,0);
+  assert.equal(result.decision.reason,'direct-conversation-no-agent-recruitment');
 });
 
 
