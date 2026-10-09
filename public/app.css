@@ -4927,3 +4927,8 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
 .artifact-preview-html-source>summary:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .artifact-preview-html-source>.artifact-preview-pre{margin:0;border:0;border-top:1px solid var(--line);border-radius:0;max-height:340px}
 @media(max-width:600px){.artifact-preview-html-frame{height:360px}}
+
+/* Actual nested specialist work, never a predictive/fake activity display. */
+.work-agent-child{margin-inline-start:12px!important;padding-inline-start:12px!important;border-inline-start:2px solid var(--accent)!important}
+.work-agent-child .work-agent-summary,.work-agent-child .workspace-agent-finding{opacity:.9}
+@media(max-width:600px){.work-agent-child{margin-inline-start:6px!important;padding-inline-start:8px!important}}
