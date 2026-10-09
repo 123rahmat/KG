@@ -16,7 +16,7 @@ const base={
  adaptation:{safety:{decision:'allow',care:[]},dataClasses:['user-content']},
  governance:{status:'unconfigured'}
 };
-const resources=['code.run','file.read','data.analyze','web.fetch'];
+const resources=['sandbox.execute','file.read','data.analyze','web.fetch'];
 
 test('every parent and child can propose sandbox and terminal command resources in all three workspaces',()=>{
  for(const surface of ['normal-chat','code','research']){
@@ -102,7 +102,7 @@ test('even approved scoped command requests are admissions, not command executio
    assert.equal(admitted.status,'parent-executor-required');
    assert.equal(admitted.executionAuthorized,false);
    assert.equal(admitted.executed,false);
-   assert.deepEqual(admitted.toolNames,['code.run']);
+   assert.deepEqual(admitted.toolNames,['sandbox.execute']);
    const manual=admitAgentResourceRequest({run,task,scope:owner,
      availableTools:resources,approved:true,request:{kind:'terminal-session'}});
    assert.equal(manual.code,'user-terminal-only');
