@@ -18,7 +18,7 @@ const RESOURCE_TO_TOOLS = Object.freeze({
   'sandbox-test': ['code.run'],
   'sandbox-execution': ['code.run'],
   'dependency-installation': ['code.run'],
-  'code-change': ['file.edit','file.create'],
+  'code-change': ['file.edit','artifact.create'],
   'terminal-session': []
 });
 const MUTATIONS = new Set(['sandbox-test','sandbox-execution','dependency-installation','code-change','terminal-session']);
