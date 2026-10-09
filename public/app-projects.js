@@ -68,7 +68,7 @@ function renderProjectManageList() {
 }
 
 async function archiveProject(project) {
-  if (!project?.id || !confirm('Archive “' + project.name + '”? Existing chats remain available.')) return;
+  if (!project?.id) return;
   try {
     await api('POST', '/api/projects/' + encodeURIComponent(project.id) + '/archive', {});
     if (state.activeProjectId === project.id) state.activeProjectId = null;
