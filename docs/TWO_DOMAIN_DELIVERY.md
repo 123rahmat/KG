@@ -20,7 +20,11 @@ Neither specialists nor the browser own completion decisions.
 
 One Gemini/Vertex boundary routes efficient and stronger calls by actual task
 requirements. Reducing optional model calls, reusing scoped context, and
-stopping at acceptance are preferred to fixed multi-agent chains. The
+stopping at acceptance are preferred to fixed multi-agent chains. Lightweight
+low-effort coordination may use Flash-Lite; complex or uncertain engineering,
+source critique, verification and recovery remain on the stronger model.
+Explicitly resolved research questions or conflicts are removed from the
+bounded evidence ledger without discarding unresolved historical gaps. The
 configured Gemini model IDs must be authorized in the deployment's Vertex
 project; model catalog entries alone do not prove API access.
 

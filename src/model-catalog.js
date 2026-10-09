@@ -78,9 +78,15 @@ export function modelDecisionForTask({ taskType = '', effort = '', adaptiveConte
   const specialized = ['code', 'coding', 'research', 'investigate', 'verify', 'review', 'agent', 'multi-agent']
     .some(kind => task.includes(kind));
   const highRisk = ['high', 'critical', 'high-impact', 'physical', 'regulated'].includes(risk);
-  const hardQualityNeed = specialized
-    || adaptiveContext?.research === true
-    || adaptiveContext?.code === true
+  // Cheap independent coordination/classification should not be upgraded
+  // solely because it belongs to a Code or Research run. Critical work and
+  // recovery still use the stronger model, even if a caller asks for low effort.
+  const lightSpecialistStep = requestedEffort === 'low'
+    && complexity < 0.45 && uncertainty < 0.45 && qualityGap < 0.2
+    && !highRisk && failures === 0 && adaptiveContext?.requiresVerification !== true;
+  const hardQualityNeed = (specialized && !lightSpecialistStep)
+    || ((adaptiveContext?.research === true || adaptiveContext?.code === true)
+      && !lightSpecialistStep)
     || ['high', 'xhigh'].includes(requestedEffort)
     || highRisk
     || failures > 0

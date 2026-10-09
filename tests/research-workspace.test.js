@@ -64,3 +64,33 @@ test('research workspace stays bounded under repeated evidence', () => {
   assert.equal(state.sourceCount, 40);
   assert.equal(state.evidenceCount, 80);
 });
+
+test('explicitly resolved questions and conflicts do not remain open forever', () => {
+  const prior = createResearchWorkspaceState({
+    goal: 'Evaluate a study', evidence: {
+      sources: [{ url: 'https://example.org/study' }],
+      findings: ['Initial hypothesis'],
+      evidenceGaps: ['Check sample size'],
+      conflicts: ['Inconsistent methods']
+    }
+  });
+  assert.equal(prior.status, 'needs-resolution');
+  const next = createResearchWorkspaceState({
+    goal: 'Evaluate a study', prior,
+    evidence: {
+      findings: ['The sample size and method conflict were checked'],
+      resolvedQuestions: [' check sample size '],
+      resolvedConflicts: ['inconsistent METHODS']
+    }
+  });
+  assert.deepEqual(next.unresolvedQuestions, []);
+  assert.deepEqual(next.conflicts, []);
+  assert.equal(next.status, 'evidence-backed');
+  assert.equal(next.sourceCount, 1);
+});
+test('unsubstantiated disappearance of a gap does not count as resolution', () => {
+  const first = createResearchWorkspaceState({ goal: 'Long research', evidence: { evidenceGaps: ['Find a source'] } });
+  const next = createResearchWorkspaceState({ goal: 'Long research', prior: first, evidence: {} });
+  assert.deepEqual(next.unresolvedQuestions, ['Find a source']);
+  assert.equal(next.status, 'needs-evidence');
+});

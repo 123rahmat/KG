@@ -46,6 +46,10 @@ test('adaptive task selection uses Flash-Lite for light work and 3.8 Flash for d
   assert.equal(modelForTask({ taskType: 'classifier', effort: 'low' }), LIGHT_MODEL);
   assert.equal(modelForTask({ taskType: 'chat', effort: 'low' }), LIGHT_MODEL);
   assert.equal(modelForTask({ taskType: 'code', effort: 'high' }), DEFAULT_MODEL);
+  assert.equal(modelForTask({ taskType: 'code', effort: 'low', adaptiveContext: { complexity: 0.1 } }), LIGHT_MODEL);
+  assert.equal(modelForTask({ taskType: 'research', effort: 'low', adaptiveContext: { complexity: 0.1, uncertainty: 0.1 } }), LIGHT_MODEL);
+  assert.equal(modelForTask({ taskType: 'code', effort: 'low', adaptiveContext: { complexity: 0.8 } }), DEFAULT_MODEL);
+  assert.equal(modelForTask({ taskType: 'research', effort: 'low', adaptiveContext: { requiresVerification: true } }), DEFAULT_MODEL);
   assert.equal(modelForTask({ taskType: 'research', effort: 'medium' }), DEFAULT_MODEL);
   assert.equal(modelForTask({ taskType: 'chat', effort: 'medium', adaptiveContext: { complexity: 0.2 } }), LIGHT_MODEL);
   assert.equal(modelForTask({ taskType: 'chat', effort: 'medium', adaptiveContext: { uncertainty: 0.7 } }), DEFAULT_MODEL);

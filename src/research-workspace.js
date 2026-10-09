@@ -197,13 +197,25 @@ export function createResearchWorkspaceState({
     else if (key === 'summary:' + text(item?.summary).toLowerCase() && !evidenceMap.has(key)) evidenceMap.set(key, item);
   }
   const evidenceLedger = [...evidenceMap.values()].slice(0, RESEARCH_WORKSPACE_LIMITS.maxEvidence);
+  // Carry forward still-open questions, but allow new observed evidence to
+  // close an old gap. Without explicit resolution, the evidence ledger can
+  // remain stuck in "needs-evidence" forever after that gap is addressed.
+  // Model prose alone never silently removes an unknown; a structured
+  // resolution signal must be recorded in this run's evidence.
+  const resolvedQuestions = new Set(stringList(
+    evidence?.resolvedQuestions, evidence?.resolvedEvidenceGaps
+  ).map(normalizeQuestion));
+  const resolvedConflicts = new Set(stringList(
+    evidence?.resolvedConflicts
+  ).map(normalizeQuestion));
   const gaps = stringList(
     evidence?.evidenceGaps,
     evidence?.unresolvedQuestions,
     evidence?.openQuestions,
     previous?.unresolvedQuestions
-  );
-  const conflicts = stringList(evidence?.conflicts, previous?.conflicts);
+  ).filter(item => !resolvedQuestions.has(normalizeQuestion(item)));
+  const conflicts = stringList(evidence?.conflicts, previous?.conflicts)
+    .filter(item => !resolvedConflicts.has(normalizeQuestion(item)));
   const historyEntry = {
     runId: text(runId) || null,
     question: activeQuestion,

@@ -36,6 +36,20 @@ export async function captureSelectedTab({
     video.playsInline = true;
     video.srcObject = stream;
     await video.play();
+    // Some browsers resolve play() before the first capture metadata arrives.
+    // Give the selected tab one bounded opportunity to expose its dimensions.
+    if ((!video.videoWidth || !video.videoHeight) && typeof video.addEventListener === 'function') {
+      await new Promise(resolve => {
+        let timer;
+        const done = () => {
+          clearTimeout(timer);
+          video.removeEventListener('loadedmetadata', done);
+          resolve();
+        };
+        video.addEventListener('loadedmetadata', done, { once: true });
+        timer = setTimeout(done, 1800);
+      });
+    }
     if (!video.videoWidth || !video.videoHeight) {
       throw new Error('The chosen tab did not provide a video frame.');
     }
