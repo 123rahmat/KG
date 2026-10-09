@@ -2,7 +2,7 @@
  * Each specialist family can be selected as a task-scoped main agent.
  * These are advisory roles, not autonomous services or execution grants.
  */
-import { SPECIALIST_FAMILIES, specialistFocusFor } from './adaptive-specialist-focus.js';
+import { SPECIALIST_FAMILIES, specialistFamilyMatches } from './adaptive-specialist-focus.js';
 
 export const FAMILY_MAIN_AGENTS = Object.freeze(Object.fromEntries(
   Object.entries(SPECIALIST_FAMILIES).flatMap(([surface, families]) =>
@@ -24,12 +24,16 @@ export const FAMILY_MAIN_AGENTS = Object.freeze(Object.fromEntries(
 export function familyMainAgentMatch(role, { surface = 'normal-chat', goal = '', task = {} } = {}) {
   const agent = FAMILY_MAIN_AGENTS[role];
   if (!agent || agent.surface !== surface || !String(goal).trim()) return 0;
-  // Do not recruit a family merely because a fallback category exists.
-  const focus = specialistFocusFor({ surface, goal });
-  if (!focus.matched || focus.family !== agent.family) return 0;
+  // Multiple relevant leads may serve distinct requirements of one task.
+  // No static "single winning family" or catalogue-size recruitment rule.
+  const match = specialistFamilyMatches({ surface, goal })
+    .find(item => item.family === agent.family);
+  if (!match || match.score < 3) return 0;
   const kind = String(task?.type ?? '').toLowerCase();
   const taskId = String(task?.id ?? '').toLowerCase();
-  return agent.bestFor.includes(kind) || agent.bestFor.includes(taskId) ? 0.98 : 0.89;
+  const fit = Math.min(0.98, 0.58 + match.score * 0.06);
+  return agent.bestFor.includes(kind) || agent.bestFor.includes(taskId)
+    ? fit : Math.max(0,fit - 0.07);
 }
 
 export function familyMainAgentStats() {
