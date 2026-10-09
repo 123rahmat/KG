@@ -113,3 +113,22 @@ test('insufficient budget or verified completion retires unnecessary work',()=>{
    acceptanceSatisfied:true,desiredRoles:['frontend-engineer']});
  assert.equal(verified.activeRoles.length,0);
 });
+
+
+test('resource requests from a completed parent remain pending while other specialists work',()=>{
+ const requestA=request('source-research','researcher',
+   'Cross-check the claim against primary evidence and source provenance');
+ const first=reconcileTaskRecruitment({...scope,
+   desiredRoles:['researcher'],requests:[requestA]});
+ const second=reconcileTaskRecruitment({...scope,
+   desiredRoles:['test-engineer'],completedRoles:['researcher'],
+   requests:[requestA,request('sandbox-test','test-engineer',
+     'Execute isolated integration checks against acceptance requirements')],
+   previous:first,waveIndex:1
+ });
+ assert.deepEqual(second.activeRoles,['test-engineer']);
+ assert.ok(second.lifecycle.retireRoles.includes('researcher'));
+ assert.ok(second.lifecycle.recruitRoles.includes('test-engineer'));
+ assert.equal(second.resources.length,2);
+ assert.equal(second.lifecycle.releaseProposals.length,0);
+});
