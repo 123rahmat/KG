@@ -19,9 +19,10 @@ const RESOURCE_TO_TOOLS = Object.freeze({
   'sandbox-execution': ['code.run'],
   'dependency-installation': ['code.run'],
   'code-change': ['file.edit','artifact.create'],
-  'terminal-session': []
+  'terminal-session': [],
+  'terminal-command': ['code.run']
 });
-const MUTATIONS = new Set(['sandbox-test','sandbox-execution','dependency-installation','code-change','terminal-session']);
+const MUTATIONS = new Set(['sandbox-test','sandbox-execution','dependency-installation','code-change','terminal-session','terminal-command']);
 const SURFACES = new Set(['normal-chat','code','research']);
 const SCOPE_REASONS = Object.freeze({
   'missing-scope': 'Authenticated user and workspace scope are required.',
@@ -69,8 +70,10 @@ export function admitAgentResourceRequest({
   if(!Object.hasOwn(RESOURCE_TO_TOOLS,kind))return denial('invalid-resource','Unknown requested resource.');
   const allowedBySurface=identity.surface==='code'
     || (!['terminal-session'].includes(kind)
-        && !(['sandbox-test','sandbox-execution','dependency-installation'].includes(kind)
+        && !(['sandbox-execution','dependency-installation'].includes(kind)
              && identity.surface==='research'));
+  if(kind==='terminal-command' && identity.surface!=='code')
+    return denial('workspace-resource-blocked','One-shot agent command requests are limited to the Code workspace sandbox.');
   if(!allowedBySurface)return denial('workspace-resource-blocked','This resource is unavailable for this workspace.');
   const policy=checkTaskPolicy(run,task??{id:'',type:'respond'});
   if(!policy.allowed)return denial(policy.code,policy.reason);
