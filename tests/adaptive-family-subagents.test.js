@@ -25,8 +25,8 @@ test('every registered family has 8 owned, nonexecuting subagent contracts',()=>
       families++;children+=item.children.length;
     }
   }
-  assert.equal(families,55);
-  assert.equal(children,440);
+  assert.equal(families,85);
+  assert.equal(children,680);
 });
 test('everyday simple chat stays a single free subskill lens',()=>{
  const p=selectFamilySubagents({surface:'normal-chat',goal:'Hi',role:'communicator',
