@@ -1717,7 +1717,9 @@ async function runCodeWorkspaceAgentPanels({
           surface: 'code', focus: codeSpecialistTeam(subsystem, { goal: basePayload?.goal }).focus,
           subsystem, goal: basePayload?.goal, iteration,
           findings: state?.findings ?? [],
-          failure: run?.situation?.executionFailure,
+          // This evidence is assembled by the server from the most recent
+          // code/test attempt; it is not a specialist's unverified claim.
+          failure: basePayload?.codeIntelligence?.failure ?? run?.situation?.executionFailure,
           risk: run?.situation?.risk,
           complexity: pressureMonitor.pressure,
           uncertainty: run?.situation?.uncertainty ?? 0,
