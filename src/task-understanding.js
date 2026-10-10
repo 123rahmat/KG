@@ -13,10 +13,16 @@ export function understandTask({
 } = {}) {
   const scope = assessment || assessWorkDomain({ request, projectContext, conversation });
   const goal = text(scope.supportedRequest || request).slice(0, 12000);
-  const intent = VERIFY.test(goal) && !IMPLEMENT.test(goal) ? 'verify'
-    : EXPLORE.test(goal) && !IMPLEMENT.test(goal) ? 'explore'
-      : PLAN.test(goal) && !IMPLEMENT.test(goal) ? 'plan'
-        : IMPLEMENT.test(goal) ? 'implement'
+  // Natural-language requests such as "make my coding agent better" are
+  // engineering mutation requests once the *independent* server domain
+  // assessment has classified them as Coding. Avoid changing Research verbs.
+  const codeImprovement = scope.domain === 'coding'
+    && /\b(?:make|improve|upgrade|optimi[sz]e|enhance|clean up|streamline|polish|complete)\b/i.test(goal);
+  const isImplementation = IMPLEMENT.test(goal) || codeImprovement;
+  const intent = VERIFY.test(goal) && !isImplementation ? 'verify'
+    : EXPLORE.test(goal) && !isImplementation ? 'explore'
+      : PLAN.test(goal) && !isImplementation ? 'plan'
+        : isImplementation ? 'implement'
           : 'answer';
   const userNeeds = scope.domain === 'coding' && ['in-scope','mixed'].includes(scope.status)
     ? captureCodingUserNeeds({
