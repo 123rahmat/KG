@@ -28,3 +28,20 @@ test('large builds plan conditionally and retain project constraints', () => {
   assert.equal(task.needsPlan, true);
   assert.deepEqual(task.constraints, ['Vertex AI only', 'No Cloud SQL']);
 });
+
+test('natural developer requests to make or improve software route to implementation',()=>{
+  for (const request of [
+    'Make the best coding agent',
+    'Improve my Node API performance',
+    'Optimize the code review pipeline'
+  ]) {
+    const task=understandTask({request});
+    assert.equal(task.domain,'coding',request);
+    assert.equal(task.intent,'implement',request);
+  }
+  const named=understandTask({
+    request:'Build an API and add a CLI, and run integration tests without deleting old files'
+  });
+  assert.ok(named.userNeeds.explicitCriteria.length>=3);
+  assert.equal(named.needsPlan,true);
+});
