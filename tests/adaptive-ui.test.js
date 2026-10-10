@@ -308,3 +308,19 @@ test('active conversation header identifies authorized project, workspace, and s
   assert.match(chat,/title:'Latest recorded workflow status'/);
   assert.match(chat,/state\.projects\.find\(item=>item\.id===displayProjectId\)/);
 });
+
+test('parallel conversations keep their project and draft boundaries while independent runs execute',async()=>{
+  const app=await read('public/app-attachments.js');
+  const settings=await read('public/app-settings.js');
+  const project=await read('public/conversation-submission-scope.js');
+  const refresh=await read('public/chat-refresh-coalescer.js');
+  assert.match(app,/submissionProjectId\(\{/);
+  assert.match(app,/submissionWorkspaceSurface\(\{/);
+  assert.match(app,/clearDraft\(\{clearNewChat:firstTurn\}\)/);
+  assert.match(app,/void autoDrive\(run\)\.catch/);
+  assert.doesNotMatch(app,/await autoDrive\(run\)/);
+  assert.match(app,/chatListRefresh\.request\(\)/);
+  assert.match(settings,/clearNewChat=false/);
+  assert.match(project,/hasSavedRuns/);
+  assert.match(refresh,/delayMs=2500/);
+});

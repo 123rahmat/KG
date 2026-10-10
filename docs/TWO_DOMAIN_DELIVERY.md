@@ -384,3 +384,32 @@ surface, visible Project Hub project name, and latest recorded server status.
 Only authorized project metadata is labeled; missing project names are not
 guessed. Browser-local search semantics match the server's literal chat-title
 search, avoiding a misleading flash of project-name-only search results.
+
+## Parallel project chats: safe follow-ups, draft retention and cheaper background refresh
+
+Following up in an existing Coding or Research conversation now uses the
+project ID and workspace surface recorded on **that conversation**, not
+the left-rail's current project selection. The latest saved run is the
+source of truth for follow-up workspace; switching chat filters or visiting
+a different project does not silently move the chat, mix evidence, or
+overwrite another project's source context. Brand-new conversations still
+use the person's chosen project and surface.
+
+Sending a new message creates the authorized run and releases the shared
+composer once persistence succeeds. Its normal background server execution
+is started and monitored independently, with run-ID locks and existing
+approval gates intact, so the person can switch to another chat and create
+new work without waiting for the first Coding/Research task to complete.
+Offline-queued conversations also initiate their own run progression
+without serially waiting through another chat's long execution.
+
+The in-tab unsent draft of a **new** conversation is consumed only when
+its first turn is submitted. Sending a follow-up in another established
+chat no longer clears the separate new-chat draft. Per-person, per-workspace,
+per-chat draft storage remains bounded and is cleared on sign-out.
+
+All active background runs share a short coalescing window for chat-list
+refreshes, rather than each run polling the expensive conversation-search
+query on every single progress update. Explicit user Refresh and workspace
+filter changes remain immediate. No extra model calls or independent agent
+workers are required to operate this navigation layer.

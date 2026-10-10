@@ -12,6 +12,8 @@ import { assistantMessage, userMessage, welcome } from './app-actions.js';
 import { loadUsage, renderUsageLimitLock, usageLimitStatus, selectTab } from './app-account.js';
 import { clearDraft, readDraft, saveDraftNow, deleteOfflineFiles, loadOfflineFiles, storeOfflineFiles, writeOfflineQueue } from './app-settings.js';
 import { chatNavigationModel, chatWorkStatus } from './chat-navigation-model.js';
+import { submissionProjectId, submissionWorkspaceSurface } from './conversation-submission-scope.js';
+import { createChatRefreshCoalescer } from './chat-refresh-coalescer.js';
 import { syncAdaptiveWorkspace } from './adaptive-workspace.js';
 import { syncActiveWorkspaceSource } from './workspace-sources.js';
 import { selectedAttachments } from './attachment-selection.js';
@@ -198,6 +200,9 @@ $('threadJump')?.addEventListener('click', () => {
     window.scrollTo({ top: document.scrollingElement.scrollHeight, behavior: reduce ? 'instant' : 'smooth' });
   });
 
+// One list request per short refresh window, regardless of how many
+// background Coding or Research runs are sending incremental updates.
+const chatListRefresh=createChatRefreshCoalescer(()=>loadRuns().catch(()=>{}));
 /** Called with every fresh copy of a run from the server. */
 export function renderRun(run) {
   if (!run) return;
@@ -214,8 +219,9 @@ export function renderRun(run) {
     state.run = run;
     renderThread();
   } else {
-    // Background work in another chat updates the list/state without stealing focus.
-    loadRuns().catch(() => {});
+    // All background runs share one bounded status refresh; none can
+    // mutate the visible conversation or monopolize expensive list queries.
+    chatListRefresh.request();
   }
 }
 
@@ -311,6 +317,7 @@ export function newChat(options={}) {
 }
 
 export async function loadRuns(){
+  chatListRefresh.cancel();
   const epoch=++chatListEpoch;
   const workspace=state.workspaceId;
   const projectId=state.activeProjectId??null;
@@ -623,7 +630,9 @@ async function flushQueuedItems() {
         renderThread();
       }
       updateConnectionUI();
-      if (state.workspaceId === currentWorkspace) await autoDrive(run);
+      if (state.workspaceId === currentWorkspace) {
+        void autoDrive(run).catch(()=>loadRuns().catch(()=>{}));
+      }
     } catch (error) {
       // A temporary failure keeps the message for the next reconnect; only
       // a definite refusal (bad request, policy, access) removes it.
@@ -666,20 +675,32 @@ export async function sendMessage(text) {
   }
 
   const visibility = $('shareRun').checked ? 'workspace' : 'private';
+  const firstTurn=!state.chat.id;
   state.chat.id ??= crypto.randomUUID();
   const chat = state.chat;
+  const hasSavedRuns=chat.runs.length>0;
+  const lastSavedRun=hasSavedRuns?chat.runs.at(-1):null;
   const submission = {
     context, workspaceId: state.workspaceId,
-    projectId: state.activeProjectId ?? chat.projectId ?? null,
-    workspaceSourceId: chat.workspaceSourceId ?? state.workspaceSourceId ?? null,
-    activeSurface: state.activeSurface ?? 'normal-chat',
+    // Sidebar project selection is navigation, never implicit authority
+    // to migrate an existing conversation to another project.
+    projectId: submissionProjectId({
+      currentProjectId:state.activeProjectId,
+      chatProjectId:chat.projectId,
+      hasSavedRuns
+    }),
+    workspaceSourceId: chat.workspaceSourceId ?? (hasSavedRuns?null:state.workspaceSourceId) ?? null,
+    activeSurface: submissionWorkspaceSurface({
+      chatSurface:lastSavedRun?.surface??lastSavedRun?.adaptation?.primarySurface,
+      chosenSurface:state.activeSurface,hasSavedRuns
+    }),
     creationMode: $('adaptiveCreateStrip')?.dataset.mode ?? null,
     modelConsent: chat.consent
   };
 
   if (navigator.onLine === false && state.settings.offlineQueue) {
     $('goal').value = '';
-    clearDraft();
+    clearDraft({clearNewChat:firstTurn});
     state.sendWaiting = true;
     try { await queueOfflineMessage(goal, files, visibility, undefined, submission, chat); }
     finally { state.sendWaiting = false; document.dispatchEvent(new Event('kindgleam:composer-state')); }
@@ -694,7 +715,7 @@ export async function sendMessage(text) {
   state.sendWaiting = true;
   document.dispatchEvent(new Event('kindgleam:composer-state'));
   $('goal').value = '';
-  clearDraft();
+  clearDraft({clearNewChat:firstTurn});
   growComposer();
   renderThread();
 
@@ -738,7 +759,16 @@ export async function sendMessage(text) {
     state.cancelledRuns?.delete(run.id);
     renderThread();
     loadRuns().catch(() => {});
-    if (state.workspaceId === submission.workspaceId) await autoDrive(run);
+    // The newly persisted run drives independently. Waiting for its entire
+    // research/coding lifecycle would block another chat's composer for
+    // minutes despite each run already having an independent server lock.
+    if(state.workspaceId===submission.workspaceId) {
+      void autoDrive(run).catch(error=>{
+        if(state.chat===chat)notify('runNotice','warn',
+          error?.message??'Work paused; reopen this chat to review the saved state.');
+        loadRuns().catch(()=>{});
+      });
+    }
     loadRuns().catch(() => {});
   } catch (error) {
     if (error.code === 'usage-limit-reached') {

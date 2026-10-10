@@ -258,14 +258,14 @@ export function saveDraftNow(){
   clearTimeout(state.draftSaveTimer);
   writeDraft($('goal')?.value??'');
 }
-export function clearDraft(){
+export function clearDraft({clearNewChat=false}={}){
   clearTimeout(state.draftSaveTimer);
   try {
     const drafts=storedDrafts();
     delete drafts[draftScope()];
-    // A newly created conversation's initial text occupied the new-chat
-    // slot before its first server run assigned a conversation ID.
-    if(state.chat?.id)delete drafts[draftScope({newChat:true})];
+    // Only the FIRST submitted turn should consume the separate new-chat
+    // draft. Later sends in an established conversation must not delete it.
+    if(clearNewChat)delete drafts[draftScope({newChat:true})];
     sessionStorage.setItem(CHAT_DRAFTS_KEY,JSON.stringify(drafts));
     sessionStorage.removeItem(DRAFT_KEY);
   } catch {}
