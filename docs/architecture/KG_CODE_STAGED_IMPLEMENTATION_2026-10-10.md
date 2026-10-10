@@ -18,6 +18,16 @@ This work implements a non-destructive first vertical slice of the coding-only p
 
 A normal landing/product remains unchanged until the new mode is fully release-ready. The older Research/Normal Chat features are not deleted, and their historical conversations remain accessible under the existing authority rules. `KG_CODING_ONLY` is staged; do not turn it on without the gates below. The coding sidebar links use already implemented modules; the navigation intentionally does not show fictitious standalone IDE, inline review, preview, or deployment screens.
 
+## Further reliability and security hardening (current branch)
+
+- Progress verification now invalidates a prior pass when later code/test work is recorded. Failed, blocked, pending, running or stale test steps cannot be presented as verified completion. The progress renderer serializes the bounded visible snapshot, not potentially huge tool result bodies, avoiding expensive redraw comparisons.
+- Expandable specialist activity shows only persisted agent states, bounded to five visible specialists. Proposed roles are explicitly not execution proof.
+- Coding-only sidebar selection now follows the actual destination rather than permanently highlighting the first link. The menu still routes into existing working tools, not fake placeholder IDE panels.
+- Under the `KG_CODING_ONLY` gate, visibility of a workspace-shared project grants **read access only**. A different editor cannot mutate its source/revision/visibility or archive it. The API gives explicit 403 owner-required responses, and the UI hides unauthorized archive actions. This ownership rule is gated to avoid silently changing legacy product permissions.
+- Added real PostgreSQL/API integration scenarios for the feature flag (on by itself and alongside the old gate), revision invalidation, cross-user shared-project write rejection and unchanged persisted ownership, plus verification-staleness tests.
+
+**Claims policy:** these changes are code and committed regression tests; full CI and live browser/provider acceptance are still separate. Preserve draft status until they pass.
+
 ## Non-negotiable next release gates
 
 1. Full CI, browser smoke and keyboard/mobile/a11y tests. A successful syntax check or isolated model test is not the same as full test evidence.
