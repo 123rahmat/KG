@@ -24,6 +24,7 @@ import { buildSituationModel, evolveSituation, situationQualityGate } from './si
 import { adaptiveBudgetStatus, adaptiveBudgetForRun, reconcileAdaptiveTransition } from './adaptive-control.js';
 import { adaptiveEffortProfile } from './adaptive-efficiency.js';
 import { buildAcceptanceContract } from './adaptive-decision-authority.js';
+import { captureCodingUserNeeds } from './coding-user-needs.js';
 import { buildUnifiedAdaptiveWorkflow, reassessUnifiedWorkflow, completionGate, unifiedRecoveryDecision } from './unified-adaptive-workflow.js';
 import { projectPersistedTaskGraph } from './persisted-task-projection.js';
 import { composeOpenWorldDecision } from './open-world-task-graph.js';
@@ -425,6 +426,15 @@ export class RunStore {
       };
     }
 
+    // Capture the user's concrete requested outcomes and constraints *before*
+    // executing. These are parsed only inside an authorized Coding controller;
+    // they never select a domain, grant permissions or certify a result.
+    const codingNeeds = controlEngineId === 'coding' && enforcedControlSurface === 'code'
+      ? captureCodingUserNeeds({
+        request: goalText, constraints, successCriteria, outputs
+      }) : null;
+    if (codingNeeds) plan.adaptation.codingUserNeeds = codingNeeds;
+
     const requirementModel = plan.workflow === 'direct'
       ? { version: 1, items: [], overallProgress: 100, completedCount: 0, requiredCount: 0, unresolvedCount: 0, blockedCount: 0, completionReady: true, nextRequirementId: null }
       : buildRequirementModel({
@@ -432,7 +442,8 @@ export class RunStore {
           requirements,
           successCriteria: [...successCriteria, ...(situation.successCriteria ?? [])],
           outputs,
-          constraints
+          constraints,
+          codingNeeds
         });
 
     if (classification) {
@@ -454,7 +465,8 @@ export class RunStore {
     });
     const acceptanceContract = buildAcceptanceContract({
       goal: goalText,
-      criteria: [...successCriteria, ...(situation.successCriteria ?? [])],
+      criteria: [...successCriteria, ...(situation.successCriteria ?? []),
+        ...(codingNeeds?.explicitCriteria ?? [])],
       evidenceRequired: situation.evidenceRequired ?? [],
       evidence,
       authorizationRequired: situation.authorizationRequired === true,
