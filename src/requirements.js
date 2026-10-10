@@ -283,7 +283,10 @@ export function reconcileRequirements(current, {
     outcome.status = 'satisfied';
     outcome.lastUpdated = new Date().toISOString();
     outcome.evidence = [...outcome.evidence, sourceEvidence(task, { summary, evidence })].slice(-12);
-  } else if (outcome && !TERMINAL_REQUIREMENT.has(outcome.status) && linkedIds.includes(outcome.id)) {
+  } else if (outcome && children.some(item => item.status !== 'satisfied')
+    && (outcome.status === 'satisfied' || linkedIds.includes(outcome.id))) {
+    // A later code revision may invalidate a previously completed outcome.
+    // Its parent must not stay green when a required child is unverified.
     outcome.status = 'in-progress';
   }
   return finalizeModel({ version: 1, items });
