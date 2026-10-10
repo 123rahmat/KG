@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 /**
  * Convert the actual acceptance criteria, constraints and observed gaps into
  * extra read-only advisory lenses for a selected parent specialist.
@@ -7,7 +8,15 @@
  */
 const normalize = value => typeof value === 'string'
   ? value.replace(/[\p{Cc}]/gu,' ').replace(/\s+/g,' ').trim() : '';
-const slug = value => value.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,70);
+// Hash the full bounded requirement so different long criteria never collapse
+// to the same first 70 characters, silently dropping needed expertise.
+const slug = value => {
+  const normalized=value.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  if(!normalized)return '';
+  const prefix=normalized.slice(0,60).replace(/-+$/g,'');
+  const fingerprint=createHash('sha256').update(value).digest('hex').slice(0,8);
+  return prefix+'-'+fingerprint;
+};
 const operationFor = value =>
   /\b(test|check|verify|audit|validate|assert|quality|acceptance|security)\b/i.test(value) ? 'verify'
     : /\b(source|citation|evidence|research|investigate|unknown|unresolved)\b/i.test(value) ? 'investigate'
