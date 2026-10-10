@@ -79,5 +79,11 @@ test('strict Coding and Research routes prevent off-topic work before model, fil
     assert.equal(research.status,201,JSON.stringify(research.body));
     assert.equal(research.body.surface,'research');
     assert.equal(research.body.adaptation.controlEngineId,'research');
+    const archived=await call('POST',`/api/projects/${codeProject}/archive`,auth);
+    assert.equal(archived.status,200);
+    const unavailable=await call('POST',`/api/runs/${legal.body.id}/execute`,{...auth,body:{}});
+    assert.equal(unavailable.status,409);
+    assert.equal(unavailable.body.code,'control-project-changed');
+
   },{env:{CODING_RESEARCH_ONLY:'true',MULTI_AGENT_MODE:'off'}});
 });
