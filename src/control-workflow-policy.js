@@ -220,7 +220,12 @@ export function buildControlWorkflowPolicy({
     action,
     understanding: Object.freeze({
       intent, needsPlan, needsBrainstorming: brainstorm,
-      requiresClarification: understood.needsClarification === true
+      requiresClarification: understood.needsClarification === true,
+      // Advisory: never grants completion, token spend, tool access or
+      // permission to assume unspecified "perfect" quality was verified.
+      explicitUserCriteria: Object.freeze((understood.userNeeds?.explicitCriteria ?? []).slice(0,12)),
+      qualityTargetUnspecified: understood.qualityUnspecified === true,
+      coverageLimited: understood.userNeeds?.coverageLimited === true
     }),
     candidateStages: Object.freeze(frontier),
     quality,
