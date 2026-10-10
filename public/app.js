@@ -1512,6 +1512,25 @@ $('chatStatusFilter')?.addEventListener('change',()=>loadRuns().catch(()=>{}));
 $('newCodeChat')?.addEventListener('click',()=>newChat({surface:'code'}));
 $('newResearchChat')?.addEventListener('click',()=>newChat({surface:'research'}));
 
+// KG Code navigation uses existing, permission-checked UI actions, not a
+// parallel client router or a second execution engine. It is visible only
+// after the server reports the staged coding-only product contract.
+$('codeNavWork')?.addEventListener('click', () => { selectTab('runs'); });
+$('codeNavProjects')?.addEventListener('click', () => $('projectManage')?.click());
+$('codeNavProgress')?.addEventListener('click', async () => {
+  await selectTab('runs');
+  $('codingProgressPanel')?.scrollIntoView({ block:'start', behavior:'auto' });
+});
+$('codeNavTerminal')?.addEventListener('click', async () => {
+  await selectTab('runs');
+  $('openTerminal')?.click();
+});
+$('codeNavFiles')?.addEventListener('click', async () => {
+  await selectTab('runs');
+  $('chatViewFiles')?.click();
+});
+$('codeNavActivity')?.addEventListener('click', () => { selectTab('audit'); });
+
 $('signin').addEventListener('submit', signIn);
 initGate();
 $('signout').addEventListener('click', signOut);
