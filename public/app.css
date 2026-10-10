@@ -3867,6 +3867,21 @@ body[data-adaptive-workspace="research"] .deep-workspace-shell {
 .adaptive-workspace-kicker { color:var(--muted); font:700 .57rem/1 var(--mono); letter-spacing:.08em; text-transform:uppercase; }
 .adaptive-workspace-surfaces { display:flex; align-items:center; justify-content:flex-end; gap:5px; flex-wrap:wrap; }
 .adaptive-workspace-surfaces button{min-height:32px}
+/* Advisory Coding/Research policy, never mistaken for recorded execution. */
+.control-workflow-summary {
+  grid-column:1/-1;
+  min-width:0;
+  padding:9px 12px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--softer);
+  font-size:.78rem;
+  line-height:1.45;
+}
+.control-workflow-summary .row { justify-content:space-between; }
+.control-workflow-summary p { margin:3px 0 0; overflow-wrap:anywhere; }
+.control-workflow-summary strong { font-size:.78rem; }
+
 .adaptive-workspace-surfaces .adaptive-active{border-color:color-mix(in srgb,var(--accent) 30%,var(--line));background:var(--accent-soft);color:var(--accent)}
 #tabs [data-adaptive-needed="true"]{box-shadow:inset 2px 0 0 var(--accent)}
 
