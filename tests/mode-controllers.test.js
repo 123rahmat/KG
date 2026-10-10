@@ -20,7 +20,10 @@ test('controller effort adapts without changing authority', () => {
   assert.equal(code.decision.recruitSpecialist,true);
   assert.equal(code.decision.parallelIndependentWork,true);
   assert.equal(code.decision.stopWhenSatisfied,true);
-  assert.match(code.principle,/one shared state/i);
+  assert.match(code.principle,/one KG system and shared task lifecycle/i);
+  assert.equal(code.controlEngine.id,'coding');
+  assert.equal(code.controlEngine.controller,'CodingControlEngine');
+  assert.equal(code.sharedRuntime.runStore,'shared-single-source-of-truth');
 });
 
 test('visual and design work stays in NormalChat instead of becoming a workspace', () => {
@@ -80,4 +83,16 @@ test('workspace compute policy keeps simple chat cheap and expands specialized w
   assert.ok(research.recommendedAgents >= 3);
   assert.ok(research.maxParallel >= 2);
   assert.equal(research.qualityFloor, 'verified-before-completion');
+});
+
+test('Coding and Research have distinct control profiles but one runtime contract', () => {
+  const coding = buildModeControllerContract({ surface:'code' });
+  const research = buildModeControllerContract({ surface:'research' });
+  assert.equal(research.controlEngine.id,'research');
+  assert.equal(research.controlEngine.controller,'ResearchControlEngine');
+  assert.notDeepEqual(coding.controlEngine.agents,research.controlEngine.agents);
+  assert.notEqual(coding.controlEngine.acceptance,research.controlEngine.acceptance);
+  assert.deepEqual(coding.sharedRuntime,research.sharedRuntime);
+  const historic = buildModeControllerContract({surface:'normal-chat'});
+  assert.equal(historic.controlEngine,undefined,'Legacy chat must not gain active domain work authority');
 });
