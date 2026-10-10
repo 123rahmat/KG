@@ -24,6 +24,15 @@ test('Chat Files lists only attached files and generated artifacts from this con
       }
     });
     assert.equal(run.status,201,JSON.stringify(run.body));
+    // Upload directly from the Files pane: not from GitHub and not tied to
+    // a message until the person explicitly uses it in the next request.
+    const fromDevice = await call('POST','/api/objects',{ ...auth,
+      body:{ type:'attachment', name:'my-phone-photo.png', contentType:'image/png',
+        content:'phone-upload-binary', visibility:'private',
+        provenance:{source:'chat-upload',runId:run.body.id}
+      }
+    });
+    assert.equal(fromDevice.status,201,JSON.stringify(fromDevice.body));
     const saved = await call('POST','/api/objects',{ ...auth,
       body:{ type:'chat-answer', name:'answer.txt', content:'saved answer',
         provenance:{source:'chat-answer',runId:run.body.id} }
@@ -33,6 +42,8 @@ test('Chat Files lists only attached files and generated artifacts from this con
     assert.equal(response.status,200,JSON.stringify(response.body));
     const ids = response.body.files.map(file => file.id);
     assert.ok(ids.includes(attachment.body.id),'saved input attachment is present');
+    assert.ok(ids.includes(fromDevice.body.id),'direct device upload belongs to the chat');
+    assert.equal(response.body.files.find(file => file.id === fromDevice.body.id).category,'attachment');
     assert.ok(ids.includes(saved.body.id),'saved result artifact is present');
     assert.ok(!ids.includes(unrelated.body.id),'unrelated workspace file must not leak');
     assert.equal(response.body.files.find(file => file.id === attachment.body.id).category,'attachment');
