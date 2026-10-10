@@ -71,6 +71,26 @@ test('strict Coding and Research routes prevent off-topic work before model, fil
       conversationId
     }});
     assert.equal(wrongProject.status,422,'Without same-project history a generic follow-up must not be admitted');
+    // A pre-migration (uncontrolled) run cannot silently become trusted
+    // history in an otherwise authorized controller conversation.
+    await pool.query(`
+      INSERT INTO runs (
+        id, workspace_id, principal_id, goal, surface, state,
+        intent, capabilities, governance, adaptation, situation, requirements,
+        project_id, visibility, attempt, max_attempts, max_tokens,
+        conversation_id, control_engine_id
+      )
+      SELECT gen_random_uuid(), workspace_id, principal_id, goal, surface, state,
+        intent, capabilities, governance, adaptation, situation, requirements,
+        project_id, visibility, attempt, max_attempts, max_tokens,
+        conversation_id, NULL
+      FROM runs WHERE id=$1
+    `,[firstConversation.body.id]);
+    const ambiguousHistory=await call('POST','/api/runs',{...auth,body:{
+      goal:'Continue this',projectId:codeProject,activeSurface:'code',conversationId
+    }});
+    assert.equal(ambiguousHistory.status,409,JSON.stringify(ambiguousHistory.body));
+    assert.equal(ambiguousHistory.body.code,'control-conversation-mismatch');
 
     const research=await call('POST','/api/runs',{...auth,body:{
       goal:'Write a complete academic research paper with sources and methods',
