@@ -1,79 +1,36 @@
-# Kindgleam (KG)
+# KG Code — AI software engineering workspace
 
-Kindgleam is an adaptive AI application for everyday work, software projects and evidence-driven research. It uses one server-owned runtime across three workspaces, with Google Vertex AI Gemini as its model boundary.
+**Product direction:** KG is becoming **KG Code**, a professional, coding-focused AI engineering environment. It uses one server-owned runtime for repository context, focused patches, controlled execution, test evidence, review, and optional specialists only when they justify their cost. The core goal is reliable, reviewable software development, not a collection of unrelated assistant modes.
 
-The system starts with the smallest useful action. It adds investigation, tools, execution or advisory specialists when current evidence and the user's goal justify them. RunStore owns task state, permissions and completion; a model or browser cannot authorize its own work.
+> **Deployment status:** The `main` branch has not yet completed the coding-only runtime cutover. Older Normal Chat and Research source and persisted records are still present for compatibility while the draft integration and production gates are verified. The main branch must not be described as strictly code-only until backend admission, migrations, browser and real sandbox/worker acceptance are validated.
 
-## Agentic domains and application entry points
+## Product boundaries
 
-Code and Research are the **two specialist multi-agent domains**. Normal Chat
-remains a non-agent direct entry point for everyday conversation, not another
-domain controller. All three UI entry points use the **same** authorized runtime;
-there is no parallel execution authority. See
-[the two-domain delivery contract](docs/TWO_DOMAIN_DELIVERY.md).
+- **One application and runtime:** project-scoped coding tasks and a server-authorized CodingControlEngine; do not deploy a second agent runtime or clone the budget, policy, database or tool systems.
+- **Adaptive, cost-aware execution:** understand, inspect the smallest relevant project context, decide whether to plan, patch in scope, run actual checks, inspect failures, apply bounded repairs, review the diff, then deliver with evidence. Optional specialists are advisory and parallel only when independent.
+- **Developer workspace:** project and repository selection, chat, progress, changes, tests, terminal, activity, and top-of-conversation **Chat | Files**. Conversation Files are user uploads and generated artifacts; they are **not** limited to GitHub repository files.
+- **Trustworthy status:** recorded steps are not a guaranteed percent of a growing task. A model saying "tests passed" never replaces an authenticated test receipt. Unavailable sandbox/provider actions must be reported as unavailable.
+- **Migration:** preserve legacy projects, conversation attachments, saved artifacts, historical data, and existing database migrations; disable old entry points only after verified data access and export.
 
-## Application workspaces
+The coding-focused changes are being validated in [PR #15](https://github.com/123rahmat/KG/pull/15). Main remains the authority for what is deployed; a draft PR, design document or successful syntax check is **not** a production release.
 
-| Workspace | What people use it for | Application behavior |
-| --- | --- | --- |
-| Normal Chat | Daily conversation, learning, demanding reasoning, business planning, writing, design and lightweight file work | Adaptive reasoning depth, scoped attachments, artifact previews and authorized tools; optional configured sandbox execution |
-| Code | Repository-scale engineering | GitHub project sources, indexed context, revision-checked patches, durable project sessions, verification and an optional isolated terminal |
-| Research | Investigation and source-heavy work | Source provenance, evidence gaps, conflicting findings and scoped investigator/analyst/critic assistance |
+## Architecture
 
-One conversation continues across these three workspaces. Each has its own controller policy and scoped task context, with a shared runtime enforcing permissions, budgets and verification. Mixed tasks use the capabilities they need. Task-aware suggestion banners appear across all three workspaces, even without attached files. Complex coding suggests Code, investigation suggests Research, and clearly lightweight new work can suggest Normal Chat. The switch button preserves the draft and selected files; switching remains an optional user action.
-
-Normal Chat is the everyday starting point: conversation, tutoring and educational problem-solving, demanding mathematical reasoning, business ideas and plans, presentations, decisions and multi-file editing are native work here. Reasoning effort adapts from direct to focused or deep without requiring a workspace switch or automatically recruiting agents. A routine current-fact question can use authorized web evidence in Chat; thesis-scale source investigation belongs in Research. The [Normal Chat task profile](src/normal-chat-task-profile.js) advises reasoning/context and verification only; it cannot authorize tools, execution or memory.
-
-Normal Chat supports up to ten attachments per browser message, each up to 5 MB. Previews show artifacts; actual execution requires a configured runner and recorded execution evidence. Code Workspace accepts GitHub repositories; its sessions and terminal require an attached GitHub source.
-
-The browser and server share [request-intent hints](public/workspace-intent.js): teaching Python or planning an API startup stays in Chat; researching GitHub adoption belongs in Research; updating a repository belongs in Code. Explicit workspace requests take precedence. Recommendations are bounded heuristics, and a small code bundle can suggest Code while remaining supported in Chat. Selected attachment names reach the task controller without copying document contents into its policy. On a workspace or project change, conversation history stays available while implicitly inherited controller state, project identity and file overlays are discarded. Explicitly supplied context remains subject to the existing authorization checks.
-
-## One adaptive architecture
-
-```mermaid
-flowchart TD
-  UI["Chat / Code / Research"] --> API["Authenticated API and policy"]
-  API --> RUN["RunStore: authoritative tasks and state"]
-  RUN --> DEC["Assess evidence and choose useful work"]
-  DEC --> WORK["Scoped model / tool / execution call"]
-  WORK --> CHECK["Record results and verify acceptance"]
-  CHECK -->|"More work justified"| RUN
-  CHECK -->|"Accepted or blocked"| UI
-  RUN <--> DB["PostgreSQL: state, leases and audit"]
+```text
+Project + repository + conversation
+       |
+Server authentication / workspace, project & revision authority
+       |
+CodingControlEngine (same shared RunStore / model and tool gateway)
+       |
+Adaptive task graph -> scoped context -> approved patch
+       |
+Isolated runner / real checks -> bounded repair -> recorded verification
+       |
+Developer review + approved write-back / deliverable
 ```
 
-This is a feedback relationship, not a required sequence of reasoning phases. The planner initially creates the current work item. RunStore grows or revises actual work from observed results, missing capabilities, changed requirements and verification outcomes.
-
-| Responsibility | Implementation |
-| --- | --- |
-| Process lifecycle and service wiring | [server.js](server.js), [src/app.js](src/app.js) |
-| Initial planning and authoritative task transitions | [src/core.js](src/core.js), [src/runs.js](src/runs.js) |
-| Durable background jobs and project fleet | [src/jobs.js](src/jobs.js), [src/fleet-control.js](src/fleet-control.js) |
-| Shared decision, acceptance and recovery policy | [src/unified-adaptive-workflow.js](src/unified-adaptive-workflow.js), [src/adaptive-decision-authority.js](src/adaptive-decision-authority.js) |
-| Advisory topology and actual specialist dispatch | [src/adaptive-agents.js](src/adaptive-agents.js), [src/multi-agent.js](src/multi-agent.js), [src/agent-lane-executor.js](src/agent-lane-executor.js) |
-| Model calls, admission, usage and provider limits | [src/runtime.js](src/runtime.js), [src/model-routing.js](src/model-routing.js) |
-| Scoped context, procedures and memory | [src/universal-context.js](src/universal-context.js), [src/agent-harness.js](src/agent-harness.js), [src/skills.js](src/skills.js), [src/memory.js](src/memory.js) |
-| Safe view of current work | [src/persisted-task-projection.js](src/persisted-task-projection.js), [src/open-world-task-graph.js](src/open-world-task-graph.js) |
-
-The graph projection is a bounded, read-only view of persisted tasks and proposed actions. It does not dispatch tools, queue work or accept model-reported completion. The [canonical architecture guide](docs/ARCHITECTURE.md) explains these boundaries and the application services.
-
-Code and Research display saved progress as it happens and a terminal outcome
-summary grounded in recorded execution, changed paths, citations and
-verification; they do not turn planned tests into passing tests. Both expose
-a user-approved **Screenshot UI** action: the browser asks the user to choose
-a tab, captures one PNG frame, stops screen sharing and attaches the image as
-an unsent chat draft. This requires HTTPS/localhost and is not an automated
-sandbox-browser screenshot or a claim that code was executed.
-
-## Efficient work and reliable outcomes
-
-A straightforward question should stay on the direct path. Optional specialists are recruited only when independent work, uncertainty or quality requirements justify their overhead. Chat, Code and Research share budget rules, with workspace-specific role selection and effort policies.
-
-Specialist calls receive bounded task scope and advisory authority. Independent lanes may run concurrently within hard ceilings; dependencies and file/resource conflicts constrain scheduling. Started peers are settled before a failed or cancelled wave returns. The parent integrates findings and the server retains verification and completion gates.
-
-Skills provide relevant procedures and required evidence. Memory recall is authorized and scoped by principal, workspace and project; recalled text cannot grant permissions. New requirements can reopen affected work while preserving unrelated verified results. Recovery uses the shared decision authority and bounded run attempts.
-
-Actual quality and efficiency are measured as accepted outcomes, tokens, cost, latency and recoverability. A deterministic policy test does not establish live Gemini answer quality or production readiness.
+No generated task may elevate tool or repository permissions. Concurrent code writers must have compatible revisions and nonoverlapping resources. The server owns credentials, budgets, resource locks, evidence, and durable run state.
 
 ## Local development
 
