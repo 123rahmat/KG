@@ -191,6 +191,10 @@ export async function withServer(run, { env = {}, fetchImpl } = {}) {
     // Keep broad HTTP fixtures deterministic by default; this does not alter production config.
     MULTI_AGENT_MODE: 'off',
     AGENTS_REVIEW: 'off',
+    // Legacy API/Research fixtures explicitly exercise pre-cutover behavior.
+    // The shipped runtime defaults to coding-only; dedicated KG Code tests
+    // override this to true and assert the server admission boundary.
+    KG_CODING_ONLY: 'false',
     OBJECT_ENCRYPTION_KEY: Buffer.from('test-object-encryption-key-32byt').toString('base64'),
     BILLING_ENCRYPTION_KEY: Buffer.from('billing-key-32-bytes-long-000000').toString('base64'),
     PERSONAL_DATA_ENCRYPTION_KEY: Buffer.from('personal-key-32-bytes-long-00000').toString('base64'),
