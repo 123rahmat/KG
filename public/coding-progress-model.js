@@ -103,12 +103,14 @@ export function codingProgressSnapshot(run) {
       current: Boolean(next && next === task)
     });
   });
-  const testState = testCounts
-    ? `${testCounts.passed} passed · ${testCounts.failed} failed · ${testCounts.total} total (receipt)`
-    : testTasks.some(task => task.status === 'failed') ? 'Test step failed'
+  const testState = testTasks.some(task => ['failed','blocked','stale'].includes(task.status))
+    ? 'Test step failed or stale'
     : testTasks.some(task => task.status === 'running') ? 'Test step running'
+    : testTasks.some(task => ['pending','queued','waiting'].includes(task.status))
+      ? 'Test step pending'
+    : testCounts ? `${testCounts.passed} passed · ${testCounts.failed} failed · ${testCounts.total} total (receipt)`
     : testTasks.some(task => task.status === 'complete') ? 'Test step recorded · counts unconfirmed'
-    : testTasks.length ? 'Test step pending' : 'No test step recorded';
+    : 'No test step recorded';
   return Object.freeze({
     runId:safe(run.id,120),status,tone,headline,terminal,verified,
     recorded:count,completed,skipped,failures,running,
