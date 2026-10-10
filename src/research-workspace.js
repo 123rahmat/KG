@@ -232,7 +232,7 @@ export function createResearchWorkspaceState({
   // The bounded preview must not report dangling links as evidence. The
   // durable source store planned for ResearchEngine will hold all records;
   // until then, visibly mark references that cannot fit in this projection.
-  const droppedReferences = new Set();
+  const droppedReferences = new Set(requestedRefs.filter(key => !selectedSourceKeys.has(key)));
   const evidenceLedger = [...evidenceMap.values()]
     .slice(0, RESEARCH_WORKSPACE_LIMITS.maxEvidence)
     .map(item => {
