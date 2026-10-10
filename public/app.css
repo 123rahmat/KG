@@ -5161,3 +5161,20 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
   background: var(--panel);
 }
 .work-output-image[hidden] { display: none; }
+
+.work-output-changes {
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+.work-output-changes li {
+  min-width: 0;
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  overflow-wrap: anywhere;
+  font-size: .79rem;
+}

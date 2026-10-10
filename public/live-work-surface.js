@@ -66,6 +66,8 @@ function entryView(item){
       s.detail?element('span',{class:'small muted',text:' · '+s.detail}):null
     ].filter(Boolean))))];
   else if(item.type==='gaps')body=[element('ul',{},item.values.map(value=>element('li',{text:value})))];
+  else if(item.type==='changes')body=[element('ul',{class:'work-output-changes'},item.paths.map(path=>
+    element('li',{},element('code',{text:path}))))];
   return element('article',{class:'work-output-item','data-output-kind':item.type},[title,...body]);
 }
 

@@ -93,3 +93,33 @@ test('chat and non-evidence tasks never create a synthetic work-output surface',
   ]));
   assert.deepEqual(output.entries,[]);
 });
+
+test('only server-recorded applied changes appear in the main Coding output',()=>{
+  const tasks=[{id:'build-code',type:'code',status:'complete',
+    evidence:{structured:{files:[{path:'src/proposed-only.js'}]}}}];
+  const without=liveWorkSnapshot(run(tasks,{state:'complete'}));
+  assert.equal(without.entries.some(x=>x.type==='changes'),false);
+  const applied=liveWorkSnapshot(run(tasks,{
+    state:'complete',adaptation:{unifiedWorkContext:{
+      lastChange:{files:['src/updated.js',{path:'src/created.js'}],
+        deleted:['src/obsolete.js']}
+    }}
+  }));
+  const change=applied.entries.find(x=>x.type==='changes');
+  assert.deepEqual(change.paths,['src/updated.js','src/created.js','src/obsolete.js']);
+  assert.equal(change.paths.includes('src/proposed-only.js'),false);
+});
+test('verification renders only real completed criterion verdicts',()=>{
+  const tasks=[{id:'verify',type:'verify',status:'complete',evidence:{
+    verdict:{verdict:'fail',criteria:[
+      {criterion:'Correct authentication response',met:true},
+      {criterion:'No cross-tenant access',met:false}
+    ]}
+  }}];
+  const output=liveWorkSnapshot(run(tasks,{state:'complete'}));
+  const table=output.entries.find(x=>x.type==='table');
+  assert.equal(table.title,'Recorded verification criteria');
+  assert.deepEqual(table.table.rows[1],['No cross-tenant access','Not met']);
+  assert.equal(liveWorkSnapshot(run([{...tasks[0],status:'pending'}]))
+    .entries.some(x=>x.title==='Recorded verification criteria'),false);
+});

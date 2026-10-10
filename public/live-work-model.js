@@ -70,6 +70,34 @@ function recordText(task) {
   return Object.freeze({type:'text',taskId:name(task.id),title:taskName(task),text:body});
 }
 
+function changedPathRecords(run) {
+  // A proposed patch is not an applied change: use only the server's saved
+  // lastChange record. Paths are names, never automatically opened or read.
+  const last=object(run?.adaptation?.unifiedWorkContext?.lastChange);
+  const files=[...arr(last.files),...arr(last.deleted)]
+    .map(item=>typeof item==='string'?item:item?.path)
+    .filter(item=>typeof item==='string'&&item.trim()).map(item=>item.slice(0,200));
+  const unique=[...new Set(files)].slice(0,12);
+  return unique.length?[{type:'changes',title:'Recorded changed files',paths:unique}]:[];
+}
+
+function verificationRecord(task) {
+  if (task?.type!=='verify' || task.status!=='complete')return null;
+  const verdict=object(task?.evidence?.verdict);
+  if (!['pass','fail','partial','inconclusive'].includes(
+    String(verdict.verdict ?? verdict.status ?? '').toLowerCase()))return null;
+  const criteria=arr(verdict.criteria).slice(0,12)
+    .map(item=>({
+      criterion:clip(typeof item==='string'?item:item?.criterion,200),
+      state:item?.met===true?'Met':item?.met===false?'Not met':'Not confirmed'
+    })).filter(item=>item.criterion);
+  if(!criteria.length)return null;
+  return {type:'table',taskId:name(task.id),title:'Recorded verification criteria',
+    table:tablePreviewModel({name:'Final verification checklist',
+      columns:['Criterion','Recorded verdict'],
+      sample:criteria.map(item=>[item.criterion,item.state])})};
+}
+
 function researchRecords(run) {
   const research=object(run?.adaptation?.researchWorkspace);
   const sources=arr(research.sourceSet).filter(item=>item && typeof item==='object').slice(-6)
@@ -118,13 +146,16 @@ export function liveWorkSnapshot(run,{maxItems=6}={}) {
     const execution=recordOutput(task);
     if(execution)entries.push(execution);
     entries.push(...recordTables(task),...recordArtifacts(task));
+    const verified=verificationRecord(task);
+    if(verified)entries.push(verified);
     const prose=recordText(task);
     if(prose)entries.push(prose);
   }
+  if(domain==='code')entries.push(...changedPathRecords(run));
   if(domain==='research')entries.push(...researchRecords(run));
   const unique=new Set();
   const priority=domain==='code'
-    ? {execution:0,table:1,artifact:2,text:3,sources:4,gaps:5}
+    ? {execution:0,changes:1,table:2,artifact:3,text:4,sources:5,gaps:6}
     : {table:0,sources:1,text:2,artifact:3,execution:4,gaps:5};
   const selected=entries.filter(item=>{
     const key=item.type+'|'+(item.taskId??item.title)+'|'+(item.type==='artifact'?item.artifact.id:item.type==='text'?item.text.slice(0,90):item.type==='table'?item.table.name:'');
