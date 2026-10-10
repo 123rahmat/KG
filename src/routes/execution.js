@@ -2175,7 +2175,11 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     if (!run) return res.status(404).json({ error: 'Run not found', code: 'run-not-found' });
     const approve = req.body?.approve === true;
     if (!approve && req.body?.approve !== false) return res.status(400).json({ error: 'Say approve: true or false.', code: 'action-decision-required' });
-    if (approve) await refreshPolicy(run, req.scope, req.principal.id, req.body, { humanApproved: true });
+    if (approve) {
+      const controllerBlock = await strictRunControlGate(run, req.scope, req.principal.id);
+      if (controllerBlock) return res.status(controllerBlock.status).json(controllerBlock);
+      await refreshPolicy(run, req.scope, req.principal.id, req.body, { humanApproved: true });
+    }
     const task = run.tasks.find(item => item.id === text(req.body?.taskId)) ?? run.tasks.at(-1);
     // Declining runs nothing, so it is always allowed; only approving an
     // action crosses the execution boundary and passes the gates.
