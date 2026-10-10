@@ -25,6 +25,10 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run lint
+      # Fast, real Node.js red→green coding fixture. Keep this test independent
+      # of optional model/provider credentials and the integration database.
+      - name: Coding regression smoke
+        run: npm run smoke:coding
       - run: npm run doctor
       - run: npm run eval:skills
       - run: npm run eval:adaptive-matrix
