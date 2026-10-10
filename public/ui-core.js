@@ -45,7 +45,7 @@ export const state = {
   projects: [],
   activeProjectId: null,
   // Discovered from the public, server-owned adaptive product contract.
-  product: { codingResearchOnly: false, codingOnly: false },
+  product: { codingResearchOnly: false, codingOnly: true },
   settings: null,
   models: null,
   voice: { recognition: null, listening: false, baseText: '' },
