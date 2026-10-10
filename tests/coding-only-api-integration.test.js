@@ -97,3 +97,35 @@ test('KG_CODING_ONLY cannot be bypassed by enabling the old two-engine flag', as
     assert.equal(plan.body.code,'code-only-task-required');
   },{env:{KG_CODING_ONLY:'true',CODING_RESEARCH_ONLY:'true',MULTI_AGENT_MODE:'off'}});
 });
+
+test('KG Code shared project view never grants edit or archive authority',async()=>{
+  await withServer(async ({call,seed,pool})=>{
+    const owner=await seed({role:'editor',workspace:'team'});
+    const collaborator=await seed({role:'editor',workspace:'team'});
+    const ownerAuth={token:owner.token,workspace:'team'};
+    const guestAuth={token:collaborator.token,workspace:'team'};
+    const created=await call('POST','/api/projects',{...ownerAuth,body:{
+      name:'Shared coding project',defaultSurface:'code',visibility:'workspace'
+    }});
+    assert.equal(created.status,201,JSON.stringify(created.body));
+    const id=created.body.project.id;
+    const visible=await call('GET',`/api/projects/${id}`,guestAuth);
+    assert.equal(visible.status,200);
+    assert.equal(visible.body.project.id,id);
+    const changed=await call('PATCH',`/api/projects/${id}`,{
+      ...guestAuth,body:{currentRevision:'attacker-revision'}});
+    assert.equal(changed.status,403,JSON.stringify(changed.body));
+    assert.equal(changed.body.code,'code-project-owner-required');
+    const archived=await call('POST',`/api/projects/${id}/archive`,guestAuth);
+    assert.equal(archived.status,403,JSON.stringify(archived.body));
+    assert.equal(archived.body.code,'code-project-owner-required');
+    const persisted=await pool.query(
+      'SELECT state,current_revision,principal_id FROM projects WHERE id=$1',[id]);
+    assert.equal(persisted.rows[0].state,'active');
+    assert.equal(persisted.rows[0].current_revision,null);
+    assert.equal(persisted.rows[0].principal_id,owner.principal.id);
+    const ownerChange=await call('PATCH',`/api/projects/${id}`,{
+      ...ownerAuth,body:{currentRevision:'valid-owner-revision'}});
+    assert.equal(ownerChange.status,200,JSON.stringify(ownerChange.body));
+  },{env:{KG_CODING_ONLY:'true',MULTI_AGENT_MODE:'off'}});
+});
