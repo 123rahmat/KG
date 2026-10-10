@@ -12,6 +12,7 @@ const group = Object.freeze([
 ]);
 let activeRequest = 0;
 let lastLoaded = '';
+let pendingKey = '';
 let lastConversation = '';
 const text = value => String(value ?? '').trim();
 const sizeLabel = size => {
@@ -85,8 +86,9 @@ async function fetchFiles({ force = false } = {}) {
     showFiles([],false);
     return;
   }
-  if (!force && lastLoaded === key) return;
+  if (!force && (lastLoaded === key || pendingKey === key)) return;
   const ticket = ++activeRequest;
+  pendingKey = key;
   const workspace = state.workspaceId;
   container.replaceChildren(element('p', { class:'small muted', role:'status', text:'Loading files attached to this chat…' }));
   try {
@@ -104,6 +106,8 @@ async function fetchFiles({ force = false } = {}) {
       element('p', { text:error.message || 'Unable to load this chat’s files.' }),
       element('button', { class:'small', type:'button', text:'Retry', onclick:() => fetchFiles({force:true}) })
     ]));
+  } finally {
+    if (ticket === activeRequest) pendingKey = '';
   }
 }
 
@@ -130,6 +134,7 @@ export function syncChatView() {
 export function resetChatView() {
   ++activeRequest;
   lastLoaded = '';
+  pendingKey = '';
   lastConversation = state.chat?.id ?? '';
   state.chatView = 'chat';
   syncChatView();
