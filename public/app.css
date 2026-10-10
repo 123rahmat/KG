@@ -5466,10 +5466,11 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
 .coding-nav > button:hover { background:var(--soft); color:var(--ink); }
 .coding-nav > button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .coding-nav > button .i { color:var(--muted); width:17px; height:17px; }
-.coding-nav > button:first-of-type {
+.coding-nav > button[aria-current="page"] {
   background:var(--accent-soft); color:var(--accent);
+  border-color:color-mix(in srgb,var(--accent) 12%,transparent);
 }
-.coding-nav > button:first-of-type .i { color:var(--accent); }
+.coding-nav > button[aria-current="page"] .i { color:var(--accent); }
 .coding-progress-panel {
   align-self:center; width:min(var(--read), calc(100% - 32px)); margin:2px auto 14px;
 }
