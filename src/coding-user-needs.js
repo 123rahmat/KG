@@ -49,6 +49,8 @@ function explicitGuardrail(clause) {
  */
 export function captureCodingUserNeeds({ request = '', constraints = [], successCriteria = [], outputs = [] } = {}) {
   const clauses = userClauses(request);
+  const rawRequest = rawText(request);
+  const fullClauseCount = rawRequest.slice(0, 12000).split(CLAUSE_SPLIT).filter(value => clean(value)).length;
   const actions = unique(clauses.filter(clause => ACTION.test(clause)));
   const guardrails = unique([
     ...clauses.map(explicitGuardrail),
@@ -59,7 +61,18 @@ export function captureCodingUserNeeds({ request = '', constraints = [], success
   // A single action is already represented by the run's original outcome.
   // Add separate criteria only for independent, explicit action clauses.
   const deliverables = actions.length > 1 ? actions : [];
-  const explicitCriteria = unique([...deliverables, ...guardrails, ...specified, ...artifacts]);
+  // Preserve negative constraints and explicit acceptance conditions first;
+  // a long feature list must not silently push "do not delete data" out.
+  const candidates = unique([...guardrails, ...specified, ...artifacts, ...deliverables], MAX + 1);
+  const coverageLimited = rawRequest.length > 12000 || fullClauseCount > MAX
+    || candidates.length > MAX
+    || (Array.isArray(constraints) && constraints.length > MAX)
+    || (Array.isArray(successCriteria) && successCriteria.length > MAX)
+    || (Array.isArray(outputs) && outputs.length > MAX);
+  const explicitCriteria = coverageLimited
+    ? [...candidates.slice(0, MAX - 1),
+      'Review remaining requested changes not listed individually in this bounded checklist']
+    : candidates;
   const aspirational = /\b(?:best|perfect|flawless|every possible|everything|100\s*%|extreme|world[- ]class)\b/i.test(rawText(request));
   return Object.freeze({
     version: 1,
@@ -71,6 +84,7 @@ export function captureCodingUserNeeds({ request = '', constraints = [], success
     guardrails: Object.freeze(guardrails),
     explicitCriteria: Object.freeze(explicitCriteria),
     qualityUnspecified: aspirational && !specified.length,
+    coverageLimited,
     verificationPolicy: 'Each explicit criterion requires a named positive verification; a blanket pass is not coverage.',
     maxItems: MAX
   });
