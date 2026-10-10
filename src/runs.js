@@ -352,10 +352,17 @@ export class RunStore {
         projectContextSwitched = true;
       }
     }
+    // Give the planner the original user's separate acceptance targets before
+    // work begins, not only at the final verifier. No inferred requirement may
+    // elevate project authorization or tool capability.
+    const codingNeeds = controlEngineId === 'coding' && enforcedControlSurface === 'code'
+      ? captureCodingUserNeeds({ request: goalText, constraints, successCriteria, outputs }) : null;
+    const codingSuccessCriteria = [...successCriteria, ...(codingNeeds?.explicitCriteria ?? [])];
+
     const situationContext = {
       user, workspace, project, files, priorWork: workspaceState?.completed?.length ? [...priorWork, ...workspaceState.completed] : priorWork, constraints, resources, requirements,
       attachedArtifacts: attachments.map(item => text(typeof item === 'string' ? item : item?.name)).filter(Boolean),
-      successCriteria, outputs, environment, language, skillLevel, preferences, currentState: currentState ?? workspaceState,
+      successCriteria: codingSuccessCriteria, outputs, environment, language, skillLevel, preferences, currentState: currentState ?? workspaceState,
       completedSteps, failedSteps, evidence, questions, dataSources, connections, connectedServices,
       commitments, dependencies, dueAt, startAt, userBehavior, capacity, availability, competingCommitments, now, creationMode,
       privacyConsent, need, adaptiveControl, verifiedConnections, workspaceType, runtimeMode,
@@ -426,13 +433,6 @@ export class RunStore {
       };
     }
 
-    // Capture the user's concrete requested outcomes and constraints *before*
-    // executing. These are parsed only inside an authorized Coding controller;
-    // they never select a domain, grant permissions or certify a result.
-    const codingNeeds = controlEngineId === 'coding' && enforcedControlSurface === 'code'
-      ? captureCodingUserNeeds({
-        request: goalText, constraints, successCriteria, outputs
-      }) : null;
     if (codingNeeds) plan.adaptation.codingUserNeeds = codingNeeds;
 
     const requirementModel = plan.workflow === 'direct'
