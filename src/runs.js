@@ -311,9 +311,10 @@ export class RunStore {
       const { rows: conflicting } = await this.pool.query(
         `SELECT id FROM runs WHERE workspace_id = $1 AND conversation_id = $2
            AND (project_id IS DISTINCT FROM $3 OR surface IS DISTINCT FROM $4
-             OR principal_id IS DISTINCT FROM $5)
+             OR principal_id IS DISTINCT FROM $5 OR control_engine_id IS DISTINCT FROM $6)
            LIMIT 1`,
-        [scope.workspaceId, conversation, linkedProjectId, enforcedControlSurface, principal.id]
+        [scope.workspaceId, conversation, linkedProjectId, enforcedControlSurface,
+          principal.id, controlEngineId]
       );
       if (conflicting.length) {
         throw new RunError('A conversation cannot switch project or control engine.', {
