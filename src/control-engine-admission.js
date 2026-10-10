@@ -69,11 +69,13 @@ export async function admitControlEngineRequest({
     // A real project-bound prior run is trusted for a contextual follow-up;
     // other chats, different projects and old general-chat runs are ignored.
     const history = await pool.query(
-      `SELECT id, surface, goal FROM runs
+      `SELECT id, surface FROM runs
          WHERE workspace_id = $1 AND principal_id = $2
            AND project_id = $3 AND conversation_id = $4
-           AND surface = $5 ORDER BY created_at DESC LIMIT 3`,
-      [scope.workspaceId, principalId, projectKey, conversationKey, surface]
+           AND surface = $5 AND control_engine_id = $6
+         ORDER BY created_at DESC LIMIT 3`,
+      [scope.workspaceId, principalId, projectKey, conversationKey, surface,
+        controlEngineForSurface(surface)]
     );
     conversation = (history.rows ?? []).map(row => ({
       scopeDecision: {
