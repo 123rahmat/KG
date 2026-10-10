@@ -61,7 +61,8 @@ function activeWorkspace(run) {
 function surfaceSet() {
   // Historical general-chat runs remain readable, but new project work has
   // exactly two controller surfaces in the staged Coding/Research product.
-  return state.product?.codingResearchOnly ? ['code', 'research']
+  return state.product?.codingOnly ? ['code']
+    : state.product?.codingResearchOnly ? ['code', 'research']
     : ['runs', 'code', 'research'];
 }
 
@@ -95,7 +96,7 @@ function surfaceButton(name, active) {
 export function adaptiveWorkspaceState() {
   const run = lastRun();
   const selected = ['code', 'research', 'normal-chat'].includes(state.activeSurface) ? state.activeSurface : null;
-  const workspace = state.product?.codingResearchOnly
+  const workspace = (state.product?.codingResearchOnly || state.product?.codingOnly)
     ? (run && ['code','research','normal-chat'].includes(run.surface)
       ? run.surface
       : ['code','research'].includes(selected) ? selected : 'code')
