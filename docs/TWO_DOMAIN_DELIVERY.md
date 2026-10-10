@@ -268,3 +268,17 @@ identifiers (not malformed, re-normalized URLs). Repeated claims merge
 their legitimate source keys while keeping the newest claim. This preserves
 traceable provenance across successive research turns without inventing
 freshness or treating reused findings as newly verified.
+
+### Smaller specialist context, without cutting Code edits or source evidence
+
+For Research and idea-discovery advisory agents, repeat history is bounded
+according to risk, uncertainty and complexity: fewer recent chat turns,
+shorter remembered excerpts and fewer skill-instruction excerpts. Current
+task, situation, criteria, evidence, source ledger and primary-model context
+remain separate and available. Idea advisors working against a Coding project
+receive project identity, focus and file paths rather than large source-code
+contents; later authorized Code implementers retain their full scoped source
+and normal coding history. This eliminates repeated large payloads in
+optional specialist calls without claiming that sources have been verified
+or work executed. The choices are deterministic, measured in regression
+tests, and do not introduce another agent or provider call.

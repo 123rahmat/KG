@@ -31,6 +31,7 @@ import { selectFamilySubagents, runBoundedFamilyChildProbes } from './adaptive-f
 import { reconcileTaskRecruitment, recruitmentSummary } from './situational-recruitment-supervisor.js';
 import { agentWaveEconomy, optionalAgentStopDecision } from './agent-quality-economy.js';
 import { optionalChildCallBudget } from './optional-child-budget.js';
+import { advisorContextEnvelope } from './advisor-context-economy.js';
 import { normalizeAgentResourceRequests, summarizeDelegationRequests, distributeSubagentCapacity } from './agent-resource-delegation.js';
 import { peerHandoffsFor } from './agent-peer-handoffs.js';
 import { explainAgentSelection } from './agent-selection-rationale.js';
@@ -959,6 +960,12 @@ export function agentMessages(role, basePayload) {
     evidenceSoFar: basePayload?.evidenceSoFar,
     task: basePayload?.task
   });
+  const advisoryEnvelope=advisorContextEnvelope({
+    surface:basePayload?.specialistSurface??basePayload?.surface??'normal-chat',
+    task:basePayload?.task??{},situation:basePayload?.situation??{},
+    conversation:basePayload?.conversation,remembered:basePayload?.remembered,
+    skills:basePayload?.skills,codeIntelligence:basePayload?.codeIntelligence
+  });
   return [
     { role: 'system', content: rolePrompt(role,basePayload) },
     {
@@ -996,25 +1003,15 @@ export function agentMessages(role, basePayload) {
          adaptiveContext: basePayload?.adaptiveContext ?? null,
         adaptiveBehavior: basePayload?.adaptiveBehavior ?? null,
          precedents: Array.isArray(basePayload?.precedents) ? basePayload.precedents.slice(0, 6) : [],
-skills: Array.isArray(basePayload?.skills) ? basePayload.skills.slice(0, 6).map(skill => ({
-          name: skill.name, version: skill.version, description: skill.description,
-          instructions: String(skill.instructions ?? '').slice(0, 5000), fingerprint: skill.fingerprint ?? null
-        })) : [],
+skills: advisoryEnvelope.skills,
         blackboard: basePayload?.blackboard ?? null,
         subsystemPlan: basePayload?.subsystemPlan ?? null,
         subsystemWork: basePayload?.subsystemWork ?? null,
         // Every workspace chat uses the same server-selected chat context as
         // the primary model: local memory, recent turns and the current
         // workspace state. Peer findings remain excluded to prevent herding.
-        remembered: Array.isArray(basePayload?.remembered)
-          ? basePayload.remembered.slice(-15).map(item => clip(String(item ?? ''), 600))
-          : [],
-        conversation: Array.isArray(basePayload?.conversation)
-          ? basePayload.conversation.slice(-6).map(turn => ({
-              user: clip(String(turn?.user ?? ''), 1600),
-              assistant: clip(String(turn?.assistant ?? ''), 1600)
-            }))
-          : [],
+        remembered: advisoryEnvelope.remembered,
+        conversation: advisoryEnvelope.conversation,
         workspace: basePayload?.workspace ?? basePayload?.unifiedWorkContext?.workspace ?? null,
         chat: basePayload?.chat ?? basePayload?.unifiedWorkContext?.chat ?? null,
         // The full codeIntelligence object is sent once; keep this legacy
@@ -1025,7 +1022,7 @@ skills: Array.isArray(basePayload?.skills) ? basePayload.skills.slice(0, 6).map(
         } : null,
         // Keep the explicit field name available to coding-panel consumers;
         // codeContext remains the generic compatibility alias.
-        codeIntelligence: basePayload?.codeIntelligence ?? null,
+        codeIntelligence: advisoryEnvelope.codeIntelligence,
         // A user-approved plan is binding for subsequent coding. Specialists
         // may identify a necessary safety/verification issue, but they must
         // not silently replace the person's keep/remove/add/change choices.
