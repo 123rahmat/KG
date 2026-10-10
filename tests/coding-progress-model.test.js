@@ -24,12 +24,31 @@ test('completion alone cannot be displayed as verified',()=>{
   assert.equal(view.verified,false);
   assert.match(view.headline,/not confirmed/);
 });
-test('only a recorded successful verification verdict grants verified badge',()=>{
+const authenticatedPass = () => ({
+  id:'test-code',type:'test-code',status:'complete',
+  evidence:{executionReceipt:{serverAuthenticated:true},
+    result:{output:{testSummary:{passed:3,failed:0,total:3}}}}
+});
+test('only a passing verifier plus authenticated passing tests grants verified badge',()=>{
   const view=codingProgressSnapshot({state:'complete',tasks:[
+    {id:'build-code',type:'build-code',status:'complete'},
+    authenticatedPass(),
     {id:'verify',type:'verify',status:'complete',evidence:{verdict:{verdict:'pass'}}}
   ]});
   assert.equal(view.verified,true);
   assert.equal(view.status,'Verified');
+  assert.equal(view.testReceiptConfirmed,true);
+  assert.deepEqual(view.testCounts,{passed:3,failed:0,total:3});
+});
+test('a model-reported passing verdict without an authenticated test receipt is not verified',()=>{
+  const view=codingProgressSnapshot({state:'complete',tasks:[
+    {id:'test-code',type:'test-code',status:'complete',evidence:{
+      result:{output:{testSummary:{passed:4,failed:0,total:4}}}}},
+    {id:'verify',type:'verify',status:'complete',evidence:{verdict:{verdict:'pass'}}}
+  ]});
+  assert.equal(view.verified,false);
+  assert.equal(view.testCounts,null);
+  assert.match(view.evidence,/No authenticated/);
 });
 test('pending tests never become a passed test count',()=>{
   const view=codingProgressSnapshot({state:'queued',tasks:[{id:'test-code',status:'pending'}]});
@@ -78,4 +97,40 @@ test('verification requires terminal run completion',()=>{
   ]});
   assert.equal(view.verified,false);
   assert.equal(view.status,'Working');
+});
+
+test('a passing verifier and authenticated tests become stale after a code change',()=>{
+  const view=codingProgressSnapshot({state:'complete',tasks:[
+    {id:'build-code',type:'build-code',status:'complete'},
+    authenticatedPass(),
+    {id:'verify',type:'verify',status:'complete',evidence:{verdict:{status:'pass'}}},
+    {id:'build-code-2',type:'build-code',status:'complete'}
+  ]});
+  assert.equal(view.verified,false);
+});
+test('the most recent incomplete/failed test steps override earlier passing receipts',()=>{
+  for(const status of ['pending','running','failed','stale']){
+    const view=codingProgressSnapshot({state:'running',tasks:[
+      authenticatedPass(),
+      {id:'test-code',type:'test-code',status}
+    ]});
+    assert.match(view.testState,/pending|running|failed or stale/i);
+    assert.equal(view.verified,false);
+  }
+});
+test('test counts require a nonempty, mathematically consistent report',()=>{
+  for(const report of [
+    {passed:4,failed:0,total:3},
+    {passed:0,failed:0,total:0},
+    {passed:2.3,failed:0,total:3},
+    {passed:1,failed:-1,total:2}
+  ]){
+    const task=authenticatedPass();
+    task.evidence.result.output.testSummary=report;
+    const view=codingProgressSnapshot({state:'complete',tasks:[
+      task,{id:'verify',type:'verify',status:'complete',evidence:{verdict:{verdict:'pass'}}}
+    ]});
+    assert.equal(view.verified,false);
+    assert.equal(view.testCounts,null);
+  }
 });
