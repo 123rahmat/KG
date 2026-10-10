@@ -60,9 +60,13 @@ test('mixed requests require an explicit split, not a silent discarded request',
 });
 
 test('only a server-authorized matching previous project turn permits short follow-up', async () => {
-  const {pool}=fake(undefined,[{id:'r1',surface:'code',goal:'Fix the bug'}]);
+  const {pool,calls}=fake(undefined,[{id:'r1',surface:'code'}]);
   const admitted=await admitControlEngineRequest({pool,...req({goal:'Continue this',conversationId:'valid-conv'})});
   assert.equal(admitted.controlEngineId,'coding');
+  // A previous legacy code-labeled run is not sufficient: the database must
+  // confirm it belongs to this same immutable controller and project.
+  assert.match(calls[1].sql,/control_engine_id = \$6/);
+  assert.equal(calls[1].args[5],'coding');
   const none=fake();
   await assert.rejects(admitControlEngineRequest({
     pool:none.pool,...req({goal:'Continue this',conversationId:'unknown'})
