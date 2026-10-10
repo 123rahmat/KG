@@ -33,6 +33,7 @@ import { buildUnifiedWorkContext, applyWorkChange } from './unified-work-context
 import { reevaluateSituationGovernance } from './situation-governance.js';
 import { MAX_CODE_REPAIRS, canRepair, builtCode, staleAfterRepair, repairRecord, hasCode, isProject, codeFiles, deletedPaths, mergeFix, repairsThisAttempt, normalizePackage } from './code-workflow.js';
 import { normalizeNextStep } from './step-plan.js';
+import { ventureIntent, ventureDiscoveryStep } from './venture-ideation.js';
 import { evidenceNextTaskGate } from './evidence-next-task-gate.js';
 import { buildRequirementModel, normalizeRequirementModel, reconcileRequirements, nextRequirement, requirementAction, gradedCriteria } from './requirements.js';
 import { insertTask, insertTasks, loadTasks } from './run-graph.js';
@@ -152,6 +153,9 @@ function newBuild(run) {
 }
 
 export function codePlanApprovalRequired(run = {}) {
+  // An explicit idea-to-software project must agree its MVP scope after
+  // exploration even when it would otherwise be classified as a small build.
+  if (ventureIntent({goal:run.goal,surface:run.surface||run.adaptation?.primarySurface}).buildAfterDiscovery) return true;
   const adaptation = run.adaptation ?? {};
   const existingCode = (adaptation.attachments?.length ?? 0) > 0
     || (adaptation.projectOverlay?.length ?? 0) > 0
@@ -2008,6 +2012,10 @@ export class RunStore {
     const textValue = value => String(value ?? '').trim();
     const next = normalizeNextStep(structured);
     const enough = structured?.enough === true;
+    const venture=ventureIntent({goal:run.goal,surface:run.surface||run.adaptation?.primarySurface});
+    const ventureStep=venture.enabled && !tasks.some(item=>item.metadata?.ventureDiscovery===true)
+      ? ventureDiscoveryStep({goal:run.goal,surface:run.surface||run.adaptation?.primarySurface})
+      : null;
     const requirementsEnabled = run.adaptation?.workflow !== 'direct';
     const activeRequirement = requirementsEnabled ? nextRequirement(requirementModel) : null;
 
@@ -2036,6 +2044,9 @@ export class RunStore {
     const planned = new Set([...(run.capabilities?.granted ?? []), ...(run.capabilities?.required ?? [])]);
     const started = type => tasks.some(item => item.type === type);
     const plannedStage = () => {
+      // Idea discovery is one conditional, saved step. It must finish before
+      // authoring or approving the MVP plan, not silently spawn a separate team.
+      if (ventureStep) return ventureStep;
       if (planned.has('capability-discovery') && !started('discover-capabilities')) {
         return { type: 'discover-capabilities', title: 'Discover the required capability',
           purpose: 'Determine the capability, tools, data, environment and verification needed for the current situation.' };
@@ -2090,6 +2101,15 @@ export class RunStore {
       candidate = {
         ...PLAN_AGREEMENT_STEP,
         ...(target.metadata?.existingCodePlan ? { existingCodePlan: true } : {})
+      };
+    }
+    // Selection is advisory until the parent writes the next server-owned
+    // task. Once explored, continue to the existing scoped build plan or the
+    // remaining Research stage, not a model-proposed unauthorised build.
+    if (target.metadata?.ventureDiscovery === true) {
+      candidate = plannedStage() ?? {
+        type:'respond',title:'Present the idea evaluation',
+        purpose:'Present compared ideas, customer needs, evidence versus assumptions, recommended direction, and a decisive validation experiment. Do not claim a product was built.'
       };
     }
     if (!candidate && target.type === 'approval' && target.metadata?.approvalFor) {
@@ -2210,7 +2230,8 @@ export class RunStore {
       candidate = { ...candidate, requirementIds: [activeRequirement.id] };
     }
 
-    if (enough && target.type !== 'verify' && target.type !== 'deliver' && !target.metadata?.buildPlan) {
+    if (enough && target.type !== 'verify' && target.type !== 'deliver'
+        && !target.metadata?.buildPlan && !target.metadata?.ventureDiscovery) {
       candidate = { type: 'verify', title: 'Verify the result',
         purpose: 'Check the result against the current success criteria and the evidence actually produced.', requires: ['verification'] };
     }
@@ -2421,6 +2442,8 @@ export class RunStore {
         : {}),
       ...(candidate.type === 'verify' ? { verification: run.adaptation?.verification ?? run.situation?.verification ?? verificationContract() } : {}),
       ...(candidate.inventionLoop === true ? { inventionLoop: true } : {}),
+      ...(candidate.ventureDiscovery===true ? { ventureDiscovery:true,
+        venturePhase:'explore-before-build' } : {}),
       ...(candidate.type === 'reassess' && candidate.sourceTask ? { sourceTask: candidate.sourceTask } : {}),
       ...(candidate.humanInput ? { humanInput: true } : {}),
       ...(admittedExpansion?.evidenceTaskId ? { evidenceAnchorTaskId: admittedExpansion.evidenceTaskId, admission: admittedExpansion.reason } : {}),
