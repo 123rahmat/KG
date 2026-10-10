@@ -368,6 +368,11 @@ export function loadConfig(env = process.env) {
     })(),
     cookieSecure,
     logLevel,
+    // Staged release switch. OFF until project/record migrations and UI are
+    // verified; when ON, new work must pass the Coding/Research project gate.
+    product: {
+      codingResearchOnly: boolean(env.CODING_RESEARCH_ONLY, false)
+    },
 
     security: {
       objectEncryptionKey,
