@@ -351,6 +351,31 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         : null
     };
   }
+  // Strict mode forbids executing old Normal Chat or retargeted projects.
+  // The same check protects queued background requests AND claimed workers.
+  async function strictRunControlGate(run, scope, principalId) {
+    if (config.product?.codingResearchOnly !== true) return null;
+    const controller = run.surface === 'code' ? 'coding'
+      : run.surface === 'research' ? 'research' : null;
+    if (!controller || run.adaptation?.controlEngineId !== controller
+        || !run.projectId || run.principalId !== principalId) {
+      return {
+        status: 409, code: 'control-historical-read-only',
+        error: 'This historical or unowned run is read-only. Start work in a Coding or Research project.'
+      };
+    }
+    const { rows } = await pool.query(
+      `SELECT id FROM projects WHERE id = $1 AND workspace_id = $2
+         AND state = 'active' AND default_surface = $3
+         AND (principal_id = $4 OR visibility = 'workspace') LIMIT 1`,
+      [run.projectId, scope.workspaceId, run.surface, principalId]
+    );
+    return rows.length ? null : {
+      status: 409, code: 'control-project-changed',
+      error: 'The project is archived or no longer matches this run’s control engine.'
+    };
+  }
+
   /** Null when the person may use the AI now; otherwise the not-executed result that says when. */
   async function usageBlock(scope) {
     const principalId = scope?.principalId ?? currentDbScope()?.principalId;
@@ -379,6 +404,8 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
           code: 'agent-owner-required'
         });
       }
+      const controllerBlock = await strictRunControlGate(run, req.scope, req.principal.id);
+      if (controllerBlock) return res.status(controllerBlock.status).json(controllerBlock);
       const policyBaseline = run.governance;
       const recheckPolicy = () => refreshPolicy(run, req.scope, req.principal.id, req.body, { baseline: policyBaseline });
       if (run.state === 'blocked') {
@@ -1098,6 +1125,8 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     }
     const run = await runs.get(req.scope, req.params.id);
     if (!run) return res.status(404).json({ error: 'Run not found', code: 'no-run' });
+    const controllerBlock = await strictRunControlGate(run, req.scope, req.principal.id);
+    if (controllerBlock) return res.status(controllerBlock.status).json(controllerBlock);
     const taskId = expectedTaskId ?? run.next;
     if (!taskId || taskId !== run.next) {
       return res.status(409).json({ error: 'That task is not the next task in this run', code: 'stale-execution', run });
@@ -1127,6 +1156,8 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
   app.post('/api/runs/:id/execution-result', scoped('editor'), route(async (req, res) => {
     const run = await runs.get(req.scope, req.params.id);
     if (!run) return res.status(404).json({ error: 'Run not found', code: 'no-run' });
+    const controllerBlock = await strictRunControlGate(run, req.scope, req.principal.id);
+    if (controllerBlock) return res.status(controllerBlock.status).json(controllerBlock);
     await refreshPolicy(run, req.scope, req.principal.id, req.body);
 
     const taskId = text(req.body?.taskId);
