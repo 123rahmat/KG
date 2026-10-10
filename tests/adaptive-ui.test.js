@@ -240,10 +240,10 @@ test('Normal Chat retains multi-file sandbox affordance while specialized worksp
 });
 
 test('main work output is shown separately from steps with only persisted terminal, table and artifact evidence', async () => {
-  const actions = await fs.readFile(path.join(root, 'public/app-actions.js'), 'utf8');
-  const workspace = await fs.readFile(path.join(root, 'public/adaptive-workspace.js'), 'utf8');
-  const surface = await fs.readFile(path.join(root, 'public/live-work-surface.js'), 'utf8');
-  const model = await fs.readFile(path.join(root, 'public/live-work-model.js'), 'utf8');
+  const actions = await fs.readFile(path.join(ROOT, 'public/app-actions.js'), 'utf8');
+  const workspace = await fs.readFile(path.join(ROOT, 'public/adaptive-workspace.js'), 'utf8');
+  const surface = await fs.readFile(path.join(ROOT, 'public/live-work-surface.js'), 'utf8');
+  const model = await fs.readFile(path.join(ROOT, 'public/live-work-model.js'), 'utf8');
   assert.match(actions, /parts\.push\(workStatusCard\(run, context\)\)/);
   assert.match(actions, /const liveOutput = renderLiveWorkSurface\(run\)/);
   assert.match(workspace, /renderLiveWorkSurface\(run\)/);
