@@ -86,6 +86,16 @@ function entryView(item){
       element('pre',{tabindex:'0',text:item.stderr})
     ]));
     if(item.status==='failed')body.push(element('span',{class:'small tone-warn',text:'Execution reported failure.'}));
+  } else if(item.type==='ideas') {
+    body=[
+      element('p',{class:'small muted',
+        text:'Model-proposed concepts, not verified market demand or approval to build.'}),
+      tableView(item),
+      item.selectedIdea ? element('p',{class:'small',text:
+        'Suggested direction (not approved): '+item.selectedIdea}):null,
+      item.decisionReason?element('p',{class:'small',text:'Why proposed: '+item.decisionReason}):null,
+      item.successMeasure?element('p',{class:'small',text:'Test for success: '+item.successMeasure}):null
+    ].filter(Boolean);
   } else if(item.type==='table')body=[tableView(item)];
   else if(item.type==='text')body=[renderMarkdown(item.text)];
   else if(item.type==='artifact') {

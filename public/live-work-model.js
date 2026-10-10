@@ -45,6 +45,29 @@ function recordOutput(task) {
   });
 }
 
+function recordVentureDecision(task) {
+  if (task?.status!=='complete' || task?.metadata?.ventureDiscovery!==true) return null;
+  const decision=object(task?.evidence?.structured?.ventureDecision);
+  const options=arr(decision.ideas).slice(0,6).filter(item=>item &&
+    typeof item.name==='string' && (typeof item.problem==='string' || typeof item.value==='string'));
+  if(!options.length) return null;
+  const table=tablePreviewModel({
+    name:'Proposed options · assumptions and validation not verified',
+    columns:['Idea','User problem','Value','Main assumption','Cheap experiment'],
+    sample:options.map(item=>[
+      clip(item.name,110),
+      clip([item.customer,item.problem].filter(Boolean).join(' · '),210),
+      clip(item.value,160),clip(item.assumption,150),clip(item.cheapTest,160)
+    ])
+  },{maxRows:6,maxColumns:5});
+  if(!table.rows.length)return null;
+  const proposed=clip(decision.selectedIdea,110);
+  const selected=options.some(item=>item.name===proposed)?proposed:'';
+  return {type:'ideas',taskId:name(task.id),title:'Idea exploration · proposed options',
+    table,selectedIdea:selected,decisionReason:clip(decision.decisionReason,300),
+    successMeasure:clip(decision.successMeasure,180)};
+}
+
 function recordTables(task) {
   const e=rawEvidence(task), output=outputOf(task);
   return [...arr(e.structured?.tables),...arr(output.tables),...arr(e.tables)]
@@ -150,11 +173,13 @@ export function liveWorkSnapshot(run,{maxItems=6}={}) {
     if (task.status==='pending'||task.status==='queued'||task.status==='skipped')continue;
     const execution=recordOutput(task);
     if(execution)entries.push(execution);
+    const ideas=recordVentureDecision(task);
+    if(ideas)entries.push(ideas);
     entries.push(...recordTables(task),...recordArtifacts(task));
     const verified=verificationRecord(task);
     if(verified)entries.push(verified);
     const prose=recordText(task);
-    if(prose && !(domain==='research' && knownFindings.some(finding=>
+    if(prose && !ideas && !(domain==='research' && knownFindings.some(finding=>
       finding.length>24 && prose.text.toLowerCase().includes(finding)))) {
       // A compact research observation is useful as a point. The full
       // answer, complete citations and provenance remain in the final result.
@@ -166,8 +191,8 @@ export function liveWorkSnapshot(run,{maxItems=6}={}) {
   if(domain==='research')entries.push(...researchRecords(run));
   const unique=new Set();
   const priority=domain==='code'
-    ? {execution:0,changes:1,table:2,artifact:3,text:4,sources:5,gaps:6}
-    : {table:0,sources:1,text:2,artifact:3,execution:4,gaps:5};
+    ? {ideas:0,execution:1,changes:2,table:3,artifact:4,text:5,sources:6,gaps:7}
+    : {ideas:0,table:1,sources:2,text:3,artifact:4,execution:5,gaps:6};
   const selected=entries.filter(item=>{
     const key=item.type+'|'+(item.taskId??item.title)+'|'+(item.type==='artifact'?item.artifact.id:item.type==='text'?item.text.slice(0,90):item.type==='table'?item.table.name:'');
     if(unique.has(key))return false;

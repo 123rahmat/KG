@@ -2018,15 +2018,24 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
     // A work step answers its part, and may say the need is met or re-plan.
     let stepJudgement = null;
     if (task.type === 'step') {
-      const read = readStepAnswer(answer.text);
+      const read = readStepAnswer(answer.text,{
+        ventureDiscovery:task.metadata?.ventureDiscovery===true
+      });
       answer.text = read.text;
-      stepJudgement = { enough: read.enough, ...(read.judged === false ? { judged: false } : {}), ...(read.next ? { next: read.next } : {}), ...(read.revise?.length ? { revise: read.revise } : {}) };
+      stepJudgement = { enough: read.enough,
+        ...(read.ventureDecision ? { ventureDecision:read.ventureDecision } : {}),
+        ...(read.judged === false ? { judged: false } : {}),
+        ...(read.next ? { next: read.next } : {}),
+        ...(read.revise?.length ? { revise: read.revise } : {}) };
     }
     if (ANSWER_TASKS.has(task.type)) {
       const withheld = guardAnswer(answer.text, blockedTopicsFrom(config));
       if (withheld) {
         answer.text = withheld.text;
         answer.citations = [];
+        // Do not leak rejected step proposals into persisted structured
+        // evidence, the workspace UI, or the next server planning stage.
+        if (task.type === 'step') stepJudgement={ enough:false,judged:false };
         await recordRefusal(pool, scope ?? currentDbScope(), { category: withheld.topic, source: 'model', topic: true });
       }
     }

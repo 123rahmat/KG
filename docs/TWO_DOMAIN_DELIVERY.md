@@ -436,3 +436,24 @@ even when a user reopens a chat before its slower network submission finishes.
 The old chat object is no longer the sole UI destination. Rendering is also
 denied when a background run belongs to a different workspace, so switching
 organizations never attaches an old response to the new workspace's thread.
+
+## Structured idea-to-build evidence handoff
+
+For an explicitly requested brainstorm inside Code or Research, the ideation
+`step` can now return a **bounded, server-saved decision record**: up to six
+distinct concepts, each with the proposed user, problem, value, primary
+assumption and cheapest validation experiment; plus an optional proposed
+choice, rationale and falsifiable success measure. The server parses and
+normalizes this data as **model advice**, never as observed market evidence,
+customer interviews, user approval, or an actual experiment receipt. Rejected
+model content cannot persist as a proposed next step or idea decision.
+
+The structured decision stays in that completed task's evidence for the next
+Coding build-plan handoff, after which the existing explicit plan-approval,
+scope-control, code-test and verification stages remain mandatory. The main
+Coding/Research output area shows a compact **proposed ideas** comparison
+table when (and only when) a completed brainstorm task saved structured
+options. It distinguishes the model's suggested direction from the person's
+approved plan, displays the experiment/success measure, and avoids duplicating
+the same prose as a separate results card. It never displays queued or pending
+ideas as work completed. Normal Chat remains direct without specialist agents.
