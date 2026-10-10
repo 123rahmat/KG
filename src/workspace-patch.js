@@ -7,6 +7,7 @@
  */
 import crypto from 'node:crypto';
 import { normalizeWorkspaceFiles, safeWorkspacePath, WORKSPACE_LIMITS } from './code-workspace.js';
+import { isSensitiveWorkspacePath } from './workspace-path.js';
 
 const text = value => String(value ?? '');
 const sha256 = value => crypto.createHash('sha256').update(text(value), 'utf8').digest('hex');
@@ -50,7 +51,9 @@ export function normalizeChangeSet(changes = []) {
   return list.map(change => {
     const path = safeWorkspacePath(change?.path);
     if (!path) throw new Error('Workspace change-set contains an invalid path');
-    if (WRITE_BLOCKED_PATH.test(path)) throw new Error('Workspace changes may not write credential or private-key files');
+    if (WRITE_BLOCKED_PATH.test(path) || isSensitiveWorkspacePath(path)) {
+      throw new Error('Workspace changes may not write credential or private-key files');
+    }
     const kind = change?.kind === 'delete' || change?.delete === true
       ? 'delete'
       : change?.kind === 'range'
