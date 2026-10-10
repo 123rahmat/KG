@@ -4920,3 +4920,30 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
  .kg-entrance *{animation:none!important;transition:none!important}
 }
 /* ━━━━━━━ End KG Code entrance ━━━━━━━ */
+
+/* User-defined coding needs. Unlike task progress, these represent the exact
+   explicit outcomes the requester needs checked before declaring completion. */
+.code-user-coverage {
+  margin:4px 17px 12px;padding:13px 14px;border:1px solid var(--line);
+  border-radius:var(--radius-sm);background:var(--softer);min-width:0;
+}
+.code-user-coverage-header {display:flex;justify-content:space-between;gap:7px 14px;
+  align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:.78rem}
+.code-user-coverage-header strong{font-weight:730;color:var(--ink)}
+.code-user-coverage-header>span{color:var(--muted);font-size:.71rem}
+.code-user-coverage-list{list-style:none;margin:0;padding:0;display:grid;gap:5px}
+.code-user-coverage-list li{display:grid;grid-template-columns:18px minmax(0,1fr) auto;
+  gap:8px;align-items:start;font-size:.74rem;line-height:1.35;padding:6px 0;
+  border-top:1px solid var(--line);overflow-wrap:anywhere}
+.code-user-coverage-indicator{font-size:.9rem;color:var(--muted);line-height:1}
+.code-user-coverage-indicator.acknowledged{color:var(--ok)}
+.code-user-coverage-state{font-size:.66rem;color:var(--muted);white-space:nowrap}
+.code-user-coverage-note,.code-user-coverage-warning{
+  font-size:.68rem;line-height:1.55;margin:8px 0 0;color:var(--muted)
+}
+.code-user-coverage-warning{color:var(--warn)}
+@media(max-width:520px){
+  .code-user-coverage{margin:0 11px 10px;padding:11px}
+  .code-user-coverage-list li{grid-template-columns:16px minmax(0,1fr)}
+  .code-user-coverage-state{grid-column:2}
+}
