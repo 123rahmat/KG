@@ -14,6 +14,7 @@ import { liveWorkFocus } from './live-work-focus.js';
 import { workspaceOutcomeSummary } from './workspace-outcomes.js';
 import { renderLiveWorkSurface } from './live-work-surface.js';
 import { controlWorkflowChatView } from './control-workflow-view.js';
+import { codingProgressSnapshot } from './coding-progress-model.js';
 
 const SURFACE_META = {
   runs: { label: 'Normal Chat', icon: 'chat', kind: 'normal-chat' },
@@ -193,7 +194,9 @@ export function workPresentation(run, { driving = false, online = true, consent 
     ?? tasks.find(task => !['complete', 'skipped'].includes(task.status)) ?? null;
   const check = [...tasks].reverse().find(task => task.type === 'verify');
   const verdict = check?.evidence?.verdict;
-  const verified = check?.status === 'complete' && (verdict?.verdict === 'pass' || verdict?.status === 'pass');
+  const verified = run?.surface === 'code'
+    ? codingProgressSnapshot(run)?.verified === true
+    : check?.status === 'complete' && (verdict?.verdict === 'pass' || verdict?.status === 'pass');
   const waiting = !terminal && (run?.state === 'waiting' || consent || manual || ['clarify', 'approval'].includes(current?.type));
   const disconnected = !terminal && !online;
   const live = !terminal && !waiting && !disconnected && !stopping
