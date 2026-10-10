@@ -71,16 +71,17 @@ export function renderCodingProgress(host, run, { surface = 'normal-chat', pendi
       ])
     ])
   ));
-  host.replaceChildren(element('div',{class:'code-progress-card'},[
-    intro,
-    element('div',{class:'code-progress-meter-wrap'},[meter,facts]),
-    element('details',{class:'code-progress-detail'},[
+  const wasOpen = host.querySelector('.code-progress-detail')?.open === true;
+  const detail = element('details',{class:'code-progress-detail'},[
       element('summary',{text:`Recorded activity · latest ${snapshot.checkpoints.length} steps`}),
       steps,
       snapshot.hiddenCount ? element('p',{class:'code-progress-subtitle',
         text:`${snapshot.hiddenCount} earlier recorded steps are shown in the conversation history.`}) : null,
       element('p',{class:'code-progress-evidence-text',text:snapshot.evidence})
-    ].filter(Boolean)),
-    quickActions
+    ].filter(Boolean));
+  detail.open = wasOpen;
+  host.replaceChildren(element('div',{class:'code-progress-card'},[
+    intro,element('div',{class:'code-progress-meter-wrap'},[meter,facts]),
+    detail,quickActions
   ]));
 }
