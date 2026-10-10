@@ -10,7 +10,7 @@ const idea = /\b(?:brainstorm|ideat(?:e|ion|ing)|ideas?|concepts?|come up with|o
 const business = /\b(?:business|startup|start-up|venture|entrepreneur|customer|commercial|revenue|moneti[sz]|market|saas|business model|go.to.market)\b/i;
 const product = /\b(?:build|develop|create|implement|ship|launch|prototype|mvp|app|website|platform|software|product|system|service)\b/i;
 const review = /\b(?:validate|assess|evaluate|feasib|challenge|compare|business plan|business model|market research|customer discovery|business strategy)\b/i;
-const skip = /\b(?:just (?:build|code|make|implement|do) it|skip (?:the )?(?:ideation|brainstorm|plan(?:ning)?)|without (?:a )?(?:plan|brainstorm)|no need (?:to )?(?:brainstorm|plan))\b/i;
+const skip = /\b(?:just (?:build|code|make|implement|do) it|skip (?:the )?(?:ideation|brainstorm(?:ing)?|plan(?:ning)?)|without (?:a )?(?:plan|brainstorm)|no need (?:to )?(?:brainstorm|plan))\b/i;
 const maintenance = /\b(?:fix|repair|debug|regression|refactor|patch|bug|lint|crash|error|broken|failing tests?)\b/i;
 const explicitExploration = /\b(?:brainstorm|ideat(?:e|ion|ing)|explore (?:ideas|alternatives|concepts)|generate ideas|compare (?:ideas|concepts))\b/i;
 

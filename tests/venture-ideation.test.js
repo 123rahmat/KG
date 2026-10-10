@@ -26,6 +26,7 @@ test('only explicit idea- or venture-led projects start a discovery phase',()=>{
   assert.equal(ventureIntent({goal:'Brainstorm solutions to fix a startup MVP flaw',surface:'code'}).enabled,true);
   assert.equal(ventureIntent({goal:'Write a thank-you note',surface:'normal-chat'}).enabled,false);
   assert.equal(ventureIntent({goal:'Just build it: startup SaaS app',surface:'code'}).enabled,false);
+  assert.equal(ventureIntent({goal:'Skip brainstorming and build a startup SaaS app',surface:'code'}).enabled,false);
   assert.equal(ventureIntent({goal:'Build a startup SaaS app for restaurants',surface:'code'}).enabled,true);
   assert.equal(ventureDiscoveryStep({goal:'Fix a cache regression',surface:'code'}),null);
   const step=ventureDiscoveryStep({goal:codeGoal,surface:'code'});

@@ -109,7 +109,7 @@ test('the user may skip brainstorming, but the coding plan approval is not skipp
   const root={id:'understand',type:'understand',status:'complete',
     dependsOn:[],requires:[],metadata:{},purpose:'Understand constraints'};
   saved.push(root);
-  const run={...baseRun(),goal:'Just build it: create a startup SaaS product MVP'};
+  const run={...baseRun(),goal:'Skip brainstorming and build a startup SaaS app'};
   await store.adaptSteps(client,run,root,{questions:[]},emptyRequirements);
   assert.equal(saved.at(-1).type,'plan');
   assert.equal(saved.at(-1).metadata.buildPlan,true);
