@@ -750,6 +750,8 @@ function selectedWorkspaceArea(workspace) {
 function applyFocusedCodeArea(host = $('deepWorkspaceShell')) {
   if (!host || !codeAreaFocusEnabled(host.dataset.workspace)) return;
   const selected = selectedWorkspaceArea('code');
+  const sectionGrid = host.querySelector('.deep-workspace-section-grid');
+  if (sectionGrid) sectionGrid.hidden = selected === 'overview';
   for (const area of host.querySelectorAll('[data-workspace-area]')) {
     const active = area.dataset.workspaceArea === selected;
     area.hidden = !active;
@@ -1255,6 +1257,7 @@ function renderDeepWorkspaceShell() {
   const controlKey = focused?.dataset.workspaceControl;
   const areaKey = focused?.dataset.workspaceArea;
   host.dataset.workspace = data.workspace;
+  host.dataset.codingFocus = String(codeAreaFocusEnabled(data.workspace));
   host.replaceChildren(...(data.workspace === 'code' ? codeWorkspaceProject(data) : researchWorkspaceProject(data)));
   applyFocusedCodeArea(host);
   for (const control of host.querySelectorAll('.deep-workspace-actions button')) control.dataset.workspaceControl = 'action:' + control.textContent;
