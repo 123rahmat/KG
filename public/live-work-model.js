@@ -64,7 +64,9 @@ function recordText(task) {
   // Final response already has the full Markdown answer; never duplicate it.
   if (['respond','deliver'].includes(task.type)) return null;
   const body=clip(e.findings || e.summary || e.text || task.summary,1600);
-  if (!body.trim() || /^[\[{]/.test(body.trim()) || body.trim()===String(task.purpose??'').trim()) return null;
+  const prose=body.trim();
+  if(!prose || prose.startsWith('{') || prose.startsWith('[')
+    || prose===String(task.purpose??'').trim())return null;
   return Object.freeze({type:'text',taskId:name(task.id),title:taskName(task),text:body});
 }
 
