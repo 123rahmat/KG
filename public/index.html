@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>KG Code — AI Software Development Workspace</title>
-<meta name="description" content="KG Code is an adaptive software engineering workspace for repository-aware coding, controlled patches, testing and developer review.">
+<title>KG Code — AI Engineering Workspace</title>
+<meta name="description" content="KG Code is an AI software development workspace for project-aware coding, adaptive agents, recorded tests and review.">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -63,332 +63,92 @@
   <symbol id="i-verify" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.2-2.7 7.9-7 9-4.3-1.1-7-4.8-7-9V6z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></symbol>
 </svg>
 
-<!-- Public landing ------------------------------------------------------ -->
-<section class="landing" id="landing" aria-labelledby="landingTitle">
-  <header class="landing-nav">
-    <a class="brand landing-brand" href="/" aria-label="KG Code home">
+<!-- Single-screen KG Code entrance: illustrated workflow is a DEMO, not live execution. -->
+<section class="landing kg-entrance" id="landing" aria-labelledby="landingTitle">
+  <div class="kg-entrance-orb kg-entrance-orb-one" aria-hidden="true"></div>
+  <div class="kg-entrance-orb kg-entrance-orb-two" aria-hidden="true"></div>
+  <header class="kg-entrance-header">
+    <a class="brand kg-entrance-brand" href="/" aria-label="KG Code home">
       <svg class="logo" aria-hidden="true"><use href="#i-logo"/></svg>
-      <span>KG Code</span>
+      <span>KG<span class="kg-brand-accent"> Code</span></span>
     </a>
-    <nav class="landing-nav-links" aria-label="Landing page">
-      <a href="#system"><svg class="landing-nav-icon" aria-hidden="true"><use href="#i-adapt"/></svg>How it works</a>
-      <a href="#workspaces"><svg class="landing-nav-icon" aria-hidden="true"><use href="#i-sparkle"/></svg>Workspaces</a>
-      <a href="#code"><svg class="landing-nav-icon" aria-hidden="true"><use href="#i-code"/></svg>Code</a>
-    </nav>
-    <button class="landing-signin" id="landingSignIn" type="button">Sign in</button>
+    <div class="kg-entrance-header-right">
+      <span class="kg-entrance-edition">AI ENGINEERING WORKSPACE</span>
+      <button id="landingSignIn" type="button" class="kg-entrance-signin">Sign in <span aria-hidden="true">↗</span></button>
+    </div>
   </header>
 
-  <main class="landing-main">
-    <section class="landing-hero" aria-labelledby="landingTitle">
-      <div class="landing-copy">
-        <p class="landing-kicker">Adaptive AI for software engineering</p>
-        <h1 id="landingTitle">From code issue<br><em>to a reviewed change.</em></h1>
-        <p class="landing-lead">Inspect a project, implement focused changes, run real checks, and review recorded evidence. KG Code adapts the engineering workflow without unnecessary agents or invented results.</p>
-        <div class="landing-actions">
-          <button class="primary landing-cta" id="landingSignInPrimary" type="button">Start working</button>
-          <a class="landing-text-link" href="#system">See how it works <span aria-hidden="true">↓</span></a>
-        </div>
-        <div class="landing-proof" aria-label="Working with KG Code">
-          <span><i class="landing-status-dot"></i> Recorded task progress</span>
-          <span>Tools and specialists when useful</span>
-          <span>Evidence before completion</span>
-        </div>
+  <main class="kg-entrance-main">
+    <div class="kg-entrance-copy">
+      <div class="kg-eyebrow"><span class="kg-status-pulse" aria-hidden="true"></span> BUILT FOR SOFTWARE ENGINEERS <span class="kg-eyebrow-divider">/</span> KG CODE</div>
+      <h1 id="landingTitle">Your code.<br>Your workflow.<br><em>One intelligent<br>workspace.</em></h1>
+      <p class="kg-entrance-description">Bring your repository or project files. KG Code explores the context, makes focused changes, runs authorized checks, and shows what actually happened — from first instruction to reviewed diff.</p>
+      <div class="kg-entrance-value-row" aria-label="Core features">
+        <span><svg class="i" aria-hidden="true"><use href="#i-files"/></svg> Project-aware</span>
+        <span><svg class="i" aria-hidden="true"><use href="#i-run"/></svg> Adaptive agents</span>
+        <span><svg class="i" aria-hidden="true"><use href="#i-verify"/></svg> Evidence-first</span>
       </div>
+      <div class="kg-entrance-bottom-note"><span class="kg-entrance-note-line" aria-hidden="true"></span> BUILT TO SHIP REAL SOFTWARE, NOT JUST GENERATE CODE.</div>
+    </div>
 
-      <div class="landing-hero-panel" aria-label="Example of an adaptive project workflow">
-        <div class="preview-top">
-          <div>
-            <span class="preview-eyebrow">EXAMPLE · CODE WORKSPACE</span>
-            <strong>From request to verified change</strong>
-          </div>
-          <span class="preview-live"><i></i> adapts as work changes</span>
+    <section class="kg-entrance-product" aria-label="KG Code product demonstration and sign-in">
+      <div class="kg-editor-mock" id="code-demo" data-demo="code" aria-label="Illustrative coding agent workflow">
+        <div class="kg-editor-topbar">
+          <div class="kg-window-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+          <span class="kg-editor-project"><svg class="i" aria-hidden="true"><use href="#i-code"/></svg> kg-code <span aria-hidden="true">/</span> src <span aria-hidden="true">/</span> agent.ts</span>
+          <span class="kg-editor-example">ILLUSTRATIVE</span>
         </div>
-        <div class="preview-request">
-          <span class="preview-label">USER REQUEST</span>
-          <p>“Review this project, find the risky part, and fix it.”</p>
-        </div>
-        <div class="preview-flow" aria-hidden="true">
-          <div class="preview-node">
-            <span>Understand</span>
-            <b>read the project</b>
-          </div>
-          <span class="preview-arrow">→</span>
-          <div class="preview-node active">
-            <span>Investigate</span>
-            <b>isolate the risk</b>
-          </div>
-          <span class="preview-arrow">→</span>
-          <div class="preview-node">
-            <span>Verify</span>
-            <b>test the change</b>
-          </div>
-        </div>
-        <div class="preview-footer">
-          <span>The next step changes with the evidence, not a fixed script.</span>
-          <span class="mono">illustrative workflow</span>
-        </div>
-      </div>
-    </section>
-
-    <section class="landing-section workspace-showcase" id="workspaces" aria-labelledby="workspaceTitle">
-      <div class="section-heading">
-        <p class="landing-kicker">One professional engineering workspace</p>
-        <h2 id="workspaceTitle">Inspect, implement, test and review — together.</h2>
-        <p>Use repository-aware conversations, scoped changes, and authentic test evidence in one workspace, with shared permissions and budgets.</p>
-      </div>
-      <div class="workspace-grid code-showcase-grid">
-        <article class="workspace-card featured">
-          <div class="workspace-icon"><svg aria-hidden="true"><use href="#i-chat"/></svg></div>
-          <div class="workspace-card-copy"><span>01 · PROJECT INSPECTION</span><h3>Inspect</h3><p>Choose a repository or upload source files. Understand dependencies, changed paths, and project revisions before editing.</p></div>
-          <div class="workspace-meta"><b>Relevant context first</b><small>Bounded files and token usage</small></div>
-        </article>
-        <article class="workspace-card">
-          <div class="workspace-icon"><svg aria-hidden="true"><use href="#i-code"/></svg></div>
-          <div class="workspace-card-copy"><span>02 · CONTROLLED EDITS</span><h3>Implement</h3><p>Plan when valuable, make revision-aware edits, and review the diff before anything is written back.</p></div>
-          <div class="workspace-meta"><b>Revision-aware changes</b><small>Focused patches · explicit write-back</small></div>
-        </article>
-        <article class="workspace-card">
-          <div class="workspace-icon"><svg aria-hidden="true"><use href="#i-research"/></svg></div>
-          <div class="workspace-card-copy"><span>03 · ENGINEERING EVIDENCE</span><h3>Test &amp; Review</h3><p>Run real checks where execution is configured, inspect failures, and clearly distinguish tested from unverified work.</p></div>
-          <div class="workspace-meta"><b>Authentic test evidence</b><small>Receipts, diffs and next steps</small></div>
-        </article>
-      </div>
-      <div class="workspace-principle">
-        <svg class="i" aria-hidden="true"><use href="#i-shield"/></svg>
-        <span><strong>One runtime. Coding-focused workflow.</strong> Task planning, execution, verification and reviewer controls use one shared architecture.</span>
-      </div>
-    </section>
-
-    <section class="landing-demos" aria-labelledby="demoTitle">
-      <div class="visual-heading demo-heading">
-        <div>
-          <p class="landing-kicker">See adaptive intelligence in action</p>
-          <h2 id="demoTitle">One coding workflow that adapts to the change.</h2>
-        </div>
-        <span class="demo-caption">Illustrative product workflows</span>
-      </div>
-
-      <article class="workflow-demo" id="code-demo" data-demo="code" aria-labelledby="codeDemoTitle">
-        <div class="demo-head">
-          <div>
-            <span class="demo-number">01 / KG CODE</span>
-            <h3 id="codeDemoTitle">Code Workspace works on the project, not just the prompt.</h3>
-            <p>KG Code reads the selected project state, narrows the change, runs the checks that matter, reviews the evidence, and keeps write-back explicit.</p>
-          </div>
-          <div class="demo-status"><i></i><span data-demo-status>running</span></div>
-        </div>
-        <div class="demo-screen code-screen">
-          <div class="demo-screen-bar">
-            <span>KG Code · coding workspace</span>
-            <span class="mono">project-aware · tested · reviewable</span>
-          </div>
-          <div class="code-scene">
-            <div class="code-stage" data-code-step="0">
-              <div class="github-badge"><svg aria-hidden="true"><use href="#i-files"/></svg></div>
-              <div><span>PROJECT STATE</span><b>GitHub project + selected revision</b><small>work stays tied to the project state you selected</small></div>
+        <div class="kg-editor-body">
+          <aside class="kg-editor-rail" aria-hidden="true">
+            <svg class="i"><use href="#i-files"/></svg>
+            <svg class="i"><use href="#i-search"/></svg>
+            <svg class="i"><use href="#i-code"/></svg>
+            <svg class="i"><use href="#i-run"/></svg>
+          </aside>
+          <div class="kg-editor-content">
+            <div class="kg-editor-tabs" aria-hidden="true"><span class="active">agent.ts <i>●</i></span><span>agent.test.ts</span></div>
+            <div class="kg-editor-code" aria-hidden="true">
+              <div><span class="ln">01</span><span class="code-purple">export async function</span> <span class="code-teal">solve</span>(task) {</div>
+              <div><span class="ln">02</span>&nbsp; <span class="code-gray">// inspect the repository</span></div>
+              <div><span class="ln">03</span>&nbsp; <span class="code-purple">const</span> context = <span class="code-purple">await</span> inspect(task);</div>
+              <div><span class="ln">04</span>&nbsp; <span class="code-purple">const</span> patch = <span class="code-purple">await</span> implement(context);</div>
+              <div class="kg-code-highlight"><span class="ln">05</span>&nbsp; <span class="code-purple">const</span> tests = <span class="code-purple">await</span> verify(patch);</div>
+              <div><span class="ln">06</span>&nbsp; <span class="code-purple">return</span> review(tests);</div>
+              <div><span class="ln">07</span>}</div>
             </div>
-            <div class="scene-connector"><span></span></div>
-            <div class="code-stage" data-code-step="1">
-              <div class="github-badge"><svg aria-hidden="true"><use href="#i-search"/></svg></div>
-              <div><span>UNDERSTAND THE CHANGE</span><b>Project structure + affected files</b><small>dependencies · tests · change risk</small></div>
-            </div>
-            <div class="scene-connector"><span></span></div>
-            <div class="code-stage" data-code-step="2">
-              <div class="github-badge"><svg aria-hidden="true"><use href="#i-sliders"/></svg></div>
-              <div><span>MAKE THE CHANGE</span><b>Choose the smallest safe change</b><small>plan → implement → inspect as needed</small></div>
-            </div>
-            <div class="scene-connector"><span></span></div>
-            <div class="code-stage code-execution" data-code-step="3">
-              <div class="github-badge"><svg aria-hidden="true"><use href="#i-run"/></svg></div>
-              <div><span>RUN + TEST</span><b>Apply the patch and collect test evidence</b><small>execution stays controlled and observable</small></div>
-              <div class="code-mini-role"><span>SPECIALISTS WHEN USEFUL</span><b>Architecture · Implementation · Debugging · Testing</b></div>
-            </div>
-            <div class="scene-connector"><span></span></div>
-            <div class="code-stage" data-code-step="4">
-              <div class="github-badge"><svg aria-hidden="true"><use href="#i-shield"/></svg></div>
-              <div><span>VERIFY</span><b>Check evidence against the goal</b><small>independent review can join when another perspective adds value</small></div>
-            </div>
-            <div class="scene-connector"><span></span></div>
-            <div class="code-stage writeback" data-code-step="5">
-              <div class="github-badge"><svg aria-hidden="true"><use href="#i-check"/></svg></div>
-              <div><span>WRITE-BACK</span><b>Review before updating GitHub</b><small>the selected revision is checked again before the write</small></div>
-            </div>
-          </div>
-          <div class="demo-timeline" aria-hidden="true">
-            <span data-code-progress="0"></span><span data-code-progress="1"></span><span data-code-progress="2"></span><span data-code-progress="3"></span><span data-code-progress="4"></span><span data-code-progress="5"></span>
+            <div class="kg-editor-divider" aria-hidden="true"><svg class="i"><use href="#i-activity"/></svg> AGENT ACTIVITY <span>SIMULATED EXAMPLE</span></div>
+            <ol class="kg-demo-steps" aria-label="Example steps, not a live run">
+              <li data-code-step="0"><span class="kg-demo-icon"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span><span><strong>Inspect context</strong><small>Read the relevant files and dependencies</small></span><i class="kg-demo-step-dot" aria-hidden="true"></i></li>
+              <li data-code-step="1"><span class="kg-demo-icon"><svg class="i" aria-hidden="true"><use href="#i-sliders"/></svg></span><span><strong>Plan the change</strong><small>Choose the smallest safe approach</small></span><i class="kg-demo-step-dot" aria-hidden="true"></i></li>
+              <li data-code-step="2"><span class="kg-demo-icon"><svg class="i" aria-hidden="true"><use href="#i-code"/></svg></span><span><strong>Apply scoped patch</strong><small>Preserve the base revision and review diff</small></span><i class="kg-demo-step-dot" aria-hidden="true"></i></li>
+              <li data-code-step="3"><span class="kg-demo-icon"><svg class="i" aria-hidden="true"><use href="#i-run"/></svg></span><span><strong>Run real checks</strong><small>Record test output, errors and next actions</small></span><i class="kg-demo-step-dot" aria-hidden="true"></i></li>
+            </ol>
+            <div class="kg-demo-progress" aria-hidden="true"><span data-code-progress="0"></span><span data-code-progress="1"></span><span data-code-progress="2"></span><span data-code-progress="3"></span></div>
           </div>
         </div>
-        <div class="demo-footer">
-          <span><b>Engineering path:</b> understand → change → test → verify → review → write back.</span>
-          <span class="mono">one adaptive intelligence across workspaces</span>
-        </div>
-      </article>
-
-    </section>
-
-    <section class="landing-section" id="system" aria-labelledby="systemTitle">
-      <div class="section-heading">
-        <p class="landing-kicker">How it works</p>
-        <h2 id="systemTitle">One adaptive loop for software delivery.</h2>
-        <p>KG Code starts with your authorized project and goal, narrows the change, records execution evidence, and adapts when tests reveal a problem.</p>
-      </div>
-      <div class="architecture-card" aria-label="KG Code adaptive workflow">
-        <div class="architecture-input">
-          <span class="architecture-index">01</span>
-          <div>
-            <strong>Your request + context</strong>
-            <span>The goal, relevant files, project state, evidence, and constraints.</span>
-          </div>
-        </div>
-        <div class="architecture-spine">
-          <div class="architecture-step emphasis">
-            <span>02</span>
-            <div><strong>Understand what is needed</strong><small>What would make this result useful and trustworthy?</small></div>
-          </div>
-          <div class="architecture-connector"></div>
-          <div class="architecture-step">
-            <span>03</span>
-            <div><strong>Choose the right scope</strong><small>Use only the data, tools, specialists, and effort the work needs.</small></div>
-          </div>
-          <div class="architecture-connector"></div>
-          <div class="architecture-split">
-            <article class="architecture-branch">
-              <span class="branch-tag">INSPECT</span>
-              <strong>Repository context · dependencies · requirements</strong>
-              <small>Read only relevant source files before touching code.</small>
-            </article>
-            <article class="architecture-branch code">
-              <span class="branch-tag">IMPLEMENT</span>
-              <strong>Plan if needed · patch · inspect the diff</strong>
-              <small>Work from the selected GitHub state and keep write-back explicit.</small>
-            </article>
-            <article class="architecture-branch research">
-              <span class="branch-tag">VERIFY</span>
-              <strong>Execute · test · debug · review</strong>
-              <small>Never claim passing checks without saved execution evidence.</small>
-            </article>
-          </div>
-          <div class="architecture-connector"></div>
-          <div class="architecture-step">
-            <span>04</span>
-            <div><strong>Work + observe</strong><small>Use the context and tools the current step actually needs.</small></div>
-          </div>
-          <div class="architecture-connector"></div>
-          <div class="architecture-step">
-            <span>05</span>
-            <div><strong>Verify</strong><small>Check the evidence before deciding whether the work is done.</small></div>
-          </div>
-          <div class="architecture-connector loop"></div>
-        </div>
-        <div class="architecture-output">
-          <div class="output-card">
-            <span>06</span>
-            <strong>Deliver</strong>
-            <small>When the goal is supported.</small>
-          </div>
-          <div class="output-card alt">
-            <span>↻</span>
-            <strong>Adapt again</strong>
-            <small>When another step can materially improve the result.</small>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="landing-section split-section" id="code" aria-labelledby="codeTitle">
-      <div class="section-heading compact">
-        <p class="landing-kicker">Code Workspace</p>
-        <h2 id="codeTitle">Work on the project, not isolated snippets.</h2>
-        <p>KG Code understands the relevant project context, makes the smallest safe change it can justify, runs focused checks, and keeps every write-back reviewable.</p>
-      </div>
-      <div class="code-proof">
-        <div class="code-path">
-          <span class="path-node">GitHub</span>
-          <span class="path-arrow">→</span>
-          <span class="path-node">Project context</span>
-          <span class="path-arrow">→</span>
-          <span class="path-node active">Change + test</span>
-          <span class="path-arrow">→</span>
-          <span class="path-node">Verify</span>
-        </div>
-        <div class="code-note">
-          <strong>Project state stays explicit</strong>
-          <span>Work is tied to the selected GitHub revision, and write-back is reviewed before the project is updated.</span>
-        </div>
-      </div>
-    </section>
-
-    <section class="landing-section agents-section" id="agents" aria-labelledby="agentsTitle">
-      <div class="section-heading">
-        <p class="landing-kicker">Specialists on demand</p>
-        <h2 id="agentsTitle">Use the smallest team that can do the work well.</h2>
-        <p>KG Code can bring in focused help for architecture, implementation, debugging, testing, security, and performance—but only when another perspective is likely to improve the result.</p>
+        <div class="kg-editor-statusbar"><span><i class="kg-status-pulse"></i> KG CODE ENGINE</span><span>Reviewable changes <span aria-hidden="true">·</span> Recorded checks</span></div>
       </div>
 
-      <div class="agent-system-card">
-        <div class="agent-authority">
-          <span class="agent-core-tag">FOCUSED ORCHESTRATION</span>
-          <strong>Plan the work, choose the right context, then execute.</strong>
-          <small>Coordination stays lightweight. Planning and context selection guide the work while one primary path remains accountable for the result.</small>
-        </div>
-        <div class="agent-core-grid">
-          <article class="agent-card primary-agent">
-            <span class="agent-role-number">01</span>
-            <div><strong>Workflow lead</strong><p>Chooses the smallest useful next step and keeps the work focused.</p></div>
-            <span class="agent-mode">coordination</span>
-          </article>
-          <article class="agent-card primary-agent">
-            <span class="agent-role-number">02</span>
-            <div><strong>Context &amp; tools</strong><p>Selects the information, tools, dependencies, and resources the current step actually needs.</p></div>
-            <span class="agent-mode">scoping</span>
-          </article>
-          <article class="agent-card executor-agent">
-            <span class="agent-role-number">03</span>
-            <div><strong>Primary worker</strong><p>Produces the user-facing result using the approved context and available capabilities.</p></div>
-            <span class="agent-mode">result owner</span>
-          </article>
-        </div>
-        <div class="agent-specialists-heading">
-          <span>SPECIALISTS ON DEMAND</span>
-          <small>Added only when another perspective is likely to improve the result</small>
-        </div>
-        <div class="agent-specialist-grid">
-          <article class="specialist-card"><b>Strategist</b><span>Breaks down goals and dependencies.</span></article>
-          <article class="specialist-card"><b>Analyst</b><span>Tests trade-offs and consistency.</span></article>
-          <article class="specialist-card"><b>Architect</b><span>Designs boundaries and failure containment.</span></article>
-          <article class="specialist-card"><b>Implementer</b><span>Turns decisions into focused changes.</span></article>
-          <article class="specialist-card"><b>Critic</b><span>Challenges assumptions and likely failure modes.</span></article>
-          <article class="specialist-card"><b>Diagnostician</b><span>Separates symptoms, causes, and next tests.</span></article>
-          <article class="specialist-card"><b>Debugger</b><span>Finds software root causes.</span></article>
-          <article class="specialist-card"><b>Test Engineer</b><span>Builds focused regression checks.</span></article>
-          <article class="specialist-card"><b>Security Reviewer</b><span>Checks trust boundaries and data flow.</span></article>
-          <article class="specialist-card"><b>Performance Reviewer</b><span>Finds measurable resource risks.</span></article>
-        </div>
-        <div class="agent-flow-note">
-          <span class="mono">understand → choose the smallest useful team → work → verify → reassess</span>
-          <strong>Independent review joins when complexity, risk, or uncertainty makes a second perspective valuable.</strong>
-        </div>
+      <div class="kg-entrance-auth">
+        <div class="kg-auth-top"><span>YOUR WORKSPACE STARTS HERE</span><svg class="i" aria-hidden="true"><use href="#i-external"/></svg></div>
+        <div class="kg-auth-title">Build something exceptional.</div>
+        <p>Sign in to open your coding projects, conversations, files, and agent activity.</p>
+        <button class="primary kg-auth-cta" id="landingSignInPrimary" type="button">Open KG Code <span aria-hidden="true">→</span></button>
+        <p class="kg-auth-privacy"><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg> Workspace-scoped access · Changes require authorization</p>
       </div>
-    </section>
-
-    <section class="landing-principles" aria-label="Core principles">
-      <div><strong>Clear control</strong><span>Permissions, tool use, project writes, and completion checks stay explicit.</span></div>
-      <div><strong>Right-sized effort</strong><span>Simple requests stay lightweight; harder work earns more depth and specialist help.</span></div>
-      <div><strong>Evidence before finish</strong><span>Important work is checked against what actually happened before it is called complete.</span></div>
-      <div><strong>Continuity by default</strong><span>Work continues from the current conversation or project state instead of restarting from scratch.</span></div>
     </section>
   </main>
 
-  <footer class="landing-footer">
-    <span>KG Code — adaptive AI for professional software engineering.</span>
-    <a href="/policy.html">Terms and usage policy</a>
+  <footer class="kg-entrance-footer">
+    <span>© KG Code <span aria-hidden="true">·</span> Professional AI software development</span>
+    <div><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a><a href="/policy.html">Usage policy</a></div>
   </footer>
 </section>
 
 <!-- Sign in ------------------------------------------------------------- -->
 <div class="gate" id="gate" hidden>
   <div class="gate-card stack">
-    <div class="brand big"><svg class="logo" aria-hidden="true"><use href="#i-logo"/></svg> <span>KG Code</span></div>
+    <div class="brand big"><svg class="logo" aria-hidden="true"><use href="#i-logo"/></svg> <span>Kindgleam</span></div>
 
     <!-- 1. Email: sign in, or create an account, with a one-time link -->
     <section class="gate-step stack" id="gateEmail" hidden>
@@ -484,6 +244,19 @@
       <div class="brand"><svg class="logo" aria-hidden="true"><use href="#i-logo"/></svg> <span>Kindgleam</span></div>
     </div>
     <button class="new-chat" id="newWork" title="New chat"><svg class="i" aria-hidden="true"><use href="#i-new"/></svg> New chat</button>
+    <!-- Coding-only navigation: uses existing working routes and panels. -->
+    <nav id="codingNav" class="coding-nav" aria-label="Coding workspace" hidden>
+      <span class="coding-nav-label">WORKSPACE</span>
+      <button id="codeNavWork" type="button"><svg class="i" aria-hidden="true"><use href="#i-code"/></svg> Coding workspace</button>
+      <button id="codeNavProjects" type="button"><svg class="i" aria-hidden="true"><use href="#i-files"/></svg> Projects</button>
+      <button id="codeNavProgress" type="button"><svg class="i" aria-hidden="true"><use href="#i-activity"/></svg> Agent progress</button>
+      <button id="codeNavChanges" type="button"><svg class="i" aria-hidden="true"><use href="#i-code"/></svg> Code changes</button>
+      <button id="codeNavTests" type="button"><svg class="i" aria-hidden="true"><use href="#i-verify"/></svg> Checks &amp; tests</button>
+      <button id="codeNavSpecialists" type="button"><svg class="i" aria-hidden="true"><use href="#i-users"/></svg> Specialists</button>
+      <button id="codeNavTerminal" type="button"><svg class="i" aria-hidden="true"><use href="#i-run"/></svg> Terminal</button>
+      <button id="codeNavFiles" type="button"><svg class="i" aria-hidden="true"><use href="#i-files"/></svg> Chat files</button>
+      <button id="codeNavActivity" type="button"><svg class="i" aria-hidden="true"><use href="#i-activity"/></svg> Audit activity</button>
+    </nav>
     <nav class="rail-nav" id="tabs" role="tablist" aria-label="Pages">
       <button role="tab" aria-selected="true" data-tab="runs" hidden>Chat</button>
       <button role="tab" aria-selected="false" data-tab="explore" title="Explore"><svg class="i" aria-hidden="true"><use href="#i-explore"/></svg> Explore</button>
@@ -585,16 +358,46 @@
             <div class="chat-meta" id="chatMeta"></div>
           </div>
         </header>
+        <!-- Two sliding, keyboard-accessible views of this same conversation. -->
+        <div class="chat-view-nav">
+          <div class="chat-view-switch" id="chatViewSwitch" role="tablist" aria-label="Conversation content" data-view="chat">
+            <span class="chat-view-thumb" aria-hidden="true"></span>
+            <button type="button" class="chat-view-choice" id="chatViewMessages" role="tab"
+              aria-selected="true" aria-controls="thread" tabindex="0">Chat</button>
+            <button type="button" class="chat-view-choice" id="chatViewFiles" role="tab"
+              aria-selected="false" aria-controls="chatFilesPanel" tabindex="-1">Files
+              <span id="chatFilesCount" class="chat-view-count" hidden></span>
+            </button>
+          </div>
+        </div>
+        <section id="chatFilesPanel" class="chat-files-panel" role="tabpanel"
+          tabindex="0" aria-labelledby="chatViewFiles" hidden>
+          <header class="chat-files-head">
+            <div><h2>Files in this chat</h2>
+              <p class="small muted">Upload files from your phone or computer, and see this chat's saved results. GitHub is optional.</p>
+            </div>
+            <div class="chat-files-head-actions">
+              <input id="chatFilesUploadInput" type="file" class="sr-only" multiple
+                aria-label="Choose files from device" tabindex="-1">
+              <button type="button" class="primary small" id="chatFilesUpload">Upload files</button>
+              <button type="button" class="small" id="refreshChatFiles">Refresh</button>
+            </div>
+          </header>
+          <div id="chatFilesUploadStatus" class="small muted" role="status" aria-live="polite"></div>
+          <div id="chatFilesPending" class="chat-files-pending" hidden></div>
+          <div id="chatFilesContent" class="chat-files-content" aria-live="polite"></div>
+        </section>
         <div id="adaptiveWorkspaceBar" class="adaptive-workspace-bar" aria-label="Current workspace"></div>
         <div id="workspaceSourceBar" class="workspace-source-bar" aria-label="Project sources">
-          <button id="openProjectSources" type="button" class="workspace-source-primary">GitHub project</button>
-          <span id="workspaceSourceStatus" class="workspace-source-status" aria-live="polite">GitHub or attached code input</span>
+          <button id="openProjectSources" type="button" class="workspace-source-primary">Connect GitHub (optional)</button>
+          <span id="workspaceSourceStatus" class="workspace-source-status" aria-live="polite">Or upload files directly from your device</span>
           <button id="attachCodeInput" type="button" class="workspace-source-input">ZIP / code file</button>
           <button id="syncWorkspaceSource" type="button" hidden>Sync</button>
           <button id="openTerminal" type="button">Terminal</button>
         </div>
+        <section id="codingProgressPanel" class="coding-progress-panel" aria-label="Recorded coding progress" hidden></section>
         <section id="deepWorkspaceShell" class="deep-workspace-shell" hidden aria-label="Workspace context"></section>
-        <div class="thread" id="thread" aria-label="Conversation"></div>
+        <div class="thread" id="thread" role="tabpanel" aria-labelledby="chatViewMessages" tabindex="0" aria-label="Conversation"></div>
         <div class="sr-only" id="workAnnouncer" role="status" aria-live="polite" aria-atomic="true"></div>
         <button class="thread-jump" id="threadJump" type="button" hidden aria-label="Jump to the latest update"><svg class="i" aria-hidden="true"><use href="#i-chevron"/></svg>Latest update</button>
         <div id="runNotice" hidden></div>

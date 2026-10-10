@@ -2,7 +2,7 @@
 
 **Product direction:** KG is becoming **KG Code**, a professional, coding-focused AI engineering environment. It uses one server-owned runtime for repository context, focused patches, controlled execution, test evidence, review, and optional specialists only when they justify their cost. The core goal is reliable, reviewable software development, not a collection of unrelated assistant modes.
 
-> **Deployment status:** The `main` branch has not yet completed the coding-only runtime cutover. Older Normal Chat and Research source and persisted records are still present for compatibility while the draft integration and production gates are verified. The main branch must not be described as strictly code-only until backend admission, migrations, browser and real sandbox/worker acceptance are validated.
+> **Release status:** The `main` source now defaults to the KG Code admission gate (`KG_CODING_ONLY=true`), with server-owned project scoping and coding-focused UI. Complete CI, migrations, browser, live runner and provider acceptance **are still required**; a source commit is not proof of production readiness. Set `KG_CODING_ONLY=false` only for an emergency rollback. Legacy data and research-related compatibility modules remain readable, but new work is code-only when the gate is enabled.
 
 ## Product boundaries
 
@@ -12,7 +12,7 @@
 - **Trustworthy status:** recorded steps are not a guaranteed percent of a growing task. A model saying "tests passed" never replaces an authenticated test receipt. Unavailable sandbox/provider actions must be reported as unavailable.
 - **Migration:** preserve legacy projects, conversation attachments, saved artifacts, historical data, and existing database migrations; disable old entry points only after verified data access and export.
 
-The coding-focused changes are being validated in [PR #15](https://github.com/123rahmat/KG/pull/15). Main remains the authority for what is deployed; a draft PR, design document or successful syntax check is **not** a production release.
+Coding-focused UI, admission, project controls, and conversation-scoped Files are integrated into `main`. The original [development PR #15](https://github.com/123rahmat/KG/pull/15) is retained as a design and implementation history reference. Keep a verified data backup and pass the release gates before production deployment.
 
 ## Architecture
 
@@ -31,6 +31,14 @@ Developer review + approved write-back / deliverable
 ```
 
 No generated task may elevate tool or repository permissions. Concurrent code writers must have compatible revisions and nonoverlapping resources. The server owns credentials, budgets, resource locks, evidence, and durable run state.
+
+## Coding-only configuration and test gates
+
+`KG_CODING_ONLY=true` is the default when running the current source. Authenticated new work must use an active Code project and the CodingControlEngine; ordinary chat and research requests cannot start new coding-only work. The separate historical `CODING_RESEARCH_ONLY` switch is not needed for this product.
+
+The top-of-chat **Chat | Files** switch is scoped to each conversation. Files can be uploaded from the device and generated or saved as chat artifacts; it is not just the GitHub source tree. Older chats, research records, and existing storage/migrations are retained for reading/export.
+
+For verification, use `npm run test:code:hardening`, `npm run test:code:integration` (PostgreSQL), `npm run test:ui` (browser), `npm run verify`, and configured runner/provider smoke tests. Never claim a task is verified from a proposed test or model narrative. See `docs/architecture/KG_CODE_MATURITY_AND_ADVERSARIAL_GATES_2026-10-10.md`.
 
 ## Local development
 

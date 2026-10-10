@@ -6,9 +6,12 @@
  */
 import { specialistBudgetRatio } from './agent-topology-policy.js';
 import { normalChatTaskProfile } from './normal-chat-task-profile.js';
+import { controlEngineProfile, SHARED_RUNTIME_CONTRACT } from './work-control-engines.js';
+import { buildControlWorkflowPolicy } from './control-workflow-policy.js';
 
 const text = value => String(value ?? '').trim();
 const uniq = value => [...new Set((Array.isArray(value) ? value : []).map(text).filter(Boolean))];
+const tGoal = s => text(s?.goal ?? s?.question ?? s?.task ?? '');
 const clamp01 = value => Math.min(1, Math.max(0, Number.isFinite(Number(value)) ? Number(value) : 0));
 
 const RUNTIME_PROFILES = Object.freeze({
@@ -229,6 +232,32 @@ export function buildModeControllerContract({
     version: MODE_CONTROLLER_VERSION,
     controller: controller.id,
     mode: controller.mode,
+    // Explicitly record the independent decision owner while every controller
+    // still uses the same model, run/task lifecycle, worker and tool runtime.
+    ...(controller.mode === 'code' || controller.mode === 'research'
+      ? { controlEngine: controlEngineProfile(controller.mode) } : {}),
+    sharedRuntime: SHARED_RUNTIME_CONTRACT,
+    // The controller is genuinely situation-adaptive rather than a static
+    // prompt: conditional work types, optional agent cost ceiling and domain
+    // evidence requirements are projected inside the one shared workflow.
+    ...(controller.mode === 'code' || controller.mode === 'research'
+      ? { workflowPolicy: buildControlWorkflowPolicy({
+          surface: controller.mode,
+          goal: tGoal(situation),
+          complexity,
+          uncertainty,
+          risk: normalizedRisk,
+          failedAttempts: previousFailure ? 1 : 0,
+          remainingBudgetRatio,
+          observedIndependentWork,
+          verifiedStateReusable: verified,
+          conflictingEvidence: Boolean(situation?.conflicts?.length || situation?.researchWorkspace?.conflicts?.length),
+          authorization: {
+            required: acceptance?.authorizationRequired === true,
+            approved: acceptance?.authorizationSatisfied === true
+          },
+          acceptanceSatisfied: acceptanceMet
+        }) } : {}),
     objective: controller.objective,
     decision: {
       defaultAction: controller.mode === 'normal-chat' ? 'direct' : 'specialized-next-step',
@@ -258,6 +287,6 @@ export function buildModeControllerContract({
       uncertainty: clamp01(uncertainty),
       complexity: clamp01(complexity)
     },
-    principle: 'Specialize the control policy, not the intelligence kernel: one shared state, one authority model, one verification contract, one model family.'
+    principle: 'One KG system and shared task lifecycle; separate Coding and Research control policies, scoped agentic work, task graphs, and acceptance.'
   });
 }

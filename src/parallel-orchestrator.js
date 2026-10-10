@@ -25,29 +25,69 @@ const boundedInt = (value, fallback, max = ABSOLUTE_MAX_PARALLEL) => {
   return Number.isFinite(n) ? Math.max(1, Math.min(max, Math.floor(n))) : fallback;
 };
 
+/**
+ * Resource paths are hierarchical. Treat a directory writer and any descendant
+ * reader/writer as conflicting; unrelated path segments do not conflict.
+ * Non-path locks are exact identifiers, never substring matches.
+ */
+/**
+ * Normalize source paths before comparing read/write leases. A caller can
+ * spell one file as src/../src/main.js, src\\main.js or ./src/main.js.
+ * Unresolvable parent traversal is treated as a conflict, never independence.
+ */
+function normalizedResource(value) {
+  const raw = text(value).replace(/\\/g, '/');
+  if (!raw) return null;
+  const parts = [];
+  for (const part of raw.split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') {
+      if (!parts.length) return null;
+      parts.pop();
+    } else {
+      parts.push(part);
+    }
+  }
+  return parts.join('/') || null;
+}
+export function resourceScopesOverlap(left, right) {
+  const a = normalizedResource(left);
+  const b = normalizedResource(right);
+  // Invalid/ambiguous resource names must not justify parallel writes.
+  if (!a || !b) return true;
+  return a === b || a.startsWith(b + '/') || b.startsWith(a + '/');
+}
+
 const writeResourcesOf = item => {
   const metadata = item?.metadata ?? item ?? {};
-  return new Set([
-    ...list(metadata.writeSet),
-    ...list(metadata.mutates)
-  ]);
+  return new Set([...list(metadata.writeSet), ...list(metadata.mutates)]);
 };
-
 const readResourcesOf = item => {
   const metadata = item?.metadata ?? item ?? {};
-  return new Set([
-    ...list(metadata.readSet),
-    ...list(metadata.reads)
-  ]);
+  return new Set([...list(metadata.readSet), ...list(metadata.reads)]);
 };
-
 const lockResourcesOf = item => {
   const metadata = item?.metadata ?? item ?? {};
-  return new Set([
-    ...list(metadata.resourceLocks),
-    ...list(metadata.resources)
-  ]);
+  return new Set([...list(metadata.resourceLocks), ...list(metadata.resources)]);
 };
+
+export function dependencySatisfied(dependency) {
+  if (!dependency) return false;
+  if (dependency.status === 'complete') {
+    // An explicitly acceptance-gated task cannot unlock dependents from
+    // model assertions or completion status alone.
+    if (dependency.metadata?.acceptanceRequired === true) {
+      return dependency.acceptance?.status === 'accepted'
+        || dependency.evidence?.acceptance?.status === 'accepted';
+    }
+    return true;
+  }
+  // A skipped mandatory check is NEVER the equivalent of a passed check.
+  // Explicit optional waivers require a recorded approval, not a model hint.
+  return dependency.status === 'skipped'
+    && dependency.metadata?.required === false
+    && dependency.metadata?.waiverApproved === true;
+}
 
 export function taskCanRunInParallel(task = {}) {
   const metadata = task?.metadata ?? {};
@@ -67,14 +107,19 @@ export function tasksConflict(a = {}, b = {}) {
   const leftLocks = lockResourcesOf(a);
   const rightLocks = lockResourcesOf(b);
 
-  // Shared locks/resources are explicit serialization points even for readers.
+  // Unknown resource scope is NOT evidence of independence. Requiring at
+  // least one read/write/lock declaration prevents speculative parallel
+  // execution of unscoped tasks, especially model-proposed code mutations.
+  if (!(leftWrites.size || leftReads.size || leftLocks.size)
+      || !(rightWrites.size || rightReads.size || rightLocks.size)) return true;
+
+  // Named locks are exact keys. Hierarchical files/dirs are compared below.
   for (const value of leftLocks) if (rightLocks.has(value)) return true;
-  // Writers cannot race each other or a reader of the same resource.
   for (const value of leftWrites) {
-    if (rightWrites.has(value) || rightReads.has(value)) return true;
+    if ([...rightWrites, ...rightReads].some(other => resourceScopesOverlap(value, other))) return true;
   }
   for (const value of rightWrites) {
-    if (leftReads.has(value)) return true;
+    if ([...leftReads].some(other => resourceScopesOverlap(value, other))) return true;
   }
   return false;
 }
@@ -86,7 +131,7 @@ export function readyTasks(tasks = []) {
     task?.status === 'pending'
     && (task.dependsOn ?? []).every(id => {
       const dependency = byId.get(id);
-      return dependency?.status === 'complete' || dependency?.status === 'skipped';
+      return dependencySatisfied(dependency);
     })
   );
 }
@@ -350,6 +395,10 @@ export function workspaceLanesConflict(a = {}, b = {}) {
   const rightReads = new Set(list(b.readSet));
   // Two read-only lanes can always share a stable project snapshot.
   if (!leftMutates && !rightMutates) return false;
+  // A read-only advisory lane with no declared read set might inspect the
+  // whole repository, so it must not race an authorized writer.
+  if ((!leftMutates && leftReads.size === 0)
+      || (!rightMutates && rightReads.size === 0)) return true;
 
   // A mutation is only parallel-safe against a lane anchored to the same
   // immutable revision. Unknown revisions fail closed rather than racing.
@@ -360,10 +409,10 @@ export function workspaceLanesConflict(a = {}, b = {}) {
   // Writes conflict with writes and with reads of the same path. This keeps
   // analysis lanes from observing a partially integrated mutation.
   for (const path of leftWrites) {
-    if (rightWrites.has(path) || rightReads.has(path)) return true;
+    if ([...rightWrites, ...rightReads].some(other => resourceScopesOverlap(path, other))) return true;
   }
   for (const path of rightWrites) {
-    if (leftReads.has(path)) return true;
+    if ([...leftReads].some(other => resourceScopesOverlap(path, other))) return true;
   }
 
   // A writer with no explicit read set is still safe against disjoint writers;

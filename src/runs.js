@@ -236,7 +236,8 @@ export class RunStore {
 
   /** Plan a goal and persist the result as a run. */
   async create(scope, principal, {
-    goal, policies, activeSurface, timeZone, runtimeMode = 'auto',
+    goal, policies, activeSurface, enforcedControlSurface = null, controlEngineId = null,
+    timeZone, runtimeMode = 'auto',
     workspaceType = 'personal', jurisdiction = '',
     user = null, workspace = null, project = null, projectId = null, files = [], priorWork = [],
     constraints = [], resources = [], requirements = [], successCriteria = [], outputs = [],
@@ -256,17 +257,20 @@ export class RunStore {
     }
     // Earlier turns come from runs this person may already see: the same
     // workspace and visibility rule as every other read.
-    const history = conversation ? await this.conversationHistory(scope, conversation) : [];
-    const previousState = conversation ? await this.conversationState(scope, conversation) : null;
+    // In strict mode, don't load earlier chat contents until the stored
+    // controller+project boundary and the continuation owner are checked.
+    let history = controlEngineId || !conversation ? [] : await this.conversationHistory(scope, conversation);
+    let previousState = controlEngineId || !conversation ? null : await this.conversationState(scope, conversation);
     if (!goalText) throw new RunError('A goal is required', { status: 400, code: 'needs-input' });
     if (Buffer.byteLength(goalText, 'utf8') > this.maxGoalChars) {
       throw new RunError('Goal is too large for one workflow run', { status: 413, code: 'goal-too-large' });
     }
 
     const linkedProjectId = text(projectId);
+    let linkedProject = null;
     if (linkedProjectId) {
-      const { rows: [linkedProject] } = await this.pool.query(
-        `SELECT id
+      const { rows: [projectRow] } = await this.pool.query(
+        `SELECT id, default_surface, current_revision
            FROM projects
           WHERE id = $1
             AND workspace_id = $2
@@ -275,12 +279,50 @@ export class RunStore {
           LIMIT 1`,
         [linkedProjectId, scope.workspaceId, scope.principalId]
       );
+      linkedProject = projectRow;
       if (!linkedProject) {
         throw new RunError('Project not found or not accessible in this workspace.', {
           status: 404,
           code: 'project-not-found'
         });
       }
+      if (controlEngineId && (controlEngineId !== (linkedProject.default_surface === 'code' ? 'coding'
+        : linkedProject.default_surface === 'research' ? 'research' : null)
+        || linkedProject.default_surface !== enforcedControlSurface)) {
+        throw new RunError('The requested control engine does not own this project.', {
+          status: 409, code: 'control-domain-mismatch'
+        });
+      }
+      if (controlEngineId &&
+          text(project?.currentRevision) !== text(linkedProject.current_revision)) {
+        throw new RunError('Project revision changed during admission; start from its current revision.', {
+          status: 409, code: 'control-stale-revision'
+        });
+      }
+    }
+    if (controlEngineId && (!linkedProjectId
+        || !['coding','research'].includes(controlEngineId)
+        || !['code','research'].includes(enforcedControlSurface))) {
+      throw new RunError('New domain work requires a verified Coding or Research project.', {
+        status: 422, code: 'control-project-required'
+      });
+    }
+    if (controlEngineId && conversation) {
+      const { rows: conflicting } = await this.pool.query(
+        `SELECT id FROM runs WHERE workspace_id = $1 AND conversation_id = $2
+           AND (project_id IS DISTINCT FROM $3 OR surface IS DISTINCT FROM $4
+             OR principal_id IS DISTINCT FROM $5 OR control_engine_id IS DISTINCT FROM $6)
+           LIMIT 1`,
+        [scope.workspaceId, conversation, linkedProjectId, enforcedControlSurface,
+          principal.id, controlEngineId]
+      );
+      if (conflicting.length) {
+        throw new RunError('A conversation cannot switch project or control engine.', {
+          status: 409, code: 'control-conversation-mismatch'
+        });
+      }
+      history = await this.conversationHistory(scope, conversation);
+      previousState = await this.conversationState(scope, conversation);
     }
     // A follow-up continues the previous project only when the project
     // identity is the same. This prevents two local projects in one chat from
@@ -321,7 +363,8 @@ export class RunStore {
     let situation = buildSituationModel(goalText, situationContext);
     if (ethics) situation.ethics = ethics;
     let plan = planGoal(goalText, {
-      policies, activeSurface: inheritedSurface, timeZone, runtimeMode, workspaceType, jurisdiction,
+      policies, activeSurface: inheritedSurface, enforcedControlSurface,
+      timeZone, runtimeMode, workspaceType, jurisdiction,
       conversation: history,
       attachments,
       executionAvailable,
@@ -356,7 +399,8 @@ export class RunStore {
       situation = buildSituationModel(goalText, situationContext);
       if (ethics) situation.ethics = ethics;
       plan = planGoal(goalText, {
-        policies, timeZone, conversation: history, attachments, executionAvailable, ethics,
+        policies, enforcedControlSurface, timeZone, conversation: history,
+        attachments, executionAvailable, ethics,
         ...situationContext
       });
       if (plan.state === 'needs-input') {
@@ -364,6 +408,21 @@ export class RunStore {
           status: 400, code: 'needs-input', detail: { questions: plan.questions }
         });
       }
+    }
+
+    if (controlEngineId && plan.surface !== enforcedControlSurface) {
+      throw new RunError('The planner must not retarget an owned controller run.', {
+        status: 409, code: 'control-plan-surface-mismatch'
+      });
+    }
+    if (controlEngineId) {
+      plan.adaptation.controlEngineId = controlEngineId;
+      plan.adaptation.controlWorkIdentity = {
+        projectId: linkedProjectId, controlEngineId,
+        projectRevision: text(linkedProject?.current_revision) || null,
+        // Server-owned state, never self-authorized by a model or UI tab.
+        source: 'authorized-project', immutable: true
+      };
     }
 
     const requirementModel = plan.workflow === 'direct'
@@ -511,14 +570,14 @@ export class RunStore {
       await client.query(
         `INSERT INTO runs (id, workspace_id, principal_id, goal, surface, state,
                            intent, capabilities, governance, adaptation, situation, requirements, project_id, visibility, attempt, max_attempts, max_tokens,
-                           conversation_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 1, $15, $16, $17)`,
+                           conversation_id, control_engine_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 1, $15, $16, $17, $18)`,
         [id, scope.workspaceId, principal.id, plan.goal, plan.surface, plan.state,
          JSON.stringify(plan.intent), JSON.stringify(plan.capabilities),
          JSON.stringify(plan.governance), JSON.stringify(plan.adaptation), JSON.stringify(situation), JSON.stringify(requirementModel),
          linkedProjectId || null,
          ['private', 'workspace'].includes(text(visibility)) ? text(visibility) : 'private',
-         this.maxAttempts, maxTokens, conversation || null]
+         this.maxAttempts, maxTokens, conversation || null, controlEngineId || null]
       );
       const tasks = plan.workflow === 'direct' ? plan.tasks : plan.tasks.map((task, index) => index === 0
         ? { ...task, metadata: { ...(task.metadata ?? {}), requirementIds: requirementModel.items.filter(item => item.kind === 'outcome').map(item => item.id) } }

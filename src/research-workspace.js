@@ -47,6 +47,10 @@ function normalizeUrl(value) {
 }
 
 function sourceKey(source, index = 0) {
+  // Persisted ledgers already contain canonical keys. Recomputing a key from
+  // partial URL/title metadata can orphan citations in later project turns.
+  const persisted = text(source?.key);
+  if (/^(?:url|meta|doi|id):\S{1,1996}$/.test(persisted)) return persisted;
   const url = normalizeUrl(source?.url ?? source?.href ?? (typeof source === 'string' ? source : ''));
   if (url) return `url:${url}`;
   const title = clip(source?.title ?? source?.name ?? (typeof source === 'string' ? source : ''), 500);
@@ -84,7 +88,7 @@ export function normalizeResearchSource(source, index = 0) {
   };
 }
 
-export function normalizeResearchSources(input = []) {
+export function normalizeResearchSources(input = [], { limit = RESEARCH_WORKSPACE_LIMITS.maxSources } = {}) {
   const source = Array.isArray(input) ? input : [];
   const out = [];
   const seen = new Set();
@@ -94,7 +98,7 @@ export function normalizeResearchSources(input = []) {
     seen.add(normalized.key);
     out.push(normalized);
   }
-  return out.slice(0, RESEARCH_WORKSPACE_LIMITS.maxSources);
+  return out.slice(0, Number.isFinite(limit) ? Math.max(0, limit) : RESEARCH_WORKSPACE_LIMITS.maxSources);
 }
 
 function sourceInputs(evidence, citations, toolLog) {
@@ -107,7 +111,9 @@ function sourceInputs(evidence, citations, toolLog) {
       ...(Array.isArray(item?.citations) ? item.citations : [])
     ]) : [])
   ];
-  return normalizeResearchSources(all);
+  // The authoritative input may contain more than the model-context preview.
+  // Bound this per turn independently from the 40-source presentation limit.
+  return normalizeResearchSources(all, { limit: 2000 });
 }
 
 function normalizeEvidenceItem(item, sourcesByKey) {
@@ -185,14 +191,30 @@ export function createResearchWorkspaceState({
   const fingerprint = researchQuestionFingerprint(activeQuestion, goal);
   const currentSources = sourceInputs(evidence, citations, toolLog);
   const previousSources = normalizeResearchSources(previous?.sourceSet ?? []);
+  // Preserve metadata of sources cited by continuing claims before filling
+  // the bounded model preview with unreferenced new discoveries.
   const sourceMap = new Map();
   for (const source of [...currentSources, ...previousSources]) {
     if (!sourceMap.has(source.key)) sourceMap.set(source.key, source);
   }
-  const sourceSet = [...sourceMap.values()].slice(0, RESEARCH_WORKSPACE_LIMITS.maxSources);
+  const previousEvidence = Array.isArray(previous?.evidenceLedger) ? previous.evidenceLedger : [];
+  const newItems = [
+    ...(Array.isArray(evidence?.findings) ? evidence.findings : []),
+    ...(Array.isArray(evidence?.claims) ? evidence.claims : [])
+  ];
+  const requestedRefs = [...newItems, ...previousEvidence].flatMap(item => [
+    ...(Array.isArray(item?.sourceKeys) ? item.sourceKeys.filter(key => typeof key === 'string') : []),
+    ...normalizeResearchSources(item?.sources, { limit: 100 }).map(source => source.key)
+  ]);
+  const selectedKeys = [...new Set([
+    ...requestedRefs,
+    ...currentSources.map(source => source.key),
+    ...previousSources.map(source => source.key)
+  ])].filter(key => sourceMap.has(key)).slice(0, RESEARCH_WORKSPACE_LIMITS.maxSources);
+  const sourceSet = selectedKeys.map(key => sourceMap.get(key));
+  const selectedSourceKeys = new Set(selectedKeys);
   const sourceKeys = new Set(currentSources.map(source => source.key));
   const currentEvidence = normalizeEvidence(evidence, sourceSet);
-  const previousEvidence = Array.isArray(previous?.evidenceLedger) ? previous.evidenceLedger : [];
   const evidenceMap = new Map();
   for (const item of [...currentEvidence, ...previousEvidence]) {
     const key = item?.id ? `id:${item.id}` : `summary:${text(item?.summary).toLowerCase()}`;
@@ -207,7 +229,22 @@ export function createResearchWorkspaceState({
         .filter(sourceKey => sourceMap.has(sourceKey)).slice(0,12)
     });
   }
-  const evidenceLedger = [...evidenceMap.values()].slice(0, RESEARCH_WORKSPACE_LIMITS.maxEvidence);
+  // The bounded preview must not report dangling links as evidence. The
+  // durable source store planned for ResearchEngine will hold all records;
+  // until then, visibly mark references that cannot fit in this projection.
+  const droppedReferences = new Set(requestedRefs.filter(key => !selectedSourceKeys.has(key)));
+  const evidenceLedger = [...evidenceMap.values()]
+    .slice(0, RESEARCH_WORKSPACE_LIMITS.maxEvidence)
+    .map(item => {
+      const sourceKeys = [...new Set(item.sourceKeys ?? [])].filter(key => {
+        if (selectedSourceKeys.has(key)) return true;
+        droppedReferences.add(key);
+        return false;
+      });
+      return { ...item, sourceKeys };
+    });
+  const linkedClaims = evidenceLedger.filter(item => item.sourceKeys.length > 0).length;
+  const unlinkedClaims = evidenceLedger.length - linkedClaims;
   // Carry forward still-open questions, but allow new observed evidence to
   // close an old gap. Without explicit resolution, the evidence ledger can
   // remain stuck in "needs-evidence" forever after that gap is addressed.
@@ -223,7 +260,8 @@ export function createResearchWorkspaceState({
     evidence?.evidenceGaps,
     evidence?.unresolvedQuestions,
     evidence?.openQuestions,
-    previous?.unresolvedQuestions
+    previous?.unresolvedQuestions,
+    ...(droppedReferences.size ? [`${droppedReferences.size} source reference(s) are outside the bounded evidence view; recheck provenance`] : [])
   ).filter(item => !resolvedQuestions.has(normalizeQuestion(item)));
   const conflicts = stringList(evidence?.conflicts, previous?.conflicts)
     .filter(item => !resolvedConflicts.has(normalizeQuestion(item)));
@@ -244,7 +282,7 @@ export function createResearchWorkspaceState({
       .update(activeQuestion).digest('hex').slice(0, 24);
   const status = conflicts.length
     ? 'needs-resolution'
-    : gaps.length || sourceSet.length === 0
+    : gaps.length || sourceSet.length === 0 || unlinkedClaims > 0
       ? 'needs-evidence'
       : evidenceLedger.length
         ? 'evidence-backed'
@@ -263,7 +301,7 @@ export function createResearchWorkspaceState({
       : { mode: 'new', parentId: null },
     sourceSet,
     sourceCount: sourceSet.length,
-    currentTurnSourceKeys: [...sourceKeys].slice(0, RESEARCH_WORKSPACE_LIMITS.maxSources),
+    currentTurnSourceKeys: [...sourceKeys].filter(key => selectedSourceKeys.has(key)).slice(0, RESEARCH_WORKSPACE_LIMITS.maxSources),
     evidenceLedger,
     evidenceCount: evidenceLedger.length,
     unresolvedQuestions: gaps.slice(0, RESEARCH_WORKSPACE_LIMITS.maxQuestions),
@@ -272,6 +310,11 @@ export function createResearchWorkspaceState({
       currentTurnSources: currentSources.length,
       currentTurnEvidence: currentEvidence.length,
       provenancePresent: currentSources.length > 0,
+      linkedClaims,
+      unlinkedClaims,
+      droppedSourceReferences: droppedReferences.size,
+      // A link is not a verified passage or an experimental receipt.
+      verifiedClaims: 0,
       hasEvidence: evidenceLedger.length > 0
     },
     status,

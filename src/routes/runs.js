@@ -14,6 +14,8 @@ import { resolveModelSelection } from '../model-routing.js';
 import { FeedbackStore } from '../feedback.js';
 import { EvolutionStore } from '../evolution.js';
 import { SkillLearningStore, skillContextSignature } from '../skills.js';
+import { admitControlEngineRequest, ControlAdmissionError, verifyControlledRun } from '../control-engine-admission.js';
+import { conversationFileLinks, presentConversationFile } from '../chat-files.js';
 
 // Files the AI reads for itself: text and code, CSV, PDF, Word, Excel and
 // PowerPoint become text; images are shown to the model. Anything else stays
@@ -114,6 +116,55 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
     return attachments;
   }
 
+  /** A non-safety scope decline: no model/tool spend or abuse strike. */
+  async function strictProductAdmission(req, res) {
+    if (config.product?.codingResearchOnly !== true && config.product?.codingOnly !== true) return null;
+    try {
+      return await admitControlEngineRequest({
+        pool,
+        scope: req.scope,
+        principalId: req.principal.id,
+        goal: req.body?.goal,
+        projectId: req.body?.projectId,
+        activeSurface: req.body?.activeSurface,
+        conversationId: req.body?.conversationId,
+        codingOnly: config.product?.codingOnly === true
+      });
+    } catch (error) {
+      if (!(error instanceof ControlAdmissionError)) throw error;
+      await audit?.record({
+        principalId: req.principal.id, workspaceId: req.scope.workspaceId,
+        action: 'product.scope.declined', target: 'new-work',
+        outcome: 'denied', detail: { code: error.code },
+        requestId: req.requestId
+      });
+      res.status(error.status).json({
+        error: error.message, code: error.code,
+        ...(error.detail ? { detail: error.detail } : {})
+      });
+      return false;
+    }
+  }
+
+  async function strictExistingRun(req, res) {
+    if (config.product?.codingResearchOnly !== true && config.product?.codingOnly !== true) return true;
+    const run = await runs.get(req.scope, req.params.id);
+    if (!run) {
+      res.status(404).json({ error: 'Run not found', code: 'no-run' });
+      return false;
+    }
+    const blocked = await verifyControlledRun({
+      pool, run, scope: req.scope, principalId: req.principal.id,
+      codingResearchOnly: config.product?.codingResearchOnly === true,
+      codingOnly: config.product?.codingOnly === true
+    });
+    if (blocked) {
+      res.status(blocked.status).json(blocked);
+      return false;
+    }
+    return true;
+  }
+
   /* ---------------------------------------------------------- workflow */
 
   // Plan without persisting or executing. Useful for previewing what a goal
@@ -163,6 +214,8 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
   }
 
   app.post('/api/plan', scoped('viewer'), route(async (req, res) => {
+    const admitted = await strictProductAdmission(req, res);
+    if (admitted === false) return;
     const policies = await governance.forScope({
       workspaceId: req.scope.workspaceId,
       principalId: req.principal.id,
@@ -191,6 +244,11 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
     const learnedSkills = await skillLearning.profiles(req.scope, { limit: 48, contextSignature: planSkillContext });
     const plan = planGoal(req.body?.goal, {
       ...planningInput(req, policies, config),
+      ...(admitted ? {
+        activeSurface: admitted.surface,
+        enforcedControlSurface: admitted.surface,
+        project: { id: admitted.projectId, currentRevision: admitted.projectRevision }
+      } : {}),
       executionAvailable: executionAvailable(),
       blockedTopics: blockedTopicsFrom(config),
       classifierHints: classification.hints,
@@ -203,6 +261,8 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
   }));
 
   app.post('/api/runs', scoped('editor'), idempotent, route(async (req, res) => {
+    const admitted = await strictProductAdmission(req, res);
+    if (admitted === false) return;
     const policies = await governance.forScope({
       workspaceId: req.scope.workspaceId,
       principalId: req.principal.id,
@@ -263,7 +323,17 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
       }
       return res.status(422).json({ error: verdict.message, code: 'usage-policy', category: verdict.category, alternatives: verdict.alternatives });
     }
-    const input = { ...planningInput(req, policies, config), executionAvailable: executionAvailable() };
+    const input = {
+      ...planningInput(req, policies, config),
+      ...(admitted ? {
+        activeSurface: admitted.surface,
+        enforcedControlSurface: admitted.surface,
+        controlEngineId: admitted.controlEngineId,
+        project: { id: admitted.projectId, currentRevision: admitted.projectRevision },
+        projectId: admitted.projectId
+      } : {}),
+      executionAvailable: executionAvailable()
+    };
     // Topics that need care carry their cautions into every step.
     if (verdict.decision === 'care') input.constraints = [...(input.constraints ?? []), ...verdict.care.map(careNote)];
     const created = await runs.create(req.scope, req.principal, {
@@ -307,6 +377,41 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
     const list = await runs.conversationRuns(req.scope, req.params.id);
     if (!list.length) return res.status(404).json({ error: 'Conversation not found', code: 'no-conversation' });
     res.json({ id: req.params.id, runs: list });
+  }));
+
+  // The Chat / Files segmented view has a strictly conversation-scoped
+  // attachment/artifact list, not a global workspace file browser.
+  // Referenced IDs never bypass normal object visibility/tenant RLS.
+  app.get('/api/conversations/:id/files', scoped('viewer'), route(async (req, res) => {
+    const conversation = await runs.conversationRuns(req.scope, req.params.id);
+    if (!conversation.length) {
+      return res.status(404).json({ error: 'Conversation not found', code: 'no-conversation' });
+    }
+    const refs = conversationFileLinks(conversation);
+    const candidateIds = [...new Set([...refs.attachmentIds, ...refs.artifactIds])];
+    const { rows } = await pool.query(
+      `SELECT id, name, type, content_type, size, created_at
+         FROM objects
+        WHERE workspace_id = $1
+          AND (visibility = 'workspace' OR owner_id = $2)
+          AND (id = ANY($3::text[])
+            OR ((provenance->>'runId') = ANY($4::text[])
+              AND EXISTS (
+                SELECT 1 FROM runs linked
+                 WHERE linked.id::text = objects.provenance->>'runId'
+                   AND linked.workspace_id = objects.workspace_id
+                   AND linked.principal_id = objects.owner_id
+              )))
+        ORDER BY created_at DESC, id DESC
+        LIMIT 501`,
+      [req.scope.workspaceId, req.scope.principalId, candidateIds, refs.runIds]
+    );
+    const linked = new Set(refs.attachmentIds);
+    return res.json({
+      conversationId: req.params.id,
+      files: rows.slice(0, 500).map(row => presentConversationFile(row, linked)),
+      truncated: rows.length > 500
+    });
   }));
 
   // Deleting a chat removes the person's own messages in it, with their
@@ -440,13 +545,16 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
 
   // Record a real outcome for one task. The client names the task and supplies
   // evidence; the server decides whether that task may complete.
-  app.post('/api/runs/:id/advance', scoped('editor'), route(async (req, res) =>
+  app.post('/api/runs/:id/advance', scoped('editor'), route(async (req, res) => {
+    if (!(await strictExistingRun(req, res))) return;
     res.json(await runs.advance(
       req.scope, req.principal, req.params.id, req.body?.taskId, req.body ?? {},
       { requestId: req.requestId }
-    ))));
+    ));
+  }));
 
   app.post('/api/runs/:id/fail', scoped('editor'), route(async (req, res) => {
+    if (!(await strictExistingRun(req, res))) return;
     const run = await runs.fail(req.scope, req.principal, req.params.id, req.body?.reason, {
       requestId: req.requestId
     });
@@ -462,6 +570,7 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
    * and a system that auto-approves its own gate has no gate.
    */
   app.post('/api/runs/:id/execution-plan', scoped('editor'), route(async (req, res) => {
+    if (!(await strictExistingRun(req, res))) return;
     const run = await runs.get(req.scope, req.params.id);
     if (!run) return res.status(404).json({ error: 'Run not found', code: 'no-run' });
     const task = run.tasks.find(item => item.id === run.next);

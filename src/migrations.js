@@ -3251,5 +3251,83 @@ export const MIGRATIONS = [
           AND r.principal_id = current_setting('app.principal_id', true))
       );
     `
+  }  ,{
+    version: 81,
+    name: 'domain-control-run-owner',
+    sql: `
+      ALTER TABLE runs ADD COLUMN control_engine_id TEXT NULL;
+      ALTER TABLE runs ADD CONSTRAINT runs_domain_control_scope
+        CHECK (control_engine_id IS NULL OR
+          (control_engine_id = 'coding' AND surface = 'code' AND project_id IS NOT NULL) OR
+          (control_engine_id = 'research' AND surface = 'research' AND project_id IS NOT NULL));
+      CREATE INDEX runs_domain_control_idx
+        ON runs(workspace_id, principal_id, control_engine_id, project_id)
+        WHERE control_engine_id IS NOT NULL;
+    `
   }
+
+  ,{
+    version: 82,
+    name: 'protect-persisted-control-identity',
+    sql: `
+      CREATE FUNCTION protect_domain_control_identity() RETURNS trigger
+      LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.control_engine_id IS DISTINCT FROM OLD.control_engine_id
+           OR (OLD.control_engine_id IS NOT NULL AND (
+             NEW.project_id IS DISTINCT FROM OLD.project_id
+             OR NEW.surface IS DISTINCT FROM OLD.surface
+             OR NEW.workspace_id IS DISTINCT FROM OLD.workspace_id
+             OR NEW.principal_id IS DISTINCT FROM OLD.principal_id
+           )) THEN
+          RAISE EXCEPTION 'Control identity cannot change'
+            USING ERRCODE = '23514';
+        END IF;
+        RETURN NEW;
+      END;
+      $$;
+      CREATE TRIGGER runs_control_identity_immutable
+      BEFORE UPDATE ON runs FOR EACH ROW
+      EXECUTE FUNCTION protect_domain_control_identity();
+    `
+  }
+  ,{
+    version: 83,
+    name: 'validate-controller-project-at-run-insert',
+    sql: `
+      -- The project row lock prevents concurrent revision/owner changes
+      -- between run admission and insertion; historical runs stay untouched.
+      CREATE FUNCTION validate_controlled_run_project() RETURNS trigger
+      LANGUAGE plpgsql AS $$
+      DECLARE project_surface TEXT;
+      DECLARE project_revision TEXT;
+      BEGIN
+        IF NEW.control_engine_id IS NULL THEN RETURN NEW; END IF;
+        SELECT default_surface, current_revision
+          INTO project_surface, project_revision
+          FROM projects
+         WHERE id = NEW.project_id
+           AND workspace_id = NEW.workspace_id
+           AND state = 'active'
+           AND (principal_id = NEW.principal_id OR visibility = 'workspace')
+         FOR SHARE;
+        IF NOT FOUND OR (NEW.control_engine_id = 'coding' AND project_surface IS DISTINCT FROM 'code')
+          OR (NEW.control_engine_id = 'research' AND project_surface IS DISTINCT FROM 'research') THEN
+          RAISE EXCEPTION 'Controlled run requires matching authorized active project'
+            USING ERRCODE = '23514';
+        END IF;
+        IF COALESCE(NEW.adaptation->'controlWorkIdentity'->>'projectRevision', '')
+          IS DISTINCT FROM COALESCE(project_revision, '') THEN
+          RAISE EXCEPTION 'Controlled run project revision is stale'
+            USING ERRCODE = '23514';
+        END IF;
+        RETURN NEW;
+      END;
+      $$;
+      CREATE TRIGGER runs_verify_controlled_project
+      BEFORE INSERT ON runs FOR EACH ROW
+      EXECUTE FUNCTION validate_controlled_run_project();
+    `
+  }
+
 ];

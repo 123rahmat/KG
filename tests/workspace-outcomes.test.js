@@ -32,3 +32,17 @@ test('outcomes are reserved for final code and research records', () => {
   assert.equal(workspaceOutcomeSummary({ state: 'respond', tasks: [] }, 'code'), null);
   assert.equal(workspaceOutcomeSummary({ state: 'complete', tasks: [] }, 'normal-chat'), null);
 });
+
+test('coding outcome never calls a plain model verdict authenticated verification',()=>{
+  const run={surface:'code',state:'complete',tasks:[
+    {id:'test-code',type:'test-code',status:'complete',evidence:{
+      result:{output:{testSummary:{total:2,passed:2,failed:0}}}}},
+    {id:'verify',type:'verify',status:'complete',evidence:{verdict:{status:'pass'}}}
+  ],adaptation:{}};
+  const result=workspaceOutcomeSummary(run,'code');
+  assert.equal(result.facts.some(item=>item.includes('passing verification')),false);
+  assert.ok(result.notes.some(item=>item.includes('No authenticated passing test receipt')));
+  run.tasks[0].evidence.executionReceipt={serverAuthenticated:true};
+  const confirmed=workspaceOutcomeSummary(run,'code');
+  assert.ok(confirmed.facts.includes('1 passing verification'));
+});

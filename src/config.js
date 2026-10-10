@@ -368,6 +368,13 @@ export function loadConfig(env = process.env) {
     })(),
     cookieSecure,
     logLevel,
+    // Staged release switch. OFF until project/record migrations and UI are
+    // verified; when ON, new work must pass the Coding/Research project gate.
+    product: {
+      codingResearchOnly: boolean(env.CODING_RESEARCH_ONLY, false),
+      // KG Code ships coding-only by default. Operators can set KG_CODING_ONLY=false for emergency rollback.
+      codingOnly: boolean(env.KG_CODING_ONLY, true)
+    },
 
     security: {
       objectEncryptionKey,

@@ -130,6 +130,28 @@ export async function loadAudit() {
   ])));
 }
 
+function configureCodingOnlyNavigation() {
+  const only = state.product?.codingOnly === true;
+  if (only) {
+    document.title = 'KG Code — Coding Workspace';
+    const brand = document.querySelector('#chatSidebar .brand span');
+    if (brand) brand.textContent = 'KG Code';
+    const newWork = $('newWork');
+    for (const node of newWork.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE) node.textContent = ' New coding task';
+    }
+  }
+  $('codingNav').hidden = !only;
+  $('tabs').hidden = only;
+  $('newResearchChat').hidden = only;
+  if (only) {
+    $('newWork').title = 'New coding task';
+    $('newWork').setAttribute('aria-label', 'New coding task');
+    $('newCodeChat').textContent = 'New coding task';
+    $('goal').placeholder = 'Describe the code change, bug, or project task…';
+  }
+}
+
 const TAB_LOADERS = { runs: loadRuns, explore: async () => renderExplore(), objects: loadObjects, audit: loadAudit };
 
 export async function selectTab(name) {
@@ -140,6 +162,7 @@ export async function selectTab(name) {
   for (const tab of ['runs', 'explore', 'objects', 'audit']) {
     $(`tab-${tab}`).hidden = tab !== name;
   }
+  document.dispatchEvent(new CustomEvent('kindgleam:tab-changed', { detail: { name } }));
   await guard(() => TAB_LOADERS[name]());
 }
 
@@ -148,7 +171,7 @@ export function applyRole() {
   $('createRun').disabled = !editor;
   $('goal').disabled = !editor;
   $('goal').placeholder = editor
-    ? 'Ask anything…'
+    ? (state.product?.codingOnly ? 'Describe a coding task…' : 'Ask anything…')
     : 'You have view-only access in this workspace.';
   $('newWork').hidden = !editor;
   $('newWorkTop').hidden = !editor;
@@ -693,6 +716,17 @@ export async function enterApp() {
   $('userInitial').textContent = (state.principal.name || '?').trim().charAt(0).toUpperCase();
   await ensureTerms();
   await loadPreferences();
+  // Read before rendering the project hub. This is UI gating only; server
+  // admission, run ownership and job/tool guards remain authoritative.
+  try {
+    const contract = await api('GET', '/api/adaptive-contract', undefined, { workspace: false });
+    state.product = { codingResearchOnly: contract?.product?.codingResearchOnly === true,
+      codingOnly: contract?.product?.codingOnly === true };
+    configureCodingOnlyNavigation();
+  } catch {
+    state.product = { codingResearchOnly: false, codingOnly: false };
+    configureCodingOnlyNavigation();
+  }
   await loadProjects().catch(() => {
     state.projects = [];
     state.activeProjectId = null;

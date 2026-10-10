@@ -17,13 +17,24 @@ export class ProjectError extends Error {
   }
 }
 
-export function normalizeProject(input = {}) {
+export function normalizeProject(input = {}, { codingResearchOnly = false, codingOnly = false } = {}) {
   const value = input && typeof input === 'object' ? input : {};
   const name = text(value.name).replace(/\s+/g, ' ').slice(0, 120);
   if (!name) throw new ProjectError('Project name is required.');
   const description = text(value.description).replace(/\s+/g, ' ').slice(0, 500);
-  const defaultSurface = text(value.defaultSurface || value.surface) || 'normal-chat';
+  const defaultSurface = text(value.defaultSurface || value.surface)
+    || ((codingResearchOnly || codingOnly) ? 'code' : 'normal-chat');
   if (!SURFACES.has(defaultSurface)) throw new ProjectError('Project surface must be normal-chat, code or research.');
+  if (codingOnly && defaultSurface !== 'code') {
+    throw new ProjectError('New KG Code projects must use Coding.', {
+      status: 422, code: 'code-only-project-required'
+    });
+  }
+  if (codingResearchOnly && !['code','research'].includes(defaultSurface)) {
+    throw new ProjectError('New projects must belong to Coding or Research.', {
+      status: 422, code: 'control-project-domain-required'
+    });
+  }
   const visibility = text(value.visibility) || 'private';
   if (!['private', 'workspace'].includes(visibility)) throw new ProjectError('Project visibility must be private or workspace.');
   return {
@@ -57,12 +68,14 @@ const RUN_JOIN = [
 ].join(' ');
 
 export class ProjectStore {
-  constructor(pool) {
+  constructor(pool, { codingResearchOnly = false, codingOnly = false } = {}) {
     this.pool = pool;
+    this.codingResearchOnly = codingResearchOnly === true;
+    this.codingOnly = codingOnly === true;
   }
 
   async create(scope, principal, input = {}) {
-    const normalized = normalizeProject(input);
+    const normalized = normalizeProject(input, { codingResearchOnly: this.codingResearchOnly, codingOnly: this.codingOnly });
     if (normalized.sourceId) {
       const { rows: [source] } = await this.pool.query(
         'SELECT id FROM workspace_sources WHERE id = $1 AND workspace_id = $2 AND principal_id = $3 AND revoked_at IS NULL LIMIT 1',
@@ -127,7 +140,23 @@ export class ProjectStore {
   async update(scope, id, patch = {}) {
     const current = await this.get(scope, id);
     if (!current) return null;
-    const normalized = normalizeProject({ ...current, ...(patch || {}) });
+    // A shared project is visible, not implicitly writable. In KG Code
+    // only its owner may retarget the revision, source or access policy.
+    if (this.codingOnly && current.principalId !== scope.principalId) {
+      throw new ProjectError('Only the project owner can modify this coding project.', {
+        status: 403, code: 'code-project-owner-required'
+      });
+    }
+    if ((this.codingResearchOnly || this.codingOnly) && ((this.codingOnly && current.defaultSurface !== 'code') || current.defaultSurface === 'normal-chat'
+        || (patch?.defaultSurface && patch.defaultSurface !== current.defaultSurface)
+        || (patch?.surface && patch.surface !== current.defaultSurface))) {
+      throw new ProjectError('The owning control engine cannot be changed.', {
+        status: 409, code: 'control-project-immutable'
+      });
+    }
+    const normalized = normalizeProject({ ...current, ...(patch || {}) }, {
+      codingResearchOnly: this.codingResearchOnly, codingOnly: this.codingOnly
+    });
     if (normalized.sourceId) {
       const { rows: [source] } = await this.pool.query(
         'SELECT id FROM workspace_sources WHERE id = $1 AND workspace_id = $2 AND principal_id = $3 AND revoked_at IS NULL LIMIT 1',
@@ -148,10 +177,20 @@ export class ProjectStore {
   }
 
   async archive(scope, id) {
-    const { rows: [row] } = await this.pool.query(
-      'UPDATE projects SET state=\'archived\', updated_at=now() WHERE id=$1 AND workspace_id=$2 AND (visibility=\'workspace\' OR principal_id=$3) RETURNING *',
-      [id, scope.workspaceId, scope.principalId]
-    );
+    if (this.codingOnly) {
+      const current = await this.get(scope, id);
+      if (!current) return null;
+      if (current.principalId !== scope.principalId) {
+        throw new ProjectError('Only the project owner can archive this coding project.', {
+          status: 403, code: 'code-project-owner-required'
+        });
+      }
+    }
+    const sql = this.codingOnly
+      ? "UPDATE projects SET state='archived', updated_at=now() WHERE id=$1 AND workspace_id=$2 AND principal_id=$3 RETURNING *"
+      : "UPDATE projects SET state='archived', updated_at=now() WHERE id=$1 AND workspace_id=$2 AND (visibility='workspace' OR principal_id=$3) RETURNING *";
+    const { rows: [row] } = await this.pool.query(sql,
+      [id, scope.workspaceId, scope.principalId]);
     return present(row);
   }
 }

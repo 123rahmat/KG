@@ -7,6 +7,7 @@
  */
 import crypto from 'node:crypto';
 import { normalizeWorkspaceFiles, safeWorkspacePath, WORKSPACE_LIMITS } from './code-workspace.js';
+import { isSensitiveWorkspacePath } from './workspace-path.js';
 
 const text = value => String(value ?? '');
 const sha256 = value => crypto.createHash('sha256').update(text(value), 'utf8').digest('hex');
@@ -46,18 +47,23 @@ function assertExpectedBase(files, expectedContentHash) {
 export function normalizeChangeSet(changes = []) {
   const list = Array.isArray(changes) ? changes : [];
   if (list.length > WORKSPACE_LIMITS.maxChangedFiles) throw new Error('Workspace change-set is too large');
-  const seen = new Set();
+  const seen = new Map();
   return list.map(change => {
     const path = safeWorkspacePath(change?.path);
     if (!path) throw new Error('Workspace change-set contains an invalid path');
-    if (WRITE_BLOCKED_PATH.test(path)) throw new Error('Workspace changes may not write credential or private-key files');
+    if (WRITE_BLOCKED_PATH.test(path) || isSensitiveWorkspacePath(path)) {
+      throw new Error('Workspace changes may not write credential or private-key files');
+    }
     const kind = change?.kind === 'delete' || change?.delete === true
       ? 'delete'
       : change?.kind === 'range'
         ? 'range'
         : 'upsert';
-    if (kind !== 'range' && seen.has(path)) throw new Error('Workspace change-set contains duplicate path: ' + path);
-    if (kind !== 'range') seen.add(path);
+    const earlier = seen.get(path);
+    if (earlier && (kind !== 'range' || earlier !== 'range')) {
+      throw new Error('Workspace change-set contains conflicting operations for path: ' + path);
+    }
+    seen.set(path,kind);
     if (kind === 'upsert') {
       const content = String(change?.content ?? '');
       if (Buffer.byteLength(content, 'utf8') > WORKSPACE_LIMITS.maxFileBytes) throw new Error('Changed file is too large: ' + path);
@@ -88,6 +94,11 @@ export function applySurgicalChanges(files = [], changes = [], { expectedContent
     if (change.kind === 'range') {
       const current = map.get(change.path);
       if (current === undefined) throw new Error('Cannot patch missing file: ' + change.path);
+      if (!change.expectedDigest && !expectedContentHash) {
+        const error = new Error('Existing file range requires a base revision or pre-image digest: ' + change.path);
+        error.code = 'missing-preimage';
+        throw error;
+      }
       if (change.expectedDigest && contentDigest(current) !== change.expectedDigest) {
         const error = new Error('Patch pre-image changed: ' + change.path);
         error.code = 'stale-file';
@@ -98,9 +109,15 @@ export function applySurgicalChanges(files = [], changes = [], { expectedContent
       grouped.set(change.path, list);
       continue;
     }
-    if (change.beforeDigest && map.has(change.path) && contentDigest(map.get(change.path)) !== change.beforeDigest) {
+    if (change.beforeDigest && (!map.has(change.path)
+      || contentDigest(map.get(change.path)) !== change.beforeDigest)) {
       const error = new Error('Patch pre-image changed: ' + change.path);
       error.code = 'stale-file';
+      throw error;
+    }
+    if (map.has(change.path) && !change.beforeDigest && !expectedContentHash) {
+      const error = new Error('Existing file change requires a base revision or pre-image digest: ' + change.path);
+      error.code = 'missing-preimage';
       throw error;
     }
     if (change.kind === 'delete') map.delete(change.path);
@@ -113,6 +130,11 @@ export function applySurgicalChanges(files = [], changes = [], { expectedContent
     const ordered = [...ranges].sort((a,b) => b.startLine - a.startLine || b.endLine - a.endLine);
     let previousStart = Infinity;
     for (const patch of ordered) {
+      if (patch.endLine > source.length) {
+        const error = new Error('Patch line range exceeds the existing file: ' + path);
+        error.code = 'stale-file';
+        throw error;
+      }
       if (patch.endLine >= previousStart) throw new Error('Overlapping patch ranges in ' + path);
       previousStart = patch.startLine;
       source.splice(patch.startLine - 1, patch.endLine - patch.startLine + 1, ...patch.replacement.split(/\r?\n/));

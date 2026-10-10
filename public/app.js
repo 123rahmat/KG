@@ -25,11 +25,13 @@ import { initArtifactPreview } from './artifact-preview.js';
 import { captureSelectedTab } from './workspace-screenshot.js';
 import { initProjectHub, loadProjects } from './app-projects.js';
 import { executionContextKey, executionContextCurrent } from './execution-context.js';
+import { initChatFilesPanel } from './chat-files-panel.js';
 
 initSettings();
 initWorkspaceSources();
 initTerminal();
 initArtifactPreview();
+initChatFilesPanel();
 
 
 /* --------------------------------------------------------------- transport */
@@ -1230,6 +1232,7 @@ export async function saveAnswer(value, runId) {
     content: value,
     provenance: { source: 'chat-answer', runId: runId ?? null }
   });
+  document.dispatchEvent(new Event('kindgleam:chat-files-updated'));
   notify('runNotice', 'ok', `Saved to Files as ${object.name ?? object.id}.`);
 }
 
@@ -1262,8 +1265,8 @@ function initLandingWorkflowDemos() {
       root: document.querySelector('[data-demo="code"]'),
       itemSelector: '[data-code-step]',
       progressSelector: '[data-code-progress]',
-      stepCount: 6,
-      duration: 2500
+      stepCount: 4,
+      duration: 2350
     }
   ].filter(item => item.root);
 
@@ -1279,7 +1282,7 @@ function initLandingWorkflowDemos() {
       items.forEach((node, index) => node.classList.toggle('is-active', index === step));
       progress.forEach((node, index) => node.classList.toggle('is-active', index === step));
       root.dataset.currentStep = String(step);
-      if (status) status.textContent = step === stepCount - 1 ? 'verifying' : 'running';
+      if (status) status.textContent = 'Illustrative workflow';
     };
 
     const start = () => {
@@ -1494,6 +1497,62 @@ $('chatSurfaceFilter')?.addEventListener('change',()=>loadRuns().catch(()=>{}));
 $('chatStatusFilter')?.addEventListener('change',()=>loadRuns().catch(()=>{}));
 $('newCodeChat')?.addEventListener('click',()=>newChat({surface:'code'}));
 $('newResearchChat')?.addEventListener('click',()=>newChat({surface:'research'}));
+
+// KG Code navigation uses existing, permission-checked UI actions, not a
+// parallel client router or a second execution engine. It is visible only
+// after the server reports the staged coding-only product contract.
+const codingNavItems = ['codeNavWork','codeNavProjects','codeNavProgress',
+  'codeNavChanges','codeNavTests','codeNavSpecialists',
+  'codeNavTerminal','codeNavFiles','codeNavActivity'];
+function selectCodingNav(itemId) {
+  if (state.product?.codingOnly !== true) return;
+  for (const id of codingNavItems) {
+    const button = $(id);
+    if (!button) continue;
+    if (id === itemId) button.setAttribute('aria-current','page');
+    else button.removeAttribute('aria-current');
+  }
+}
+document.addEventListener('kindgleam:tab-changed', event => {
+  selectCodingNav(event.detail?.name === 'audit' ? 'codeNavActivity' : 'codeNavWork');
+});
+$('codeNavWork')?.addEventListener('click', async () => {
+  await selectTab('runs');
+  selectCodingNav('codeNavWork');
+});
+$('codeNavProjects')?.addEventListener('click', () => {
+  $('projectManage')?.click();
+  selectCodingNav('codeNavProjects');
+});
+$('codeNavProgress')?.addEventListener('click', async () => {
+  await selectTab('runs');
+  $('codingProgressPanel')?.scrollIntoView({ block:'start', behavior:'auto' });
+  selectCodingNav('codeNavProgress');
+});
+async function openCodingInspector(area, activeNav) {
+  await selectTab('runs');
+  // Workspace inspectors belong to the Chat panel, never the conversation's
+  // own Files panel. Switching back preserves its uploads and artifacts.
+  $('chatViewMessages')?.click();
+  document.dispatchEvent(new CustomEvent('kindgleam:open-code-area', {
+    detail:{area}
+  }));
+  selectCodingNav(activeNav);
+}
+$('codeNavChanges')?.addEventListener('click', () => openCodingInspector('changes','codeNavChanges'));
+$('codeNavTests')?.addEventListener('click', () => openCodingInspector('tests','codeNavTests'));
+$('codeNavSpecialists')?.addEventListener('click', () => openCodingInspector('agents','codeNavSpecialists'));
+$('codeNavTerminal')?.addEventListener('click', async () => {
+  await selectTab('runs');
+  $('openTerminal')?.click();
+  selectCodingNav('codeNavTerminal');
+});
+$('codeNavFiles')?.addEventListener('click', async () => {
+  await selectTab('runs');
+  $('chatViewFiles')?.click();
+  selectCodingNav('codeNavFiles');
+});
+$('codeNavActivity')?.addEventListener('click', () => { selectTab('audit'); });
 
 $('signin').addEventListener('submit', signIn);
 initGate();

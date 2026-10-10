@@ -5,6 +5,7 @@
 
 import { renderMarkdown } from './markdown.js';
 import { syncThread } from './thread-view.js';
+import { resetChatView, notifyChatFilesChanged, selectedChatUploadIds } from './chat-files-panel.js';
 import { workPresentation } from './adaptive-workspace.js';
 import { state, $, element, button, api, notify, guard, canEdit, aiConnected, clearNotice, updateConnectionUI } from './ui-core.js';
 import { autoDrive, browserAdaptationContext, bytes, heading, runStatus, svgIcon, timeAgo } from './app.js';
@@ -16,6 +17,7 @@ import { submissionProjectId, submissionWorkspaceSurface } from './conversation-
 import { createChatRefreshCoalescer } from './chat-refresh-coalescer.js';
 import { chatIsSending, markChatSending, syncVisibleChatSending } from './chat-send-state.js';
 import { syncAdaptiveWorkspace } from './adaptive-workspace.js';
+import { renderCodingProgress } from './coding-progress-panel.js';
 import { syncActiveWorkspaceSource } from './workspace-sources.js';
 import { selectedAttachments } from './attachment-selection.js';
 import { renderProjectHub } from './app-projects.js';
@@ -50,6 +52,7 @@ function clearStagedChatAttachments(){
   state.attachments=[];
   state.attachmentScope=null;
   renderAttachments();
+  document.dispatchEvent(new Event('kindgleam:staged-files-changed'));
 }
 
 function consumeAttachments(files) {
@@ -112,7 +115,7 @@ function renderAttachments() {
   syncAdaptiveWorkspace();
 }
 
-export function addAttachments(fileList) {
+export function addAttachments(fileList, { focus = true } = {}) {
   for (const file of fileList) {
     if (state.attachments.length >= MAX_ATTACH_FILES) {
       notify('runNotice', 'warn', `You can attach up to ${MAX_ATTACH_FILES} files to one message.`);
@@ -127,7 +130,8 @@ export function addAttachments(fileList) {
     state.attachmentScope.add(file);
   }
   renderAttachments();
-  $('goal').focus({ preventScroll: true });
+  document.dispatchEvent(new Event('kindgleam:staged-files-changed'));
+  if (focus) $('goal').focus({ preventScroll: true });
 }
 
 export function renderThread() {
@@ -161,11 +165,16 @@ export function renderThread() {
     ]) });
   }
   syncThread(thread, entries, state.chat.id ?? 'new:' + (state.activeProjectId ?? ''));
+  notifyChatFilesChanged();
   announceWork();
   renderChatHead();
   highlightActiveChat();
   // The workspace bar shows what this chat's situation needs now.
   syncAdaptiveWorkspace();
+  renderCodingProgress($('codingProgressPanel'), state.run, {
+    surface: state.activeSurface, pending: Boolean(state.chat.pending),
+    offline: state.network?.online === false || state.network?.reachable === false
+  });
   updateThreadJump();
   document.dispatchEvent(new Event('kindgleam:composer-state'));
 }
@@ -299,9 +308,16 @@ export function newChat(options={}) {
   if(options?.skipSave!==true)saveDraftNow();
   if(['code','research','normal-chat'].includes(options?.surface))
     state.activeSurface=options.surface;
+  if (state.product?.codingOnly) state.activeSurface = 'code';
+  if (state.product?.codingResearchOnly && !['code','research'].includes(state.activeSurface)) {
+    const project = state.projects.find(item => item.id === state.activeProjectId);
+    state.activeSurface = ['code','research'].includes(project?.defaultSurface)
+      ? project.defaultSurface : 'code';
+  }
   clearStagedChatAttachments();
   if ($('tab-runs').hidden) selectTab('runs');
   state.chat = { id: null, runs: [], pending: null, consent: state.settings.consent, workspaceSourceId: null, projectId: state.activeProjectId ?? null };
+  resetChatView();
   syncVisibleChatSending(state);
   document.dispatchEvent(new Event('kindgleam:composer-state'));
   state.workspaceSourceId = null;
@@ -464,6 +480,7 @@ export async function openChat(id){
       projectId:chatProjectId,
       consent:runs.some(run=>run.adaptation?.privacy?.consent?.modelProvider===true)
     };
+    resetChatView();
     syncVisibleChatSending(state);
     document.dispatchEvent(new Event('kindgleam:composer-state'));
     state.workspaceSourceId=state.chat.workspaceSourceId;
@@ -572,7 +589,7 @@ async function createRunFromQueuedItem(item) {
     adaptiveControl: item.adaptiveControl ?? personalContext().adaptiveControl,
     activeSurface: item.activeSurface ?? state.activeSurface ?? 'normal-chat',
     creationMode: item.creationMode ?? null,
-    attachments,
+    attachments: [...new Set([...(item.storedAttachmentIds ?? []), ...attachments])],
     ...(item.workspaceSourceId ? { workspaceSourceId: item.workspaceSourceId } : {}),
     visibility,
     privacyConsent: { modelProvider: item.modelConsent ?? state.chat.consent }
@@ -595,6 +612,8 @@ async function queueOfflineMessage(goal, files, visibility, idempotencyKey, subm
     creationMode: submission.creationMode,
     modelConsent: submission.modelConsent,
     attachmentIds: [],
+    // Existing chat uploads have durable object IDs; do not re-upload them.
+    storedAttachmentIds: [...(submission.storedAttachmentIds ?? [])],
     files
   };
   state.network.queue.push(item);
@@ -666,10 +685,35 @@ export async function sendMessage(text) {
     return;
   }
   const files = selectedAttachments(state.attachments, state.attachmentScope);
+  const storedAttachmentIds = selectedChatUploadIds();
+  if (files.length + storedAttachmentIds.length > MAX_ATTACH_FILES) {
+    notify('runNotice','warn','Use at most 10 files per message, including files selected from this chat.');
+    return;
+  }
   const context = personalContext();
   const goal = String(text ?? '').trim()
     || (files.length ? `Please look at the attached file${files.length > 1 ? 's' : ''}.` : '');
   if (!goal || chatIsSending(state)) return;
+  // Frontend avoids uploads and provider consent for work the owning project
+  // cannot accept. The server independently rechecks every authority field.
+  if (state.product?.codingResearchOnly === true || state.product?.codingOnly === true) {
+    const selected = state.projects.find(project =>
+      project.id === state.activeProjectId && project.state === 'active');
+    if (!selected || (state.product?.codingOnly
+      ? selected.defaultSurface !== 'code' : !['code','research'].includes(selected.defaultSurface))) {
+      notify('runNotice', 'warn', 'Select or create a Coding or Research project first.');
+      document.dispatchEvent(new Event('kindgleam:open-projects'));
+      return;
+    }
+    const run = state.chat?.runs?.at(-1);
+    const effectiveSurface = run?.surface ?? state.activeSurface;
+    if (selected.defaultSurface !== effectiveSurface
+      || (run && run.projectId !== selected.id)) {
+      notify('runNotice', 'warn',
+        'This conversation belongs to a different project or control engine. Start a new project chat.');
+      return;
+    }
+  }
   state.chat.consent ||= state.settings.consent;
   if (aiConnected() && !state.chat.consent) {
     // A second message while the consent question is open joins the first,
@@ -703,7 +747,8 @@ export async function sendMessage(text) {
       chosenSurface:state.activeSurface,hasSavedRuns
     }),
     creationMode: $('adaptiveCreateStrip')?.dataset.mode ?? null,
-    modelConsent: chat.consent
+    modelConsent: chat.consent,
+    storedAttachmentIds
   };
 
   if (navigator.onLine === false && state.settings.offlineQueue) {
@@ -711,7 +756,10 @@ export async function sendMessage(text) {
     clearDraft({clearNewChat:firstTurn});
     markChatSending(state,chat,submission.workspaceId,true);
     document.dispatchEvent(new Event('kindgleam:composer-state'));
-    try { await queueOfflineMessage(goal, files, visibility, undefined, submission, chat); }
+    try {
+      await queueOfflineMessage(goal, files, visibility, undefined, submission, chat);
+      chat.chatFileIds?.clear();
+    }
     finally { markChatSending(state,chat,submission.workspaceId,false); document.dispatchEvent(new Event('kindgleam:composer-state')); }
     growComposer();
     return;
@@ -750,7 +798,7 @@ export async function sendMessage(text) {
       projectId: submission.projectId,
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       ...context,
-      attachments,
+      attachments: [...new Set([...submission.storedAttachmentIds, ...attachments])],
       ...(submission.workspaceSourceId ? { workspaceSourceId: submission.workspaceSourceId } : {}),
       activeSurface: submission.activeSurface,
       creationMode: submission.creationMode,
@@ -758,6 +806,7 @@ export async function sendMessage(text) {
       privacyConsent: { modelProvider: submission.modelConsent }
     }, { workspaceId: submission.workspaceId, idempotencyKey });
     chat.pending = null;
+    chat.chatFileIds?.clear();
     chat.projectId = run.projectId ?? submission.projectId;
     if (state.chat === chat && state.workspaceId === submission.workspaceId) {
       consumeAttachments(files);

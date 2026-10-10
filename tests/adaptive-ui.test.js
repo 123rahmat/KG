@@ -210,8 +210,8 @@ test('Research Workspace opens in the dedicated workspace surface, not Explore',
 test('landing focuses on one professional coding workflow without obsolete public demos', async () => {
   const html = await read('public/index.html');
   const app = await read('public/app.js');
-  assert.match(html, /<title>KG Code — AI Software Development Workspace<\/title>/);
-  assert.match(html, /Inspect, implement, test and review/);
+  assert.match(html, /<title>KG Code — AI Engineering Workspace<\/title>/);
+  assert.match(html, /Your code\./);
   assert.match(html, /href="#code"/);
   assert.match(html, /data-demo="code"/);
   assert.match(html, /id="landingSignIn"/);

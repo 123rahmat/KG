@@ -90,3 +90,38 @@ test('code that could not be run is reported only for the attempt it happened in
   assert.equal(untestedCode(run(2)), false);
   assert.equal(adaptationFor(run(2), { type: 'deliver' })?.codeNotRun, undefined);
 });
+
+test('bounded repair quality ignores malformed or contradictory test failure counts',async()=>{
+  const {failureDistance}=await import('../src/code-workflow.js');
+  const unknown=100_000;
+  for(const summary of [
+    {total:0,failed:0},
+    {total:3,failed:-1},
+    {total:3,failed:4},
+    {total:3,failed:NaN},
+    {total:3,failed:Infinity},
+    {total:3,failed:null},
+    {total:3},
+    {total:'invalid',failed:1},
+    {total:3,failed:0}
+  ]) assert.equal(failureDistance({status:'failed',testSummary:summary}),
+    unknown,JSON.stringify(summary));
+  assert.equal(failureDistance({status:'failed',testSummary:{total:4,failed:3}}),3);
+  assert.equal(failureDistance({status:'syntax-error'}),1_000_000);
+  assert.equal(failureDistance({status:'timed-out',timedOut:true}),500_000);
+});
+test('adaptive repair spends no unbounded retries on stalled errors',async()=>{
+  const {repairDecision}=await import('../src/code-workflow.js');
+  const failure=failed=>({status:'failed',testSummary:{total:4,failed},
+    stderr:'unit assertion failed'});
+  const run=history=>({
+    attempt:1,adaptation:{scale:'small',codeRepairs:history.map(x=>({
+      attempt:1,failure:x
+    }))}
+  });
+  assert.equal(repairDecision(run([]),failure(4)).reason,'first-failure');
+  assert.equal(repairDecision(run([failure(4)]),failure(3)).reason,'progress');
+  assert.equal(repairDecision(run([failure(4)]),failure(4)).reason,'one-more-try');
+  assert.equal(repairDecision(run([failure(4),failure(4)]),failure(4)).reason,'no-progress');
+  assert.equal(repairDecision(run(Array(4).fill(failure(4))),failure(2)).reason,'ceiling');
+});
