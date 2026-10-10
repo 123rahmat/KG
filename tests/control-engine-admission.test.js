@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { admitControlEngineRequest, ControlAdmissionError } from '../src/control-engine-admission.js';
+import { admitControlEngineRequest } from '../src/control-engine-admission.js';
 
 const req = changes => ({
   scope: { workspaceId: 'tenant-a', principalId: 'person-a' },
