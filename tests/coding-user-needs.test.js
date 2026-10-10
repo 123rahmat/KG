@@ -100,3 +100,12 @@ test('generic legacy requirement models still accept their historical simple pas
   assert.equal(completed.completionReady,true);
   assert.equal(model.items.some(item=>item.explicitCoverage),false);
 });
+
+test('late no-delete guardrail is preserved when a request exceeds the summary cap',()=>{
+  const actionList=Array.from({length:35},(_,n)=>'Add feature'+n).join('; ');
+  const needs=captureCodingUserNeeds({request:actionList+'; Do not delete production data'});
+  assert.equal(needs.coverageLimited,true);
+  assert.ok(needs.guardrails.includes('Do not delete production data'));
+  assert.ok(needs.explicitCriteria.includes('Do not delete production data'));
+  assert.ok(needs.explicitCriteria.some(text=>/remaining requested changes/.test(text)));
+});
