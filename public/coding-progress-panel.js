@@ -2,16 +2,23 @@
  * Project coding progress panel: pure server evidence rendered with existing
  * DOM primitives. It neither starts agents nor grants tool permissions.
  */
-import { element, button } from './ui-core.js';
+import { element, button, state } from './ui-core.js';
 import { codingProgressSnapshot } from './coding-progress-model.js';
 import { agentActivitySnapshot } from './agent-activity.js';
 
 const get = id => document.getElementById(id);
 const statusDot = tone => element('span',{class:'code-progress-dot '+tone,'aria-hidden':'true'});
+function inspectArea(area) {
+  get('chatViewMessages')?.click();
+  document.dispatchEvent(new CustomEvent('kindgleam:open-code-area',{detail:{area}}));
+  get('deepWorkspaceShell')?.scrollIntoView({block:'nearest',behavior:'auto'});
+}
 let lastSignature = '';
 let lastHost = null;
 
-export function renderCodingProgress(host, run, { surface = 'normal-chat', pending = false } = {}) {
+export function renderCodingProgress(host, run, {
+  surface = 'normal-chat', pending = false, offline = false
+} = {}) {
   if (!host) return;
   const coding = run?.surface === 'code' || (!run && surface === 'code');
   const snapshot = coding ? codingProgressSnapshot(run) : null;
@@ -21,8 +28,8 @@ export function renderCodingProgress(host, run, { surface = 'normal-chat', pendi
   // The run's evidence can include large tool output and file contents.
   // Serialize only the small visible projection, not the full run/task graph
   // on every streaming UI update.
-  const signature = JSON.stringify({coding,snapshot,pending,surface,
-    specialists,activeSpecialists});
+  const signature = JSON.stringify({coding,snapshot,pending,offline,surface,
+    specialists,activeSpecialists,focused:state.product?.codingOnly === true});
   if (host === lastHost && signature === lastSignature) return;
   lastHost = host;
   lastSignature = signature;
@@ -35,16 +42,24 @@ export function renderCodingProgress(host, run, { surface = 'normal-chat', pendi
       element('h2',{class:'code-progress-title',text:snapshot?.headline ||
         (pending ? 'Preparing your coding request' : 'Start a coding task')}),
       element('p',{class:'code-progress-subtitle',text:snapshot
-        ? 'Live status from saved run steps. No estimated completion or fabricated test passes.'
+        ? offline
+          ? 'Offline · showing the last saved run status. Execution is not confirmed live.'
+          : 'Recorded execution state. The plan can grow; this is not estimated completion.'
         : 'Choose a repository or attach source files, then describe the change you want.'})
     ]),
     element('span',{class:'code-progress-status '+(snapshot?.tone || 'neutral')},[
       statusDot(snapshot?.tone || 'neutral'),
-      element('span',{text:snapshot?.status || (pending ? 'Preparing' : 'Ready')})
+      element('span',{text:offline ? 'Offline · saved state'
+        : snapshot?.status || (pending ? 'Preparing' : 'Ready')})
     ])
   ]);
   const quickActions = element('div',{class:'code-progress-actions',role:'group',
     'aria-label':'Open related coding tools'},[
+    ...(state.product?.codingOnly ? [
+      button('Review changes',()=>inspectArea('changes'),'code-progress-action'),
+      button('Inspect tests',()=>inspectArea('tests'),'code-progress-action'),
+      button('Agent activity',()=>inspectArea('agents'),'code-progress-action')
+    ] : []),
     button('Chat files',()=>get('chatViewFiles')?.click(),'code-progress-action'),
     button('Terminal',()=>get('openTerminal')?.click(),'code-progress-action')
   ]);
@@ -59,7 +74,7 @@ export function renderCodingProgress(host, run, { surface = 'normal-chat', pendi
   }
   const meter = element('progress',{
     class:'code-progress-meter',value:snapshot.completed,max:snapshot.recorded,
-    'aria-label':'Recorded workflow steps completed'
+    'aria-label':'Completed steps among currently recorded work (not full task completion)'
   });
   const facts = element('div',{class:'code-progress-facts'},[
     element('span',{text:snapshot.progressLabel}),
