@@ -172,7 +172,8 @@ export function renderThread() {
   // The workspace bar shows what this chat's situation needs now.
   syncAdaptiveWorkspace();
   renderCodingProgress($('codingProgressPanel'), state.run, {
-    surface: state.activeSurface, pending: Boolean(state.chat.pending)
+    surface: state.activeSurface, pending: Boolean(state.chat.pending),
+    offline: state.network?.online === false || state.network?.reachable === false
   });
   updateThreadJump();
   document.dispatchEvent(new Event('kindgleam:composer-state'));
