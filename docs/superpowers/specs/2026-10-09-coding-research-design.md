@@ -5,7 +5,7 @@ Agreed design • implementation requested 9 October 2026
 
 KG is a dedicated work system for coding, research papers and thesis work. The user has explicitly removed daily conversation, general chat and generic file-assistant work from the product scope.
 
-The product has two distinct workspaces, Coding and Research, each with its own workflow engine and project work chats. Chat is how users direct domain work; there is no everyday-chat workspace. Files remain essential inputs and outputs: repositories, papers, datasets, manuscripts, figures and experiment artifacts. Planning, brainstorming, architecture discussion and research-question development are native work in both project types.
+The product has two distinct workspaces, Coding and Research, each with its own control engine and project work chats. Chat is how users direct domain work; there is no everyday-chat workspace. Files remain essential inputs and outputs: repositories, papers, datasets, manuscripts, figures and experiment artifacts. Planning, brainstorming, architecture discussion and research-question development are native work in both project types.
 
 Success means users can resume projects, produce verified code, and develop research deliverables whose claims and results can be traced to sources and experiments. The goal is to serve these workflows well, with their own measurable quality criteria.
 
@@ -133,7 +133,7 @@ Support proposal, introduction, literature review, methods, results, discussion,
 
 ## Research figures and images
 
-Add a Research figure-and-image specialist for figures, plots, mathematical diagrams, conceptual models, image panels, graphical abstracts and manuscript placement. It works inside ResearchEngine and shares the research project's evidence and method contracts.
+Add a Research figure-and-image specialist for figures, plots, mathematical diagrams, conceptual models, image panels, graphical abstracts and manuscript placement. It works inside ResearchControlEngine and shares the research project's evidence and method contracts.
 
 Treat four cases separately: data-backed plots; mathematical/conceptual diagrams; inspected source images; and illustrative artwork. Charts and numerical figures are produced with deterministic plotting/rendering tools from recorded data or equations. Generated illustration cannot stand in for experimental measurements, microscopy, observations or results.
 
@@ -145,11 +145,11 @@ Inspect the rendered artifact: labels and equations, axes and scale, legends, fi
 
 Preserve original imported images and their source attribution. Record cropping, contrast adjustments, resizing, annotations and other transformations, keeping the original available. Image-derived measurements require a documented extraction method and accuracy limits; do not report them as original numerical data without checking.
 
-ResearchEngine can use bounded image-generation/editing support for clearly identified illustrative needs, such as a conceptual graphical abstract. Record the origin and transformations. It must not fabricate or replace research evidence. Avoid launching image generation when an exact diagram or plotted dataset is the required deliverable.
+ResearchControlEngine can use bounded image-generation/editing support for clearly identified illustrative needs, such as a conceptual graphical abstract. Record the origin and transformations. It must not fabricate or replace research evidence. Avoid launching image generation when an exact diagram or plotted dataset is the required deliverable.
 
 Maintain a figure register with stable figure IDs, artifact versions, manuscript placement and caption references. Changing data or analysis invalidates affected figures and claims. Distinct figures can be rendered concurrently; shared manuscript edits and figure-number changes go through an integration step.
 
-This is research-focused visual work, not a generic image assistant. CodingEngine can create or inspect visual assets needed for software within its own project authority.
+This is research-focused visual work, not a generic image assistant. CodingControlEngine can create or inspect visual assets needed for software within its own project authority.
 
 ## Research integrity repairs
 
@@ -167,7 +167,7 @@ Use capable models from the verified configured deployment catalog for difficult
 
 Show useful statuses: reading, editing, testing, checking sources, needs input, blocked and complete. Required verification cannot silently disappear because a budget is exhausted. Report partial work and remaining checks instead.
 
-A finished CodingEngine task requires the relevant acceptance checks. A finished source-dependent ResearchEngine task requires traceable support and honest treatment of unresolved evidence. High-quality academic evaluation also needs subject expertise beyond mechanical citation checks.
+A finished CodingControlEngine task requires the relevant acceptance checks. A finished source-dependent ResearchControlEngine task requires traceable support and honest treatment of unresolved evidence. High-quality academic evaluation also needs subject expertise beyond mechanical citation checks.
 
 ## Maturity and speed
 
@@ -194,7 +194,7 @@ Measure time to first useful output, total completion time, p50/p95 latency, rec
 
 Strengthen KG's native runtime. The reviewed repository already provides a model/agent harness, conflict-aware execution waves, project/subsystem contracts, typed handoffs, an encrypted versioned blackboard and server-owned jobs with leases.
 
-A framework migration would add a second set of state and scheduling abstractions during an already substantial product change. A fully decentralized mesh would make resource ownership and verification harder. Keep one authority per run, owned by its CodingEngine or ResearchEngine, and improve the existing shared primitives. No run is controlled by both engines.
+A framework migration would add a second set of state and scheduling abstractions during an already substantial product change. A fully decentralized mesh would make resource ownership and verification harder. Keep one authority per run, owned by its CodingControlEngine or ResearchControlEngine, and improve the existing shared primitives. No run is controlled by both engines.
 
 | Responsibility | Existing boundary | Required change |
 | --- | --- | --- |
@@ -310,8 +310,8 @@ Every loop needs a finite step/attempt ceiling, deadline and overall token/cost 
 
 ```mermaid
 flowchart TD
-  U["Choose workspace"] --> C["CodingEngine"]
-  U --> R["ResearchEngine"]
+  U["Choose workspace"] --> C["CodingControlEngine"]
+  U --> R["ResearchControlEngine"]
   C --> CG["Coding task graph"]
   R --> RG["Research task graph"]
   CG --> CW["Coding workers"]
@@ -371,14 +371,14 @@ Do not drop historical database migrations or remove user data as a shortcut to 
 | --- | --- | --- |
 | 1. Scope cleanup | Enforce coding/research scope; remove Normal Chat, daily reminders, generic business tools and obsolete callers; introduce two workspace destinations | Scope acceptance/decline checks; import/registration checks; supported data/history migration |
 | 2. Evidence integrity | Repair sourceKeys handling, durable source retention and claim support status | Both reproduced defects covered; unsupported/dangling claims detected |
-| 3. Engines and user understanding | Separate CodingEngine/ResearchEngine contracts, state/queue partitions and task understanding; conditional brainstorming/planning | Isolation under concurrent work; clear tasks proceed; ambiguous tasks get relevant assistance |
+| 3. Engines and user understanding | Separate CodingControlEngine/ResearchControlEngine control contracts, scoped graph/context and logical shared-queue partitions; conditional brainstorming/planning | Isolation under concurrent work; clear tasks proceed; ambiguous tasks get relevant assistance |
 | 4. Harness and persistence | Enforced invocation contract, recorded outcomes, leases, cancellation and resume | Crash/resume, duplicate delivery and late-result cases preserve correct state |
 | 5. Graph and local agents | Typed task contracts, ready frontier, scoped workers and resource-aware integration | Dependency correctness; serial/parallel equivalence where expected; conflict rejection |
 | 6. Communication and loops | Durable internal messages, acknowledgments, revision checks and bounded recovery | Duplicates/stale messages rejected; failures trigger targeted repair; loops terminate |
 | 7. External A2A | Standards adapter for separately deployed agents | Pinned-version interoperability, identity/scope checks, streaming/cancellation and acceptance mapping |
 | 8. Domain delivery and evaluation | Repository tasks, mathematics/statistics checks, research figures/manuscripts and experiment reproduction | Independent tests, numerical/figure receipts, claim audits, live outputs and measured quality/cost/latency |
 
-Start with one real coding task in CodingEngine and one source-grounded research task in ResearchEngine as end-to-end vertical slices. Expand by observed failures and acceptance evidence. Avoid implementing every specialist capability before either slice works.
+Start with one real coding task in CodingControlEngine and one source-grounded research task in ResearchControlEngine as end-to-end vertical slices. Expand by observed failures and acceptance evidence. Avoid implementing every specialist capability before either slice works.
 
 Preserve identifiers, permissions, task history and source revisions. Roll out two-workspace navigation reversibly while migrations and scope checks are validated. The detailed implementation plan should name the actual affected callers, schema changes and checks for each stage.
 
@@ -409,7 +409,7 @@ Additional acceptance cases cover domain enforcement: in-scope paraphrases and t
 
 Math/statistics cases cover known symbolic solutions and excluded roots, units and limiting cases, ill-conditioned numerical problems, missing data, inappropriate test assumptions and reproducible dataset analysis. Check recorded results against independent reference fixtures; do not grade mathematical correctness by keyword presence.
 
-Workspace/engine isolation tests must exercise simultaneous CodingEngine and ResearchEngine runs, switching the visible workspace, cancellation, queue capacity, message routing, cache/memory isolation and explicit artifact transfers. Assert that one engine cannot read or modify the other's project resources without the checked handoff path.
+Workspace/engine isolation tests must exercise simultaneous CodingControlEngine and ResearchControlEngine runs, switching the visible workspace, cancellation, queue capacity, message routing, cache/memory isolation and explicit artifact transfers. Assert that one engine cannot read or modify the other's project resources without the checked handoff path.
 
 Figure evaluation uses reference datasets/equations, caption and manuscript-link checks, rendered inspection and export checks. Include misleading scales, stale analysis, overlapping labels, unreadable sizing, uncertainty omission and illustrative imagery mistakenly presented as empirical evidence.
 
