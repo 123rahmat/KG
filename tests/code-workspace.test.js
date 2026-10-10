@@ -155,3 +155,35 @@ test('combined Code Workspace file collisions are never silently overwritten', a
   ]).catch(error => error);
   assert.equal(result?.code, 'workspace-file-conflict');
 });
+
+test('coding workspace patch rejects stale base revisions without touching other source files', async () => {
+  const { workspaceContentHash } = await import('../src/code-workspace.js');
+  const files = [{ path: 'src/app.js', content: 'export const build = 1;' },
+    { path: 'tests/app.test.js', content: 'test placeholder' }];
+  const base = workspaceContentHash(files);
+  const changed = applyWorkspacePatch(files, [{ path: 'src/app.js', kind: 'modified',
+    after: 'export const build = 2;' }], { expectedContentHash: base });
+  assert.equal(changed[0].content, 'export const build = 2;');
+  assert.equal(changed[1].content, files[1].content);
+  assert.throws(() => applyWorkspacePatch(files, [{ path: 'src/app.js', kind: 'modified',
+    after: 'export const build = 9;' }], { expectedContentHash: 'different' }),
+  error => error.code === 'stale-workspace');
+});
+
+test('coding workspace patch protects secrets and rejects ambiguous duplicate or invalid paths', () => {
+  for (const path of ['.env', '.env.production', 'secrets.json',
+    'config/service-account.json', 'config/credentials.yaml',
+    '.npmrc', 'keys/deploy.pem']) {
+    assert.throws(() => applyWorkspacePatch([], [{ path, content: 'do-not-write' }]),
+      /credential or private-key/, path);
+  }
+  for (const path of ['.env.example', 'src/project.js', 'package.json']) {
+    assert.doesNotThrow(() => applyWorkspacePatch([], [{ path, content: 'ok' }]), path);
+  }
+  assert.throws(() => applyWorkspacePatch([], [
+    { path: 'src/app.js', content: 'first' }, { path: 'src/app.js', content: 'second' }
+  ]), /duplicate path/);
+  for (const path of ['../outside.js', '/root.js', 'src/../other.js']) {
+    assert.throws(() => applyWorkspacePatch([], [{ path, content: 'bad' }]), /invalid path/);
+  }
+});
