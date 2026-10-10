@@ -25,29 +25,48 @@ const boundedInt = (value, fallback, max = ABSOLUTE_MAX_PARALLEL) => {
   return Number.isFinite(n) ? Math.max(1, Math.min(max, Math.floor(n))) : fallback;
 };
 
+/**
+ * Resource paths are hierarchical. Treat a directory writer and any descendant
+ * reader/writer as conflicting; unrelated path segments do not conflict.
+ * Non-path locks are exact identifiers, never substring matches.
+ */
+export function resourceScopesOverlap(left, right) {
+  const normalize = value => text(value).replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');
+  const a = normalize(left);
+  const b = normalize(right);
+  return Boolean(a && b && (a === b || a.startsWith(b + '/') || b.startsWith(a + '/')));
+}
+
 const writeResourcesOf = item => {
   const metadata = item?.metadata ?? item ?? {};
-  return new Set([
-    ...list(metadata.writeSet),
-    ...list(metadata.mutates)
-  ]);
+  return new Set([...list(metadata.writeSet), ...list(metadata.mutates)]);
 };
-
 const readResourcesOf = item => {
   const metadata = item?.metadata ?? item ?? {};
-  return new Set([
-    ...list(metadata.readSet),
-    ...list(metadata.reads)
-  ]);
+  return new Set([...list(metadata.readSet), ...list(metadata.reads)]);
 };
-
 const lockResourcesOf = item => {
   const metadata = item?.metadata ?? item ?? {};
-  return new Set([
-    ...list(metadata.resourceLocks),
-    ...list(metadata.resources)
-  ]);
+  return new Set([...list(metadata.resourceLocks), ...list(metadata.resources)]);
 };
+
+export function dependencySatisfied(dependency) {
+  if (!dependency) return false;
+  if (dependency.status === 'complete') {
+    // An explicitly acceptance-gated task cannot unlock dependents from
+    // model assertions or completion status alone.
+    if (dependency.metadata?.acceptanceRequired === true) {
+      return dependency.acceptance?.status === 'accepted'
+        || dependency.evidence?.acceptance?.status === 'accepted';
+    }
+    return true;
+  }
+  // A skipped mandatory check is NEVER the equivalent of a passed check.
+  // Explicit optional waivers require a recorded approval, not a model hint.
+  return dependency.status === 'skipped'
+    && dependency.metadata?.required === false
+    && dependency.metadata?.waiverApproved === true;
+}
 
 export function taskCanRunInParallel(task = {}) {
   const metadata = task?.metadata ?? {};
@@ -67,14 +86,14 @@ export function tasksConflict(a = {}, b = {}) {
   const leftLocks = lockResourcesOf(a);
   const rightLocks = lockResourcesOf(b);
 
-  // Shared locks/resources are explicit serialization points even for readers.
-  for (const value of leftLocks) if (rightLocks.has(value)) return true;
-  // Writers cannot race each other or a reader of the same resource.
+  // Named locks serialize exact matches; file and directory resources use
+  // prefix-aware overlap so src/ conflicts with src/routes/run.js.
+  for (const value of leftLocks) if ([...rightLocks].some(other => resourceScopesOverlap(value, other))) return true;
   for (const value of leftWrites) {
-    if (rightWrites.has(value) || rightReads.has(value)) return true;
+    if ([...rightWrites, ...rightReads].some(other => resourceScopesOverlap(value, other))) return true;
   }
   for (const value of rightWrites) {
-    if (leftReads.has(value)) return true;
+    if ([...leftReads].some(other => resourceScopesOverlap(value, other))) return true;
   }
   return false;
 }
@@ -86,7 +105,7 @@ export function readyTasks(tasks = []) {
     task?.status === 'pending'
     && (task.dependsOn ?? []).every(id => {
       const dependency = byId.get(id);
-      return dependency?.status === 'complete' || dependency?.status === 'skipped';
+      return dependencySatisfied(dependency);
     })
   );
 }
@@ -360,10 +379,10 @@ export function workspaceLanesConflict(a = {}, b = {}) {
   // Writes conflict with writes and with reads of the same path. This keeps
   // analysis lanes from observing a partially integrated mutation.
   for (const path of leftWrites) {
-    if (rightWrites.has(path) || rightReads.has(path)) return true;
+    if ([...rightWrites, ...rightReads].some(other => resourceScopesOverlap(path, other))) return true;
   }
   for (const path of rightWrites) {
-    if (leftReads.has(path)) return true;
+    if ([...leftReads].some(other => resourceScopesOverlap(path, other))) return true;
   }
 
   // A writer with no explicit read set is still safe against disjoint writers;
