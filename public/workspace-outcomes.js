@@ -2,6 +2,8 @@
  * UI-only outcome report. Every number comes from persisted run evidence.
  * It neither infers model intent nor claims unperformed execution or tests.
  */
+import { codingProgressSnapshot } from './coding-progress-model.js';
+
 const array = value => Array.isArray(value) ? value : [];
 const number = value => Number.isFinite(Number(value)) && Number(value) > 0
   ? Math.floor(Number(value)) : 0;
@@ -26,7 +28,8 @@ export function workspaceOutcomeSummary(run, domain) {
   const tasks = array(run.tasks);
   const completed = tasks.filter(task => task?.status === 'complete').length;
   const failed = tasks.filter(task => ['failed', 'blocked'].includes(task?.status)).length;
-  const verified = tasks.filter(successfulVerification).length;
+  const verified = domain === 'code' ? (codingProgressSnapshot(run)?.verified === true ? 1 : 0)
+    : tasks.filter(successfulVerification).length;
   const specialists = new Set(tasks.flatMap(task => array(task?.evidence?.multiAgent?.agentStates))
     .filter(agent => agent?.status === 'complete' && agent?.role && agent.role !== 'arbiter')
     .map(agent => value(agent.role)));
@@ -45,7 +48,7 @@ export function workspaceOutcomeSummary(run, domain) {
     if (verified) facts.push(countLabel(verified, 'passing verification'));
     if (tests.length && !receipts.length) notes.push('Test steps were recorded; an authenticated runner receipt was not found in this view.');
     if (!paths.length) notes.push('No applied file-change path was recorded in the work summary.');
-    if (!verified) notes.push('No passing final verification verdict was recorded.');
+    if (!verified) notes.push('No authenticated passing test receipt and final verification together were confirmed.');
   } else {
     const evidence = run?.adaptation?.researchWorkspace ?? {};
     const sources = number(evidence.sourceCount ?? array(evidence.sourceSet).length);
