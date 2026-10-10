@@ -44,8 +44,6 @@ export function codingProgressSnapshot(run) {
     task?.type === 'verify' || task?.id === 'verify' ? i : index, -1);
   const candidate = tasks[lastVerifyIndex];
   const verdict = candidate?.evidence?.verdict;
-  const requiredChecks = tasks.filter(task =>
-    task?.id === 'test-code' || task?.type === 'test-code');
   const testTasks = tasks.filter(task => task.id === 'test-code' || task.type === 'test-code');
   const testWithReceipt = [...testTasks].reverse().find(task =>
     task?.executionReceipt?.serverAuthenticated === true
@@ -62,6 +60,17 @@ export function codingProgressSnapshot(run) {
     task?.id === 'build-code' || task?.type === 'build-code' ? i : index,-1);
   const lastTestIndex = tasks.lastIndexOf(testWithReceipt);
   const retestRequired = lastBuildIndex > lastTestIndex && lastBuildIndex >= 0;
+  // A recorded failure in a previous repair iteration must not permanently
+  // block a later authenticated green run. Only work at/after the latest
+  // passing receipt can invalidate its final verification.
+  const afterReceipt = lastTestIndex >= 0 ? tasks.slice(lastTestIndex + 1) : tasks;
+  const isCheckOrBuild = task => ['build-code','test-code'].includes(task?.id)
+    || ['build-code','test-code'].includes(task?.type);
+  const unresolvedAfterReceipt = afterReceipt.some(task =>
+    ['failed','blocked','stale','running'].includes(task?.status)
+    || (isCheckOrBuild(task) && !['complete','skipped'].includes(task?.status))
+  );
+  const latestTestTask = testTasks.at(-1) ?? null;
   const passingTestReceipt = Boolean(testCounts && testCounts.passed === testCounts.total
     && testCounts.failed === 0 && testWithReceipt?.status === 'complete'
     && lastTestIndex >= lastBuildIndex);
@@ -71,8 +80,9 @@ export function codingProgressSnapshot(run) {
     && passingTestReceipt
     && candidate.status === 'complete'
     && (verdict?.verdict === 'pass' || verdict?.status === 'pass')
-    && !tasks.some(task => ['failed','blocked','stale','running'].includes(task?.status))
-    && requiredChecks.every(task => task.status === 'complete')
+    && !unresolvedAfterReceipt
+    && lastVerifyIndex >= lastTestIndex
+    && latestTestTask === testWithReceipt
     && !tasks.slice(lastVerifyIndex+1).some(task =>
       ['build-code','test-code'].includes(task?.id) ||
       ['build-code','test-code'].includes(task?.type));
@@ -105,13 +115,13 @@ export function codingProgressSnapshot(run) {
     });
   });
   const testState = retestRequired && testWithReceipt ? 'Code changed · rerun tests'
-    : testTasks.some(task => ['failed','blocked','stale'].includes(task.status))
-    ? 'Test step failed or stale'
-    : testTasks.some(task => task.status === 'running') ? 'Test step running'
-    : testTasks.some(task => ['pending','queued','waiting'].includes(task.status))
-      ? 'Test step pending'
+    : ['failed','blocked','stale'].includes(latestTestTask?.status) ? 'Test step failed or stale'
+    : latestTestTask?.status === 'running' ? 'Test step running'
+    : ['pending','queued','waiting'].includes(latestTestTask?.status) ? 'Test step pending'
+    : latestTestTask && latestTestTask !== testWithReceipt
+      ? 'Latest test step recorded · counts unconfirmed'
     : testCounts ? `${testCounts.passed} passed · ${testCounts.failed} failed · ${testCounts.total} total (receipt)`
-    : testTasks.some(task => task.status === 'complete') ? 'Test step recorded · counts unconfirmed'
+    : latestTestTask?.status === 'complete' ? 'Test step recorded · counts unconfirmed'
     : 'No test step recorded';
   return Object.freeze({
     runId:safe(run.id,120),status,tone,headline,terminal,verified,
