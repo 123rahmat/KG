@@ -52,9 +52,12 @@ test('each step is sent only the rules that apply to it', () => {
   const all = ['respond', 'verify', 'understand', 'discover-capabilities', 'plan', 'step', 'reassess', 'prototype', 'code']
     .map(type => systemPromptFor({ task: { type, id: type === 'code' ? 'build-code' : type, method: 'invention' }, run: { workflow: 'full', situation: { risk: 'crisis', ethics: {} }, adaptation: { notAvailableHere: ['simulation'], codeNotRun: { language: 'go', reason: 'Not run: Go is not turned on' } } }, payload: { adaptation: { codeNotRun: { language: 'go' } }, attachments: [1], conversation: [1], previousAttempts: [1], remembered: [1], codeRepair: {} } })).join(' ');
   const researchAnswer = systemPromptFor({task:{type:'deliver'},run:{surface:'research',workflow:'full'},payload:{}});
+  const ventureRun={surface:'code',workflow:'full',goal:'Brainstorm a new startup app and build an MVP',situation:{}};
+  const ventureExplore=systemPromptFor({task:{type:'step',ventureDiscovery:true},run:ventureRun,payload:{}});
+  const ventureBuildPlan=systemPromptFor({task:{type:'plan',buildPlan:true},run:ventureRun,payload:{}});
   const buildPlan = systemPromptFor({ task: { type: 'plan', buildPlan: true }, run: {}, payload: {} });
   assert.doesNotMatch(buildPlan, /at most ONE first useful work step/, 'a build plan is not a workflow plan');
-  for (const [when, rule] of PROMPT_RULES) assert.ok(`${all} ${researchAnswer} ${buildPlan}`.includes(rule), `rule "${when}" reaches no step: ${rule.slice(0, 60)}`);
+  for (const [when, rule] of PROMPT_RULES) assert.ok(`${all} ${researchAnswer} ${ventureExplore} ${ventureBuildPlan} ${buildPlan}`.includes(rule), `rule "${when}" reaches no step: ${rule.slice(0, 60)}`);
 });
 
 test('answers the person reads are result first with main points; working steps stay brief', () => {
@@ -106,4 +109,15 @@ test('unrelated Research synthesis does not pay for code-generation prompting',(
   assert.match(code,/Code: write clear, secure code with tests/);
   const directCode=systemPromptFor({task:{type:'respond'},run:{surface:'normal-chat',workflow:'direct',goal:'Write a Python script',situation:{}},payload:{}});
   assert.match(directCode,/Code: write clear, secure code with tests/);
+});
+
+test('venture ideation and business build planning load their specialist rules only when applicable',()=>{
+  const run={surface:'code',workflow:'full',goal:'Brainstorm startup ideas then build the MVP',situation:{}};
+  assert.match(systemPromptFor({task:{id:'step',type:'step',ventureDiscovery:true},run,payload:{}}),
+    /Idea discovery before building/);
+  assert.match(systemPromptFor({task:{id:'plan',type:'plan',buildPlan:true},run,payload:{}}),
+    /Idea-to-build handoff/);
+  const plain=systemPromptFor({task:{id:'build-code',type:'code'},run:{
+    surface:'code',workflow:'full',goal:'Fix a cache bug',situation:{}},payload:{}});
+  assert.doesNotMatch(plain,/Idea discovery before building|Idea-to-build handoff/);
 });

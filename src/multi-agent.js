@@ -33,6 +33,7 @@ import { agentWaveEconomy, optionalAgentStopDecision } from './agent-quality-eco
 import { normalizeAgentResourceRequests, summarizeDelegationRequests, distributeSubagentCapacity } from './agent-resource-delegation.js';
 import { peerHandoffsFor } from './agent-peer-handoffs.js';
 import { explainAgentSelection } from './agent-selection-rationale.js';
+import { VENTURE_AGENTS, ventureIntent, ventureRolePriority, ventureRoleScore, ventureRoleAssignment } from './venture-ideation.js';
 import { compileOpenWorldSpecialistBrief, openWorldResearchPriority } from './open-world-specialist-bridge.js';
 
 export const MULTI_AGENT_MODES = Object.freeze(['auto', 'always', 'off']);
@@ -49,6 +50,7 @@ const MIN_ROLE_UTILITY = 0.25;
 const ROLE_REDUNDANCY_PENALTY = 0.08;
 
 const ROLE_CATALOG = Object.freeze({
+  ...VENTURE_AGENTS,
   'idea-explorer': {
     purpose: 'Generate diverse, concrete possibilities under the user constraints. Separate exploration from endorsement, avoid repeating the same idea in new words, and preserve user choice.',
     bestFor: ['plan', 'understand', 'respond', 'step', 'design']
@@ -473,6 +475,12 @@ export function multiAgentDecision(run, task, { mode = 'auto', progress = {} } =
   if (maturity?.independentVerificationRequired && maturityPressure >= 0.65 && task?.type !== 'deliver') {
     return { enabled: true, adaptiveAuthority, reason: 'real-world-maturity-justified', pressure, maturity };
   }
+  if (task?.metadata?.ventureDiscovery===true
+      && ventureIntent({goal:run?.goal,surface:explicitSurface}).enabled
+      && (remainingSpecialistBudget(run) === null || remainingSpecialistBudget(run) >= .12)) {
+    return { enabled:true,reason:'explicit-venture-ideation-phase',
+      pressure:Math.max(pressure,.44),maturity,adaptiveAuthority };
+  }
   if (pressure >= AUTO_PANEL_THRESHOLD) return { enabled: true, reason: 'adaptive-value-justified', pressure, maturity, adaptiveAuthority };
   return { enabled: false, reason: 'single-agent-sufficient', pressure, maturity, adaptiveAuthority };
 }
@@ -531,9 +539,14 @@ function roleUtility(role, run, task, progress = {}, precomputed = null) {
     goal: progress?.goal ?? run?.goal,
     task
   });
+  const ventureUtility = ventureRoleScore(role,{
+    goal:progress?.goal??run?.goal,
+    surface:run?.surface||run?.adaptation?.primarySurface,
+    task,run
+  });
   const learningBoost = run?.adaptation?.learning?.caution === true
     && ['critic', 'debugger', 'test-engineer'].includes(role) ? 0.12 : 0;
-  return Math.max(0, Math.min(1.2, Math.max(base, domainUtility) + disagreementBoost + learningBoost - resolutionPenalty - (completed.has(role) ? 1 : 0)));
+  return Math.max(0, Math.min(1.2, Math.max(base, domainUtility, ventureUtility) + disagreementBoost + learningBoost - resolutionPenalty - (completed.has(role) ? 1 : 0)));
 }
 
 function roleCandidates(run, task, progress = {}, precomputed = null) {
@@ -599,6 +612,11 @@ export function rolesFor(run, task, {
   if (matchingLeads.length >= 2) {
     targetCount = Math.min(maximum,Math.max(targetCount,
       matchingLeads.length + (signals.executable ? 1 : 0)));
+  }
+  const ventureRoles = ventureRolePriority({goal:selectedGoal,surface:selectedSurface,task,run});
+  if(task?.metadata?.ventureDiscovery===true && ventureRoles.length>=3
+    && decision.pressure>=.34 && (remainingSpecialistBudget(run)===null || remainingSpecialistBudget(run)>=.38)) {
+    targetCount=Math.min(maximum,Math.max(targetCount,3));
   }
   const dynamicSpecialists = taskSpecialistCandidates({
     surface:selectedSurface,goal:selectedGoal,task,
@@ -669,6 +687,7 @@ export function rolesFor(run, task, {
   const requiredRoles = [
     ...((researchTeams?.teams ?? []).map((team, index) => [true, team.leadRole, 2.8 - index * .02])),
     ...matchingDomainExperts.map(item=>[true,item.role,2.55+item.score*.1]),
+    ...ventureRoles.map((role,index)=>[true,role,2.62-index*.04]),
     [openWorldResearchPriority(run, task) && !signals.executable, 'researcher', 1.9],
     [signals.securityFocus && signals.executable, 'security-reviewer', signals.stakes > 0 ? 3 : 2],
     [signals.retrying && signals.executable, 'debugger', 2],
@@ -937,6 +956,12 @@ export function agentMessages(role, basePayload) {
         taskSpecialization: taskSpecialization(role, basePayload),
         specialtyFocus,
         familySubagents,
+        ventureAssignment: ventureRoleAssignment(role,{
+          goal:basePayload?.goal,
+          surface:specialtyFocus.workspace,
+          task:basePayload?.task??{},
+          run:{tasks:basePayload?.workPlan?.steps??[]}
+        }),
         subagentFindings: Array.isArray(basePayload?.subagentFindings)
           ? basePayload.subagentFindings.slice(0,2) : [],
         openWorldAssignment,

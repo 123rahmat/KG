@@ -1757,7 +1757,8 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         purpose: task.purpose,
         requirementIds: task.metadata?.requirementIds ?? [],
         ...(task.metadata?.inventionLoop ? { method: 'invention' } : {}),
-        ...(task.metadata?.buildPlan ? { buildPlan: true, existingCodePlan: task.metadata?.existingCodePlan === true } : {})
+        ...(task.metadata?.buildPlan ? { buildPlan: true, existingCodePlan: task.metadata?.existingCodePlan === true } : {}),
+        ...(task.metadata?.ventureDiscovery ? { ventureDiscovery:true } : {})
       },
       // What the plan can shape: the stages still ahead.
       stagesAhead: task.type === 'plan' ? run.tasks.filter(item => item.status === 'pending' && item.id !== task.id).map(item => ({ id: item.id, type: item.type, purpose: item.purpose })) : null,

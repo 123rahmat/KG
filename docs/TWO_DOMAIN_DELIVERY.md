@@ -168,3 +168,35 @@ horizontal progress rail. For research, the main evidence reader prioritizes
 source-ledger facts, tables and linked sources while suppressing the duplicate
 prose already represented by the evidence ledger. It does not invent text,
 figures, citations, terminal output or work that did not execute.
+
+## Business / Idea-to-product agent path
+
+Business and creative venture requests stay within the existing **Research**
+and **Coding** agentic domains (Normal Chat remains direct). The server detects
+explicit idea discovery/validation requests rather than recruiting a permanent
+business team on every ordinary code or business question.
+
+For a venture-led Coding build, the same server-owned incremental graph
+creates a single **Explore and test the idea** step after understanding (and
+essential clarifications) and before the existing code-plan agreement gate.
+That task compares at least three distinct solution directions, maps customer
+needs, tests feasibility and identifies the smallest falsifiable experiment.
+Its saved evidence is available to the downstream coding plan. Once the
+exploration is complete, the server moves to the original build-plan approval,
+then only after explicit user agreement can code generation take place. For
+Research-only venture work, an evidence investigation and answer follow where
+needed, **without inventing a code build**. Explicit "just build it" requests,
+ordinary bug fixes and non-venture chats skip the extra idea stage.
+
+Available task-scoped advisory main specialists include venture ideation,
+customer discovery, business model, market validation, feasibility and
+product MVP leads. Each has a larger vocabulary of child expertise but the
+actual team size and selected child skills remain bounded by current need,
+provider budget and the parent orchestration policy. These specialists do not
+invoke tools or approve financial, external or software mutations.
+
+The existing UI displays the named idea checkpoint and later build stages;
+read-only main-area summaries derive from recorded work. The step-progress
+"Why now" panel explicitly distinguishes hypothesis exploration from executed
+validation or approved implementation. Unknown demand, revenue or market
+figures are labeled assumptions until established by authorized sources.

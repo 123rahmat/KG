@@ -26,7 +26,11 @@ export function nextWorkDecision(run){
   const next=tasks.find(item=>safe(item?.id,120)===id);
   if(!next || ['complete','failed','skipped','blocked'].includes(next.status))return null;
   const kind=['build-code','test-code'].includes(id)?id:safe(next.type)||id;
-  const [why,how]=GUIDE[kind]||[
+  const venture=next.metadata?.ventureDiscovery===true;
+  const [why,how]=venture
+    ? ['Alternative ideas need a testable, user-relevant choice before a product is planned or built.',
+       'Compare distinct ideas, customer needs, assumptions and feasibility; choose a small validation experiment without claiming it ran.']
+    : GUIDE[kind]||[
     'The server selected this next recorded task.',
     'Work within the task permissions and verify the resulting evidence.'
   ];

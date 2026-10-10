@@ -33,3 +33,15 @@ test('approval stays human controlled',()=>{
   assert.equal(item.action,'Action needed');
   assert.match(item.how,/approval/);
 });
+
+test('venture discovery progress explains decision and approach before any build is claimed',()=>{
+  const snapshot={state:'running',next:'step',tasks:[
+    {id:'understand',type:'understand',status:'complete'},
+    {id:'step',type:'step',status:'pending',metadata:{
+      title:'Explore and test the idea',ventureDiscovery:true}}
+  ]};
+  const decision=nextWorkDecision(snapshot);
+  assert.match(decision.why,/Alternative ideas/);
+  assert.match(decision.how,/customer needs/);
+  assert.equal(decision.speculative,false);
+});
