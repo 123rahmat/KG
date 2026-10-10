@@ -6,8 +6,10 @@
  * permission or a substitute for server-side route enforcement.
  */
 const value = item => String(item ?? '').trim();
-const CODE = /\b(?:cod(?:e|ing)|program(?:ming)?|software|application|app|website|webapp|frontend|backend|full[- ]stack|api|endpoint|database|sql|postgres(?:ql)?|script|javascript|typescript|python|java|rust|react|node(?:js)?|git(?:hub)?|repository|repo|commit|pull request|compiler|algorithm|runtime|test(?:s|ing)?|debug(?:ging)?|bug(?:s)?|fix|refactor|deploy(?:ment)?|docker|kubernetes|microservices|package|dependency|ui|ux|css|html)\b/i;
+const CODE = /\b(?:cod(?:e|ing)|program(?:ming)?|software|application|app|website|webapp|frontend|backend|full[- ]stack|api|endpoint|database|sql|postgres(?:ql)?|script|javascript|typescript|python|java|rust|react|node(?:js)?|git(?:hub)?|repository|repo|commit|pull request|compiler|algorithm|runtime|test suite|unit tests|debug(?:ging)?|software bugs?|refactor|deploy(?:ment)?|docker|kubernetes|microservices|package|dependency|ui|ux|css|html)\b/i;
 const RESEARCH = /\b(?:research|thes(?:is|es)|thsis|dissertation|academi\w*|scholarly|journal|peer[- ]review|literature review|systematic review|meta[- ]analysis|study design|experimental design|experiment|methodology|qualitative|quantitative|mixed[- ]methods?|theoretical framework|conceptual framework|hypothes(?:is|es)|bibliograph\w*|citation\w*|doi|manuscript|abstract|introduction|discussion|results section|scientific paper|research paper|research question|data analys\w*|statistical analys\w*|statistical model|causal inference|fieldwork|ethnograph\w*|interviews? (?:study|coding|analysis)|mathematical proof|formal proof|equations? for (?:a |the )?(?:study|paper|model))\b/i;
+const SCHOLARLY_OUTPUT = /\\b(?:research paper|academic paper|scholarly (?:paper|article)|journal (?:article|manuscript)|thesis|dissertation|literature review|systematic review|research proposal|study protocol)\\b/i;
+const RESEARCH_CONTEXT = /\\b(?:for (?:my|our|the) (?:study|research|experiment|thesis|paper)|analy[sz]e (?:experimental|clinical|qualitative) (?:data|results))\\b/i;
 const CODE_ACTION = /\b(?:build|create|develop|write|implement|design|review|repair|fix|debug|test|explain|optimise|optimize|deploy|refactor|integrate|migrate|execute|compare|plan|architect|inspect|update|change|how|why)\b/i;
 const ACADEMIC_ACTION = /\b(?:draft|write|design|analyse|analyze|compare|review|investigate|study|explain|translate|edit|format|verify|summari[sz]e|derive|prove|calculate|plan|prepare|check|evaluate|visuali[sz]e|plot|find|formulate)\b/i;
 const UNRELATED = /\b(?:holiday|vacation|itinerary|tourist|travel (?:plans?|tips?)|book a restaurant|dinner reservation|weather forecast|horoscope|birthday wishes|romantic poem|remind me|set (?:an? )?alarm|daily (?:news|routine)|football score|match score|personal advice|health advice|recipe|cooking|pizza places)\b/i;
@@ -66,8 +68,12 @@ export function assessWorkDomain({
     });
   }
 
-  // Purpose decides domain: a holiday-planner API is software, while a
-  // tourism thesis studies travel without becoming a personal itinerary.
+  // The actual deliverable wins over subject words: a paper on an API is
+  // Research, and a research-lab application build is still Coding.
+  if (hasResearch && (SCHOLARLY_OUTPUT.test(text) || (RESEARCH_CONTEXT.test(text)
+    && !/\\b(?:build|implement|deploy)\\b.{0,90}\\b(?:application|app|software|api|website)\\b/i.test(text)))) {
+    return decision('in-scope', 'research', text, 'scholarly-deliverable');
+  }
   if (hasCode && (!hasResearch || explicitSoftware)) {
     return decision('in-scope', 'coding', text, 'software-deliverable');
   }
