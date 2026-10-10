@@ -41,3 +41,24 @@ test('files pane is hidden when viewing chat, and composer preserved on return',
   assert.match(css, /chat\[data-chat-view="files"\] #composer/);
   assert.match(css, /chat-files-panel\[hidden\]/);
 });
+
+test('Files tab uploads from the user device without requiring GitHub', () => {
+  assert.match(html, /id="chatFilesUploadInput" type="file"/);
+  assert.match(html, /id="chatFilesUpload">Upload files/);
+  assert.match(html, /GitHub is optional/);
+  assert.match(behavior, /fileToBase64\(file\)/);
+  assert.match(behavior, /type:'attachment'/);
+  assert.match(behavior, /source:'chat-upload'/);
+  assert.match(behavior, /addAttachments\(all, \{ focus:false \}\)/);
+  assert.match(behavior, /MAX_DEVICE_FILE_BYTES = 5 \* 1024 \* 1024/);
+  assert.match(behavior, /selectedChatUploadIds/);
+  assert.match(attachmentCode, /storedAttachmentIds/);
+  assert.match(attachmentCode, /selectedChatUploadIds\(\)/);
+});
+
+test('directly uploaded files can be selected for the next AI message', () => {
+  assert.match(behavior, /Use with next message/);
+  assert.match(behavior, /fileSelection\(\)\.add\(item\.id\)/);
+  assert.match(attachmentCode, /attachments: \[\.\.\.new Set\(\[\.\.\.submission\.storedAttachmentIds, \.\.\.attachments\]\)\]/);
+  assert.match(attachmentCode, /storedAttachmentIds: \[\.\.\.\(submission\.storedAttachmentIds \?\? \[\]\)\]/);
+});
