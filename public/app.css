@@ -5595,3 +5595,40 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
   font-size:.76rem; color:var(--ink-2); background:var(--softer);
 }
 .code-progress-agent-list > li > span:last-child { color:var(--muted); }
+
+/* Coding-only focused inspector: real tabpanels instead of an overwhelming
+   always-expanded developer dashboard. Preserve legacy multi-panel layouts. */
+.deep-workspace-shell[data-coding-focus="true"] .deep-workspace-section-grid {
+  grid-template-columns:minmax(0,1fr); gap:0; margin-top:10px;
+}
+.deep-workspace-shell[data-coding-focus="true"] .deep-workspace-section-grid[hidden] {
+  display:none !important;
+}
+.deep-workspace-shell[data-coding-focus="true"] .deep-workspace-nav {
+  gap:6px; padding-block:3px 12px; scroll-snap-type:x proximity;
+}
+.deep-workspace-shell[data-coding-focus="true"] .deep-workspace-nav button {
+  min-height:38px; padding-inline:13px;
+  border-radius:9px; scroll-snap-align:start;
+}
+.deep-workspace-shell[data-coding-focus="true"] .deep-workspace-nav button[aria-selected="true"] {
+  color:var(--accent); background:var(--accent-soft);
+  border-color:color-mix(in srgb,var(--accent) 30%,var(--line));
+}
+.deep-workspace-shell[data-coding-focus="true"] [role="tabpanel"] {
+  min-width:0; min-height:118px;
+}
+.deep-workspace-shell[data-coding-focus="true"] [role="tabpanel"][hidden] {
+  display:none !important;
+}
+.deep-workspace-shell[data-coding-focus="true"] .deep-workspace-section-grid > [role="tabpanel"] {
+  width:100%;
+}
+@media (max-width:760px) {
+  .deep-workspace-shell[data-coding-focus="true"] {
+    padding:9px; width:calc(100% - 16px); border-radius:14px;
+  }
+  .deep-workspace-shell[data-coding-focus="true"] .deep-workspace-nav button {
+    min-height:44px;
+  }
+}
