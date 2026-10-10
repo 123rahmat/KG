@@ -578,7 +578,23 @@ export function planGoal(goal, {
   }
 
   const intent = smallTalk ? { kind: 'chat', confidence: 1, signals: ['answer'] } : classifyIntent(value, situationContext);
-  const surfaceBoundary = classifySurfaceBoundary(value, { activeSurface, attachments, flags: analysis.flags, actions: analysis.goalModel?.actions ?? [] });
+  const detectedSurfaceBoundary = classifySurfaceBoundary(value, {
+    activeSurface, attachments, flags: analysis.flags, actions: analysis.goalModel?.actions ?? []
+  });
+  // The route + RunStore validated project ownership before supplying this
+  // override. Every policy/skill/plan branch must see the SAME controller
+  // instead of merely relabeling the final run after legacy chat planning.
+  const surfaceBoundary = ['code','research'].includes(enforcedControlSurface)
+    ? {
+        ...detectedSurfaceBoundary,
+        surface: enforcedControlSurface,
+        requested: enforcedControlSurface,
+        redirect: false,
+        transition: 'stay',
+        reason: 'authorized-project-controller',
+        workspace: surfaceRuntimePolicy(enforcedControlSurface).contract
+      }
+    : detectedSurfaceBoundary;
   // The three-workspace surface policy is the single routing authority.
   // Older adaptive heuristics may still describe capabilities, but they must
   // not override the chosen NormalChat / Code / Research operating boundary.
