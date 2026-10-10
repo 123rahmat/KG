@@ -1,7 +1,7 @@
 {
-  "name": "Kindgleam",
-  "short_name": "Kindgleam",
-  "description": "Adaptive AI for everyday work, software projects, and evidence-driven research.",
+  "name": "KG Code — AI Software Engineering",
+  "short_name": "KG Code",
+  "description": "Adaptive AI coding workspace for repository-aware software development, safe code changes, tests, and review.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -26,5 +26,9 @@
       "type": "image/png",
       "purpose": "any"
     }
+  ],
+  "categories": [
+    "productivity",
+    "developer tools"
   ]
 }
