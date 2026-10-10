@@ -728,10 +728,52 @@ function workspaceWorkView(run) {
 
 const workspaceAreas = new Map();
 
+/**
+ * A Coding project is a focused developer workspace, not a wall of six
+ * simultaneously visible cards. Selection is local presentation state scoped
+ * to the authorized workspace + conversation/project, never execution state.
+ */
+function codeWorkspaceKey() {
+  const run = lastRun();
+  return ['code', state.workspaceId || 'none', run?.projectId || state.activeProjectId || 'none',
+    state.chat?.id || 'new'].join(':');
+}
+function codeAreaFocusEnabled(workspace = 'code') {
+  return workspace === 'code' && state.product?.codingOnly === true;
+}
+const CODE_AREAS = new Set(['overview','activity','files','changes','tests','agents']);
+function selectedWorkspaceArea(workspace) {
+  if (codeAreaFocusEnabled(workspace))
+    return workspaceAreas.get(codeWorkspaceKey()) || 'overview';
+  return workspaceAreas.get(workspace) || 'overview';
+}
+function applyFocusedCodeArea(host = $('deepWorkspaceShell')) {
+  if (!host || !codeAreaFocusEnabled(host.dataset.workspace)) return;
+  const selected = selectedWorkspaceArea('code');
+  for (const area of host.querySelectorAll('[data-workspace-area]')) {
+    const active = area.dataset.workspaceArea === selected;
+    area.hidden = !active;
+  }
+  for (const control of host.querySelectorAll('[data-workspace-nav]')) {
+    const active = control.dataset.workspaceNav === selected;
+    control.classList.toggle('active', active);
+    control.setAttribute('aria-selected', String(active));
+    control.tabIndex = active ? 0 : -1;
+  }
+}
+
 function openWorkspaceArea(name) {
   const host = $('deepWorkspaceShell');
   const area = host?.querySelector('[data-workspace-area="' + name + '"]');
   if (!area) return;
+  if (codeAreaFocusEnabled(host.dataset.workspace)) {
+    if (!CODE_AREAS.has(name)) return;
+    workspaceAreas.set(codeWorkspaceKey(), name);
+    applyFocusedCodeArea(host);
+    area.focus({ preventScroll: true });
+    area.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+    return;
+  }
   workspaceAreas.set(host.dataset.workspace, name);
   for (const control of host.querySelectorAll('[data-workspace-nav]')) {
     const active = control.dataset.workspaceNav === name;
@@ -744,19 +786,50 @@ function openWorkspaceArea(name) {
 }
 
 function workspaceNavigation(workspace, areas) {
-  const selected = workspaceAreas.get(workspace) || 'overview';
-  return element('nav', { class: 'deep-workspace-nav', 'aria-label': (workspace === 'code' ? 'Code' : 'Research') + ' project areas' }, areas.map(([id, label]) => {
+  const selected = selectedWorkspaceArea(workspace);
+  const focused = codeAreaFocusEnabled(workspace);
+  const nav = element('nav', { class: 'deep-workspace-nav',
+    ...(focused ? { role: 'tablist', 'aria-orientation': 'horizontal' } : {}),
+    'aria-label': (workspace === 'code' ? 'Code' : 'Research') + ' project areas'
+  }, areas.map(([id, label]) => {
     const control = button(label, () => openWorkspaceArea(id), (id === selected ? 'active ' : '') + 'small');
     control.dataset.workspaceNav = id;
     control.dataset.workspaceControl = 'nav:' + id;
     control.setAttribute('aria-controls', 'workspace-' + workspace + '-' + id);
-    if (id === selected) control.setAttribute('aria-current', 'location');
+    if (focused) {
+      control.id = 'workspace-nav-' + workspace + '-' + id;
+      control.setAttribute('role', 'tab');
+      control.setAttribute('aria-selected', String(id === selected));
+      control.tabIndex = id === selected ? 0 : -1;
+    } else if (id === selected) control.setAttribute('aria-current', 'location');
     return control;
   }));
+  if (focused) nav.addEventListener('keydown', event => {
+    if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+    const buttons = [...nav.querySelectorAll('[data-workspace-nav]')];
+    const index = buttons.indexOf(document.activeElement);
+    if (index < 0) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1
+      : (index + (event.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
+    const id = buttons[next]?.dataset.workspaceNav;
+    if (id) {
+      openWorkspaceArea(id);
+      buttons[next]?.focus({ preventScroll: true });
+    }
+  });
+  return nav;
 }
 
 function workspaceArea(workspace, id, className) {
-  return { class: className, id: 'workspace-' + workspace + '-' + id, 'data-workspace-area': id, tabindex: '-1', 'aria-label': id === 'overview' ? 'Workspace overview' : id };
+  return { class: className, id: 'workspace-' + workspace + '-' + id,
+    'data-workspace-area': id,
+    tabindex: codeAreaFocusEnabled(workspace) ? '0' : '-1',
+    ...(codeAreaFocusEnabled(workspace) ? {
+      role: 'tabpanel', 'aria-labelledby': 'workspace-nav-' + workspace + '-' + id
+    } : {}),
+    'aria-label': id === 'overview' ? 'Workspace overview' : id
+  };
 }
 
 function researchSource(source, scope) {
@@ -1183,6 +1256,7 @@ function renderDeepWorkspaceShell() {
   const areaKey = focused?.dataset.workspaceArea;
   host.dataset.workspace = data.workspace;
   host.replaceChildren(...(data.workspace === 'code' ? codeWorkspaceProject(data) : researchWorkspaceProject(data)));
+  applyFocusedCodeArea(host);
   for (const control of host.querySelectorAll('.deep-workspace-actions button')) control.dataset.workspaceControl = 'action:' + control.textContent;
   if (controlKey) [...host.querySelectorAll('[data-workspace-control]')].find(control => control.dataset.workspaceControl === controlKey)?.focus({ preventScroll: true });
   else if (areaKey) host.querySelector('[data-workspace-area="' + areaKey + '"]')?.focus({ preventScroll: true });
@@ -1335,6 +1409,11 @@ export function renderAdaptiveWorkspace(host, mode = 'chat') {
   host.dataset.workspace = data.workspace;
   host.setAttribute('aria-label', workspaceLabel + ' · ' + data.status);
 }
+
+if (typeof document !== 'undefined') document.addEventListener('kindgleam:open-code-area', event => {
+  if (state.product?.codingOnly !== true || !CODE_AREAS.has(event.detail?.area)) return;
+  openWorkspaceArea(event.detail.area);
+});
 
 export function syncAdaptiveWorkspace() {
   renderAdaptiveWorkspace($('adaptiveWorkspaceBar'), 'chat');
