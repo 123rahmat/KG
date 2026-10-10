@@ -111,7 +111,8 @@ export function buildControlWorkflowPolicy({
   const methods = engine === 'research' && RESEARCH_METHODS.test(request);
   const researchDiscovery = engine === 'research' && (
     /(?:review|search|evidence|compare|survey|sources?|citations?|literature|references?|latest|investigate|systematic)/i.test(request)
-    || unknown > .5 || conflictingEvidence);
+    || unknown > .5 || conflictingEvidence
+    || (scholarlyDraft && /\b(?:write|draft|produce|prepare|complete)\b/i.test(request)));
   const fullManuscript = scholarlyDraft && RESEARCH_MANUSCRIPT.test(request)
     && (LONG_BUILD.test(request) || /\b(?:write|draft|produce)\b.*\b(?:thesis|dissertation|paper)\b/i.test(request));
   const brainstorm = Boolean(understood.needsBrainstorming
