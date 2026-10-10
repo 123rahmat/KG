@@ -50,7 +50,7 @@ function sourceKey(source, index = 0) {
   // Persisted ledgers already contain canonical keys. Recomputing a key from
   // partial URL/title metadata can orphan citations in later project turns.
   const persisted = text(source?.key);
-  if (/^(?:url|meta|doi|id):\\S{1,1996}$/.test(persisted)) return persisted;
+  if (/^(?:url|meta|doi|id):\S{1,1996}$/.test(persisted)) return persisted;
   const url = normalizeUrl(source?.url ?? source?.href ?? (typeof source === 'string' ? source : ''));
   if (url) return `url:${url}`;
   const title = clip(source?.title ?? source?.name ?? (typeof source === 'string' ? source : ''), 500);
