@@ -39,12 +39,39 @@ test('strict Coding and Research routes prevent off-topic work before model, fil
     assert.equal(persisted.rows[0].control_engine_id,'coding');
     assert.equal(persisted.rows[0].project_id,codeProject);
 
+    await assert.rejects(
+      pool.query("UPDATE runs SET control_engine_id='research' WHERE id=$1",[legal.body.id]),
+      { code:'23514' },
+      'DB trigger must block changing the owning controller'
+    );
+    await assert.rejects(
+      pool.query('UPDATE runs SET project_id=NULL WHERE id=$1',[legal.body.id]),
+      { code:'23514' },
+      'DB trigger must block changing project identity'
+    );
+
     const change=await call('PATCH',`/api/projects/${codeProject}`,{...auth,body:{defaultSurface:'research'}});
     assert.equal(change.status,409);
     assert.equal(change.body.code,'control-project-immutable');
 
     const createResearch=await call('POST','/api/projects',{...auth,body:{name:'Paper',defaultSurface:'research'}});
     assert.equal(createResearch.status,201);
+    const otherCode=await call('POST','/api/projects',{...auth,body:{
+      name:'Other code project',defaultSurface:'code'
+    }});
+    assert.equal(otherCode.status,201);
+    const conversationId='controller-test-123';
+    const firstConversation=await call('POST','/api/runs',{...auth,body:{
+      goal:'Explain Python module imports',projectId:codeProject,activeSurface:'code',
+      conversationId
+    }});
+    assert.equal(firstConversation.status,201,JSON.stringify(firstConversation.body));
+    const wrongProject=await call('POST','/api/runs',{...auth,body:{
+      goal:'Continue this',projectId:otherCode.body.project.id,activeSurface:'code',
+      conversationId
+    }});
+    assert.equal(wrongProject.status,422,'Without same-project history a generic follow-up must not be admitted');
+
     const research=await call('POST','/api/runs',{...auth,body:{
       goal:'Write a complete academic research paper with sources and methods',
       projectId:createResearch.body.project.id,activeSurface:'research'
