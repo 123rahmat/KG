@@ -12,3 +12,6 @@ live-eval-report.json
 backups/
 *.dump.enc
 *.dump.enc.manifest.json
+
+# Generated release ZIP (never commit binaries from local builds)
+dist/

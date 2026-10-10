@@ -33,7 +33,8 @@
     "test:ui": "node bin/ui-smoke.js",
     "smoke:coding": "node --test tests/coding-real-fixture.test.js",
     "test:code:hardening": "node --test tests/work-domain.test.js tests/parallel-agent-runtime.test.js tests/open-world-task-graph.test.js tests/workspace-patch.test.js tests/coding-progress-model.test.js tests/workspace-outcomes.test.js tests/coding-agent-adversarial-scenarios.test.js tests/coding-real-fixture.test.js tests/code-workflow.test.js tests/code-workspace.test.js",
-    "test:code:integration": "node --test tests/control-engine-strict-integration.test.js tests/coding-only-api-integration.test.js"
+    "test:code:integration": "node --test tests/control-engine-strict-integration.test.js tests/coding-only-api-integration.test.js",
+    "archive:code": "node bin/pack-kg-code.mjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

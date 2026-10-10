@@ -1,8 +1,10 @@
-# KG Code — AI software engineering workspace
+# KG Code — clean, coding-focused source edition
 
 **Product direction:** KG is becoming **KG Code**, a professional, coding-focused AI engineering environment. It uses one server-owned runtime for repository context, focused patches, controlled execution, test evidence, review, and optional specialists only when they justify their cost. The core goal is reliable, reviewable software development, not a collection of unrelated assistant modes.
 
 > **Release status:** The `main` source now defaults to the KG Code admission gate (`KG_CODING_ONLY=true`), with server-owned project scoping and coding-focused UI. Complete CI, migrations, browser, live runner and provider acceptance **are still required**; a source commit is not proof of production readiness. Set `KG_CODING_ONLY=false` only for an emergency rollback. Legacy data and research-related compatibility modules remain readable, but new work is code-only when the gate is enabled.
+
+For a reproducible ZIP snapshot use `npm run archive:code`, or download this branch as ZIP in GitHub. See [CLEAN_SOURCE_EXPORT.md](CLEAN_SOURCE_EXPORT.md). This is complete source, not a standalone deployable binary or database backup.
 
 ## Product boundaries
 
