@@ -53,25 +53,21 @@ Remove Normal Chat from the new navigation and project-creation choices. Remove 
 
 Preserve existing user data during migration. Historical general chats remain read-only history where necessary; they do not become a new general-chat product path.
 
-## Architecture: two isolated workflow engines
+## Architecture: one shared KG system, two independent control engines
 
-Implement a CodingEngine and a ResearchEngine with separate orchestration entry points, domain policies, agent registries, task graphs, run state, queues and context/memory namespaces. They can reuse tested libraries for authentication, model calls, storage, usage accounting and sandbox access. Each run has exactly one owning engine, with its own authoritative task lifecycle.
+**User clarification, 10 October 2026:** Do **not** create two entire separate AI systems. Implement two separate *domain control engines*, CodingControlEngine and ResearchControlEngine, over **one shared KG intelligence and execution runtime**. Each owns its domain orchestration and isolated agentic work, not duplicated application infrastructure. The exact decision is recorded in `docs/architecture/SHARED_KG_DOMAIN_CONTROLLERS.md` on the implementation branch.
 
-CodingEngine owns repository revisions, patches, implementation plans, integration, build/test evidence and code delivery. ResearchEngine owns source records, claim evidence, methods, mathematical analysis, experiments, figures and manuscripts.
+The shared runtime owns the **single authoritative** RunStore/task lifecycle, job worker and lease machinery, model/provider routing, toolbox/sandbox, principal/tenant authentication, storage/database, usage accounting, policy/safety enforcement, audit, scheduling infrastructure and observability. Domain-specific control engines use that runtime through governed interfaces, never clone it or silently create a competing task store.
 
-Distinguish tenant workspace identity from engine type. Keep existing principal/workspace access boundaries and add an explicit engine identity rather than repurposing a tenant identifier. Project, run, invocation, message, cache and memory lookups must enforce the owning engine plus the existing identity scope.
+**CodingControlEngine** decides coding-specific understanding, task DAG shape, specialist/team selection, revision-bounded implementation, test requirements, integration, code delivery and acceptance. **ResearchControlEngine** decides research questions, literature and evidence retrieval, methods, statistics, analysis, figures, manuscripts, source-aware verification and research acceptance. Both remain separate controllers with their own run-scoped graph instances, domain policies and agent registries. Domain agents and workflows are logically isolated even when running in a common worker process.
 
-Separate queue partitions and concurrency reservations prevent a large research run from occupying all coding capacity, or the reverse. Respect a combined user/account budget and provider ceilings without pooling mutable project state. Deploy the engines as separately managed worker pools when operational load warrants it; separate execution ownership is required even when they initially share a process.
+Each run has one immutable `controlEngineId` plus an authorized `projectId`, tenant `workspaceId`, principal and input revision. The shared runtime owns the run/task state while the owning controller alone determines its domain decisions and acceptance criteria. Project chats and progress panels are separate for Coding and Research. UI switching does not alter the owning controller of a run.
 
-The server fixes the engine for each run. UI switching changes which workspace is shown, not the ownership or input context of a running job. Background work and cancellation target the matching engine/run identity.
+Isolate controller/project data (working revisions, research sources, claim evidence, agent messages, persisted graphs, context, memory, cache keys, artifacts and lease claims) through **scoped records and explicit authorization checks**, not through copying the whole database or starting a second AI platform. Reuse tested storage, execution, memory infrastructure and scheduling mechanisms. Provide logical queue partitions and fair capacity reservations under common user/provider ceilings; optional deployment as separate worker pools must not introduce duplicate state ownership.
 
-No automatic cross-engine access to private files, source libraries, notes, memories or writable overlays. When the user explicitly requests a transfer, create a checked handoff using permitted, versioned artifact references. The receiving engine gets an imported snapshot or read-only reference; it cannot mutate the originating project or inherit its permissions. Revocation and changed versions must be handled explicitly.
+The user may request a bounded, versioned, authorized cross-controller artifact transfer. The receiving controller imports a snapshot or read-only reference without inheriting the source project's permissions or mutable memory. Research analysis code can run in ResearchControlEngine; CodingControlEngine can inspect papers needed for engineering. Neither incidental capability forces a new project/engine.
 
-A project-specific short question can take a lightweight path in its owning engine. Mathematics, figures and manuscript editing remain Research capabilities; inspecting documentation remains a Coding capability. A task needing a separately managed project in the other workspace produces an explicit handoff rather than changing the current run's engine.
-
-Reuse the existing server-owned run/task implementation as a tested primitive while isolating ownership. Do not send both engines through Normal Chat. Snapshot engine/project identity, relevant revisions, source references and acceptance criteria for each run. Models and browsers cannot authorize work or declare verified completion themselves.
-
-Use legacy normal-chat values only where historical compatibility requires them. New product work runs exclusively under CodingEngine or ResearchEngine.
+Keep server-side admission and scope checks before retrieval, specialist recruitment and execution. Preserve historical normal-chat records read-only as necessary, but new product work is Coding or Research only. No browser tab, model or agent may grant permissions, change ownership, or certify acceptance. Reuse the existing runtime and retire only superseded *active* legacy paths after callers and tests migrate; never remove migrations or user data to achieve the new UI.
 
 ## Understand the user and adapt the work
 
