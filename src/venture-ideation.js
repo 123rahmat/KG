@@ -90,16 +90,40 @@ export function ventureRoleScore(role,{goal='',surface='',task={},run={}}={}) {
   return at<0?0:Math.max(.78,1.12-at*.065);
 }
 
-export function ventureRoleAssignment(role,{goal='',surface='',task={},run={}}={}) {
+export function ventureRoleAssignment(role,{
+  goal='',surface='',task={},run={},remainingBudgetRatio=null
+}={}) {
   const spec=VENTURE_AGENTS[role];
   if(!spec || !ventureRolePriority({goal,surface,task,run}).includes(role))return null;
-  // Vocabulary is larger than the active assignment. No extra child calls.
-  const selected=spec.children.slice(0,
-    role==='venture-ideation-lead'?7:role==='product-mvp-lead'?8:6);
+  // Each agent has a broad reusable child-skill pool; admit just the lenses
+  // that this exact task, acceptance set, observed uncertainty and budget
+  // warrant. No per-main-agent fixed number, and no extra child model calls.
+  const situation=run?.situation??{};
+  const complexity=Math.max(0,Math.min(1,Number(situation.complexity)||0));
+  const uncertainty=Math.max(0,Math.min(1,Number(situation.uncertainty)||0));
+  const criteria=Array.isArray(situation.successCriteria)?situation.successCriteria:[];
+  const needs=[goal,task?.purpose,...criteria,...(Array.isArray(situation.unknowns)
+    ? situation.unknowns:[])].map(item=>typeof item==='string'?item:item?.description??'')
+    .join(' ').toLowerCase().slice(0,6500);
+  const tokens=new Set((needs.match(/[a-z]{4,}/g)??[]));
+  const ratio=remainingBudgetRatio===null||remainingBudgetRatio===undefined
+    ?1:Math.max(0,Math.min(1,Number(remainingBudgetRatio)||0));
+  const pressure=Math.max(complexity,uncertainty,Math.min(.9,criteria.length*.14));
+  const maxActive=ratio<.2?1:ratio<.4?2
+    :Math.min(spec.children.length,Math.max(3,Math.round(3+pressure*6)));
+  const scored=spec.children.map((skill,index)=>{
+    const words=skill.split('-').filter(word=>word.length>3);
+    const hits=words.filter(word=>tokens.has(word)||needs.includes(word)).length;
+    return {skill,index,score:hits*2+(!index?1:0)};
+  }).sort((a,b)=>b.score-a.score||a.index-b.index);
+  const selected=scored.slice(0,maxActive).sort((a,b)=>a.index-b.index)
+    .map(item=>item.skill);
   return Object.freeze({
     role,phase:(task?.ventureDiscovery||task?.metadata?.ventureDiscovery)?'explore-and-select'
       :(task?.buildPlan||task?.metadata?.buildPlan)?'plan-approved-mvp-scope':'check-current-venture-need',
-    skills:Object.freeze(selected),
+    skills:Object.freeze(selected),availableSkills:spec.children.length,
+    selectedSkills:selected.length,
+    selectionPolicy:'task-and-budget-specific-read-only-advisory-lenses',
     responsibility:spec.purpose,
     approvalBoundary:'proposed-idea-is-not-approval-to-build-or-launch',
     evidenceBoundary:'unverified-market-numbers-and-customer-interviews-must-be-labeled'

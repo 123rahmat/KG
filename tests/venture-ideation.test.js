@@ -43,8 +43,22 @@ test('idea agents have domain-specific advisory subagent skills and no fixed act
   const assignment=ventureRoleAssignment('business-model-lead',{
     goal:codeGoal,surface:'code',task:ventureTask
   });
-  assert.ok(assignment.skills.length>=5);
+  assert.ok(assignment.skills.length>=2);
   assert.ok(assignment.skills.length<VENTURE_AGENTS['business-model-lead'].children.length);
+  const expanded=ventureRoleAssignment('business-model-lead',{
+    goal:codeGoal,surface:'code',task:ventureTask,
+    run:{situation:{complexity:.94,uncertainty:.82,
+      successCriteria:['Price an MVP','Test customer acquisition','Document unit economics']}},
+    remainingBudgetRatio:1
+  });
+  const scarce=ventureRoleAssignment('business-model-lead',{
+    goal:codeGoal,surface:'code',task:ventureTask,
+    run:{situation:{complexity:.94,uncertainty:.82}},remainingBudgetRatio:.1
+  });
+  assert.ok(expanded.skills.length>assignment.skills.length);
+  assert.equal(scarce.skills.length,1);
+  assert.equal(expanded.selectedSkills,expanded.skills.length);
+  assert.equal(expanded.availableSkills,VENTURE_AGENTS['business-model-lead'].children.length);
   assert.match(assignment.approvalBoundary,/not-approval/);
   assert.equal(ventureRoleAssignment('business-model-lead',{
     goal:'Fix code formatting',surface:'code',task:ventureTask}),null);

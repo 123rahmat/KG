@@ -960,7 +960,9 @@ export function agentMessages(role, basePayload) {
           goal:basePayload?.goal,
           surface:specialtyFocus.workspace,
           task:basePayload?.task??{},
-          run:{tasks:basePayload?.workPlan?.steps??[]}
+          run:{tasks:basePayload?.workPlan?.steps??[],
+            situation:basePayload?.situation??{}},
+          remainingBudgetRatio:basePayload?.familyBudgetRatio??null
         }),
         subagentFindings: Array.isArray(basePayload?.subagentFindings)
           ? basePayload.subagentFindings.slice(0,2) : [],
