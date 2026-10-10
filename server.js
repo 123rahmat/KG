@@ -53,7 +53,9 @@ export function build({ config, logger, metrics, fetchImpl }) {
   });
   const jobs = new JobStore(pool);
   const fleet = new FleetStore(pool);
-  const projects = new ProjectStore(pool);
+  const projects = new ProjectStore(pool, {
+    codingResearchOnly: config.product?.codingResearchOnly === true
+  });
   // Reminders and scheduled questions (src/scheduling.js).
   const scheduler = new Scheduler({ pool, runs, identity, logger, metrics });
   const app = createApp({ config, pool, identity, governance, capabilities, objects, runs, jobs, scheduler, fleet, projects, audit, logger, metrics, fetchImpl });
