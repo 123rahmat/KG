@@ -33,6 +33,34 @@ initTerminal();
 initArtifactPreview();
 initChatFilesPanel();
 
+// Before authentication the public product contract still determines which
+// features are advertised. Presentation is never an admission authority.
+async function configureLandingProduct() {
+  try {
+    const response = await fetch('/api/adaptive-contract', { cache: 'no-store' });
+    if (!response.ok) return;
+    const contract = await response.json();
+    if (contract?.product?.codingOnly !== true) return;
+    document.body.classList.add('coding-only');
+    const set = (selector, text) => {
+      const target = document.querySelector(selector);
+      if (target) target.textContent = text;
+    };
+    set('.landing-copy .landing-kicker', 'Coding workspace · plan, build, test');
+    set('.landing-copy .landing-lead',
+      'Understand a repository, implement precise changes, debug failures and verify results in one professional engineering workspace. Tools and coding specialists activate only when needed.');
+    set('#workspaceTitle', 'One coding workspace. Focused tools for engineering.');
+    set('#workspaces .section-heading > p:last-child',
+      'Organize software projects, work with repositories or uploaded code, and review actual test evidence before applying changes.');
+    set('#systemTitle', 'A reliable coding workflow, adapted to each task.');
+    set('#workspaces .workspace-principle span',
+      'One shared runtime. Project-isolated coding context, optional specialists, authentic execution results and explicit write-back.');
+    set('.landing-footer > span', 'Kindgleam — a focused coding workspace from request to verified changes.');
+  } catch {
+    // Network loss must not turn a static public page into a broken shell.
+  }
+}
+void configureLandingProduct();
 
 /* --------------------------------------------------------------- transport */
 

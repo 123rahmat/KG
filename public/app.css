@@ -1349,6 +1349,25 @@ main > #notice { margin: 14px auto 0; width: min(var(--read), calc(100% - 32px))
 }
 .mobile-bar { display: none; }
 
+/* The public landing must not advertise standalone Research/Normal Chat when
+   server-configured CODING_ONLY is on. Legacy records are retained in storage. */
+body.coding-only .landing a[href="#research"],
+body.coding-only .landing a[href="#chat"],
+body.coding-only .landing #research,
+body.coding-only .landing #chat,
+body.coding-only .landing #research-demo,
+body.coding-only .landing [data-demo="research"],
+body.coding-only .landing [data-demo="chat"],
+body.coding-only .landing .workspace-card:not(:nth-child(2)),
+body.coding-only .landing .architecture-branch.research { display: none !important; }
+body.coding-only .landing .workspace-grid {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 780px;
+  margin-inline: auto;
+}
+body.coding-only .landing .workspace-card { min-width: 0; }
+body.coding-only .landing .landing-copy h1 { max-width: 15ch; }
+
 /* Coding-only navigation reuses the existing KG CSS tokens and actions.
    Hidden research controls are not authorization: the server denies writes. */
 .coding-action-dock { display: none; }
