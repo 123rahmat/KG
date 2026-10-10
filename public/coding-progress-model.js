@@ -46,9 +46,28 @@ export function codingProgressSnapshot(run) {
   const verdict = candidate?.evidence?.verdict;
   const requiredChecks = tasks.filter(task =>
     task?.id === 'test-code' || task?.type === 'test-code');
+  const testTasks = tasks.filter(task => task.id === 'test-code' || task.type === 'test-code');
+  const testWithReceipt = [...testTasks].reverse().find(task =>
+    task?.executionReceipt?.serverAuthenticated === true
+    || task?.evidence?.executionReceipt?.serverAuthenticated === true);
+  const recordedOutput = testWithReceipt?.evidence?.result ?? {};
+  const report = recordedOutput?.output?.testSummary ?? recordedOutput?.testSummary ?? null;
+  const whole = num => Number.isInteger(num) && num >= 0;
+  const testCounts = report && whole(report.total) && whole(report.passed)
+    && whole(report.failed) && report.total > 0
+    && report.passed + report.failed <= report.total
+    ? Object.freeze({passed:report.passed,failed:report.failed,total:report.total})
+    : null;
+  const lastBuildIndex = tasks.reduce((index,task,i) =>
+    task?.id === 'build-code' || task?.type === 'build-code' ? i : index,-1);
+  const lastTestIndex = tasks.lastIndexOf(testWithReceipt);
+  const passingTestReceipt = Boolean(testCounts && testCounts.passed === testCounts.total
+    && testCounts.failed === 0 && testWithReceipt?.status === 'complete'
+    && lastTestIndex >= lastBuildIndex);
   const runState = safe(run.state,24);
   const verified = runState === 'complete'
     && lastVerifyIndex >= 0 && lastVerifyIndex >= lastWorkIndex
+    && passingTestReceipt
     && candidate.status === 'complete'
     && (verdict?.verdict === 'pass' || verdict?.status === 'pass')
     && !tasks.some(task => ['failed','blocked','stale','running'].includes(task?.status))
@@ -84,19 +103,26 @@ export function codingProgressSnapshot(run) {
       current: Boolean(next && next === task)
     });
   });
-  const testTasks = tasks.filter(task => task.id === 'test-code' || task.type === 'test-code');
-  const testState = testTasks.some(task => task.status === 'failed') ? 'Test step failed'
+  const testState = testCounts
+    ? `${testCounts.passed} passed · ${testCounts.failed} failed · ${testCounts.total} total (receipt)`
+    : testTasks.some(task => task.status === 'failed') ? 'Test step failed'
     : testTasks.some(task => task.status === 'running') ? 'Test step running'
-    : testTasks.some(task => task.status === 'complete') ? 'Test step recorded'
+    : testTasks.some(task => task.status === 'complete') ? 'Test step recorded · counts unconfirmed'
     : testTasks.length ? 'Test step pending' : 'No test step recorded';
   return Object.freeze({
     runId:safe(run.id,120),status,tone,headline,terminal,verified,
     recorded:count,completed,skipped,failures,running,
-    testState,checkpoints:Object.freeze(checkpoints),
+    testState,testCounts,testReceiptConfirmed:Boolean(testWithReceipt),
+    checkpoints:Object.freeze(checkpoints),
     hiddenCount:Math.max(0,count-checkpoints.length),
     progressLabel:`${completed} of ${count} recorded steps done`,
     // Explicit evidence note avoids translating a planned test into a pass.
-    evidence:verified ? 'A passing verification verdict is recorded.'
-      : 'No passing verification verdict has been recorded for this run.'
+    evidence:verified
+      ? 'Verified by a recorded passing verdict and an authenticated all-passing test receipt.'
+      : !testWithReceipt
+        ? 'No authenticated test receipt and passing verification together have been confirmed.'
+        : !passingTestReceipt
+          ? 'A test receipt exists, but passing tests have not all been confirmed.'
+          : 'A passing test receipt exists, but final verification is not confirmed.'
   });
 }
