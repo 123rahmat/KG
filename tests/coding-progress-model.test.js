@@ -51,3 +51,31 @@ test('latest six markers are bounded and show omitted record count',()=>{
   assert.equal(view.checkpoints.length,6);
   assert.equal(view.hiddenCount,9);
 });
+
+test('a passing verdict before a later code change is stale, not verified',()=>{
+  const view=codingProgressSnapshot({state:'complete',tasks:[
+    {id:'build-code',type:'build-code',status:'complete'},
+    {id:'verify',type:'verify',status:'complete',evidence:{verdict:{verdict:'pass'}}},
+    {id:'build-code-2',type:'build-code',status:'complete'}
+  ]});
+  assert.equal(view.verified,false);
+  assert.equal(view.status,'Completed');
+});
+test('failed or pending tests cannot be mislabeled verified',()=>{
+  for(const testStatus of ['failed','pending','running','stale']){
+    const view=codingProgressSnapshot({state:'complete',tasks:[
+      {id:'build-code',type:'build-code',status:'complete'},
+      {id:'test-code',type:'test-code',status:testStatus},
+      {id:'verify',type:'verify',status:'complete',evidence:{verdict:{status:'pass'}}}
+    ]});
+    assert.equal(view.verified,false,'test task status '+testStatus);
+  }
+});
+test('verification requires terminal run completion',()=>{
+  const view=codingProgressSnapshot({state:'running',tasks:[
+    {id:'test-code',type:'test-code',status:'complete'},
+    {id:'verify',type:'verify',status:'complete',evidence:{verdict:{status:'pass'}}}
+  ]});
+  assert.equal(view.verified,false);
+  assert.equal(view.status,'Working');
+});
