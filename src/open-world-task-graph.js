@@ -3,7 +3,7 @@
  * executes tools or grants permissions. The run store remains authoritative.
  * A model can propose work, but callers must validate and authorize proposals.
  */
-import { readyTasks, parallelWaves } from './parallel-orchestrator.js';
+import { readyTasks, parallelWaves, dependencySatisfied } from './parallel-orchestrator.js';
 import { invalidateDependents } from './adaptive-decision-authority.js';
 
 const value = x => String(x ?? '').trim();
@@ -122,7 +122,7 @@ export function composeOpenWorldDecision({
     typeof raw === 'string' ? { id: raw, purpose: raw } : raw
   ).filter(item => item && value(item.id) && !byId.has(value(item.id)));
   const admissible = options.filter(item => list(item.dependsOn).every(dep =>
-    ['complete', 'skipped'].includes(byId.get(dep)?.status)
+    dependencySatisfied(byId.get(dep))
   ) && list(item.requires).every(cap => authorized.has(cap) && available.has(cap)));
   const gated = situation?.authorizationRequired === true && situation.authorizationSatisfied === false;
   const frontier = openWorldFrontier(current, { risk: situation?.risk });
@@ -139,7 +139,7 @@ export function composeOpenWorldDecision({
   if (frontier.ready.length) { action = 'continue-work'; reason = 'existing-ready-work'; }
   else if (waiting) { action = 'await-work'; reason = 'existing-work-running'; }
   else if (failed) { action = 'recover'; reason = 'existing-failed-or-blocked-work'; }
-  else if (current.nodes.length && current.nodes.every(node => ['complete', 'skipped'].includes(node.status))
+  else if (current.nodes.length && current.nodes.every(dependencySatisfied)
       && acceptance?.satisfied === true) { action = 'ready-to-deliver'; reason = 'server-must-check-completion'; }
   else if (scored.length && !direct) { action = 'propose-work'; reason = 'justified-registered-capability'; }
   if (!['ready-to-deliver', 'continue-work', 'await-work', 'recover'].includes(action)
