@@ -1,7 +1,7 @@
 // Offline support for the app shell only. API responses (private data) are
 // never cached. Files are fetched fresh first so a deploy never pairs new
 // HTML with last release's scripts; the cache is the offline fallback.
-const CACHE = 'kindgleam-ui-69';
+const CACHE = 'kindgleam-ui-70';
 const STATIC = ['/', '/index.html', '/app.css', '/app.js', '/app-settings.js', '/app-actions.js', '/app-attachments.js', '/attachment-selection.js', '/app-account.js', '/app-settings-window.js', '/governance-controls.js', '/execution-context.js', '/ui-core.js', '/thread-view.js', '/chat-files-panel.js', '/workspace-sources.js', '/app-projects.js', '/terminal.js', '/artifact-preview.js', '/static-html-preview.js', '/table-preview-model.js', '/adaptive-workspace.js', '/coding-progress-panel.js', '/coding-progress-model.js', '/control-workflow-view.js', '/agent-activity.js', '/work-progress-panels.js', '/markdown.js', '/math-text.js', '/manifest.webmanifest', '/kindgleam.svg', '/kindgleam-192.png', '/kindgleam.png'];
 
 self.addEventListener('install', event => {
