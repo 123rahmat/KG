@@ -516,6 +516,7 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
   }));
 
   app.post('/api/runs/:id/fail', scoped('editor'), route(async (req, res) => {
+    if (!(await strictExistingRun(req, res))) return;
     const run = await runs.fail(req.scope, req.principal, req.params.id, req.body?.reason, {
       requestId: req.requestId
     });
@@ -531,6 +532,7 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
    * and a system that auto-approves its own gate has no gate.
    */
   app.post('/api/runs/:id/execution-plan', scoped('editor'), route(async (req, res) => {
+    if (!(await strictExistingRun(req, res))) return;
     const run = await runs.get(req.scope, req.params.id);
     if (!run) return res.status(404).json({ error: 'Run not found', code: 'no-run' });
     const task = run.tasks.find(item => item.id === run.next);
