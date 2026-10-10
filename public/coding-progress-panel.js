@@ -4,6 +4,7 @@
  */
 import { element, button } from './ui-core.js';
 import { codingProgressSnapshot } from './coding-progress-model.js';
+import { agentActivitySnapshot } from './agent-activity.js';
 
 const get = id => document.getElementById(id);
 const statusDot = tone => element('span',{class:'code-progress-dot '+tone,'aria-hidden':'true'});
@@ -14,10 +15,14 @@ export function renderCodingProgress(host, run, { surface = 'normal-chat', pendi
   if (!host) return;
   const coding = run?.surface === 'code' || (!run && surface === 'code');
   const snapshot = coding ? codingProgressSnapshot(run) : null;
+  const agentState = coding && run ? agentActivitySnapshot(run) : null;
+  const specialists = Array.isArray(agentState?.roles) ? agentState.roles.slice(-5) : [];
+  const activeSpecialists = Array.isArray(agentState?.active) ? agentState.active.length : 0;
   // The run's evidence can include large tool output and file contents.
   // Serialize only the small visible projection, not the full run/task graph
   // on every streaming UI update.
-  const signature = JSON.stringify({coding,snapshot,pending,surface});
+  const signature = JSON.stringify({coding,snapshot,pending,surface,
+    specialists,activeSpecialists});
   if (host === lastHost && signature === lastSignature) return;
   lastHost = host;
   lastSignature = signature;
@@ -79,7 +84,23 @@ export function renderCodingProgress(host, run, { surface = 'normal-chat', pendi
       steps,
       snapshot.hiddenCount ? element('p',{class:'code-progress-subtitle',
         text:`${snapshot.hiddenCount} earlier recorded steps are shown in the conversation history.`}) : null,
-      element('p',{class:'code-progress-evidence-text',text:snapshot.evidence})
+      element('p',{class:'code-progress-evidence-text',text:snapshot.evidence}),
+      specialists.length ? element('section',{class:'code-progress-specialists',
+        'aria-label':'Recorded specialist activity'},[
+        element('div',{class:'code-progress-specialist-head'},[
+          element('strong',{text:`Specialist activity · ${specialists.length} recorded`}),
+          element('span',{text:activeSpecialists
+            ? `${activeSpecialists} active in the current task`
+            : 'No active specialists confirmed'})
+        ]),
+        element('ul',{class:'code-progress-agent-list'}, specialists.map(item =>
+          element('li',{},[
+            element('span',{text:item.displayRole || item.role || 'Specialist'}),
+            element('span',{text:item.status || 'Recorded'})
+          ]))),
+        element('p',{class:'code-progress-evidence-text',
+          text:'These are recorded agent states; selection is not proof of execution.'})
+      ]) : null
     ].filter(Boolean));
   detail.open = wasOpen;
   host.replaceChildren(element('div',{class:'code-progress-card'},[
