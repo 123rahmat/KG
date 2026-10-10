@@ -109,3 +109,19 @@ test('late no-delete guardrail is preserved when a request exceeds the summary c
   assert.ok(needs.explicitCriteria.includes('Do not delete production data'));
   assert.ok(needs.explicitCriteria.some(text=>/remaining requested changes/.test(text)));
 });
+
+test('model-proposed supersession cannot silently drop a user-defined acceptance gate',()=>{
+  const needs=captureCodingUserNeeds({request:'Build an API and add rate limiting without deleting existing routes'});
+  const original=buildRequirementModel({goal:'Build an API and add rate limiting without deleting existing routes',codingNeeds:needs});
+  const protectedItem=original.items.find(item=>item.explicitCoverage);
+  assert.ok(protectedItem);
+  const attempted=reconcileRequirements(original,{
+    task:{id:'reassess',type:'reassess'},
+    structured:{supersededRequirements:[protectedItem.id,protectedItem.requirement]},
+    summary:'The agent wants to skip this requirement'
+  });
+  const after=attempted.items.find(item=>item.id===protectedItem.id);
+  assert.equal(after.required,true);
+  assert.notEqual(after.status,'superseded');
+  assert.equal(attempted.completionReady,false);
+});
