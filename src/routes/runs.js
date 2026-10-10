@@ -15,6 +15,7 @@ import { FeedbackStore } from '../feedback.js';
 import { EvolutionStore } from '../evolution.js';
 import { SkillLearningStore, skillContextSignature } from '../skills.js';
 import { admitControlEngineRequest, ControlAdmissionError, verifyControlledRun } from '../control-engine-admission.js';
+import { conversationFileLinks, presentConversationFile } from '../chat-files.js';
 
 // Files the AI reads for itself: text and code, CSV, PDF, Word, Excel and
 // PowerPoint become text; images are shown to the model. Anything else stays
@@ -374,6 +375,35 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
     const list = await runs.conversationRuns(req.scope, req.params.id);
     if (!list.length) return res.status(404).json({ error: 'Conversation not found', code: 'no-conversation' });
     res.json({ id: req.params.id, runs: list });
+  }));
+
+  // The Chat / Files segmented view has a strictly conversation-scoped
+  // attachment/artifact list, not a global workspace file browser.
+  // Referenced IDs never bypass normal object visibility/tenant RLS.
+  app.get('/api/conversations/:id/files', scoped('viewer'), route(async (req, res) => {
+    const conversation = await runs.conversationRuns(req.scope, req.params.id);
+    if (!conversation.length) {
+      return res.status(404).json({ error: 'Conversation not found', code: 'no-conversation' });
+    }
+    const refs = conversationFileLinks(conversation);
+    const candidateIds = [...new Set([...refs.attachmentIds, ...refs.artifactIds])];
+    const { rows } = await pool.query(
+      `SELECT id, name, type, content_type, size, created_at
+         FROM objects
+        WHERE workspace_id = $1
+          AND (visibility = 'workspace' OR owner_id = $2)
+          AND (id = ANY($3::text[])
+            OR (provenance->>'runId') = ANY($4::text[]))
+        ORDER BY created_at DESC, id DESC
+        LIMIT 501`,
+      [req.scope.workspaceId, req.scope.principalId, candidateIds, refs.runIds]
+    );
+    const linked = new Set(refs.attachmentIds);
+    return res.json({
+      conversationId: req.params.id,
+      files: rows.slice(0, 500).map(row => presentConversationFile(row, linked)),
+      truncated: rows.length > 500
+    });
   }));
 
   // Deleting a chat removes the person's own messages in it, with their
