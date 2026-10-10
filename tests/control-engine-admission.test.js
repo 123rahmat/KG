@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { admitControlEngineRequest } from '../src/control-engine-admission.js';
+import { admitControlEngineRequest, verifyControlledRun } from '../src/control-engine-admission.js';
 
 const req = changes => ({
   scope: { workspaceId: 'tenant-a', principalId: 'person-a' },
@@ -91,4 +91,30 @@ test('no project means no costly classification or file retrieval', async () => 
     code:'control-project-required'
   });
   assert.equal(called,false);
+});
+
+test('controlled run execution gate matches persisted owner and live revision', async () => {
+  const controlled = {
+    id:'run-1',surface:'code',projectId:'code-project',principalId:'person-a',
+    adaptation:{controlEngineId:'coding',controlWorkIdentity:{
+      projectId:'code-project',controlEngineId:'coding',projectRevision:'sha1'
+    }}
+  };
+  const stored={id:'run-1',control_engine_id:'coding',surface:'code',
+    project_id:'code-project',active_project:'code-project',active_revision:'sha1'};
+  const scope={workspaceId:'tenant-a',principalId:'person-a'};
+  const check = async (run, row) => verifyControlledRun({
+    pool:{async query(){return {rows:row?[row]:[]}}},
+    run,scope,principalId:'person-a',codingResearchOnly:true
+  });
+
+  assert.equal(await check(controlled,stored),null);
+  assert.equal((await check(controlled,{...stored,active_revision:'sha2'})).code,'control-stale-revision');
+  assert.equal((await check(controlled,{...stored,active_project:null})).code,'control-project-changed');
+  assert.equal((await check(controlled,{...stored,control_engine_id:'research'})).code,'control-run-owner-mismatch');
+  assert.equal((await check({...controlled,adaptation:{controlEngineId:'coding'}},stored)).code,'control-stale-revision');
+  assert.equal((await check({...controlled,projectId:'elsewhere'},stored)).code,'control-run-owner-mismatch');
+  assert.equal((await check({...controlled,principalId:'other'},stored)).code,'control-historical-read-only');
+  assert.equal((await check(controlled,null)).code,'control-run-owner-mismatch');
+  assert.equal(await verifyControlledRun({run:controlled,codingResearchOnly:false}),null);
 });
