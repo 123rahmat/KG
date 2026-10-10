@@ -2,7 +2,7 @@
 import { assessWorkDomain } from './work-domain.js';
 const text = value => String(value ?? '').trim();
 const IMPLEMENT = /\b(?:build|implement|fix|repair|change|edit|update|modify|integrate|create|develop|write (?:code|a program)|run tests|deploy|migrate|refactor|generate)\b/i;
-const EXPLORE = /\b(?:brainstorm|ideas?|alternatives?|possible topics?|explore|compare approaches|options?|hypothes(?:is|es)|research gaps?)\b/i;
+const EXPLORE = /\b(?:brainstorm|ideas?|alternatives?|possible topics?|explore|compare approaches|options?|research gaps?)\b/i;
 const PLAN = /\b(?:plan|roadmap|architecture|proposal|outline|milestones?|design the system|methodology|study protocol)\b/i;
 const VERIFY = /\b(?:verify|validate|review|audit|check|test|reproduce|proofread|fact[- ]check)\b/i;
 const LARGE = /\b(?:entire|whole|full|complete|end[- ]to[- ]end|multi[- ]file|multiple modules|from scratch|production|thesis|dissertation|systematic review|research paper|distributed system|platform)\b/i;
