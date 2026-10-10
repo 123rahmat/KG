@@ -61,6 +61,7 @@ export function codingProgressSnapshot(run) {
   const lastBuildIndex = tasks.reduce((index,task,i) =>
     task?.id === 'build-code' || task?.type === 'build-code' ? i : index,-1);
   const lastTestIndex = tasks.lastIndexOf(testWithReceipt);
+  const retestRequired = lastBuildIndex > lastTestIndex && lastBuildIndex >= 0;
   const passingTestReceipt = Boolean(testCounts && testCounts.passed === testCounts.total
     && testCounts.failed === 0 && testWithReceipt?.status === 'complete'
     && lastTestIndex >= lastBuildIndex);
@@ -103,7 +104,8 @@ export function codingProgressSnapshot(run) {
       current: Boolean(next && next === task)
     });
   });
-  const testState = testTasks.some(task => ['failed','blocked','stale'].includes(task.status))
+  const testState = retestRequired && testWithReceipt ? 'Code changed · rerun tests'
+    : testTasks.some(task => ['failed','blocked','stale'].includes(task.status))
     ? 'Test step failed or stale'
     : testTasks.some(task => task.status === 'running') ? 'Test step running'
     : testTasks.some(task => ['pending','queued','waiting'].includes(task.status))
@@ -114,13 +116,14 @@ export function codingProgressSnapshot(run) {
   return Object.freeze({
     runId:safe(run.id,120),status,tone,headline,terminal,verified,
     recorded:count,completed,skipped,failures,running,
-    testState,testCounts,testReceiptConfirmed:Boolean(testWithReceipt),
+    testState,testCounts,testReceiptConfirmed:Boolean(testWithReceipt),retestRequired,
     checkpoints:Object.freeze(checkpoints),
     hiddenCount:Math.max(0,count-checkpoints.length),
     progressLabel:`${completed} of ${count} recorded steps done`,
     // Explicit evidence note avoids translating a planned test into a pass.
     evidence:verified
       ? 'Verified by a recorded passing verdict and an authenticated all-passing test receipt.'
+      : retestRequired && testWithReceipt ? 'Code changed after the latest authenticated test receipt. Rerun checks before claiming verification.'
       : !testWithReceipt
         ? 'No authenticated test receipt and passing verification together have been confirmed.'
         : !passingTestReceipt
