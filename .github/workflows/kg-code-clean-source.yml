@@ -1,0 +1,41 @@
+name: KG Code clean source ZIP
+on:
+  push:
+    branches:
+      - codex/kg-code-clean-export-20261010
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-source-zip:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Package committed source without secrets
+        run: npm run archive:code
+      - name: Verify ZIP archive and source layout
+        run: |
+          unzip -t dist/KG-Code-clean-source.zip | tail -n 1
+          unzip -Z -1 dist/KG-Code-clean-source.zip | grep -x 'KG-Code/server.js'
+          unzip -Z -1 dist/KG-Code-clean-source.zip | grep -x 'KG-Code/src/config.js'
+          unzip -Z -1 dist/KG-Code-clean-source.zip | grep -x 'KG-Code/public/index.html'
+          if unzip -Z -1 dist/KG-Code-clean-source.zip | grep -Eq '(^|/)(\.env|node_modules|backups)(/|$)'; then
+            echo 'Archive contains an unsafe local file'
+            exit 1
+          fi
+          sha256sum dist/KG-Code-clean-source.zip > dist/SHA256SUMS
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: KG-Code-clean-source
+          path: |
+            dist/KG-Code-clean-source.zip
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
