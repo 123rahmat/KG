@@ -1394,6 +1394,7 @@ body.coding-only .coding-action-dock {
 .coding-action-grid button .i { width: 15px; height: 15px; color: var(--accent); }
 .coding-action-hint { margin: 0 5px; color: var(--muted); font-size: .67rem; line-height: 1.4; }
 body.coding-only #newResearchChat,
+body.coding-only #adaptiveCreateStrip,
 body.coding-only #tabs [data-tab="explore"] { display: none !important; }
 body.coding-only #tabs [data-tab="runs"] { display: inline-flex !important; }
 body.coding-only .chat-new-shortcuts { grid-template-columns: 1fr; }

@@ -745,7 +745,8 @@ export async function sendMessage(text) {
       chatSurface:lastSavedRun?.surface??lastSavedRun?.adaptation?.primarySurface,
       chosenSurface:state.activeSurface,hasSavedRuns
     }),
-    creationMode: $('adaptiveCreateStrip')?.dataset.mode ?? null,
+    creationMode: state.product?.codingOnly ? null
+      : $('adaptiveCreateStrip')?.dataset.mode ?? null,
     modelConsent: chat.consent,
     storedAttachmentIds
   };
