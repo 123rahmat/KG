@@ -57,3 +57,18 @@ test('greetings respond without starting agentic work', () => {
   assert.equal(answer.status, 'needs-clarification');
   assert.match(answer.reply, /coding project or research paper/i);
 });
+
+test('academic deliverables win over incidental software vocabulary', () => {
+  assert.equal(assessWorkDomain({
+    request: 'Write a research paper on software testing methods'
+  }).domain, 'research');
+  assert.equal(assessWorkDomain({
+    request: 'Write a Python script for my thesis experiment'
+  }).domain, 'research');
+  assert.equal(assessWorkDomain({
+    request: 'Build a laboratory software application for my research project'
+  }).domain, 'coding');
+});
+test('generic household repairs do not recruit a coding engine', () => {
+  assert.notEqual(assessWorkDomain({request: 'Fix my washing machine'}).domain, 'coding');
+});
