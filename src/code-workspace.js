@@ -8,7 +8,7 @@
  * the model direct ownership of project state.
  */
 import crypto from 'node:crypto';
-import { workspacePath } from './workspace-path.js';
+import { workspacePath, isSensitiveWorkspacePath } from './workspace-path.js';
 
 const text = value => String(value ?? '').trim();
 
@@ -124,13 +124,28 @@ export function workspaceDiff(before = [], after = []) {
   return changes;
 }
 
-export function applyWorkspacePatch(files = [], patch = []) {
-  const map = new Map(normalizeWorkspaceFiles(files).map(file => [file.path, file.content]));
+/**
+ * Apply a bounded, deterministic workspace diff. Callers handling untrusted
+ * agent writes should also use the stricter revision-bound surgical patch
+ * API. The optional base hash lets safe callers reject stale snapshots.
+ */
+export function applyWorkspacePatch(files = [], patch = [], { expectedContentHash = null } = {}) {
+  const base = normalizeWorkspaceFiles(files);
+  if (expectedContentHash && workspaceContentHash(base) !== expectedContentHash) {
+    const error = new Error('Workspace changed since the patch was prepared.');
+    error.code = 'stale-workspace';
+    throw error;
+  }
+  const map = new Map(base.map(file => [file.path, file.content]));
   const changes = Array.isArray(patch) ? patch : [];
   if (changes.length > WORKSPACE_LIMITS.maxChangedFiles) throw new Error('Workspace patch is too large');
+  const seen = new Set();
   for (const change of changes) {
     const path = safeWorkspacePath(change?.path);
     if (!path) throw new Error('Workspace patch contains an invalid path');
+    if (isSensitiveWorkspacePath(path)) throw new Error('Workspace patch cannot modify credential or private-key paths');
+    if (seen.has(path)) throw new Error('Workspace patch contains a duplicate path: ' + path);
+    seen.add(path);
     if (change.kind === 'deleted' || change.delete === true) map.delete(path);
     else map.set(path, String(change.after ?? change.content ?? ''));
   }
