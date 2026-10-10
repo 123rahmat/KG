@@ -64,7 +64,7 @@ test('academic deliverables win over incidental software vocabulary', () => {
   }).domain, 'research');
   assert.equal(assessWorkDomain({
     request: 'Write a Python script for my thesis experiment'
-  }).domain, 'research');
+  }).domain, 'coding', 'the requested artifact is a script, not a thesis');
   assert.equal(assessWorkDomain({
     request: 'Build a laboratory software application for my research project'
   }).domain, 'coding');
@@ -80,4 +80,33 @@ test('misspelled domain work remains in scope with original spelling retained', 
   const b=assessWorkDomain({request:'Write a reasech thsis with references'});
   assert.equal(b.domain,'research');
   assert.equal(b.supportedRequest,'Write a reasech thsis with references');
+});
+
+test('software artifact beats incidental research topic, with scholarly deliverable still protected',()=>{
+  const software=[
+    'Build a web app to summarize research papers',
+    'Write a Python script for my thesis experiment',
+    'Create a plugin for formatting journal manuscripts',
+    'Refactor the parser for thesis files',
+    'Build a code editor for academic paper authors',
+    'Develop a React app for my research lab',
+    'Debug the API that imports scientific citations',
+    'Write unit tests for our manuscript formatting package'
+  ];
+  for (const goal of software) {
+    const d=assessWorkDomain({request:goal});
+    assert.equal(d.status,'in-scope',goal);
+    assert.equal(d.domain,'coding',goal);
+  }
+  const scholarly=[
+    'Write a research paper about software testing',
+    'Write an academic paper on building a website',
+    'Design a qualitative thesis study of migration interviews',
+    'Draft a journal manuscript about API reliability',
+    'Prepare my dissertation with scientific citations'
+  ];
+  for (const goal of scholarly) {
+    const d=assessWorkDomain({request:goal});
+    assert.equal(d.domain,'research',goal);
+  }
 });
