@@ -54,7 +54,7 @@ function selected(stage,reason){
     changed:true,reason});
 }
 export function enforceRequiredProgression({
-  run={},tasks=[],target={},candidate=null,planRequired=false
+  run={},tasks=[],candidate=null,planRequired=false
 }={}){
   if(!candidate)return Object.freeze({candidate:null,changed:false,reason:'no-proposal'});
   const domain=run.surface??run.adaptation?.primarySurface;
