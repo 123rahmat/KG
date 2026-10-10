@@ -14,6 +14,7 @@ import { resolveModelSelection } from '../model-routing.js';
 import { FeedbackStore } from '../feedback.js';
 import { EvolutionStore } from '../evolution.js';
 import { SkillLearningStore, skillContextSignature } from '../skills.js';
+import { admitControlEngineRequest, ControlAdmissionError } from '../control-engine-admission.js';
 
 // Files the AI reads for itself: text and code, CSV, PDF, Word, Excel and
 // PowerPoint become text; images are shown to the model. Anything else stays
@@ -114,6 +115,35 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
     return attachments;
   }
 
+  /** A non-safety scope decline: no model/tool spend or abuse strike. */
+  async function strictProductAdmission(req, res) {
+    if (config.product?.codingResearchOnly !== true) return null;
+    try {
+      return await admitControlEngineRequest({
+        pool,
+        scope: req.scope,
+        principalId: req.principal.id,
+        goal: req.body?.goal,
+        projectId: req.body?.projectId,
+        activeSurface: req.body?.activeSurface,
+        conversationId: req.body?.conversationId
+      });
+    } catch (error) {
+      if (!(error instanceof ControlAdmissionError)) throw error;
+      await audit?.record({
+        principalId: req.principal.id, workspaceId: req.scope.workspaceId,
+        action: 'product.scope.declined', target: 'new-work',
+        outcome: 'denied', detail: { code: error.code },
+        requestId: req.requestId
+      });
+      res.status(error.status).json({
+        error: error.message, code: error.code,
+        ...(error.detail ? { detail: error.detail } : {})
+      });
+      return false;
+    }
+  }
+
   /* ---------------------------------------------------------- workflow */
 
   // Plan without persisting or executing. Useful for previewing what a goal
@@ -163,6 +193,8 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
   }
 
   app.post('/api/plan', scoped('viewer'), route(async (req, res) => {
+    const admitted = await strictProductAdmission(req, res);
+    if (admitted === false) return;
     const policies = await governance.forScope({
       workspaceId: req.scope.workspaceId,
       principalId: req.principal.id,
@@ -191,6 +223,11 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
     const learnedSkills = await skillLearning.profiles(req.scope, { limit: 48, contextSignature: planSkillContext });
     const plan = planGoal(req.body?.goal, {
       ...planningInput(req, policies, config),
+      ...(admitted ? {
+        activeSurface: admitted.surface,
+        enforcedControlSurface: admitted.surface,
+        project: { id: admitted.projectId, currentRevision: admitted.projectRevision }
+      } : {}),
       executionAvailable: executionAvailable(),
       blockedTopics: blockedTopicsFrom(config),
       classifierHints: classification.hints,
@@ -203,6 +240,8 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
   }));
 
   app.post('/api/runs', scoped('editor'), idempotent, route(async (req, res) => {
+    const admitted = await strictProductAdmission(req, res);
+    if (admitted === false) return;
     const policies = await governance.forScope({
       workspaceId: req.scope.workspaceId,
       principalId: req.principal.id,
@@ -263,7 +302,17 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
       }
       return res.status(422).json({ error: verdict.message, code: 'usage-policy', category: verdict.category, alternatives: verdict.alternatives });
     }
-    const input = { ...planningInput(req, policies, config), executionAvailable: executionAvailable() };
+    const input = {
+      ...planningInput(req, policies, config),
+      ...(admitted ? {
+        activeSurface: admitted.surface,
+        enforcedControlSurface: admitted.surface,
+        controlEngineId: admitted.controlEngineId,
+        project: { id: admitted.projectId, currentRevision: admitted.projectRevision },
+        projectId: admitted.projectId
+      } : {}),
+      executionAvailable: executionAvailable()
+    };
     // Topics that need care carry their cautions into every step.
     if (verdict.decision === 'care') input.constraints = [...(input.constraints ?? []), ...verdict.care.map(careNote)];
     const created = await runs.create(req.scope, req.principal, {
