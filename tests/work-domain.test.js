@@ -110,3 +110,18 @@ test('software artifact beats incidental research topic, with scholarly delivera
     assert.equal(d.domain,'research',goal);
   }
 });
+
+test('coding-only intent understands developer vocabulary without a literal code keyword',()=>{
+  for (const request of [
+    'Fix login and add retry handling, and run integration tests',
+    'Fix failing regression tests',
+    'Create integration tests for my service'
+  ]) {
+    const result=assessWorkDomain({request});
+    assert.equal(result.domain,'coding',request);
+    assert.equal(result.status,'in-scope',request);
+  }
+  const paper=assessWorkDomain({request:'Write a thesis about integration testing'});
+  assert.equal(paper.domain,'research');
+  assert.notEqual(assessWorkDomain({request:'Send birthday wishes and a weather forecast'}).domain,'coding');
+});
