@@ -4,6 +4,7 @@
  */
 
 import crypto from 'node:crypto';
+import { verifyControlledRun } from '../control-engine-admission.js';
 import { parseJsonObject } from '../structured.js';
 import { callModel, callRunner, withRunControl, SANDBOX_TIMEOUT_MS } from '../runtime.js';
 import { chooseExecutionTarget, codeActionDecision, executionTargetsFor, verifyExecutionReceipt, signExecutionChallenge, executionPayloadDigest, executionSucceeded, executionIdFor, RECEIPT_ALGORITHM } from '../execution.js';
@@ -351,30 +352,10 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
         : null
     };
   }
-  // Strict mode forbids executing old Normal Chat or retargeted projects.
-  // The same check protects queued background requests AND claimed workers.
-  async function strictRunControlGate(run, scope, principalId) {
-    if (config.product?.codingResearchOnly !== true) return null;
-    const controller = run.surface === 'code' ? 'coding'
-      : run.surface === 'research' ? 'research' : null;
-    if (!controller || run.adaptation?.controlEngineId !== controller
-        || !run.projectId || run.principalId !== principalId) {
-      return {
-        status: 409, code: 'control-historical-read-only',
-        error: 'This historical or unowned run is read-only. Start work in a Coding or Research project.'
-      };
-    }
-    const { rows } = await pool.query(
-      `SELECT id FROM projects WHERE id = $1 AND workspace_id = $2
-         AND state = 'active' AND default_surface = $3
-         AND (principal_id = $4 OR visibility = 'workspace') LIMIT 1`,
-      [run.projectId, scope.workspaceId, run.surface, principalId]
-    );
-    return rows.length ? null : {
-      status: 409, code: 'control-project-changed',
-      error: 'The project is archived or no longer matches this run’s control engine.'
-    };
-  }
+  const strictRunControlGate = (run, scope, principalId) => verifyControlledRun({
+    pool, run, scope, principalId,
+    codingResearchOnly: config.product?.codingResearchOnly === true
+  });
 
   /** Null when the person may use the AI now; otherwise the not-executed result that says when. */
   async function usageBlock(scope) {
