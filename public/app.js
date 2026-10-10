@@ -25,11 +25,13 @@ import { initArtifactPreview } from './artifact-preview.js';
 import { captureSelectedTab } from './workspace-screenshot.js';
 import { initProjectHub, loadProjects } from './app-projects.js';
 import { executionContextKey, executionContextCurrent } from './execution-context.js';
+import { initChatFilesPanel } from './chat-files-panel.js';
 
 initSettings();
 initWorkspaceSources();
 initTerminal();
 initArtifactPreview();
+initChatFilesPanel();
 
 
 /* --------------------------------------------------------------- transport */
@@ -1230,6 +1232,7 @@ export async function saveAnswer(value, runId) {
     content: value,
     provenance: { source: 'chat-answer', runId: runId ?? null }
   });
+  document.dispatchEvent(new Event('kindgleam:chat-files-updated'));
   notify('runNotice', 'ok', `Saved to Files as ${object.name ?? object.id}.`);
 }
 
