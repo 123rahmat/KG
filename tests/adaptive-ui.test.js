@@ -212,7 +212,7 @@ test('landing focuses on one professional coding workflow without obsolete publi
   const app = await read('public/app.js');
   assert.match(html, /<title>KG Code — AI Engineering Workspace<\/title>/);
   assert.match(html, /Your code\./);
-  assert.match(html, /href="#code"/);
+  assert.match(html, /kg-editor-mock/);
   assert.match(html, /data-demo="code"/);
   assert.match(html, /id="landingSignIn"/);
   assert.match(html, /id="landingSignInPrimary"/);
