@@ -693,6 +693,14 @@ export async function enterApp() {
   $('userInitial').textContent = (state.principal.name || '?').trim().charAt(0).toUpperCase();
   await ensureTerms();
   await loadPreferences();
+  // Read before rendering the project hub. This is UI gating only; server
+  // admission, run ownership and job/tool guards remain authoritative.
+  try {
+    const contract = await api('GET', '/api/adaptive-contract', undefined, { workspace: false });
+    state.product = { codingResearchOnly: contract?.product?.codingResearchOnly === true };
+  } catch {
+    state.product = { codingResearchOnly: false };
+  }
   await loadProjects().catch(() => {
     state.projects = [];
     state.activeProjectId = null;
