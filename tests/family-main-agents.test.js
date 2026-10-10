@@ -21,6 +21,9 @@ test('main agents own expandable specialist skill pools, not a fixed eight-role 
     assert.ok(Object.isFrozen(role));
   }
   assert.ok(lengths.size>4);
+  const long=FAMILY_MAIN_AGENTS['code-agent-runtime-engineering-lead'];
+  assert.ok(long?.subagents.length>8);
+  assert.ok(long.purpose.length<450,'only the active lenses, not every available skill, belong in a prompt');
 });
 test('scoped main agents do not activate from an unrelated or empty request',()=>{
   assert.ok(familyMainAgentMatch('code-ui-engineering-lead',{surface:'code',

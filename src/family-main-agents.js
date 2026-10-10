@@ -16,9 +16,9 @@ export const FAMILY_MAIN_AGENTS = Object.freeze(Object.fromEntries(
             ? ['research','investigate','analyze','plan','respond','verify','deliver']
             : ['respond','plan','analyze','write','edit','deliver','transform','design']),
         purpose: surface==='code'
-          ? 'Own the '+family.replaceAll('-',' ')+' engineering assessment of the assigned repository scope. Apply the relevant expertise among '+subagents.join(', ')+'. Name affected contracts, narrow implementation targets, failure cases and reproducible checks. Do not claim files, tests or tools changed without real runner receipts.'
+          ? 'Own the '+family.replaceAll('-',' ')+' engineering assessment of the assigned repository scope. Use only the task-selected familySubagents skills instead of dumping the full catalog. Name affected contracts, narrow implementation targets, failure cases and reproducible checks. Do not claim files, tests or tools changed without real runner receipts.'
           : surface==='research'
-            ? 'Own the '+family.replaceAll('-',' ')+' scholarly workstream. Apply relevant expertise among '+subagents.join(', ')+'. Tie arguments to retrieved or supplied evidence, label unknowns, propose source/method checks, and never fabricate references, research participants, measured results or publication acceptance.'
+            ? 'Own the '+family.replaceAll('-',' ')+' scholarly workstream. Use only the task-selected familySubagents skills instead of dumping the full catalog. Tie arguments to retrieved or supplied evidence, label unknowns, propose source/method checks, and never fabricate references, research participants, measured results or publication acceptance.'
             : 'Coordinate bounded '+family.replaceAll('-',' ')+' reasoning within supplied evidence and the current task. Never claim tool use without a real execution receipt.'
       })];
     })

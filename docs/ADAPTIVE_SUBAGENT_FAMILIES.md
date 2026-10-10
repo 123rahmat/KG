@@ -2,20 +2,24 @@
 
 ## Architecture
 
-Kindgleam retains its existing one server-owned workflow, the three independent
-Normal Chat / Coding / Research workspaces, its existing specialists, Gemini
-model boundary, authorization checks, tool registry, task evidence and resource
-budgets. There is **no second agent engine**.
+Kindgleam retains one server-owned workflow and the two specialist **agentic
+domains** Coding and Research. Normal Chat remains a direct, non-agent UI
+entry point. All three UI workspaces share the Gemini model boundary,
+authorization checks, tool registry, task evidence and resource budgets.
+There is **no second execution or authorization engine**.
 
-The registered specialist families are **starting vocabularies**, not fixed subagent rosters. Each catalog family supplies eight reusable seed lenses, and every parent can also derive as many distinct situation-specific advisory lenses as are supported by the task's requirements, acceptance criteria, requested outputs and observed evidence gaps. The active count is **not fixed** at one, three, eight, or any other preset roster size. Most lenses share their parent's already-authorized model call, so additional expertise does not automatically create extra model cost.
+The registered specialist families are **starting vocabularies**, not fixed subagent rosters. Each base family retains its focused seed lenses and adds domain-specific capability packs. Every Coding and Research main family now has **more than eight available lenses**, with a different count and focus by family; uncovered task requirements and observed gaps can add further temporary lenses. The number **activated** is determined by current need and a bounded context budget, not by a static roster. Most active lenses run inside their parent's already-authorized Gemini model call; independent probes are exceptional and separately budgeted.
 
 **Implementation**:
-- `src/adaptive-specialist-focus.js` — authoritative family/subskill catalog.
+- `src/adaptive-specialist-focus.js` — authoritative family/subskill catalog;
+  base discovery stays separate from generic cross-family skills.
+- `src/specialist-capability-packs.js` — scoped domain expansion without
+  fixed subagent-count assumptions.
 - `src/adaptive-family-subagents.js` — family objectives, domain
   checks, related-family consultation options, child selection and exceptional
   bounded read-only independent model checks.
 - `src/multi-agent.js` — parent agent gets its currently selected family
-  subskills; independent child calls are admitted based on task evidence, the trusted task compute allowance, provider concurrency, and the same usage reservations and audit callbacks as parent agents. No unbounded recursive recruitment occurs.
+  subskills; independent child calls are admitted based on task evidence, the trusted task compute allowance, provider concurrency, and the same usage reservations and audit callbacks as parent agents. The full skill catalog is deliberately **not copied into each model prompt**. No unbounded recursive recruitment occurs.
 - `src/subsystem-orchestrator.js` and the existing code-specialist iteration
   continue to manage parallel Coding work: ownership, dependencies and patch
   integration remain with the parent. New family lenses do not mutate files.
@@ -25,12 +29,15 @@ The registered specialist families are **starting vocabularies**, not fixed suba
 
 ## Activated Coding specialties
 
-The available Coding registry now provides **33 distinct main-agent family
-definitions with eight seed subagent specialties apiece** (264 possible
-seed lenses, not 264 active model calls). Examples include UI, UX, frontend,
-backend, API, database, security, accessibility, testing, data-pipeline
-engineering, data management, identity/access, file rendering, AI integration,
-devops, reliability, desktop/mobile and performance.
+The registry provides **63 Coding family leads** and **57 Research family
+leads**, plus direct-chat family metadata that does not recruit agents.
+Each family has an expanded, nonuniform skill pool, not eight fixed children.
+Coding coverage includes UI/UX, frontend, backend, APIs, databases,
+authentication, data governance, AI-agent runtime, files, payments,
+deployment, testing, debugging and performance. Research coverage includes
+primary-source analysis, scholarly writing, reviews, qualitative and
+quantitative methodology, reproducibility, ethics, datasets and figures.
+Available lenses are not the number of concurrently running model calls.
 
 Code subsystem selection uses the actual scoped files and task goal to
 differentiate `src/ui/`, `src/ux/`, identity/session modules, data governance
