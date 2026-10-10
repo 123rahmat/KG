@@ -267,8 +267,9 @@ export class RunStore {
     }
 
     const linkedProjectId = text(projectId);
+    let linkedProject = null;
     if (linkedProjectId) {
-      const { rows: [linkedProject] } = await this.pool.query(
+      const { rows: [projectRow] } = await this.pool.query(
         `SELECT id, default_surface, current_revision
            FROM projects
           WHERE id = $1
@@ -278,6 +279,7 @@ export class RunStore {
           LIMIT 1`,
         [linkedProjectId, scope.workspaceId, scope.principalId]
       );
+      linkedProject = projectRow;
       if (!linkedProject) {
         throw new RunError('Project not found or not accessible in this workspace.', {
           status: 404,
@@ -289,6 +291,12 @@ export class RunStore {
         || linkedProject.default_surface !== enforcedControlSurface)) {
         throw new RunError('The requested control engine does not own this project.', {
           status: 409, code: 'control-domain-mismatch'
+        });
+      }
+      if (controlEngineId &&
+          text(project?.currentRevision) !== text(linkedProject.current_revision)) {
+        throw new RunError('Project revision changed during admission; start from its current revision.', {
+          status: 409, code: 'control-stale-revision'
         });
       }
     }
@@ -410,6 +418,7 @@ export class RunStore {
       plan.adaptation.controlEngineId = controlEngineId;
       plan.adaptation.controlWorkIdentity = {
         projectId: linkedProjectId, controlEngineId,
+        projectRevision: text(linkedProject?.current_revision) || null,
         // Server-owned state, never self-authorized by a model or UI tab.
         source: 'authorized-project', immutable: true
       };
