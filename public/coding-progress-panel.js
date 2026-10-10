@@ -14,8 +14,10 @@ export function renderCodingProgress(host, run, { surface = 'normal-chat', pendi
   if (!host) return;
   const coding = run?.surface === 'code' || (!run && surface === 'code');
   const snapshot = coding ? codingProgressSnapshot(run) : null;
-  const signature = JSON.stringify({coding,runId:run?.id,runState:run?.state,
-    next:run?.next,tasks:run?.tasks, pending, surface});
+  // The run's evidence can include large tool output and file contents.
+  // Serialize only the small visible projection, not the full run/task graph
+  // on every streaming UI update.
+  const signature = JSON.stringify({coding,snapshot,pending,surface});
   if (host === lastHost && signature === lastSignature) return;
   lastHost = host;
   lastSignature = signature;
