@@ -25,13 +25,17 @@ test('Escape closes the phone menu, one layer at a time', () => {
 
 test('public landing is a single-screen product surface with sign-in actions separate from the form', () => {
   const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
-  assert.match(html, /<section class="landing" id="landing"/);
+  assert.match(html, /<section class="landing kg-entrance" id="landing"/);
   assert.match(html, /id="landingSignIn"/);
   assert.match(html, /id="landingSignInPrimary"/);
-  const landing = html.match(/<section class="landing" id="landing"[\s\S]*?<\/section>/)?.[0] ?? '';
+  const landing = html.split('<!-- Sign in ')[0] ?? '';
   assert.doesNotMatch(landing, /id="emailSignin"|id="signin"|type="password"/);
-  assert.match(css, /\.landing \{[^}]*min-height: 100vh/);
-  assert.match(css, /\.landing-main \{[^}]*align-content: center/);
+  assert.match(landing, /ILLUSTRATIVE|SIMULATED EXAMPLE/);
+  assert.match(landing, /data-demo="code"/);
+  assert.doesNotMatch(landing, /data-demo="research"|data-demo="chat"/);
+  assert.match(css, /\.kg-entrance \{[\s\S]*?min-height:100svh/);
+  assert.match(css, /@media\(max-width:520px\)/);
+  assert.match(css, /prefers-reduced-motion:reduce/);
 });
 
 test('production response style rules prohibit casual filler', () => {
