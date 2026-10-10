@@ -14,7 +14,7 @@
 
 ## Architecture correction — binding requirement (2026-10-10)
 
-**User decision:** Separate **control engines**, not complete AI systems. Apply this correction to every task and test below, including older `CodingEngine`/`ResearchEngine` names. New code should use `CodingControlEngine` and `ResearchControlEngine` for domain decision-makers. The existing shared kernel/runtime is the only system owner of RunStore, jobs, persistence, provider/tool gateway, authorization, usage and verification receipts. Each controller has **isolated per-run work DAGs, agent-team choices, memory/cache/artifact namespaces and acceptance**, enforced by the shared runtime; do not duplicate these infrastructure services. Use one deployable application unless measured workload warrants separate worker pools. Project chats remain separate views over that one platform.
+**User decision:** Separate **control engines**, not complete AI systems. Apply this correction to every task and test below, including older `CodingControlEngine`/`ResearchControlEngine` names. New code should use `CodingControlEngine` and `ResearchControlEngine` for domain decision-makers. The existing shared kernel/runtime is the only system owner of RunStore, jobs, persistence, provider/tool gateway, authorization, usage and verification receipts. Each controller has **isolated per-run work DAGs, agent-team choices, memory/cache/artifact namespaces and acceptance**, enforced by the shared runtime; do not duplicate these infrastructure services. Use one deployable application unless measured workload warrants separate worker pools. Project chats remain separate views over that one platform.
 
 **Implementation reinterpretation:** The “engine ownership and historical migration” task must introduce `control_engine_id` (or an unambiguous alias `engine_id`) as **immutable domain-control scope**, not a new independent runtime. The “separate engine execution and fair queue capacity” task implements two controller entry points **feeding the same RunStore and shared worker scheduler** with logical queue reservations, not two copies of the lifecycle. The “two separate workspace interfaces” task delivers domain-specific project chats, not two websites. Cross-controller transfer needs explicit versioned handoff; incidental analysis code/paper reads remain in the owning controller. Update tests to verify reuse of shared services as well as isolation of control decisions and private project work.
 
@@ -22,7 +22,7 @@
 
 ## Global Constraints
 
-- “The product has two distinct workspaces, Coding and Research, each with its own workflow engine and project work chats.”
+- “The product has two distinct workspaces, Coding and Research, each with its own control engine and project work chats.”
 - “Each run has exactly one owning **control engine** for policy, graph and acceptance; there is **one authoritative shared task lifecycle**.”
 - “Distinguish tenant workspace identity from engine type.”
 - “Enforce scope on the server before substantive planning, agent recruitment, retrieval, tool admission or execution.”
@@ -358,7 +358,7 @@ Tasks 8–13 consume Subproject A's ownership and scope boundaries. They make wo
 **Files:** Create `src/engines/coding.js`, `src/engines/research.js`, `src/engines/registry.js`, `src/engines/execution-services.js`, `tests/engine-runtime-isolation.test.js`.
 Modify `src/routes/runs.js`, `src/routes/execution.js`, `src/jobs.js`, `server.js`, `src/config.js`, `src/memory.js`, `src/blackboard.js`, `src/adaptive-cache.js`, `src/skills.js`, `src/unified-work-context.js`, `src/domain-specialists.js`, `src/mode-controllers.js`.
 
-**Interfaces:** CodingEngine and ResearchEngine each implement `plan({ scope, understanding, inputIdentity, request })`, `execute({ scope, runId, taskId, signal })`, `accept({ run, task, outcome })`, `resume({ scope, runId })`, and `cancel({ scope, runId })`; async operations return existing RunStore views. Registry `engineForRun(run)` selects only persisted ownership. JobStore.claim gains required engineId, and createJobWorker gains engineId/slot budget.
+**Interfaces:** CodingControlEngine and ResearchControlEngine each implement `plan({ scope, understanding, inputIdentity, request })`, `execute({ scope, runId, taskId, signal })`, `accept({ run, task, outcome })`, `resume({ scope, runId })`, and `cancel({ scope, runId })`; async operations return existing RunStore views. Registry `engineForRun(run)` selects only persisted ownership. JobStore.claim gains required engineId, and createJobWorker gains engineId/slot budget.
 
 - [ ] **Step 1: Write the failing acceptance tests in the named test files.**
 
@@ -594,7 +594,7 @@ Tasks 14–17 consume the durable ledger, invocation receipts and versioned arti
 **Files:** Create `src/research/computation.js`, `src/research/math-contract.js`, `runners/research/Dockerfile`, `runners/research/requirements.lock`, `runners/research/compute.py`, `tests/research-math.test.js`, `tests/fixtures/research-math.json`, `bin/research-runner-checks.js`.
 Modify `src/domain-specialists.js`, `src/tools/registry.js`, `src/toolbox.js`, `src/sandbox.js`, `src/config.js`, `bin/sandbox-runner.js`, `src/engines/research.js`, `src/engines/coding.js`.
 
-**Interfaces:** Produces `validateMathContract(input) -> { valid, issues }` and `executeResearchComputation(scope, contract, { runner, signal }) -> { results, diagnostics, receiptRef, artifactRefs }`. Math contract records variables, assumptions, units, restrictions, precision, dataset/equation/source versions and requested checks. ResearchEngine math capability uses the harness; CodingEngine may use authorized algorithm/math computation in its own scope.
+**Interfaces:** Produces `validateMathContract(input) -> { valid, issues }` and `executeResearchComputation(scope, contract, { runner, signal }) -> { results, diagnostics, receiptRef, artifactRefs }`. Math contract records variables, assumptions, units, restrictions, precision, dataset/equation/source versions and requested checks. ResearchControlEngine math capability uses the harness; CodingControlEngine may use authorized algorithm/math computation in its own scope.
 
 - [ ] **Step 1: Write the failing acceptance tests in the named test files.**
 
@@ -692,7 +692,7 @@ Use the node:test portion of the verification command below. Expect FAIL on the 
 
 - [ ] **Step 3: Implement the specified boundary and connect its production callers.**
 
-Wire literature/method/statistics/math/qualitative/reproducibility/writing/reference/figure capabilities into ResearchEngine on demand. Support proposal through conclusion/references and targeted reviewer revision. Audit material claims against reviewed inspected support, results against computation receipts, figures against accepted current versions, and manuscript references against stable IDs. Keep direct findings, synthesis, inference and uncertainty distinct. Render and inspect final exports through sandbox tools before publication-readiness claims; unresolved evidence remains explicit.
+Wire literature/method/statistics/math/qualitative/reproducibility/writing/reference/figure capabilities into ResearchControlEngine on demand. Support proposal through conclusion/references and targeted reviewer revision. Audit material claims against reviewed inspected support, results against computation receipts, figures against accepted current versions, and manuscript references against stable IDs. Keep direct findings, synthesis, inference and uncertainty distinct. Render and inspect final exports through sandbox tools before publication-readiness claims; unresolved evidence remains explicit.
 
 - [ ] **Step 4: Run the task verification and inspect the recorded output.**
 
