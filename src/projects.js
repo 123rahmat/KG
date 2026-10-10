@@ -17,14 +17,19 @@ export class ProjectError extends Error {
   }
 }
 
-export function normalizeProject(input = {}, { codingResearchOnly = false } = {}) {
+export function normalizeProject(input = {}, { codingResearchOnly = false, codingOnly = false } = {}) {
   const value = input && typeof input === 'object' ? input : {};
   const name = text(value.name).replace(/\s+/g, ' ').slice(0, 120);
   if (!name) throw new ProjectError('Project name is required.');
   const description = text(value.description).replace(/\s+/g, ' ').slice(0, 500);
   const defaultSurface = text(value.defaultSurface || value.surface)
-    || (codingResearchOnly ? 'code' : 'normal-chat');
+    || ((codingResearchOnly || codingOnly) ? 'code' : 'normal-chat');
   if (!SURFACES.has(defaultSurface)) throw new ProjectError('Project surface must be normal-chat, code or research.');
+  if (codingOnly && defaultSurface !== 'code') {
+    throw new ProjectError('New KG Code projects must use Coding.', {
+      status: 422, code: 'code-only-project-required'
+    });
+  }
   if (codingResearchOnly && !['code','research'].includes(defaultSurface)) {
     throw new ProjectError('New projects must belong to Coding or Research.', {
       status: 422, code: 'control-project-domain-required'
@@ -63,13 +68,14 @@ const RUN_JOIN = [
 ].join(' ');
 
 export class ProjectStore {
-  constructor(pool, { codingResearchOnly = false } = {}) {
+  constructor(pool, { codingResearchOnly = false, codingOnly = false } = {}) {
     this.pool = pool;
     this.codingResearchOnly = codingResearchOnly === true;
+    this.codingOnly = codingOnly === true;
   }
 
   async create(scope, principal, input = {}) {
-    const normalized = normalizeProject(input, { codingResearchOnly: this.codingResearchOnly });
+    const normalized = normalizeProject(input, { codingResearchOnly: this.codingResearchOnly, codingOnly: this.codingOnly });
     if (normalized.sourceId) {
       const { rows: [source] } = await this.pool.query(
         'SELECT id FROM workspace_sources WHERE id = $1 AND workspace_id = $2 AND principal_id = $3 AND revoked_at IS NULL LIMIT 1',
@@ -134,7 +140,7 @@ export class ProjectStore {
   async update(scope, id, patch = {}) {
     const current = await this.get(scope, id);
     if (!current) return null;
-    if (this.codingResearchOnly && (current.defaultSurface === 'normal-chat'
+    if ((this.codingResearchOnly || this.codingOnly) && ((this.codingOnly && current.defaultSurface !== 'code') || current.defaultSurface === 'normal-chat'
         || (patch?.defaultSurface && patch.defaultSurface !== current.defaultSurface)
         || (patch?.surface && patch.surface !== current.defaultSurface))) {
       throw new ProjectError('The owning control engine cannot be changed.', {
@@ -142,7 +148,7 @@ export class ProjectStore {
       });
     }
     const normalized = normalizeProject({ ...current, ...(patch || {}) }, {
-      codingResearchOnly: this.codingResearchOnly
+      codingResearchOnly: this.codingResearchOnly, codingOnly: this.codingOnly
     });
     if (normalized.sourceId) {
       const { rows: [source] } = await this.pool.query(
