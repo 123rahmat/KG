@@ -4,6 +4,7 @@
  */
 import { element, button, state } from './ui-core.js';
 import { codingProgressSnapshot } from './coding-progress-model.js';
+import { codingUserCoverage } from './coding-user-coverage.js';
 import { agentActivitySnapshot } from './agent-activity.js';
 
 const get = id => document.getElementById(id);
@@ -22,13 +23,14 @@ export function renderCodingProgress(host, run, {
   if (!host) return;
   const coding = run?.surface === 'code' || (!run && surface === 'code');
   const snapshot = coding ? codingProgressSnapshot(run) : null;
+  const userCoverage = coding && run ? codingUserCoverage(run) : null;
   const agentState = coding && run ? agentActivitySnapshot(run) : null;
   const specialists = Array.isArray(agentState?.roles) ? agentState.roles.slice(-5) : [];
   const activeSpecialists = Array.isArray(agentState?.active) ? agentState.active.length : 0;
   // The run's evidence can include large tool output and file contents.
   // Serialize only the small visible projection, not the full run/task graph
   // on every streaming UI update.
-  const signature = JSON.stringify({coding,snapshot,pending,offline,surface,
+  const signature = JSON.stringify({coding,snapshot,userCoverage,pending,offline,surface,
     specialists,activeSpecialists,focused:state.product?.codingOnly === true});
   if (host === lastHost && signature === lastSignature) return;
   lastHost = host;
@@ -82,6 +84,28 @@ export function renderCodingProgress(host, run, {
     element('span',{class:snapshot.verified?'code-progress-evidence good':'code-progress-evidence',
       text:snapshot.verified ? 'Verification recorded' : 'Not verified'})
   ]);
+  const coverageCard = userCoverage ? element('section',{
+    class:'code-user-coverage','aria-label':'Your requested engineering outcomes'
+  },[
+    element('div',{class:'code-user-coverage-header'},[
+      element('strong',{text:'Your requirements'}),
+      element('span',{text:userCoverage.label})
+    ]),
+    element('ul',{class:'code-user-coverage-list'},userCoverage.items.map(item =>
+      element('li',{},[
+        element('span',{class:'code-user-coverage-indicator '+item.status,
+          'aria-hidden':'true',text:item.status==='acknowledged'?'✓':'○'}),
+        element('span',{text:item.text}),
+        element('span',{class:'code-user-coverage-state',
+          text:item.status==='acknowledged'?'Checked':'Needs verification'})
+      ])
+    )),
+    userCoverage.hidden ? element('p',{class:'code-user-coverage-note',
+      text:`${userCoverage.hidden} more user-defined checks are in the run requirements.`}) : null,
+    userCoverage.limited ? element('p',{class:'code-user-coverage-warning',
+      text:'This is a bounded checklist. Review the full original request for additional subrequests.'}) : null,
+    element('p',{class:'code-user-coverage-note',text:userCoverage.caveat})
+  ].filter(Boolean)) : null;
   const steps = element('ol',{class:'code-progress-checkpoints',
     'aria-label':'Latest recorded workflow steps'},snapshot.checkpoints.map((step,index)=>
     element('li',{class:'code-progress-step '+step.status+(step.current?' current':'')},[
@@ -120,6 +144,6 @@ export function renderCodingProgress(host, run, {
   detail.open = wasOpen;
   host.replaceChildren(element('div',{class:'code-progress-card'},[
     intro,element('div',{class:'code-progress-meter-wrap'},[meter,facts]),
-    detail,quickActions
+    coverageCard,detail,quickActions
   ]));
 }
