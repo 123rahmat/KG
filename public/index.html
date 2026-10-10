@@ -646,6 +646,16 @@
       <div class="brand"><svg class="logo" aria-hidden="true"><use href="#i-logo"/></svg> <span>Kindgleam</span></div>
     </div>
     <button class="new-chat" id="newWork" title="New chat"><svg class="i" aria-hidden="true"><use href="#i-new"/></svg> New chat</button>
+    <!-- Coding-only navigation: uses existing working routes and panels. -->
+    <nav id="codingNav" class="coding-nav" aria-label="Coding workspace" hidden>
+      <span class="coding-nav-label">WORKSPACE</span>
+      <button id="codeNavWork" type="button"><svg class="i" aria-hidden="true"><use href="#i-code"/></svg> Coding workspace</button>
+      <button id="codeNavProjects" type="button"><svg class="i" aria-hidden="true"><use href="#i-files"/></svg> Projects</button>
+      <button id="codeNavProgress" type="button"><svg class="i" aria-hidden="true"><use href="#i-activity"/></svg> Agent progress</button>
+      <button id="codeNavTerminal" type="button"><svg class="i" aria-hidden="true"><use href="#i-run"/></svg> Terminal &amp; tests</button>
+      <button id="codeNavFiles" type="button"><svg class="i" aria-hidden="true"><use href="#i-files"/></svg> Chat files</button>
+      <button id="codeNavActivity" type="button"><svg class="i" aria-hidden="true"><use href="#i-verify"/></svg> Activity</button>
+    </nav>
     <nav class="rail-nav" id="tabs" role="tablist" aria-label="Pages">
       <button role="tab" aria-selected="true" data-tab="runs" hidden>Chat</button>
       <button role="tab" aria-selected="false" data-tab="explore" title="Explore"><svg class="i" aria-hidden="true"><use href="#i-explore"/></svg> Explore</button>
@@ -784,6 +794,7 @@
           <button id="syncWorkspaceSource" type="button" hidden>Sync</button>
           <button id="openTerminal" type="button">Terminal</button>
         </div>
+        <section id="codingProgressPanel" class="coding-progress-panel" aria-label="Recorded coding progress" hidden></section>
         <section id="deepWorkspaceShell" class="deep-workspace-shell" hidden aria-label="Workspace context"></section>
         <div class="thread" id="thread" role="tabpanel" aria-labelledby="chatViewMessages" tabindex="0" aria-label="Conversation"></div>
         <div class="sr-only" id="workAnnouncer" role="status" aria-live="polite" aria-atomic="true"></div>
