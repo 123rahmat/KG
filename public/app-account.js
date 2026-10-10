@@ -724,7 +724,10 @@ export async function enterApp() {
       codingOnly: contract?.product?.codingOnly === true };
     configureCodingOnlyNavigation();
   } catch {
-    state.product = { codingResearchOnly: false, codingOnly: false };
+    // The product is coding-only by default. When the contract cannot be
+    // retrieved, do not reveal discontinued creation paths that will fail
+    // server-side admission anyway. An explicit server rollback still wins.
+    state.product = { codingResearchOnly: false, codingOnly: true };
     configureCodingOnlyNavigation();
   }
   await loadProjects().catch(() => {
