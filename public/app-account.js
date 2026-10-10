@@ -148,7 +148,7 @@ export function applyRole() {
   $('createRun').disabled = !editor;
   $('goal').disabled = !editor;
   $('goal').placeholder = editor
-    ? 'Ask anything…'
+    ? (state.product?.codingOnly ? 'Describe the coding task or bug to fix…' : 'Ask anything…')
     : 'You have view-only access in this workspace.';
   $('newWork').hidden = !editor;
   $('newWorkTop').hidden = !editor;
@@ -697,9 +697,27 @@ export async function enterApp() {
   // admission, run ownership and job/tool guards remain authoritative.
   try {
     const contract = await api('GET', '/api/adaptive-contract', undefined, { workspace: false });
-    state.product = { codingResearchOnly: contract?.product?.codingResearchOnly === true };
+    state.product = {
+      codingResearchOnly: contract?.product?.codingResearchOnly === true,
+      codingOnly: contract?.product?.codingOnly === true
+    };
   } catch {
-    state.product = { codingResearchOnly: false };
+    state.product = { codingResearchOnly: false, codingOnly: false };
+  }
+  document.body.classList.toggle('coding-only', state.product.codingOnly);
+  if (state.product.codingOnly) {
+    state.activeSurface = 'code';
+    const filter = $('chatSurfaceFilter');
+    if (filter) filter.value = 'code';
+    const label = $('newWork')?.querySelector('.new-work-label');
+    if (label) label.textContent = 'New coding task';
+    const options = $('chatSurfaceFilter')?.options ?? [];
+    for (const option of options) {
+      if (['research', 'normal-chat'].includes(option.value)) {
+        option.hidden = true;
+        option.disabled = true;
+      }
+    }
   }
   await loadProjects().catch(() => {
     state.projects = [];
