@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace KG's three-purpose product with one coding-and-research product containing two isolated workspaces, verified domain outputs, and bounded multiagent execution.
+**Goal:** Refocus one existing KG system on Coding and academic Research, with two isolated domain controllers/project chats, verified outputs and bounded multiagent workflows.
 
-**Architecture:** CodingEngine and ResearchEngine own separate orchestration entry points, registries, graph instances, queue reservations, and context namespaces. They reuse the existing server-owned RunStore, job leases, permissions, usage accounting, providers, and sandbox libraries; none of the new modules becomes a competing task lifecycle. Cleanup follows caller replacement, and research provenance remains durable independently of model context limits.
+**Architecture (user-corrected 10 October 2026):** **One KG AI/execution system** with **two independent domain control engines** (CodingControlEngine and ResearchControlEngine). Each controls its own orchestration, agent recruitment, graph instances, work policy and acceptance. Its project/run/agent/context/artifact scope is logically isolated; the underlying RunStore, task lifecycle, worker/leases, tools, model gateway, budget, auth, database and sandbox are **shared**, never duplicated. Do not interpret “separate engines” as “two full systems”. Domain queue reservations are partitions of one shared scheduler; separate deployments are optional, not core architecture. Cleanup follows caller replacement and preserves research provenance and historical user data. See the 2026-10-10 architecture correction.
 
 **Tech Stack:** Existing Node.js ESM (Node >=22.0.0), Express 5, PostgreSQL, node:test, ESLint, Playwright, existing provider and sandbox interfaces. Research computation uses a separate locked Python runner environment with SymPy, SciPy and Matplotlib; preserve the configured deployment model catalog.
 
@@ -12,10 +12,18 @@
 
 **Base:** `123rahmat/KG` main `e7b5630f9132b5db2782c09e1b6288970195d06f`; Git tree `979319795f0126d76934571469a23e2d60595240`. Latest existing migration is 80. Refresh main and reconcile concurrent changes before implementation or integration.
 
+## Architecture correction — binding requirement (2026-10-10)
+
+**User decision:** Separate **control engines**, not complete AI systems. Apply this correction to every task and test below, including older `CodingEngine`/`ResearchEngine` names. New code should use `CodingControlEngine` and `ResearchControlEngine` for domain decision-makers. The existing shared kernel/runtime is the only system owner of RunStore, jobs, persistence, provider/tool gateway, authorization, usage and verification receipts. Each controller has **isolated per-run work DAGs, agent-team choices, memory/cache/artifact namespaces and acceptance**, enforced by the shared runtime; do not duplicate these infrastructure services. Use one deployable application unless measured workload warrants separate worker pools. Project chats remain separate views over that one platform.
+
+**Implementation reinterpretation:** The “engine ownership and historical migration” task must introduce `control_engine_id` (or an unambiguous alias `engine_id`) as **immutable domain-control scope**, not a new independent runtime. The “separate engine execution and fair queue capacity” task implements two controller entry points **feeding the same RunStore and shared worker scheduler** with logical queue reservations, not two copies of the lifecycle. The “two separate workspace interfaces” task delivers domain-specific project chats, not two websites. Cross-controller transfer needs explicit versioned handoff; incidental analysis code/paper reads remain in the owning controller. Update tests to verify reuse of shared services as well as isolation of control decisions and private project work.
+
+`docs/architecture/SHARED_KG_DOMAIN_CONTROLLERS.md` on the foundation PR is the authoritative ADR for this clarification. Do not remove old data or claim the migration complete before the shared runtime is connected and verified.
+
 ## Global Constraints
 
 - “The product has two distinct workspaces, Coding and Research, each with its own workflow engine and project work chats.”
-- “Each run has exactly one owning engine, with its own authoritative task lifecycle.”
+- “Each run has exactly one owning **control engine** for policy, graph and acceptance; there is **one authoritative shared task lifecycle**.”
 - “Distinguish tenant workspace identity from engine type.”
 - “Enforce scope on the server before substantive planning, agent recruitment, retrieval, tool admission or execution.”
 - “Treat a scope decline separately from safety/abuse refusals so an ordinary unrelated request does not penalize the account.”
@@ -345,7 +353,7 @@ Use explicit paths from Files, inspect `git diff --check` and the staged diff, t
 
 Tasks 8–13 consume Subproject A's ownership and scope boundaries. They make worker execution, graphs, messages, handoffs and external-agent results obey the same durable authority.
 
-### Task 8: Separate engine execution and fair queue capacity
+### Task 8: Isolate control-engine decisions and ensure fair shared scheduler capacity
 
 **Files:** Create `src/engines/coding.js`, `src/engines/research.js`, `src/engines/registry.js`, `src/engines/execution-services.js`, `tests/engine-runtime-isolation.test.js`.
 Modify `src/routes/runs.js`, `src/routes/execution.js`, `src/jobs.js`, `server.js`, `src/config.js`, `src/memory.js`, `src/blackboard.js`, `src/adaptive-cache.js`, `src/skills.js`, `src/unified-work-context.js`, `src/domain-specialists.js`, `src/mode-controllers.js`.
