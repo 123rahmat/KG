@@ -359,6 +359,10 @@ export const CODE_FOLLOW_UP = /\b(?:bugs?|functions?|methods?|class(?:es)?|varia
 export function planGoal(goal, {
   policies = {},
   activeSurface = '',
+  // Only passed by the server after authorization against a stored project.
+  // Prevents the legacy heuristic from routing a simple technical question
+  // into the historical Normal Chat execution path.
+  enforcedControlSurface = null,
   timeZone = '',
   runtimeMode = 'auto',
   workspaceType = 'personal',
@@ -578,7 +582,9 @@ export function planGoal(goal, {
   // The three-workspace surface policy is the single routing authority.
   // Older adaptive heuristics may still describe capabilities, but they must
   // not override the chosen NormalChat / Code / Research operating boundary.
-  const resolvedSurface = surfaceBoundary.surface === 'normal-chat' ? 'chat' : surfaceBoundary.surface;
+  const resolvedSurface = ['code','research'].includes(enforcedControlSurface)
+    ? enforcedControlSurface
+    : surfaceBoundary.surface === 'normal-chat' ? 'chat' : surfaceBoundary.surface;
   const adaptiveExecution = adaptiveExecutionEnvelope({
     goal: value,
     complexity: Number(analysis.situation?.complexity ?? analysis.complexity ?? 0),
