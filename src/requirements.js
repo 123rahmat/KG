@@ -71,6 +71,9 @@ function normalizeItem(input, existing = null) {
     requirement: label.slice(0, 800),
     kind: text(existing?.kind) || text(input?.kind) || 'requirement',
     required: existing?.required !== undefined ? existing.required !== false : input?.required !== false,
+    // Explicit KG Code user needs must be individually acknowledged by a
+    // named verification result. A blanket 'pass' is not coverage evidence.
+    explicitCoverage: existing?.explicitCoverage === true || input?.explicitCoverage === true,
     priority: Math.max(0, Math.min(100, Number(existing?.priority ?? input?.priority ?? 50) || 50)),
     importance: text(existing?.importance) || text(input?.importance) || 'important',
     dependencies: cleanList(existing?.dependencies ?? input?.dependencies),
@@ -151,7 +154,7 @@ export function normalizeRequirementModel(value, goal = '') {
   const model = finalizeModel({ version: 1, items });
   return model.items.length || !text(goal) ? model : buildRequirementModel({ goal });
 }
-export function buildRequirementModel({ goal = '', requirements = [], successCriteria = [], outputs = [], constraints = [] } = {}) {
+export function buildRequirementModel({ goal = '', requirements = [], successCriteria = [], outputs = [], constraints = [], codingNeeds = null } = {}) {
   const items = [];
   if (text(goal)) {
     ensureItem(items, {
@@ -166,6 +169,13 @@ export function buildRequirementModel({ goal = '', requirements = [], successCri
     if (item && !item.verificationCriteria.some(c => c.toLowerCase() === item.requirement.toLowerCase())) item.verificationCriteria.push(item.requirement);
   }
   for (const value of outputs) ensureItem(items, value, { kind:'output', status:'identified', required:true, priority:80, importance:'high' });
+  // Capture only explicit user clauses from the server-side Coding contract;
+  // never invent goals from a model-generated plan or an aspiration like best.
+  for (const value of cleanList(codingNeeds?.explicitCriteria, 12)) {
+    const item = ensureItem(items, value, { kind:'criterion', required:true, priority:95,
+      importance:'critical', status:'confirmed', verificationCriteria:[value], explicitCoverage:true });
+    if (item) item.explicitCoverage = true;
+  }
   if (constraints.length && items[0]) items[0].constraints = cleanList(constraints);
   return finalizeModel({ version: 1, items });
 }
@@ -202,6 +212,14 @@ export function reconcileRequirements(current, {
         summary: summary || 'Requirement superseded by a changed situation.',
         evidence
       })].slice(-12);
+    }
+  }
+
+  // A code repair invalidates earlier verification of user-specific changes.
+  // Passing a previous revision must never satisfy criteria for new code.
+  if (task?.type === 'build-code' || task?.id === 'build-code') {
+    for (const item of items) {
+      if (item.explicitCoverage && item.status === 'satisfied') item.status = 'in-progress';
     }
   }
 
@@ -250,7 +268,7 @@ export function reconcileRequirements(current, {
       const at = new Date().toISOString();
       for (const item of items) {
         if (item.kind === 'outcome' || item.required === false || TERMINAL_REQUIREMENT.has(item.status)
-          || ['failed', 'waiting-for-user'].includes(item.status)) continue;
+          || ['failed', 'waiting-for-user'].includes(item.status) || item.explicitCoverage) continue;
         if (linkedIds.length && !linkedIds.includes(item.id)) continue;
         item.status = 'satisfied';
         item.lastUpdated = at;
