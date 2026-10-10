@@ -680,6 +680,22 @@
         <svg class="i" aria-hidden="true"><use href="#i-search"/></svg>
         <input id="chatSearch" class="search" type="search" placeholder="Search chats" aria-label="Search chats">
       </label>
+      <div class="chat-list-filters" role="group" aria-label="Filter conversations">
+        <select id="chatSurfaceFilter" aria-label="Filter by workspace">
+          <option value="all">All workspaces</option>
+          <option value="code">Coding chats</option>
+          <option value="research">Research chats</option>
+          <option value="normal-chat">Normal chats</option>
+        </select>
+        <select id="chatStatusFilter" aria-label="Filter by progress">
+          <option value="all">All statuses</option>
+          <option value="action">Needs attention</option>
+          <option value="working">In progress</option>
+          <option value="complete">Completed</option>
+          <option value="issues">Failed or blocked</option>
+        </select>
+      </div>
+      <p id="chatListSummary" class="chat-list-summary small muted" role="status" aria-live="polite"></p>
       <div id="runList" class="run-list"></div>
     </div>
     <div class="rail-footer">

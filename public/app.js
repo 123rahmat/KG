@@ -14,7 +14,7 @@
 
 import { state, $, element, button, api, notify, clearNotice, guard, canEdit, composerControls, aiConnected, configuredTargets, updateConnectionUI, waitForConnection } from './ui-core.js';
 import { addAttachments, flushOfflineQueue, growComposer, loadRuns, newChat, renderChatList, renderRun, renderThread, sendMessage, stopRun } from './app-attachments.js';
-import { initSettings, saveDraftSoon, adoptLegacy } from './app-settings.js';
+import { initSettings, saveDraftSoon, saveDraftNow, readDraft, adoptLegacy } from './app-settings.js';
 import { applyRole, enterApp, initAccount, initGate, loadAudit, loadObjects, loadUsage, usageLimitStatus, registerAppWorker, selectTab, showGate, signIn, signOut, takeSignInToken, uploadObject } from './app-account.js';
 import { codeMarkdown, hasCode, initActions } from './app-actions.js';
 import { renderMarkdown } from './markdown.js';
@@ -985,6 +985,10 @@ export async function autoDrive(run) {
   if (state.drivingRuns.has(run.id)) return run;
   state.drivingRuns.add(run.id);
   let current = run;
+  const visibleConversation=()=>Boolean(state.chat?.id && (
+    state.chat.id===current.conversationId
+    || (!current.conversationId && state.chat.id===current.id)
+  ));
   const refresh = async () => {
     const fresh = await api('GET', '/api/runs/' + run.id);
     if (fresh?.id === run.id) { current = fresh; renderRun(fresh); }
@@ -1010,7 +1014,7 @@ export async function autoDrive(run) {
       for (let steps = 0; steps < 30 && isAutomatic(current) && !state.cancelledRuns?.has(run.id) && state.stoppingRun !== run.id; steps += 1) {
         const before = String(current.next) + ':' + String(current.attempt);
         const rerun = repairRerun(current);
-        if (state.chat?.id === current.conversationId || !state.chat?.id) {
+        if (visibleConversation()) {
           state.run = current; state.driving = current.id;
           state.drivingLabel = rerun ? 'Running the revised code' : taskLabel(nextTaskOf(current));
           renderThread();
@@ -1021,7 +1025,7 @@ export async function autoDrive(run) {
         if (String(current.next) + ':' + String(current.attempt) === before) break;
       }
     } else if (isAutomatic(current)) {
-      if (state.chat?.id === current.conversationId || !state.chat?.id) {
+      if (visibleConversation()) {
         state.run = current; state.driving = current.id; state.drivingLabel = taskLabel(task); renderThread();
       }
       if (!state.cancelledRuns?.has(run.id) && state.stoppingRun !== run.id) current = await runStep(null, {}, current) || current;
@@ -1029,8 +1033,10 @@ export async function autoDrive(run) {
     }
   } finally {
     state.drivingRuns.delete(run.id);
-    if (state.driving === run.id) state.driving = null;
-    state.drivingLabel = '';
+    if (state.driving === run.id) {
+      state.driving = null;
+      state.drivingLabel = '';
+    }
     if (state.run?.id === run.id) { state.run = current; renderThread(); }
     else loadRuns().catch(() => {});
   }
@@ -1489,6 +1495,8 @@ $('goal').addEventListener('paste', event => {
   }
 });
 $('chatSearch').addEventListener('input', renderChatList);
+$('chatSurfaceFilter')?.addEventListener('change', renderChatList);
+$('chatStatusFilter')?.addEventListener('change', renderChatList);
 
 $('signin').addEventListener('submit', signIn);
 initGate();
@@ -1578,36 +1586,51 @@ $('tabs').addEventListener('click', event => {
   if (tab) selectTab(tab.dataset.tab);
 });
 
-document.addEventListener('kindgleam:select-surface', event => {
-  const name = event.detail?.name;
-  const workspace = event.detail?.workspace;
-  if (workspace) state.activeSurface = workspace;
-  else if (name === 'explore') state.activeSurface = 'research';
-  else if (name === 'runs') state.activeSurface = 'normal-chat';
+function selectChatWorkspaceSurface(surface){
+  const resolved=['code','research'].includes(surface)?surface:'normal-chat';
+  if(!state.chat?.id && state.activeSurface!==resolved){
+    saveDraftNow();
+    state.activeSurface=resolved;
+    $('goal').value=readDraft()?.text??'';
+    growComposer();
+  }else state.activeSurface=resolved;
+}
+document.addEventListener('kindgleam:select-surface',event=>{
+  const name=event.detail?.name;
+  const workspace=event.detail?.workspace;
+  if(workspace)selectChatWorkspaceSurface(workspace);
+  else if(name==='explore')selectChatWorkspaceSurface('research');
+  else if(name==='runs')selectChatWorkspaceSurface('normal-chat');
   renderThread();
-  if (name && (name !== 'runs' || $('tab-runs').hidden)) selectTab(name);
+  if(name&&(name!=='runs'||$('tab-runs').hidden))selectTab(name);
 });
 
-document.addEventListener('kindgleam:open-code-workspace', () => {
-  state.activeSurface = 'code';
+document.addEventListener('kindgleam:open-code-workspace',()=>{
+  selectChatWorkspaceSurface('code');
   renderThread();
-  if ($('tab-runs').hidden) selectTab('runs');
+  if($('tab-runs').hidden)selectTab('runs');
 });
 
 document.addEventListener('kindgleam:project-selected', async event => {
   const projectId = event.detail?.projectId ?? null;
   const currentProjectId = state.chat?.runs?.at(-1)?.projectId ?? state.chat?.projectId ?? null;
-  if (projectId && currentProjectId !== projectId) newChat();
+  if(projectId && currentProjectId!==projectId){
+    newChat();
+    const project=state.projects.find(item=>item.id===projectId);
+    if(project)selectChatWorkspaceSurface(project.defaultSurface);
+  }
   await loadRuns().catch(() => {});
 });
 
 $('workspace').addEventListener('change', async event => {
+  saveDraftNow();
   state.workspaceId = event.target.value;
   state.role = state.workspaces.find(workspace => workspace.id === state.workspaceId)?.role ?? 'viewer';
   state.activeProjectId = null;
   applyRole();
-  newChat();
+  newChat({skipSave:true});
   await loadProjects().catch(() => {});
+  await loadRuns().catch(() => {});
 });
 
 // Enter sends, Shift+Enter starts a new line, as in any chat.

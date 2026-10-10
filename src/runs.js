@@ -689,31 +689,39 @@ export class RunStore {
     const size = Math.min(Math.max(Number(limit) || 30, 1), MAX_PAGE);
     const filterProjectId = text(projectId) || null;
     if (filterProjectId) {
+      // LIMIT applies after selecting the latest visible row of each chat.
+      // LIMIT on raw runs previously hid sibling project chats when one
+      // conversation contained many messages.
       const { rows } = await this.pool.query(
-        `SELECT conversation_id, conversation_id IS NULL AS single,
-                first_value(goal) OVER (
-                  PARTITION BY COALESCE(conversation_id, id::text)
-                  ORDER BY created_at ASC, id ASC
-                ) AS title,
-                count(*) OVER (
-                  PARTITION BY COALESCE(conversation_id, id::text)
-                )::int AS messages,
-                visibility, state, surface, project_id, updated_at, id
-           FROM runs
-          WHERE workspace_id = $1
-            AND (visibility = 'workspace' OR principal_id = $2)
-            AND project_id = $3
+        `SELECT conversation_id, single, title, messages, visibility,
+                state, surface, project_id, updated_at
+           FROM (
+             SELECT COALESCE(conversation_id, id::text) AS conversation_id,
+                    conversation_id IS NULL AS single,
+                    first_value(goal) OVER (
+                      PARTITION BY COALESCE(conversation_id, id::text)
+                      ORDER BY created_at ASC, id ASC
+                    ) AS title,
+                    count(*) OVER (
+                      PARTITION BY COALESCE(conversation_id, id::text)
+                    )::int AS messages,
+                    visibility, state, surface, project_id, updated_at, id,
+                    row_number() OVER (
+                      PARTITION BY COALESCE(conversation_id, id::text)
+                      ORDER BY updated_at DESC, id DESC
+                    ) AS latest
+               FROM runs
+              WHERE workspace_id = $1
+                AND (visibility = 'workspace' OR principal_id = $2)
+                AND project_id = $3
+           ) project_conversations
+          WHERE latest = 1
           ORDER BY updated_at DESC, id DESC
           LIMIT $4`,
         [scope.workspaceId, scope.principalId, filterProjectId, size]
       );
-      const latest = new Map();
-      for (const row of rows) {
-        const id = row.conversation_id ?? row.id;
-        if (!latest.has(id)) latest.set(id, row);
-      }
-      return [...latest.values()].map(row => ({
-        id: row.conversation_id ?? row.id,
+      return rows.map(row => ({
+        id: row.conversation_id,
         single: row.single,
         title: row.title,
         messages: row.messages,

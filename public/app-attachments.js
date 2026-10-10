@@ -10,10 +10,12 @@ import { state, $, element, button, api, notify, guard, canEdit, aiConnected, cl
 import { autoDrive, browserAdaptationContext, bytes, heading, runStatus, svgIcon, timeAgo } from './app.js';
 import { assistantMessage, userMessage, welcome } from './app-actions.js';
 import { loadUsage, renderUsageLimitLock, usageLimitStatus, selectTab } from './app-account.js';
-import { clearDraft, deleteOfflineFiles, loadOfflineFiles, storeOfflineFiles, writeOfflineQueue } from './app-settings.js';
+import { clearDraft, readDraft, saveDraftNow, deleteOfflineFiles, loadOfflineFiles, storeOfflineFiles, writeOfflineQueue } from './app-settings.js';
+import { chatNavigationModel, chatWorkStatus } from './chat-navigation-model.js';
 import { syncAdaptiveWorkspace } from './adaptive-workspace.js';
 import { syncActiveWorkspaceSource } from './workspace-sources.js';
 import { selectedAttachments } from './attachment-selection.js';
+import { renderProjectHub } from './app-projects.js';
 
 /* ------------------------------------------------------------- attachments */
 
@@ -190,10 +192,15 @@ $('threadJump')?.addEventListener('click', () => {
 /** Called with every fresh copy of a run from the server. */
 export function renderRun(run) {
   if (!run) return;
-  const index = state.chat.runs.findIndex(item => item.id === run.id);
-  if (index >= 0) state.chat.runs[index] = run;
-  else if (state.chat.id === run.conversationId || !state.chat.id) state.chat.runs.push(run);
-  const active = !state.chat.id || state.chat.id === run.conversationId;
+  const active=Boolean(state.chat.id && (
+    state.chat.id===run.conversationId
+    || (!run.conversationId && state.chat.id===run.id)
+  ));
+  const index=active?state.chat.runs.findIndex(item=>item.id===run.id):-1;
+  if(index>=0)state.chat.runs[index]=run;
+  else if(active)state.chat.runs.push(run);
+  // A blank new chat must never absorb background output from an older
+  // Code/Research conversation merely because it has no ID yet.
   if (active) {
     state.run = run;
     renderThread();
@@ -253,15 +260,24 @@ export function growComposer() {
   box.style.height = `${box.scrollHeight}px`;
 }
 
-export function newChat() {
+let openChatEpoch=0;
+let chatListEpoch=0;
+export function newChat(options={}) {
+  openChatEpoch++;
+  if(options?.skipSave!==true)saveDraftNow();
   if ($('tab-runs').hidden) selectTab('runs');
   state.chat = { id: null, runs: [], pending: null, consent: state.settings.consent, workspaceSourceId: null, projectId: state.activeProjectId ?? null };
   state.workspaceSourceId = null;
   state.workspaceSource = null;
   if (state.usage) state.usage.context = null;
   $('shareRun').checked = state.settings.share;
-  clearDraft();
+  $('goal').value=readDraft()?.text??'';
+  growComposer();
   state.run = null;
+  // Background run drivers continue but do not hold the new chat's stop
+  // button or composer hostage.
+  state.driving=null;
+  state.drivingLabel='';
   clearNotice('runNotice');
   renderUsageLimitLock();
   document.body.classList.remove('chats-open');
@@ -269,14 +285,19 @@ export function newChat() {
   $('goal').focus({ preventScroll: true });
 }
 
-export async function loadRuns() {
-  const projectQuery = state.activeProjectId
-    ? '&projectId=' + encodeURIComponent(state.activeProjectId)
-    : '';
-  const { conversations } = await api('GET', '/api/conversations?limit=100' + projectQuery);
-  state.conversations = conversations;
+export async function loadRuns(){
+  const epoch=++chatListEpoch;
+  const workspace=state.workspaceId;
+  const projectId=state.activeProjectId??null;
+  const projectQuery=projectId?'&projectId='+encodeURIComponent(projectId):'';
+  const {conversations}=await api('GET','/api/conversations?limit=100'+projectQuery);
+  // Background polls from an old project/workspace must never replace the
+  // visible chat list after a quick selection or account/workspace switch.
+  if(epoch!==chatListEpoch||workspace!==state.workspaceId
+    ||projectId!==(state.activeProjectId??null))return;
+  state.conversations=Array.isArray(conversations)?conversations:[];
   renderChatList();
-  if (state.chat) renderChatHead();
+  if(state.chat)renderChatHead();
 }
 
 function dateGroup(value) {
@@ -295,45 +316,70 @@ const CHAT_SURFACE_LABELS = Object.freeze({
   research: 'Research'
 });
 
-export function renderChatList() {
-  const list = $('runList');
-  const query = $('chatSearch').value.trim().toLowerCase();
-  const chats = state.conversations.filter(chat =>
-    (!state.activeProjectId || chat.projectId === state.activeProjectId)
-    && (!query || String(chat.title).toLowerCase().includes(query))
-  );
+export function renderChatList(){
+  const list=$('runList');
+  const query=$('chatSearch')?.value??'';
+  const surface=$('chatSurfaceFilter')?.value??'all';
+  const status=$('chatStatusFilter')?.value??'all';
+  const enriched=state.conversations.map(chat=>({
+    ...chat,
+    projectName:state.projects.find(project=>project.id===chat.projectId)?.name??''
+  }));
+  const navigation=chatNavigationModel(enriched,{
+    projectId:state.activeProjectId,surface,status,query
+  });
+  const summary=$('chatListSummary');
+  if(summary)summary.textContent=navigation.shown+' shown · '
+    +navigation.coding+' Code · '+navigation.research+' Research · '
+    +navigation.needsAction+' need attention'
+    +(navigation.loaded>=100?' · Recent 100 loaded':'');
   list.replaceChildren();
-  if (!chats.length) {
-    list.append(element('div', { class: 'empty small', text: query ? 'No chats match your search.' : 'No chats yet.' }));
+  if(!navigation.chats.length){
+    list.append(element('div',{class:'empty small',text:navigation.isFiltered
+      ?'No chats match these filters. Adjust the project, workspace or status.'
+      :'No chats yet. Start a Code or Research conversation.'}));
     return;
   }
-  let lastGroup = '';
-  for (const chat of chats) {
-    const group = dateGroup(chat.updatedAt);
-    if (group !== lastGroup) {
-      list.append(element('div', { class: 'list-group', text: group }));
-      lastGroup = group;
+  let lastGroup='';
+  for(const chat of navigation.chats){
+    const group=dateGroup(chat.updatedAt);
+    if(group!==lastGroup){
+      list.append(element('div',{class:'list-group',text:group}));
+      lastGroup=group;
     }
-    // Each chat shows a short detail line; one waiting for the person says so.
-    const [statusText, tone] = runStatus({ state: chat.state });
-    const projectName = state.projects.find(project => project.id === chat.projectId)?.name ?? '';
-    list.append(element('div', { class: 'run-row' }, [element('button', {
-      class: 'run-item', type: 'button', 'data-run': chat.id, title: `${chat.title} · ${timeAgo(chat.updatedAt)}`, onclick: () => openChat(chat.id)
-    }, [
-      element('span', { class: 'run-item-goal', text: chat.title }),
-      element('span', { class: 'run-item-meta' }, [
-        tone === 'warn'
-          ? element('span', { class: 'run-item-status' }, [element('span', { class: 'dot warn' }), element('span', { text: statusText })])
-          : element('span', { text: timeAgo(chat.updatedAt) }),
-        Number(chat.messages) > 1 ? element('span', { text: String(chat.messages) + ' messages' }) : null,
-        CHAT_SURFACE_LABELS[chat.surface] ? element('span', { class: 'run-item-surface', text: CHAT_SURFACE_LABELS[chat.surface] }) : null,
-        projectName && !state.activeProjectId ? element('span', { class: 'run-item-project', text: projectName }) : null,
-        chat.shared ? element('span', { class: 'run-item-shared', title: 'Shared with workspace' }, svgIcon('users')) : null
-      ])
-    ]), element('button', {
-      class: 'run-delete', type: 'button', title: 'Delete chat', 'aria-label': `Delete chat: ${chat.title}`,
-      onclick: event => { event.stopPropagation(); deleteChat(chat); }
-    }, [svgIcon('trash')])]));
+    const [statusText,tone]=runStatus({state:chat.state});
+    const statusGroup=chatWorkStatus(chat);
+    const projectName=chat.projectName;
+    list.append(element('div',{class:'run-row',
+      'data-chat-status':statusGroup,
+      'data-chat-surface':chat.surface},[
+      element('button',{
+        class:'run-item',type:'button','data-run':chat.id,
+        title:chat.title+' · '+timeAgo(chat.updatedAt),
+        onclick:()=>openChat(chat.id)
+      },[
+        element('span',{class:'run-item-goal',text:chat.title}),
+        element('span',{class:'run-item-meta'},[
+          tone==='warn'||tone==='bad'
+            ?element('span',{class:'run-item-status'},[
+              element('span',{class:'dot '+(tone==='bad'?'bad':'warn')}),
+              element('span',{text:statusText})
+            ])
+            :element('span',{text:timeAgo(chat.updatedAt)}),
+          Number(chat.messages)>1?element('span',{text:String(chat.messages)+' messages'}):null,
+          CHAT_SURFACE_LABELS[chat.surface]
+            ?element('span',{class:'run-item-surface',text:CHAT_SURFACE_LABELS[chat.surface]}):null,
+          projectName&&!state.activeProjectId
+            ?element('span',{class:'run-item-project',text:projectName}):null,
+          chat.shared?element('span',{class:'run-item-shared',
+            title:'Shared with workspace'},svgIcon('users')):null
+        ].filter(Boolean))
+      ]),
+      element('button',{class:'run-delete',type:'button',title:'Delete chat',
+        'aria-label':'Delete chat: '+chat.title,
+        onclick:event=>{event.stopPropagation();deleteChat(chat);}},
+        [svgIcon('trash')])
+    ]));
   }
   highlightActiveChat();
 }
@@ -342,41 +388,52 @@ async function deleteChat(chat) {
   if (!confirm(`Delete "${String(chat.title).slice(0, 80)}"? Its messages and steps are removed for good.`)) return;
   await guard(async () => {
     await api('DELETE', `/api/conversations/${encodeURIComponent(chat.id)}`);
-    if (state.chat.id === chat.id) newChat();
+    if (state.chat.id === chat.id) {clearDraft();newChat({skipSave:true});}
     await loadRuns();
     notify('runNotice', 'ok', 'Chat deleted.');
   }, 'runNotice');
 }
 
-export async function openChat(id) {
-  if ($('tab-runs').hidden) selectTab('runs');
-  await guard(async () => {
-    const { runs } = await api('GET', `/api/conversations/${encodeURIComponent(id)}`);
-    const latestSource = runs.at(-1)?.adaptation?.attachments?.find(item => item?.sourceId)
-      ?? runs.at(-1)?.adaptation?.attachments?.find(item => item?.sourceKind);
-    const chatProjectId = runs.at(-1)?.projectId ?? null;
-    state.activeProjectId = chatProjectId;
-    state.chat = {
-      id,
-      runs,
-      pending: null,
-      workspaceSourceId: runs.at(-1)?.adaptation?.workspaceSourceId ?? latestSource?.sourceId ?? null,
-      projectId: chatProjectId,
-      consent: runs.some(run => run.adaptation?.privacy?.consent?.modelProvider === true)
+export async function openChat(id){
+  if($('tab-runs').hidden)selectTab('runs');
+  const epoch=++openChatEpoch;
+  const workspace=state.workspaceId;
+  saveDraftNow();
+  await guard(async()=>{
+    const {runs}=await api('GET','/api/conversations/'+encodeURIComponent(id));
+    // A slower response from another click cannot steal the visible chat.
+    if(epoch!==openChatEpoch||workspace!==state.workspaceId)return;
+    const latest=runs.at(-1)??null;
+    const latestSource=latest?.adaptation?.attachments?.find(item=>item?.sourceId)
+      ??latest?.adaptation?.attachments?.find(item=>item?.sourceKind);
+    const chatProjectId=latest?.projectId??null;
+    // Do not silently replace an explicit "All projects" navigation filter.
+    // The chat's own project stays attached to subsequent messages.
+    state.chat={
+      id,runs,pending:null,
+      workspaceSourceId:latest?.adaptation?.workspaceSourceId??latestSource?.sourceId??null,
+      projectId:chatProjectId,
+      consent:runs.some(run=>run.adaptation?.privacy?.consent?.modelProvider===true)
     };
-    if (state.chat.workspaceSourceId) {
-      state.workspaceSourceId = state.chat.workspaceSourceId;
-      state.workspaceSource = latestSource
-        ? { id: state.chat.workspaceSourceId, kind: latestSource.sourceKind ?? 'github', name: latestSource.sourceName ?? latestSource.name }
-        : null;
-    }
-    for (const run of runs) if (state.chat.consent) state.consented.add(run.id);
-    state.run = runs.at(-1) ?? null;
+    state.workspaceSourceId=state.chat.workspaceSourceId;
+    state.workspaceSource=state.workspaceSourceId&&latestSource
+      ? {id:state.workspaceSourceId,kind:latestSource.sourceKind??'github',
+          name:latestSource.sourceName??latestSource.name}
+      :null;
+    const surface=latest?.surface??latest?.adaptation?.primarySurface;
+    state.activeSurface=['code','research'].includes(surface)?surface:'normal-chat';
+    renderProjectHub();
+    for(const run of runs)if(state.chat.consent)state.consented.add(run.id);
+    state.run=latest;
+    state.driving=latest && state.drivingRuns?.has(latest.id)?latest.id:null;
+    state.drivingLabel='';
+    $('goal').value=readDraft()?.text??'';
+    growComposer();
     document.body.classList.remove('chats-open');
-    if (state.usage) state.usage.context = null;
+    if(state.usage)state.usage.context=null;
     renderThread();
     loadUsage();
-  }, 'runNotice');
+  },'runNotice');
 }
 
 /** Ask the person once per chat before the AI reads it. */

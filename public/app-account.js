@@ -9,7 +9,7 @@ import { fileToBase64, flushOfflineQueue, growComposer, loadRuns, newChat, openC
 import { renderExplore } from './app-actions.js';
 import { previewButton, previewKind } from './artifact-preview.js';
 import { activateSettingsSection, openSettings } from './app-settings-window.js';
-import { OFFLINE_QUEUE_KEY, clearDraft, clearOfflineFiles, loadOfflineFiles, loadPreferences, readDraft, setSaveState } from './app-settings.js';
+import { OFFLINE_QUEUE_KEY, clearAllDrafts, clearOfflineFiles, loadOfflineFiles, loadPreferences, readDraft, setSaveState } from './app-settings.js';
 import { loadProjects, renderProjectHub } from './app-projects.js';
 
 /* ------------------------------------------------------------------ files */
@@ -917,7 +917,7 @@ export function initGate() {
 
 export async function signOut() {
   await api('DELETE', '/api/session', undefined, { workspace: false }).catch(() => {});
-  clearDraft();
+  clearAllDrafts();
   try { sessionStorage.removeItem(OFFLINE_QUEUE_KEY); } catch {}
   await clearOfflineFiles();
   location.reload();

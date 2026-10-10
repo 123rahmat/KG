@@ -254,3 +254,27 @@ test('main work output is shown separately from steps with only persisted termin
   assert.match(model, /serverAuthenticated/);
   assert.match(model, /sample/);
 });
+
+test('multiple Coding and Research chats have scoped filters, drafts and background updates',async()=>{
+  const html=await read('public/index.html');
+  const chat=await read('public/app-attachments.js');
+  const settings=await read('public/app-settings.js');
+  const model=await read('public/chat-navigation-model.js');
+  const key=await read('public/chat-draft-key.js');
+  const app=await read('public/app.js');
+  assert.match(html,/id="chatSurfaceFilter"/);
+  assert.match(html,/id="chatStatusFilter"/);
+  assert.match(html,/id="chatListSummary"/);
+  assert.match(chat,/chatNavigationModel\(enriched/);
+  assert.match(model,/needsAction/);
+  assert.match(settings,/chat-drafts\.v2/);
+  assert.match(settings,/saveDraftNow\(/);
+  assert.match(settings,/readDraft\(/);
+  assert.match(key,/principalId/);
+  assert.match(key,/workspaceId/);
+  assert.match(key,/conversationId/);
+  assert.match(chat,/state\.chat\.id===run\.conversationId/);
+  assert.match(app,/visibleConversation\(\)/);
+  assert.match(app,/chatSurfaceFilter/);
+  assert.match(app,/chatStatusFilter/);
+});

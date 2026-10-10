@@ -321,3 +321,36 @@ one suggestion is shown at a time; it can be dismissed or copied into the
 composer by the user. These are **not facts or automatic research actions**,
 and do not authorize a new provider call. Source links alone are not treated
 as independent proof.
+
+## Multi-chat, multi-project Coding and Research organization
+
+The left rail now filters the **loaded** conversation page by workspace
+(Coding, Research, Normal Chat), project selection, search, and material work
+status (needs action, working, complete, failed/blocked). The summary reports
+the number loaded and highlights active or attention-requiring conversations.
+These are navigation filters on authorized server data, not additional AI
+agents, provider calls, or merged conversation memory. The current server
+chat page remains capped at 100 conversations and visibly says so.
+
+Project-scoped server conversation listings now apply the SQL limit
+**after** selecting one latest visible row per conversation. Previously,
+a 100-message chat could consume 100 run rows and hide every sibling chat
+in that project. The corrected SQL preserves tenant/principal visibility,
+project identity, earliest chat title, message count and latest progress.
+
+Each Coding or Research chat now has a private **per-principal, per-workspace,
+per-conversation in-tab draft**; unsent text is saved before switching, and
+restored only for the selected chat. A new chat's draft is separated by
+project and selected surface. A small bounded session storage pool keeps
+recent drafts; sign-out and storage limitations remain local-device concerns.
+Opening a chat restores its latest saved workspace mode and source binding.
+Switching to a chat while other runs execute will not cancel background work,
+and background run updates may refresh navigation but **cannot** write into an
+unrelated blank conversation or replace the wrong foreground stop control.
+The explicit All-projects filter is not silently replaced just because a
+chat belongs to a particular project.
+
+All context and project state remain scoped by existing server ownership,
+authorization and project revision controls. Changing a UI filter never
+moves files, grants access, or mixes Research evidence with another project's
+Coding files.

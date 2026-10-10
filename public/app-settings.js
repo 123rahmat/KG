@@ -4,6 +4,7 @@
  */
 
 import { state, $, api, updateConnectionUI } from './ui-core.js';
+import { chatDraftKey } from './chat-draft-key.js';
 
 /* ---------------------------------------------------------------- settings */
 
@@ -12,6 +13,7 @@ import { state, $, api, updateConnectionUI } from './ui-core.js';
 const SETTINGS_KEY = 'kindgleam.settings';
 export const OFFLINE_QUEUE_KEY = 'kindgleam.offline.queue';
 const DRAFT_KEY = 'kindgleam.draft';
+const CHAT_DRAFTS_KEY = 'kindgleam.chat-drafts.v2';
 const OFFLINE_DB_NAME = 'kindgleam-offline';
 const OFFLINE_DB_VERSION = 1;
 const OFFLINE_FILE_STORE = 'files';
@@ -205,36 +207,83 @@ export async function clearOfflineFiles() {
   });
 }
 
-export function readDraft() {
-  try {
-    const saved = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? 'null');
-    return saved && typeof saved.text === 'string' ? saved : null;
-  } catch { return null; }
+// Drafts are private to both the signed-in principal and the *specific*
+// conversation (or new-chat project/surface). A single global draft could
+// otherwise appear in a completely different Code or Research chat.
+function draftScope({newChat=false}={}){
+  return chatDraftKey({
+    principalId:state.principal?.id,
+    workspaceId:state.workspaceId,
+    conversationId:newChat?null:state.chat?.id,
+    projectId:state.chat?.projectId??state.activeProjectId,
+    surface:state.activeSurface
+  });
 }
-
-function writeDraft(value) {
+function storedDrafts(){
   try {
-    if (!String(value).trim()) sessionStorage.removeItem(DRAFT_KEY);
-    else sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
-      text: String(value).slice(0, 20000), workspaceId: state.workspaceId, at: Date.now()
-    }));
+    const data=JSON.parse(sessionStorage.getItem(CHAT_DRAFTS_KEY)??'{}');
+    return data&&typeof data==='object'&&!Array.isArray(data)?data:{};
+  } catch {return {};}
+}
+export function readDraft(){
+  const value=storedDrafts()[draftScope()];
+  if(value&&typeof value.text==='string')return value;
+  // Import a legacy single-chat draft only for a fresh chat, never when
+  // opening a named conversation, to prevent crossing chat boundaries.
+  if(state.chat?.id)return null;
+  try {
+    const old=JSON.parse(sessionStorage.getItem(DRAFT_KEY)??'null');
+    if(old?.workspaceId===state.workspaceId&&typeof old.text==='string'){
+      sessionStorage.removeItem(DRAFT_KEY);
+      return old;
+    }
+  } catch {}
+  return null;
+}
+function writeDraft(value){
+  try {
+    const drafts=storedDrafts();
+    const scope=draftScope();
+    if(!String(value).trim())delete drafts[scope];
+    else drafts[scope]={text:String(value).slice(0,20000),at:Date.now()};
+    // Bound per-tab storage; other conversations' unsent text is preserved
+    // unless the oldest slots exceed this explicit limit.
+    const order=Object.entries(drafts)
+      .sort((a,b)=>(b[1]?.at??0)-(a[1]?.at??0)).slice(0,35);
+    sessionStorage.setItem(CHAT_DRAFTS_KEY,JSON.stringify(Object.fromEntries(order)));
+    sessionStorage.removeItem(DRAFT_KEY);
   } catch {}
 }
-
-export function clearDraft() {
+export function saveDraftNow(){
   clearTimeout(state.draftSaveTimer);
-  try { sessionStorage.removeItem(DRAFT_KEY); } catch {}
+  writeDraft($('goal')?.value??'');
 }
-
-
-export function saveDraftSoon() {
+export function clearDraft(){
   clearTimeout(state.draftSaveTimer);
-  state.draftSaveTimer = setTimeout(() => {
-    writeDraft($('goal')?.value ?? '');
+  try {
+    const drafts=storedDrafts();
+    delete drafts[draftScope()];
+    // A newly created conversation's initial text occupied the new-chat
+    // slot before its first server run assigned a conversation ID.
+    if(state.chat?.id)delete drafts[draftScope({newChat:true})];
+    sessionStorage.setItem(CHAT_DRAFTS_KEY,JSON.stringify(drafts));
+    sessionStorage.removeItem(DRAFT_KEY);
+  } catch {}
+}
+export function clearAllDrafts(){
+  clearTimeout(state.draftSaveTimer);
+  try {
+    sessionStorage.removeItem(CHAT_DRAFTS_KEY);
+    sessionStorage.removeItem(DRAFT_KEY);
+  } catch {}
+}
+export function saveDraftSoon(){
+  clearTimeout(state.draftSaveTimer);
+  state.draftSaveTimer=setTimeout(()=>{
+    writeDraft($('goal')?.value??'');
     updateConnectionUI();
-  }, 180);
+  },180);
 }
-
 export function applyTheme() {
   const theme = state.settings.theme;
   if (theme) document.documentElement.dataset.theme = theme;

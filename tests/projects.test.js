@@ -104,3 +104,44 @@ test('runs reject a project outside the current workspace', () =>
       assert.equal(run.status, 404);
       assert.equal(run.body.code, 'project-not-found');
     })()));
+
+test('a project lists distinct conversations even when one chat has many runs', () =>
+  withServer(async ({ call, seed }) => {
+    const { token, workspace }=await seed({role:'admin'});
+    const auth={token,workspace};
+    const created=await call('POST','/api/projects',{...auth,
+      body:{name:'Parallel work',defaultSurface:'code',visibility:'private'}});
+    assert.equal(created.status,201);
+    const projectId=created.body.project.id;
+    // A long Code thread used to consume the raw SQL LIMIT before another
+    // Research/Code conversation could appear.
+    for(let i=0;i<7;i++){
+      const resp=await call('POST','/api/runs',{...auth,body:{
+        goal:i?'Improve the code in iteration '+i+'.':'Start a Code Workspace dashboard project.',
+        projectId,conversationId:'long-code-project-chat',activeSurface:'code'
+      }});
+      assert.equal(resp.status,201,JSON.stringify(resp.body));
+    }
+    for(const [id,goal,surface] of [
+      ['separate-research-chat','Research the latest testing patterns.','research'],
+      ['separate-code-chat','Fix the UI navigation regression.','code']
+    ]){
+      const resp=await call('POST','/api/runs',{...auth,body:{
+        goal,projectId,conversationId:id,activeSurface:surface
+      }});
+      assert.equal(resp.status,201,JSON.stringify(resp.body));
+    }
+    const response=await call('GET','/api/conversations?projectId='
+      +encodeURIComponent(projectId)+'&limit=3',auth);
+    assert.equal(response.status,200);
+    const chats=response.body.conversations;
+    assert.equal(chats.length,3);
+    assert.equal(new Set(chats.map(chat=>chat.id)).size,3);
+    assert.ok(chats.some(chat=>chat.id==='separate-research-chat'&&chat.surface==='research'));
+    assert.ok(chats.some(chat=>chat.id==='separate-code-chat'&&chat.surface==='code'));
+    const long=chats.find(chat=>chat.id==='long-code-project-chat');
+    assert.ok(long);
+    assert.equal(long.messages,7);
+    assert.equal(long.title,'Start a Code Workspace dashboard project.');
+    assert.ok(chats.every(chat=>chat.projectId===projectId));
+  }));
