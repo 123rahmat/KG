@@ -253,9 +253,10 @@ export function createApp({ config, pool, identity, governance, capabilities, ob
     version: ADAPTIVE_CONTRACT_VERSION,
     invariant: ADAPTATION_INVARIANT,
     openWorld: true,
-    product: { codingResearchOnly: config.product?.codingResearchOnly === true,
-      supportedWorkspaces: ['code','research'],
-      legacyReadOnly: config.product?.codingResearchOnly === true },
+    product: { codingOnly: config.product?.codingOnly === true,
+      codingResearchOnly: config.product?.codingResearchOnly === true,
+      supportedWorkspaces: config.product?.codingOnly ? ['code'] : ['code','research'],
+      legacyReadOnly: config.product?.codingOnly === true || config.product?.codingResearchOnly === true },
     executionTruth: 'Execution is reported only when a configured runner/tool returns evidence.'
   }));
 

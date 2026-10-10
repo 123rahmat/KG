@@ -1,8 +1,11 @@
 /** User-facing project organization routes. */
 import { ProjectStore, ProjectError } from '../projects.js';
 
-export function registerProjectRoutes(app, { pool, audit, route, scoped, projects: injectedProjects = null }) {
-  const projects = injectedProjects ?? new ProjectStore(pool);
+export function registerProjectRoutes(app, { pool, audit, route, scoped, config = {}, projects: injectedProjects = null }) {
+  const projects = injectedProjects ?? new ProjectStore(pool, {
+    codingOnly: config?.product?.codingOnly === true,
+    codingResearchOnly: config?.product?.codingResearchOnly === true
+  });
 
   app.get('/api/projects', scoped('viewer'), route(async (req, res) => {
     res.json({ projects: await projects.list(req.scope, { includeArchived: req.query?.archived === 'true' }) });

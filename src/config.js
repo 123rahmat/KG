@@ -368,9 +368,10 @@ export function loadConfig(env = process.env) {
     })(),
     cookieSecure,
     logLevel,
-    // Staged release switch. OFF until project/record migrations and UI are
-    // verified; when ON, new work must pass the Coding/Research project gate.
+    // Both staged switches default OFF. CODING_ONLY supersedes the old
+    // two-domain mode and never deletes previously stored research history.
     product: {
+      codingOnly: boolean(env.CODING_ONLY, false),
       codingResearchOnly: boolean(env.CODING_RESEARCH_ONLY, false)
     },
 

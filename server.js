@@ -54,7 +54,8 @@ export function build({ config, logger, metrics, fetchImpl }) {
   const jobs = new JobStore(pool);
   const fleet = new FleetStore(pool);
   const projects = new ProjectStore(pool, {
-    codingResearchOnly: config.product?.codingResearchOnly === true
+    codingResearchOnly: config.product?.codingResearchOnly === true,
+    codingOnly: config.product?.codingOnly === true
   });
   // Reminders and scheduled questions (src/scheduling.js).
   const scheduler = new Scheduler({ pool, runs, identity, logger, metrics });
