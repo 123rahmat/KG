@@ -72,3 +72,12 @@ test('academic deliverables win over incidental software vocabulary', () => {
 test('generic household repairs do not recruit a coding engine', () => {
   assert.notEqual(assessWorkDomain({request: 'Fix my washing machine'}).domain, 'coding');
 });
+
+test('misspelled domain work remains in scope with original spelling retained', () => {
+  const a=assessWorkDomain({request:'Help with codong in Python'});
+  assert.equal(a.domain,'coding');
+  assert.equal(a.supportedRequest,'Help with codong in Python');
+  const b=assessWorkDomain({request:'Write a reasech thsis with references'});
+  assert.equal(b.domain,'research');
+  assert.equal(b.supportedRequest,'Write a reasech thsis with references');
+});
