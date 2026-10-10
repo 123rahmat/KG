@@ -57,7 +57,9 @@ export const state = {
   draftSaveTimer: null,
   feedbackByRun: new Map(),
   // The person can move the current conversation between adaptive workspace envelopes.
-  activeSurface: 'normal-chat'
+  activeSurface: 'normal-chat',
+  // Presentation-only Chat / Files tabs; never grants object access.
+  chatView: 'chat'
 };
 
 export function updateConnectionUI() {
