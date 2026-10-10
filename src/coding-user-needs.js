@@ -35,7 +35,7 @@ function userClauses(value) {
   const source = rawText(value).slice(0, 12000);
   // Do not split at periods in file names (.js), version numbers or code.
   const lines = source.split(CLAUSE_SPLIT).map(value => clean(value)).filter(Boolean);
-  return unique(lines);
+  return lines;
 }
 function explicitGuardrail(clause) {
   const match = NEGATIVE.exec(clause);
@@ -50,7 +50,7 @@ function explicitGuardrail(clause) {
 export function captureCodingUserNeeds({ request = '', constraints = [], successCriteria = [], outputs = [] } = {}) {
   const clauses = userClauses(request);
   const rawRequest = rawText(request);
-  const fullClauseCount = rawRequest.slice(0, 12000).split(CLAUSE_SPLIT).filter(value => clean(value)).length;
+  const fullClauseCount = clauses.length;
   const actions = unique(clauses.filter(clause => ACTION.test(clause)));
   const guardrails = unique([
     ...clauses.map(explicitGuardrail),
