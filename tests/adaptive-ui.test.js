@@ -207,21 +207,20 @@ test('Research Workspace opens in the dedicated workspace surface, not Explore',
 });
 
 
-test('landing presents all three workspaces with equal product-level storytelling', async () => {
+test('landing focuses on one professional coding workflow without obsolete public demos', async () => {
   const html = await read('public/index.html');
   const app = await read('public/app.js');
-  const css = await read('public/app.css');
-  assert.match(html, /One intelligence\. Three workspaces with a clear purpose\./);
-  assert.match(html, /href="#research"/);
-  assert.match(html, /data-demo="chat"/);
+  assert.match(html, /<title>KG Code — AI Software Development Workspace<\/title>/);
+  assert.match(html, /Inspect, implement, test and review/);
+  assert.match(html, /href="#code"/);
   assert.match(html, /data-demo="code"/);
-  assert.match(html, /data-demo="research"/);
-  assert.match(html, /id="research" aria-labelledby="researchTitle"/);
-  assert.match(html, /Research that shows what the evidence actually supports/);
-  assert.match(app, /data-demo="research"/);
-  assert.match(app, /data-research-step/);
-  assert.match(css, /\[data-research-step\]\.is-active/);
-  assert.match(css, /architecture-split[\s\S]*repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(html, /id="landingSignIn"/);
+  assert.match(html, /id="landingSignInPrimary"/);
+  assert.doesNotMatch(html, /data-demo="chat"/);
+  assert.doesNotMatch(html, /data-demo="research"/);
+  assert.doesNotMatch(html, /href="#research"/);
+  assert.doesNotMatch(html, /id="research" aria-labelledby="researchTitle"/);
+  assert.match(app, /data-demo="code"/);
 });
 
 test('Normal Chat retains multi-file sandbox affordance while specialized workspace panels show recorded activity', async () => {
