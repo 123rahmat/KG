@@ -2014,7 +2014,7 @@ export class RunStore {
     const enough = structured?.enough === true;
     const venture=ventureIntent({goal:run.goal,surface:run.surface||run.adaptation?.primarySurface});
     const ventureStep=venture.enabled && !tasks.some(item=>item.metadata?.ventureDiscovery===true)
-      ? ventureDiscoveryStep({goal:run.goal,surface:run.surface||run.adaptation?.primarySurface})
+      ? ventureDiscoveryStep({goal:run.goal,surface:run.surface||run.adaptation?.primarySurface,situation:run.situation})
       : null;
     const requirementsEnabled = run.adaptation?.workflow !== 'direct';
     const activeRequirement = requirementsEnabled ? nextRequirement(requirementModel) : null;
@@ -2443,6 +2443,7 @@ export class RunStore {
       ...(candidate.type === 'verify' ? { verification: run.adaptation?.verification ?? run.situation?.verification ?? verificationContract() } : {}),
       ...(candidate.inventionLoop === true ? { inventionLoop: true } : {}),
       ...(candidate.ventureDiscovery===true ? { ventureDiscovery:true,
+        ventureMode:candidate.ventureMode??'divergent',
         venturePhase:'explore-before-build' } : {}),
       ...(candidate.type === 'reassess' && candidate.sourceTask ? { sourceTask: candidate.sourceTask } : {}),
       ...(candidate.humanInput ? { humanInput: true } : {}),

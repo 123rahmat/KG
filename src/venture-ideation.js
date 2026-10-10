@@ -13,6 +13,9 @@ const review = /\b(?:validate|assess|evaluate|feasib|challenge|compare|business 
 const skip = /\b(?:just (?:build|code|make|implement|do) it|skip (?:the )?(?:ideation|brainstorm(?:ing)?|plan(?:ning)?)|without (?:a )?(?:plan|brainstorm)|no need (?:to )?(?:brainstorm|plan))\b/i;
 const maintenance = /\b(?:fix|repair|debug|regression|refactor|patch|bug|lint|crash|error|broken|failing tests?)\b/i;
 const explicitExploration = /\b(?:brainstorm|ideat(?:e|ion|ing)|explore (?:ideas|alternatives|concepts)|generate ideas|compare (?:ideas|concepts))\b/i;
+const chosenIdea = /\b(?:my idea|our idea|this idea|this concept|my concept|already (?:have|picked|chosen|selected)|chosen idea|selected concept|validate (?:my|this|the) (?:idea|concept)|evaluate (?:my|this|the) (?:idea|concept))\b/i;
+const explicitBreadth = /\b(?:brainstorm|ideat(?:e|ion|ing)|generate (?:ideas|concepts)|compare (?:several|multiple|three|3) (?:ideas|concepts)|explore (?:several|different|multiple) (?:ideas|concepts))\b/i;
+
 
 export function ventureIntent({ goal = '', surface = '' } = {}) {
   const request=clean(goal);
@@ -36,6 +39,26 @@ export function ventureIntent({ goal = '', surface = '' } = {}) {
     kind:build?'idea-to-build':discovery?'venture-discovery':'none',
     signals:Object.freeze(signals),
     reason:discovery?'explicit-idea-or-business-discovery-required':'no-extra-venture-phase'
+  });
+}
+
+/**
+ * Choose the LEAST exploratory work that still serves the real request.
+ * Unknown markets remain assumptions; this only decides ideation breadth.
+ */
+export function ventureExplorationPolicy({goal='',surface='',situation={}}={}) {
+  const intent=ventureIntent({goal,surface});
+  if(!intent.enabled)return Object.freeze({mode:'skip',minAlternatives:0,reason:'venture-phase-not-needed'});
+  const request=clean(goal);
+  const breadth=explicitBreadth.test(request);
+  const selected=chosenIdea.test(request);
+  const lowBudget=Number(situation?.resourceBudgetRatio) >= 0
+    && situation?.resourceBudgetRatio != null && Number(situation.resourceBudgetRatio)<.25;
+  const mode=breadth?'divergent':selected?'validate-selected':'focused';
+  return Object.freeze({
+    mode,minAlternatives:mode==='divergent'?3:mode==='focused'&&!lowBudget?2:1,
+    reason:breadth?'user-requested-distinct-ideas'
+      :selected?'respect-user-selected-concept':'focus-on-practical-options'
   });
 }
 
@@ -75,8 +98,12 @@ export function ventureRolePriority({goal='',surface='',task={},run={}}={}) {
   const type=String(task?.type??'');
   let ranks=[];
   if(task?.metadata?.ventureDiscovery===true || task?.ventureDiscovery===true || type==='understand') {
-    ranks=['venture-ideation-lead','customer-discovery-lead','business-model-lead',
-      'venture-feasibility-lead','market-validation-lead'];
+    const policy=ventureExplorationPolicy({goal,surface,situation:run?.situation});
+    ranks=policy.mode==='divergent'
+      ? ['venture-ideation-lead','customer-discovery-lead','business-model-lead',
+        'venture-feasibility-lead','market-validation-lead']
+      : ['venture-feasibility-lead','customer-discovery-lead','market-validation-lead',
+        'product-mvp-lead','business-model-lead'];
   } else if(type==='investigate') {
     ranks=['market-validation-lead','customer-discovery-lead','venture-feasibility-lead'];
   } else if(task?.metadata?.buildPlan===true || task?.buildPlan===true || type==='plan') {
@@ -135,10 +162,18 @@ export function ventureRoleAssignment(role,{
   });
 }
 
-export function ventureDiscoveryStep({goal='',surface=''}={}) {
-  if(!ventureIntent({goal,surface}).enabled)return null;
+export function ventureDiscoveryStep({goal='',surface='',situation={}}={}) {
+  const policy=ventureExplorationPolicy({goal,surface,situation});
+  if(policy.mode==='skip')return null;
+  const direction=policy.mode==='divergent'
+    ? 'Explore at least three meaningfully different solutions, not three names for one product. Compare them against the user problem and identify a practical winner.'
+    : policy.mode==='validate-selected'
+      ? 'Keep the user-selected idea as the default. Test its strongest assumptions, compare a meaningful counterexample only if relevant, and do not replace the idea without user direction.'
+      : 'Clarify the proposed concept and briefly compare it with one plausible alternative. Focus on validation and the smallest viable scope rather than a large speculative idea catalog.';
   return Object.freeze({
-    type:'step',title:'Explore and test the idea',ventureDiscovery:true,
-    purpose:'Explore three meaningfully different ways to solve the user problem (not three names for one solution); connect each to a target user, unmet need and concrete value. Compare practical constraints, business assumptions, competitor alternatives, risks and smallest useful validation experiments. Recommend a direction with explicit unknowns, lean MVP boundaries, and a falsifiable success measure. Do not invent market numbers, customer interviews, prior-art searches or approval to build. For an already chosen idea, challenge assumptions briefly without replacing the user choice.'
+    type:'step',
+    title:policy.mode==='divergent'?'Explore and test the idea':'Validate the proposed direction',
+    ventureDiscovery:true,ventureMode:policy.mode,
+    purpose:direction+' Identify the target user, unmet need, practical constraints, evidence versus hypotheses, business assumptions, feasibility, main risk, smallest useful validation experiment, and measurable success criteria. Recommend a lean MVP with explicit non-goals. Never invent market numbers, customer interviews, prior-art searches, verification receipts or authorization to build.'
   });
 }

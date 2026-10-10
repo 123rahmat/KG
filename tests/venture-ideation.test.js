@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ventureIntent, ventureDiscoveryStep, ventureRolePriority,
+import { ventureIntent, ventureExplorationPolicy, ventureDiscoveryStep, ventureRolePriority,
   ventureRoleScore, ventureRoleAssignment, VENTURE_AGENTS } from '../src/venture-ideation.js';
 import { rolesFor, agentMessages, multiAgentDecision } from '../src/multi-agent.js';
 import { systemPromptFor } from '../src/reasoning-context.js';
@@ -32,7 +32,7 @@ test('only explicit idea- or venture-led projects start a discovery phase',()=>{
   const step=ventureDiscoveryStep({goal:codeGoal,surface:'code'});
   assert.equal(step.type,'step');
   assert.equal(step.ventureDiscovery,true);
-  assert.match(step.purpose,/three meaningfully different/);
+  assert.match(step.purpose,/three meaningfully different solutions/);
   assert.match(step.purpose,/Do not invent market numbers/);
 });
 
@@ -122,4 +122,28 @@ test('saved venture selection can hand off to a product-focused implementation a
   assert.ok(!built.includes('venture-ideation-lead'));
   assert.deepEqual(ventureRolePriority({goal:'Refactor a file',surface:'code',
     task:{id:'build-code',type:'code'}}),[]);
+});
+
+test('adaptive ideation covers true brainstorms but respects selected user idea and token pressure',()=>{
+  const broad=ventureExplorationPolicy({goal:codeGoal,surface:'code'});
+  assert.equal(broad.mode,'divergent');
+  assert.equal(broad.minAlternatives,3);
+  const selected='Validate my idea for a startup SaaS app and build an MVP';
+  const check=ventureExplorationPolicy({goal:selected,surface:'code'});
+  assert.equal(check.mode,'validate-selected');
+  assert.equal(check.minAlternatives,1);
+  const validate=ventureDiscoveryStep({goal:selected,surface:'code'});
+  assert.equal(validate.ventureMode,'validate-selected');
+  assert.match(validate.purpose,/Keep the user-selected idea/);
+  assert.doesNotMatch(validate.purpose,/three genuinely different/);
+  const focused=ventureExplorationPolicy({goal:'Build a startup SaaS app for restaurants',surface:'code'});
+  assert.equal(focused.mode,'focused');
+  assert.equal(focused.minAlternatives,2);
+  const scarce=ventureExplorationPolicy({goal:'Build a startup SaaS app for restaurants',
+    surface:'code',situation:{resourceBudgetRatio:.15}});
+  assert.equal(scarce.minAlternatives,1);
+  const focusedRoles=ventureRolePriority({goal:selected,surface:'code',task:ventureTask});
+  assert.equal(focusedRoles[0],'venture-feasibility-lead');
+  assert.ok(!focusedRoles.includes('venture-ideation-lead'));
+  assert.equal(ventureExplorationPolicy({goal:'Fix one existing test',surface:'code'}).mode,'skip');
 });

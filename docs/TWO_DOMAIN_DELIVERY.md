@@ -234,3 +234,37 @@ Code workspace and compiles the matching native code-generation capability
 under the ordinary resource/governance policy. It does **not** route
 idea-only conversations to Code, claim that project source files exist,
 or authorize running code without the required approval and runner checks.
+
+## Need-driven agent economics and improved creative/research continuity
+
+Coding, Research and business/idea work share the existing parent workflow;
+there is no extra fixed-size agent tier. The optional child-model admission
+policy observes complexity, uncertainty, unmet success criteria, research
+conflicts, failures and remaining compute allowance. For easy work and most
+ordinary ideation it reserves **zero** extra child calls. When independent
+checks could change an important decision, it allows a small, bounded number,
+still subject to the existing per-child need, consent, provider-budget and
+token gates. Operator-configured child allowances remain upper bounds. The
+final parent verification, research evidence fetching and human approvals
+are **not** bypassed.
+
+Specialist system messages use a compact findings/risks/next-check JSON
+contract for Research, brainstorming and read-only reviewers. Only the
+scoped Coding implementer receives the large patch-proposal format. All
+specialist messages still prohibit unauthorized tools, shell commands,
+credential access, fabricated sources or claimed tests. This saves prompt
+tokens before models are called and does not shorten an expressly detailed
+final deliverable.
+
+Venture discovery respects requested breadth. Open brainstorming compares
+at least three distinct concepts. An already selected idea gets focused
+assumption validation without replacing the user's preference. A known
+direction gets a short comparison rather than an expensive broad brainstorm.
+The selected mode travels in the server task metadata, survives UI/rerenders
+and keeps the existing build plan and approval gate.
+
+Research ledger updates now keep already-recorded source identifiers as
+identifiers (not malformed, re-normalized URLs). Repeated claims merge
+their legitimate source keys while keeping the newest claim. This preserves
+traceable provenance across successive research turns without inventing
+freshness or treating reused findings as newly verified.

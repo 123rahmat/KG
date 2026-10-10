@@ -1034,3 +1034,23 @@ test('Code specialist model calls receive the parent cancellation signal', async
   assert.ok(signals.length > 0);
   assert.ok(signals.every(signal => signal === controller.signal));
 });
+
+test('non-implementer specialist prompts avoid token-heavy code patch schema',()=>{
+  const work={goal:'Compare credible studies for an evidence review',
+    specialistSurface:'research',task:{type:'investigate'},situation:{risk:'ordinary'}};
+  const researcher=agentMessages('critic',work)[0].content;
+  assert.match(researcher,/one compact JSON object/);
+  assert.doesNotMatch(researcher,/baseContentHash|patchProposal/);
+  assert.doesNotMatch(researcher,/For coding-panel work/);
+  const idea=agentMessages('venture-ideation-lead',{
+    specialistSurface:'code',goal:'Brainstorm startup SaaS product ideas then build MVP',
+    task:{type:'step',ventureDiscovery:true},situation:{}
+  })[0].content;
+  assert.match(idea,/compact JSON object/);
+  assert.doesNotMatch(idea,/patchProposal/);
+  const implementing=agentMessages('implementer',{
+    specialistSurface:'code',goal:'Implement a multi-file API',
+    task:{type:'code',id:'build-code'},situation:{}
+  })[0].content;
+  assert.match(implementing,/patchProposal/);
+});

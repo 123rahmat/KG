@@ -94,3 +94,26 @@ test('unsubstantiated disappearance of a gap does not count as resolution', () =
   assert.deepEqual(next.unresolvedQuestions, ['Find a source']);
   assert.equal(next.status, 'needs-evidence');
 });
+
+test('saved research source keys remain valid when repeated evidence arrives',()=>{
+  const first=createResearchWorkspaceState({
+    goal:'Study battery aging',evidence:{
+      sources:[{url:'https://journal.example/study#results',title:'Source'}],
+      findings:[{id:'claim-a',summary:'The outcome depends on temperature',
+        sources:[{url:'https://journal.example/study'}]}]
+    }
+  });
+  assert.equal(first.evidenceLedger[0].sourceKeys.length,1);
+  const key=first.evidenceLedger[0].sourceKeys[0];
+  const next=createResearchWorkspaceState({goal:'Study battery aging',prior:first,
+    evidence:{findings:[{id:'claim-a',summary:'Revised observation after checking',
+      sourceKeys:[key]}]}});
+  assert.equal(next.evidenceCount,1);
+  assert.equal(next.evidenceLedger[0].summary,'Revised observation after checking');
+  assert.deepEqual(next.evidenceLedger[0].sourceKeys,[key]);
+  const noRefs=createResearchWorkspaceState({goal:'Study battery aging',prior:next,
+    evidence:{findings:[{id:'claim-a',summary:'Latest statement without new references'}]}});
+  assert.deepEqual(noRefs.evidenceLedger[0].sourceKeys,[key],
+    'deduplicating the newer claim does not silently erase recorded provenance');
+  assert.equal(noRefs.coverage.currentTurnSources,0);
+});

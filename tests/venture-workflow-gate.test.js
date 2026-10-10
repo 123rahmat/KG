@@ -115,3 +115,16 @@ test('the user may skip brainstorming, but the coding plan approval is not skipp
   assert.equal(saved.at(-1).metadata.buildPlan,true);
   assert.notEqual(saved.at(-1).metadata.ventureDiscovery,true);
 });
+
+test('saved venture phase mode travels into the server-owned step metadata',async()=>{
+  const {saved,client}=makeDb();
+  const store=new RunStore(null);
+  const understood={id:'understand',type:'understand',status:'complete',
+    metadata:{},dependsOn:[],requires:[],purpose:'Understand the idea'};
+  saved.push(understood);
+  const run={...baseRun(),goal:'Validate my idea for a startup SaaS app and build an MVP'};
+  await store.adaptSteps(client,run,understood,{enough:true,next:{type:'code'}},emptyRequirements);
+  assert.equal(saved.at(-1).metadata.ventureDiscovery,true);
+  assert.equal(saved.at(-1).metadata.ventureMode,'validate-selected');
+  assert.match(saved.at(-1).purpose,/Keep the user-selected idea/);
+});

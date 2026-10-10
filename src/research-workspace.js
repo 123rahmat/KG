@@ -118,11 +118,14 @@ function normalizeEvidenceItem(item, sourcesByKey) {
   if (!item || typeof item !== 'object') return null;
   const summary = clip(item.summary ?? item.finding ?? item.text ?? item.claim);
   if (!summary) return null;
-  const rawSources = Array.isArray(item.sources) ? item.sources : Array.isArray(item.sourceKeys) ? item.sourceKeys : [];
-  const sourceKeys = normalizeResearchSources(rawSources)
-    .map(source => source.key)
-    .filter(key => sourcesByKey.has(key))
-    .slice(0, 12);
+  const rawSources = Array.isArray(item.sources) ? item.sources : [];
+  // Saved ledger references are ALREADY keys (url:/meta:), not URLs to
+  // normalize a second time. Keep only references present in this source set.
+  const directKeys = Array.isArray(item.sourceKeys) ? item.sourceKeys
+    .filter(key => typeof key==='string' && sourcesByKey.has(key)) : [];
+  const fromSources = normalizeResearchSources(rawSources)
+    .map(source => source.key).filter(key => sourcesByKey.has(key));
+  const sourceKeys = [...new Set([...directKeys,...fromSources])].slice(0,12);
   const id = text(item.id) || null;
   return { id, summary, sourceKeys };
 }
@@ -193,8 +196,16 @@ export function createResearchWorkspaceState({
   const evidenceMap = new Map();
   for (const item of [...currentEvidence, ...previousEvidence]) {
     const key = item?.id ? `id:${item.id}` : `summary:${text(item?.summary).toLowerCase()}`;
-    if (key !== 'summary:' && !evidenceMap.has(key)) evidenceMap.set(key, item);
-    else if (key === 'summary:' + text(item?.summary).toLowerCase() && !evidenceMap.has(key)) evidenceMap.set(key, item);
+    if (key==='summary:') continue;
+    const older=evidenceMap.get(key);
+    if (!older) evidenceMap.set(key,item);
+    else evidenceMap.set(key,{
+      ...older,
+      // A newer finding wins, but older, actually recorded source links
+      // remain traceable when a duplicate arrives without citations.
+      sourceKeys:[...new Set([...(older.sourceKeys??[]),...(item.sourceKeys??[])])]
+        .filter(sourceKey => sourceMap.has(sourceKey)).slice(0,12)
+    });
   }
   const evidenceLedger = [...evidenceMap.values()].slice(0, RESEARCH_WORKSPACE_LIMITS.maxEvidence);
   // Carry forward still-open questions, but allow new observed evidence to
