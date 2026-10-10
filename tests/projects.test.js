@@ -145,3 +145,41 @@ test('a project lists distinct conversations even when one chat has many runs', 
     assert.equal(long.title,'Start a Code Workspace dashboard project.');
     assert.ok(chats.every(chat=>chat.projectId===projectId));
   }));
+
+test('server filters find older Coding and Research chats beyond the most recent unfiltered page', () =>
+  withServer(async ({call,seed})=>{
+    const {token,workspace}=await seed({role:'admin'});
+    const auth={token,workspace};
+    const created=await call('POST','/api/projects',{...auth,body:{
+      name:'Two concurrent domains',defaultSurface:'research',visibility:'private'
+    }});
+    assert.equal(created.status,201);
+    const projectId=created.body.project.id;
+    const samples=[
+      ['r-older-chat','Research source dates for the autumn release','research'],
+      ['c-middle-chat','Implement the web backend authentication','code'],
+      ['c-latest-chat','Fix sidebar layout and CSS','code']
+    ];
+    for(const [id,goal,activeSurface] of samples){
+      const res=await call('POST','/api/runs',{...auth,body:{
+        conversationId:id,goal,activeSurface,projectId
+      }});
+      assert.equal(res.status,201,JSON.stringify(res.body));
+    }
+    const unfiltered=await call('GET','/api/conversations?limit=1',auth);
+    assert.equal(unfiltered.status,200);
+    assert.equal(unfiltered.body.conversations.length,1);
+    const older=await call('GET','/api/conversations?surface=research&limit=1',auth);
+    assert.equal(older.status,200);
+    assert.deepEqual(older.body.conversations.map(item=>item.id),['r-older-chat']);
+    const scoped=await call('GET','/api/conversations?projectId='+encodeURIComponent(projectId)
+      +'&surface=code&limit=2',auth);
+    assert.deepEqual(scoped.body.conversations.map(item=>item.id),['c-latest-chat','c-middle-chat']);
+    const searched=await call('GET','/api/conversations?search=AUTUMN&status=working&limit=1',auth);
+    assert.deepEqual(searched.body.conversations.map(item=>item.id),['r-older-chat']);
+    const literal=await call('GET','/api/conversations?search=%25&limit=10',auth);
+    assert.equal(literal.body.conversations.length,0,
+      'percent-sign search uses literal matching, never unbounded SQL wildcards');
+    const unrelated=await call('GET','/api/conversations?projectId=unrelated&surface=research',auth);
+    assert.deepEqual(unrelated.body.conversations,[]);
+  }));

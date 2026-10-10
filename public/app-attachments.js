@@ -274,6 +274,8 @@ let chatListEpoch=0;
 export function newChat(options={}) {
   openChatEpoch++;
   if(options?.skipSave!==true)saveDraftNow();
+  if(['code','research','normal-chat'].includes(options?.surface))
+    state.activeSurface=options.surface;
   clearStagedChatAttachments();
   if ($('tab-runs').hidden) selectTab('runs');
   state.chat = { id: null, runs: [], pending: null, consent: state.settings.consent, workspaceSourceId: null, projectId: state.activeProjectId ?? null };
@@ -299,12 +301,22 @@ export async function loadRuns(){
   const epoch=++chatListEpoch;
   const workspace=state.workspaceId;
   const projectId=state.activeProjectId??null;
-  const projectQuery=projectId?'&projectId='+encodeURIComponent(projectId):'';
-  const {conversations}=await api('GET','/api/conversations?limit=100'+projectQuery);
+  const surface=$('chatSurfaceFilter')?.value??'all';
+  const status=$('chatStatusFilter')?.value??'all';
+  const search=String($('chatSearch')?.value??'').trim().slice(0,160);
+  const params=new URLSearchParams({limit:'100'});
+  if(projectId)params.set('projectId',projectId);
+  if(surface!=='all')params.set('surface',surface);
+  if(status!=='all')params.set('status',status);
+  if(search)params.set('search',search);
+  const {conversations}=await api('GET','/api/conversations?'+params.toString());
   // Background polls from an old project/workspace must never replace the
   // visible chat list after a quick selection or account/workspace switch.
   if(epoch!==chatListEpoch||workspace!==state.workspaceId
-    ||projectId!==(state.activeProjectId??null))return;
+    ||projectId!==(state.activeProjectId??null)
+    ||surface!==($('chatSurfaceFilter')?.value??'all')
+    ||status!==($('chatStatusFilter')?.value??'all')
+    ||search!==String($('chatSearch')?.value??'').trim().slice(0,160))return;
   state.conversations=Array.isArray(conversations)?conversations:[];
   renderChatList();
   if(state.chat)renderChatHead();
@@ -342,7 +354,7 @@ export function renderChatList(){
   if(summary)summary.textContent=navigation.shown+' shown · '
     +navigation.coding+' Code · '+navigation.research+' Research · '
     +navigation.needsAction+' need attention'
-    +(navigation.loaded>=100?' · Recent 100 loaded':'');
+    +(navigation.loaded>=100?' · 100 matching chats loaded':'');
   list.replaceChildren();
   if(!navigation.chats.length){
     list.append(element('div',{class:'empty small',text:navigation.isFiltered

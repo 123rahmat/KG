@@ -296,7 +296,10 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
     res.json({
       conversations: await runs.conversations(req.scope, {
         limit: req.query.limit,
-        projectId: req.query.projectId
+        projectId: req.query.projectId,
+        surface: req.query.surface,
+        status: req.query.status,
+        query: req.query.search
       })
     })));
 

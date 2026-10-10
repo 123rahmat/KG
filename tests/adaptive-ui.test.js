@@ -280,3 +280,23 @@ test('multiple Coding and Research chats have scoped filters, drafts and backgro
   assert.match(app,/chatSurfaceFilter/);
   assert.match(app,/chatStatusFilter/);
 });
+
+test('multiple workspaces search server history and start scoped Coding/Research chats',async()=>{
+  const html=await read('public/index.html');
+  const app=await read('public/app.js');
+  const chat=await read('public/app-attachments.js');
+  const server=await read('src/runs.js');
+  const routes=await read('src/routes/runs.js');
+  assert.match(html,/id="newCodeChat"/);
+  assert.match(html,/id="newResearchChat"/);
+  assert.match(app,/newChat\(\{surface:'code'\}\)/);
+  assert.match(app,/newChat\(\{surface:'research'\}\)/);
+  assert.match(chat,/options\?\.surface/);
+  assert.match(chat,/params\.set\('surface',surface\)/);
+  assert.match(chat,/params\.set\('status',status\)/);
+  assert.match(chat,/params\.set\('search',search\)/);
+  assert.match(chat,/chatListEpoch/);
+  assert.match(routes,/search: req\.query\.search/);
+  assert.match(server,/POSITION\(\$7 IN LOWER\(title\)\)>0/);
+  assert.match(server,/targetSurface\|\|targetStatus\|\|searchText/);
+});

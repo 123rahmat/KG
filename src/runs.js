@@ -685,9 +685,65 @@ export class RunStore {
   }
 
   /** One entry per conversation, newest first, for the chat list. */
-  async conversations(scope, { limit, projectId = null } = {}) {
+  async conversations(scope, { limit, projectId = null, surface = null, status = null, query = null } = {}) {
     const size = Math.min(Math.max(Number(limit) || 30, 1), MAX_PAGE);
     const filterProjectId = text(projectId) || null;
+    // Search/filter across the authorized history, not just the latest 100
+    // chats returned to the browser. SQL parameters are bounded and all
+    // predicates apply to the final chat row after its message history.
+    const targetSurface=['code','research','normal-chat'].includes(text(surface))
+      ? text(surface) : null;
+    const targetStatus=['action','working','complete','issues'].includes(text(status))
+      ? text(status) : null;
+    const searchText=text(query).slice(0,160).toLowerCase()||null;
+    if(targetSurface||targetStatus||searchText){
+      const {rows}=await this.pool.query(
+        `SELECT conversation_id, single, title, messages, visibility, state,
+                surface, project_id, updated_at
+           FROM (
+             SELECT COALESCE(conversation_id,id::text) AS conversation_id,
+                    conversation_id IS NULL AS single,
+                    FIRST_VALUE(goal) OVER (
+                      PARTITION BY COALESCE(conversation_id,id::text)
+                      ORDER BY created_at ASC,id ASC
+                    ) AS title,
+                    COUNT(*) OVER (
+                      PARTITION BY COALESCE(conversation_id,id::text)
+                    )::int AS messages,
+                    visibility,state,surface,project_id,updated_at,id,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY COALESCE(conversation_id,id::text)
+                      ORDER BY updated_at DESC,id DESC
+                    ) AS latest
+               FROM runs
+              WHERE workspace_id=$1
+                AND (visibility='workspace' OR principal_id=$2)
+                AND ($4::text IS NULL OR project_id=$4)
+           ) visible_conversations
+          WHERE latest=1
+            AND ($5::text IS NULL
+              OR CASE WHEN surface IN ('code','research') THEN surface
+                      ELSE 'normal-chat' END=$5)
+            AND ($6::text IS NULL
+              OR CASE WHEN state IN ('approval','clarify','waiting','iterate','verify')
+                    THEN 'action'
+                  WHEN state IN ('failed','blocked','exhausted')
+                    THEN 'issues'
+                  WHEN state='complete' THEN 'complete'
+                  ELSE 'working' END=$6)
+            AND ($7::text IS NULL OR POSITION($7 IN LOWER(title))>0)
+          ORDER BY updated_at DESC,id DESC
+          LIMIT $3`,
+        [scope.workspaceId,scope.principalId,size,filterProjectId,
+          targetSurface,targetStatus,searchText]
+      );
+      return rows.map(row=>({
+        id:row.conversation_id,single:row.single,title:row.title,
+        messages:row.messages,shared:row.visibility==='workspace',
+        state:row.state,surface:row.surface||'normal-chat',
+        projectId:row.project_id??null,updatedAt:row.updated_at
+      }));
+    }
     if (filterProjectId) {
       // LIMIT applies after selecting the latest visible row of each chat.
       // LIMIT on raw runs previously hid sibling project chats when one

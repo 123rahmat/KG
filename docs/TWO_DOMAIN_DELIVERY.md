@@ -359,3 +359,22 @@ When switching chats, locally selected but unsent File objects are cleared
 from the composer rather than being silently carried into another project's
 request. The user can explicitly reattach them. Pending offline messages
 retain their own saved files and conversation target.
+
+### Finding older chats and starting a domain-focused conversation
+
+Workspace and status filters and chat-title searches now query authorized
+server history BEFORE the last-100-chat page is selected. This allows an older
+Research or Coding conversation to appear when 100 newer chats from other
+domains exist. The query uses parameterized SQL, per-workspace and
+per-principal visibility checks, latest state per conversation, a literal
+case-insensitive substring match, and a fixed maximum of 100 returned
+conversations. Unfiltered navigation retains its optimized recent-run path.
+Search requests are lightly debounced, and stale network responses cannot
+overwrite another workspace/filter selection.
+
+Two small actions create a fresh **Coding chat** or **Research chat** using the
+current selected project without borrowing any other chat's unsent draft,
+file attachment, evidence or execution run. Changing a workspace or opening
+another chat does not pause already-authorized background jobs. The project
+selector remains a navigation filter, not a permission grant or an implicit
+copying instruction.

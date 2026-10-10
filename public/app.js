@@ -1495,9 +1495,19 @@ $('goal').addEventListener('paste', event => {
     addAttachments(event.clipboardData.files);
   }
 });
-$('chatSearch').addEventListener('input', renderChatList);
-$('chatSurfaceFilter')?.addEventListener('change', renderChatList);
-$('chatStatusFilter')?.addEventListener('change', renderChatList);
+// Keep client filtering instantaneous and refresh the authorized server page
+// after a short pause. Older matching Code/Research chats are not limited to
+// the most recent 100 unrelated conversations.
+let chatSearchDebounce=null;
+$('chatSearch').addEventListener('input',()=>{
+  renderChatList();
+  clearTimeout(chatSearchDebounce);
+  chatSearchDebounce=setTimeout(()=>loadRuns().catch(()=>{}),320);
+});
+$('chatSurfaceFilter')?.addEventListener('change',()=>loadRuns().catch(()=>{}));
+$('chatStatusFilter')?.addEventListener('change',()=>loadRuns().catch(()=>{}));
+$('newCodeChat')?.addEventListener('click',()=>newChat({surface:'code'}));
+$('newResearchChat')?.addEventListener('click',()=>newChat({surface:'research'}));
 
 $('signin').addEventListener('submit', signIn);
 initGate();
