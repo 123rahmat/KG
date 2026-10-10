@@ -32,6 +32,8 @@ function stage(id, reason, required = true) {
  */
 export function controlQualityRequirements({
   surface = 'code', taskKind = 'answer', requiresEvidence = false,
+  quantitative = taskKind === 'quantitative',
+  figure = taskKind === 'figure',
   sourceEvidence = {}, runtimeEvidence = {}, authorization = {}
 } = {}) {
   const engine = controlEngineForSurface(surface);
@@ -41,9 +43,9 @@ export function controlQualityRequirements({
       : ['accurate-technical-answer'])
     : [
       ...(requiresEvidence ? ['inspected-primary-or-credible-sources', 'claim-to-source-traceability'] : []),
-      ...(taskKind === 'quantitative' ? ['reproducible-computation', 'units-and-assumptions-checked'] : []),
+      ...(quantitative ? ['reproducible-computation', 'units-and-assumptions-checked'] : []),
       ...(taskKind === 'manuscript' ? ['complete-requested-sections', 'citation-integrity', 'method-limitations'] : []),
-      ...(taskKind === 'figure' ? ['data-provenance-and-axis-integrity'] : [])
+      ...(figure ? ['data-provenance-and-axis-integrity'] : [])
     ];
   const missing = [];
   if (engine === 'coding' && taskKind === 'implement') {
@@ -61,6 +63,20 @@ export function controlQualityRequirements({
     if (!Array.isArray(sourceEvidence?.materialClaims) || !sourceEvidence.materialClaims.length
       || sourceEvidence.materialClaims.some(c => !c?.sourceInspectionId || c?.supported !== true))
       missing.push('claim-to-source-traceability');
+  }
+  if (engine === 'research' && quantitative) {
+    if (runtimeEvidence?.computationReceiptAuthenticated !== true)
+      missing.push('reproducible-computation');
+    if (runtimeEvidence?.unitsAndAssumptionsVerified !== true)
+      missing.push('units-and-assumptions-checked');
+  }
+  if (engine === 'research' && figure
+    && (runtimeEvidence?.figureDataProvenanceVerified !== true || runtimeEvidence?.figureAxesAudited !== true))
+    missing.push('data-provenance-and-axis-integrity');
+  if (engine === 'research' && taskKind === 'manuscript') {
+    if (runtimeEvidence?.requestedSectionsVerified !== true) missing.push('complete-requested-sections');
+    if (runtimeEvidence?.citationIntegrityVerified !== true) missing.push('citation-integrity');
+    if (runtimeEvidence?.limitationsReviewed !== true) missing.push('method-limitations');
   }
   if (authorization?.required === true && authorization?.approved !== true) missing.push('human-authorization');
   return Object.freeze({
@@ -155,6 +171,7 @@ export function buildControlWorkflowPolicy({
   const quality = controlQualityRequirements({
     surface, taskKind: qualityKind,
     requiresEvidence: engine === 'research' && (scholarlyDraft || researchDiscovery),
+    quantitative, figure,
     sourceEvidence, runtimeEvidence, authorization
   });
   const possibleRoles = engine === 'coding'
