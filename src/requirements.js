@@ -253,7 +253,13 @@ export function reconcileRequirements(current, {
       const verificationTargets = items.some(candidate => candidate.kind !== 'outcome' && candidate.required !== false)
         ? items.filter(candidate => candidate.kind !== 'outcome')
         : items;
-      const item = verificationTargets.find(candidate => matchCriterion(candidate, label));
+      // A shorter guardrail (e.g. "without deleting files") can be a
+      // substring of another deliverable. Explicit needs must match exactly,
+      // otherwise verifying one subtask could falsely tick off another.
+      const exact = candidate => candidate.requirement.toLowerCase() === label.toLowerCase()
+        || candidate.verificationCriteria.some(value => value.toLowerCase() === label.toLowerCase());
+      const item = verificationTargets.find(candidate => candidate.explicitCoverage && exact(candidate))
+        || verificationTargets.find(candidate => candidate.explicitCoverage ? false : matchCriterion(candidate, label));
       if (!item) continue;
       const met = criterion?.met === true;
       item.status = met && verdict === 'pass' ? 'satisfied' : met ? 'verified' : 'failed';
