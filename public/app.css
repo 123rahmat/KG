@@ -5578,3 +5578,20 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
 @media (prefers-reduced-motion:reduce) {
   .code-progress-status, .code-progress-dot { animation:none !important; transition:none !important; }
 }
+
+/* Recorded specialists live inside the expandable evidence panel; never imply
+   that a proposed agent actually executed or that parallelism was observed. */
+.code-progress-specialists { padding:2px 0 14px; border-top:1px solid var(--line); }
+.code-progress-specialist-head {
+  display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px 14px;
+  padding:13px 0 9px; font-size:.76rem; line-height:1.4;
+}
+.code-progress-specialist-head strong { color:var(--ink-2); }
+.code-progress-specialist-head > span { color:var(--muted); }
+.code-progress-agent-list { display:grid; gap:3px; margin:0 0 7px; padding:0; list-style:none; }
+.code-progress-agent-list > li {
+  display:flex; justify-content:space-between; gap:9px; flex-wrap:wrap;
+  padding:7px 10px; border:1px solid var(--line); border-radius:8px;
+  font-size:.76rem; color:var(--ink-2); background:var(--softer);
+}
+.code-progress-agent-list > li > span:last-child { color:var(--muted); }
