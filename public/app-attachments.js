@@ -17,6 +17,7 @@ import { submissionProjectId, submissionWorkspaceSurface } from './conversation-
 import { createChatRefreshCoalescer } from './chat-refresh-coalescer.js';
 import { chatIsSending, markChatSending, syncVisibleChatSending } from './chat-send-state.js';
 import { syncAdaptiveWorkspace } from './adaptive-workspace.js';
+import { renderCodingProgress } from './coding-progress-panel.js';
 import { syncActiveWorkspaceSource } from './workspace-sources.js';
 import { selectedAttachments } from './attachment-selection.js';
 import { renderProjectHub } from './app-projects.js';
@@ -170,6 +171,9 @@ export function renderThread() {
   highlightActiveChat();
   // The workspace bar shows what this chat's situation needs now.
   syncAdaptiveWorkspace();
+  renderCodingProgress($('codingProgressPanel'), state.run, {
+    surface: state.activeSurface, pending: Boolean(state.chat.pending)
+  });
   updateThreadJump();
   document.dispatchEvent(new Event('kindgleam:composer-state'));
 }
@@ -303,6 +307,7 @@ export function newChat(options={}) {
   if(options?.skipSave!==true)saveDraftNow();
   if(['code','research','normal-chat'].includes(options?.surface))
     state.activeSurface=options.surface;
+  if (state.product?.codingOnly) state.activeSurface = 'code';
   if (state.product?.codingResearchOnly && !['code','research'].includes(state.activeSurface)) {
     const project = state.projects.find(item => item.id === state.activeProjectId);
     state.activeSurface = ['code','research'].includes(project?.defaultSurface)
@@ -690,10 +695,11 @@ export async function sendMessage(text) {
   if (!goal || chatIsSending(state)) return;
   // Frontend avoids uploads and provider consent for work the owning project
   // cannot accept. The server independently rechecks every authority field.
-  if (state.product?.codingResearchOnly === true) {
+  if (state.product?.codingResearchOnly === true || state.product?.codingOnly === true) {
     const selected = state.projects.find(project =>
       project.id === state.activeProjectId && project.state === 'active');
-    if (!selected || !['code','research'].includes(selected.defaultSurface)) {
+    if (!selected || (state.product?.codingOnly
+      ? selected.defaultSurface !== 'code' : !['code','research'].includes(selected.defaultSurface))) {
       notify('runNotice', 'warn', 'Select or create a Coding or Research project first.');
       document.dispatchEvent(new Event('kindgleam:open-projects'));
       return;
