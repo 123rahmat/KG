@@ -98,3 +98,12 @@ test('Research output guidance favors concise public points with evidence instea
   const verify=systemPromptFor({task:{type:'verify'},run:{surface:'research',workflow:'full',situation:{}},payload:{}});
   assert.doesNotMatch(verify,/Research answer economy/);
 });
+
+test('unrelated Research synthesis does not pay for code-generation prompting',()=>{
+  const research=systemPromptFor({task:{type:'deliver'},run:{surface:'research',workflow:'full',goal:'Compare primary studies',situation:{}},payload:{}});
+  const code=systemPromptFor({task:{type:'deliver'},run:{surface:'code',workflow:'full',goal:'Fix a bug in the backend',situation:{}},payload:{}});
+  assert.doesNotMatch(research,/Code: write clear, secure code with tests/);
+  assert.match(code,/Code: write clear, secure code with tests/);
+  const directCode=systemPromptFor({task:{type:'respond'},run:{surface:'normal-chat',workflow:'direct',goal:'Write a Python script',situation:{}},payload:{}});
+  assert.match(directCode,/Code: write clear, secure code with tests/);
+});

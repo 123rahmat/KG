@@ -36,3 +36,13 @@ test('elevated uncertainty or risk leaves room for responsible evidence and cave
   assert.equal(researchResponseTokenCap({run:research('Assess',
     {successCriteria:Array.from({length:12},(_,n)=>'Criterion '+n)}),task:{type:'deliver'}}),null);
 });
+
+test('explicit response preferences and multiple acceptance checks change token allowance',()=>{
+  assert.equal(researchResponseTokenCap({run:research('Find practical evidence',{
+    need:{deliverable:'Brief findings',depth:'brief'},
+    user:{preferences:{answerLength:'detailed'}}
+  }),task:{type:'deliver'}}),null);
+  assert.equal(researchResponseTokenCap({run:research('Find practical evidence',{
+    successCriteria:['one','two','three']
+  }),task:{type:'deliver'}}),3600);
+});

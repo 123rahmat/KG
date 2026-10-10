@@ -107,7 +107,12 @@ export function systemPromptFor({ task = {}, run = {}, payload = {} } = {}) {
     remembered: has(payload.remembered),
     ethics: Boolean(run.situation?.ethics),
     need: answering || type === 'plan',
-    code: answering || type === 'code',
+    // Avoid loading code-generation instructions into ordinary Research
+    // citations/synthesis; they consume tokens without helping evidence work.
+    code: type === 'code' || task.id === 'build-code'
+      || run?.surface === 'code' || run?.adaptation?.primarySurface === 'code'
+      || Boolean(payload?.codeIntelligence) || Boolean(payload?.codeRepair)
+      || (run?.surface !== 'research' && /\b(?:code|script|program|debug|bug|python|javascript|typescript|sql|html|css|api|frontend|backend)\b/i.test(String(run?.goal??''))),
     scoped: run.workflow !== 'direct' && (answering || PLANNING.has(type)),
     buildCode: task.id === 'build-code',
     codeRepair: has(payload.codeRepair),

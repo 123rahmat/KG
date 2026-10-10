@@ -13,7 +13,8 @@ export function researchResponseTokenCap({run={},task={}}={}){
   if(surface!=='research'||!['respond','deliver'].includes(task?.type))return null;
   const need=run.situation?.need??{};
   const userPrefs=run.situation?.user?.preferences??{};
-  const depth=String(need.depth??userPrefs.answerLength??'').toLowerCase();
+  // Explicit user preferences outrank auto-inferred task depth.
+  const depth=String(userPrefs.answerLength??userPrefs.responseLength??need.depth??'').toLowerCase();
   const goal=String(run.goal??'');
   const deliverable=String(need.deliverable??'');
   const form=String(need.form??'');
@@ -25,6 +26,7 @@ export function researchResponseTokenCap({run={},task={}}={}){
   const pressure=Math.max(
     positive(run.situation?.complexity),
     positive(run.situation?.uncertainty),
+    criteria.length>=6?.8:criteria.length>=3?.45:0,
     ['high','critical','regulated','high-impact'].includes(String(run.situation?.risk??'').toLowerCase()) ? 0.9 : 0
   );
   // These are generous safety ceilings for ordinary concise findings, not
