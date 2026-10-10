@@ -3,6 +3,47 @@ import { element, downloadUrl } from './ui-core.js';
 import { renderMarkdown } from './markdown.js';
 import { artifactChip } from './artifact-preview.js';
 import { liveWorkSnapshot } from './live-work-model.js';
+import { codingMilestoneSuggestion } from './coding-milestone-suggestions.js';
+
+// A suggestion is not an action or a new AI call. Dismissal lasts for this
+// tab session and is keyed to the recorded milestone; later checkpoints can
+// offer fresh, distinct guidance without repeating the same suggestion.
+const dismissedMilestones=new Set();
+function suggestionView(run){
+  const suggestion=codingMilestoneSuggestion(run);
+  if(!suggestion || dismissedMilestones.has(suggestion.id))return null;
+  const card=element('aside',{class:'work-milestone-suggestion',
+    'aria-label':'Optional coding suggestion',
+    'data-suggestion-kind':suggestion.kind},[
+    element('div',{class:'work-suggestion-body'},[
+      element('span',{class:'work-output-eyebrow',text:'OPTIONAL PROJECT SUGGESTION'}),
+      element('strong',{text:suggestion.title}),
+      element('p',{class:'small muted',text:suggestion.why}),
+      element('p',{class:'small',text:suggestion.provenance})
+    ]),
+    element('div',{class:'work-suggestion-actions'})
+  ]);
+  const actions=card.querySelector('.work-suggestion-actions');
+  const add=element('button',{type:'button',class:'small',text:'Add to request'});
+  add.addEventListener('click',()=>{
+    const composer=document.getElementById('goal');
+    if(!composer || composer.disabled)return;
+    const existing=String(composer.value??'').trim();
+    composer.value=existing?existing+'\n'+suggestion.request:suggestion.request;
+    composer.dispatchEvent(new Event('input',{bubbles:true}));
+    composer.focus({preventScroll:false});
+    dismissedMilestones.add(suggestion.id);
+    card.remove();
+  });
+  const hide=element('button',{type:'button',class:'small',text:'Dismiss',
+    'aria-label':'Dismiss suggestion for this project step'});
+  hide.addEventListener('click',()=>{
+    dismissedMilestones.add(suggestion.id);
+    card.remove();
+  });
+  actions.append(add,hide);
+  return card;
+}
 
 function tableView(item) {
   const t=item.table;
@@ -98,6 +139,7 @@ export function renderLiveWorkSurface(run,options={}){
         snapshot.progressPoints.map(point=>element('li',{
           'data-point-kind':point.kind,text:point.text
         }))):null,
+    suggestionView(run),
     snapshot.currentStep?element('p',{class:'work-output-current',role:'status'},[
       element('span',{class:'work-output-status-dot','aria-hidden':'true'}),
       element('span',{text:'Current step · '+snapshot.currentStep})

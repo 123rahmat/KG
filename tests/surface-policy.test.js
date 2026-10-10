@@ -93,3 +93,23 @@ test('specialized maturity profiles share one intelligence while differing by wo
   assert.match(research.verificationStrategy,/provenance/i);
   assert.match(normal.costStrategy,/one primary model with adaptive reasoning effort/i);
 });
+
+test('idea-first requests that explicitly continue to MVP coding select the Code project',async()=>{
+  const { workspaceIntent }=await import('../public/workspace-intent.js');
+  const { planGoal }=await import('../src/core.js');
+  const goal='Brainstorm startup concepts, then build an MVP';
+  const intent=workspaceIntent(goal);
+  assert.equal(intent.ideaBuildProject,true);
+  assert.equal(intent.softwareBuild,true);
+  assert.equal(classifySurfaceBoundary(goal,{
+    activeSurface:'normal-chat',actions:['create']
+  }).surface,'code');
+  const plan=planGoal(goal);
+  assert.equal(plan.surface,'code');
+  assert.ok(plan.capabilities.granted.includes('code-generation'));
+  assert.equal(classifySurfaceBoundary('Brainstorm a few business ideas.',{
+    activeSurface:'normal-chat',actions:['answer']
+  }).surface,'normal-chat');
+  assert.equal(workspaceIntent('Brainstorm some business ideas.').ideaBuildProject,false);
+  assert.equal(workspaceIntent('I want a business plan, not software.').ideaBuildProject,false);
+});

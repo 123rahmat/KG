@@ -2241,6 +2241,17 @@ export class RunStore {
         };
       }
     }
+    // Model-proposed next steps and even an early "enough:true" are not
+    // authority to bypass explicitly needed ideation. Keep essential human
+    // clarification/approval and genuine evidence-gathering gates available,
+    // but never schedule coding, planning or finalization before the recorded
+    // idea comparison exists. The parent inserts only this one next step.
+    if (ventureStep && candidate && [
+      'code','plan','step','prototype','respond','verify','deliver'
+    ].includes(candidate.type)) {
+      candidate = ventureStep;
+    }
+
     // Delivery is never allowed to skip a required verification boundary.
     // Some deterministic tool/result paths can otherwise select a planned
     // deliver stage directly even though the run-level acceptance contract

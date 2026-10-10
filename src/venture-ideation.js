@@ -11,6 +11,8 @@ const business = /\b(?:business|startup|start-up|venture|entrepreneur|customer|c
 const product = /\b(?:build|develop|create|implement|ship|launch|prototype|mvp|app|website|platform|software|product|system|service)\b/i;
 const review = /\b(?:validate|assess|evaluate|feasib|challenge|compare|business plan|business model|market research|customer discovery|business strategy)\b/i;
 const skip = /\b(?:just (?:build|code|make|implement|do) it|skip (?:the )?(?:ideation|brainstorm|plan(?:ning)?)|without (?:a )?(?:plan|brainstorm)|no need (?:to )?(?:brainstorm|plan))\b/i;
+const maintenance = /\b(?:fix|repair|debug|regression|refactor|patch|bug|lint|crash|error|broken|failing tests?)\b/i;
+const explicitExploration = /\b(?:brainstorm|ideat(?:e|ion|ing)|explore (?:ideas|alternatives|concepts)|generate ideas|compare (?:ideas|concepts))\b/i;
 
 export function ventureIntent({ goal = '', surface = '' } = {}) {
   const request=clean(goal);
@@ -20,6 +22,9 @@ export function ventureIntent({ goal = '', surface = '' } = {}) {
     product:product.test(request),review:review.test(request)};
   const build=workspace==='code' && signals.product && (signals.idea || signals.business);
   const discovery=supported && !skip.test(request)
+    // Names such as "idea service" or "business model module" are not a
+    // request to brainstorm during an ordinary maintenance or bug-fix task.
+    && (!maintenance.test(request) || explicitExploration.test(request))
     && ((signals.idea && (signals.product || signals.business || signals.review))
       || (signals.business && signals.review)
       || (signals.business && signals.product

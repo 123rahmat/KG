@@ -11,6 +11,10 @@ const codeProject = /\b(?:repository|repo|codebase|project|github|pull request|b
 const singleCode = /\b(?:function|method|class|variable|snippet|script|single file|this file|one file|small fix|small change|edit this file|fix this file|explain this code|review this code|run this script|test this file|small program|utility script)\b/i;
 const execution = /\b(?:run|execute|debug|fix|repair|test|refactor|implement|compile|build|develop|create|update|edit|modify)\b/i;
 const softwareBuild = /\b(?:build|develop|create|implement)\b.{0,100}\b(?:website|web app|application|app|api|backend|frontend|(?:web|api|backend|micro|http|rest)[- ]?service)\b/i;
+// "Brainstorm ideas, then build an MVP" is still one Coding project.
+// Do not force ideas-only questions or ordinary startup/business advice into
+// the project workspace, and never infer permission to write or deploy code.
+const ideaThenBuild = /\b(?:brainstorm|ideat(?:e|ion|ing)|ideas?|concepts?|business opportunities)\b.{0,220}\b(?:then|after|next|and)\b.{0,100}\b(?:build|develop|implement|prototype|create)\b.{0,110}\b(?:mvp|app|application|website|software|saas|platform|product|service)\b/i;
 const compoundEngineering = /(?:\b(?:and then|then|and also|and|also)\s+|[.;]\s*)(?:please\s+)?(?:update|modify|edit|refactor|test|fix|implement|build)\b.{0,100}(?:\b(?:repository|repo|codebase|code|software|application|app|api|backend|frontend|tests?)\b|\b[\w./-]+\.(?:py|js|mjs|cjs|ts|tsx|jsx|go|rs|java|kt|c|cc|cpp|h|hpp|cs|rb|php|swift|sql|sh|html|css|json)\b)/i;
 const referencedEngineering = /(?:\b(?:and then|then|and also|and|also)\s+|[.;]\s*)(?:please\s+)?(?:update|modify|edit|refactor|test|fix|implement|build)\s+(?:(?:it|them|this|that|those)\b|(?:a|the)\s+(?:fix|patch|change)\b)/i;
 const researchRequest = new RegExp('^' + prefix + '(?:research|investigate|find sources|compare sources)\\b', 'i');
@@ -29,6 +33,7 @@ export function workspaceIntent(goal = '') {
     ? /^(?:code|coding)$/i.test(selection[1]) ? 'code'
       : /^research$/i.test(selection[1]) ? 'research' : 'normal-chat'
     : null;
+  const ideaBuildProject = ideaThenBuild.test(request);
   const compound = compoundEngineering.test(request)
     || (codeTopic.test(request) && codeProject.test(request) && referencedEngineering.test(request));
   const research = researchRequest.test(request) && !compound;
@@ -40,10 +45,11 @@ export function workspaceIntent(goal = '') {
     && /\b(?:and|then|plus)\b.{0,80}\b(?:modify|edit|refactor|test|fix)\b/i.test(request);
   return Object.freeze({
     explicitWorkspace, everyday, researchRequest: research,
-    codeTopic: engineering && codeTopic.test(request),
-    codeProject: engineering && codeProject.test(request),
-    softwareBuild: engineering && softwareBuild.test(request),
-    projectLifecycle: engineering && (construction || compound || compoundBuild),
+    ideaBuildProject: engineering && ideaBuildProject,
+    codeTopic: engineering && (codeTopic.test(request)||ideaBuildProject),
+    codeProject: engineering && (codeProject.test(request)||ideaBuildProject),
+    softwareBuild: engineering && (softwareBuild.test(request)||ideaBuildProject),
+    projectLifecycle: engineering && (construction || compound || compoundBuild || ideaBuildProject),
     singleCode: singleCode.test(request), execution: engineering && execution.test(request),
     researchProject: !everyday && researchProject.test(request),
     sourceHeavyResearch: !everyday && sourceHeavy.test(request),

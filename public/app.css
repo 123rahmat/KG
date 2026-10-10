@@ -5198,3 +5198,26 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
 @media (max-width: 700px) {
   .work-output-progress-points { font-size: .76rem; padding: 9px 10px 9px 25px; }
 }
+
+/* A single optional, user-controlled suggestion at a real saved checkpoint.
+   Keep the work output and timeline more prominent than the suggestion. */
+.work-milestone-suggestion {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  background: var(--softer);
+  border-radius: var(--radius);
+}
+.work-suggestion-body { min-width: 0; display: grid; gap: 4px; }
+.work-suggestion-body strong { font-size: .85rem; }
+.work-suggestion-body p { margin: 0; line-height: 1.48; }
+.work-suggestion-actions { display: flex; gap: 7px; flex: 0 0 auto; align-items: center; }
+.work-suggestion-actions button { font-size: .76rem; padding: 7px 9px; }
+@media (max-width: 780px) {
+  .work-milestone-suggestion { flex-wrap: wrap; }
+  .work-suggestion-actions { flex-wrap: wrap; width: 100%; }
+}

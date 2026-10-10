@@ -85,3 +85,33 @@ test('explicit skip-brainstorm request keeps the existing direct build plan rout
   await store.adaptSteps(client,run,understand,{questions:[]},emptyRequirements);
   assert.equal(saved.at(-1).metadata.ventureDiscovery,undefined);
 });
+
+test('an untrusted model suggestion cannot build or claim enough before idea exploration',async()=>{
+  const {saved,client}=makeDb();
+  const store=new RunStore(null);
+  const understood={id:'understand',type:'understand',status:'complete',
+    metadata:{},dependsOn:[],requires:[],purpose:'Understand the idea'};
+  saved.push(understood);
+  const run=baseRun();
+  await store.adaptSteps(client,run,understood,{
+    enough:true,next:{type:'code',title:'Generate code immediately',
+      purpose:'Skip idea selection and implement now'}
+  },emptyRequirements);
+  assert.equal(saved.at(-1).metadata.ventureDiscovery,true);
+  assert.equal(saved.at(-1).type,'step');
+  assert.equal(saved.at(-1).id,'step');
+  assert.ok(!saved.some(t=>t.id==='build-code'));
+});
+
+test('the user may skip brainstorming, but the coding plan approval is not skipped',async()=>{
+  const {saved,client}=makeDb();
+  const store=new RunStore(null);
+  const root={id:'understand',type:'understand',status:'complete',
+    dependsOn:[],requires:[],metadata:{},purpose:'Understand constraints'};
+  saved.push(root);
+  const run={...baseRun(),goal:'Just build it: create a startup SaaS product MVP'};
+  await store.adaptSteps(client,run,root,{questions:[]},emptyRequirements);
+  assert.equal(saved.at(-1).type,'plan');
+  assert.equal(saved.at(-1).metadata.buildPlan,true);
+  assert.notEqual(saved.at(-1).metadata.ventureDiscovery,true);
+});

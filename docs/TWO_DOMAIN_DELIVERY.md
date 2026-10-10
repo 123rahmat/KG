@@ -200,3 +200,37 @@ read-only main-area summaries derive from recorded work. The step-progress
 "Why now" panel explicitly distinguishes hypothesis exploration from executed
 validation or approved implementation. Unknown demand, revenue or market
 figures are labeled assumptions until established by authorized sources.
+
+## Conditional idea-first project development and opt-in milestone suggestions
+
+The Coding controller protects the explicit idea-development phase against
+model-suggested shortcuts: if a qualifying new venture still needs its
+**Explore and test the idea** checkpoint, a proposed coding, planning,
+prototyping, or finalization step cannot bypass it. Genuine clarification,
+authorization and necessary evidence acquisition may still precede ideation.
+Once exploration is recorded, the usual scoped build plan, explicit
+user agreement, coding, testing and verification follow. Ordinary maintenance,
+bug fixes and the user's explicit "just build it" intent do not trigger the
+extra brainstorming phase; the existing code-plan/approval controls remain.
+
+The Coding main output can present **one optional recommendation** at a
+materially different checkpoint, with a concise evidence-based "why":
+idea exploration, MVP planning, build-plan approval, generated code awaiting
+tests, recorded test failure, reassessment, or completed passing verification.
+The suggestions are static policy templates selected from **persisted server
+task state**, not generated model claims or a new recurring model call.
+User action is required to put one in the composer, and submitting the
+resulting draft is a separate user decision. Dismissed recommendations do not
+reappear in the same browser session until a *different milestone* is recorded.
+No suggestion authorizes build steps, approves tools, invents successful tests,
+or claims a product was deployed.
+
+### Multi-phase idea requests stay in the Code project
+
+The shared browser/server workspace intent also recognizes the explicit
+sequence "brainstorm concepts, then build an MVP" even when a user has not
+written the words "code" or "app". This routes the request to the
+Code workspace and compiles the matching native code-generation capability
+under the ordinary resource/governance policy. It does **not** route
+idea-only conversations to Code, claim that project source files exist,
+or authorize running code without the required approval and runner checks.

@@ -38,6 +38,7 @@ import {
 import { selectAdaptiveWorkflow } from './unified-adaptive-workflow.js';
 import { adaptiveEffortProfile } from './adaptive-efficiency.js';
 import { classifySurfaceBoundary, surfaceRuntimePolicy } from './surface-policy.js';
+import { workspaceIntent } from '../public/workspace-intent.js';
 import { buildModeControllerContract } from './mode-controllers.js';
 
 const text = value => String(value ?? '').trim();
@@ -357,13 +358,17 @@ export function discoverCapabilityRequirements(goal, analysis = inspectGoal(goal
   // about code (explain it, review it, what does this keyword do) is answered.
   const codeWork = actions.has('create') || actions.has('transform') || actions.has('execute')
     || !['answer', 'investigate'].some(action => actions.has(action));
-  if ((f.code && codeWork) || (actions.has('transform') && /\b(code|software|program|script|api|repository|repo)\b/i.test(text(goal)))) {
+  // The user can request "brainstorm concepts, THEN build an MVP" without
+  // using the word code or app. Workspace routing alone is not sufficient:
+  // this same explicit software-build intent must compile code-generation.
+  const ideaToBuild = workspaceIntent(goal).ideaBuildProject === true;
+  if (((f.code || ideaToBuild) && codeWork) || (actions.has('transform') && /\b(code|software|program|script|api|repository|repo)\b/i.test(text(goal)))) {
     add({ id: 'code-generation', category: 'creation', source: 'native', dynamic: false, risk: 'medium', reason: 'Create or modify executable source.' });
     if (!selfRun) add({ id: 'code-execution', category: 'execution', source: 'native', dynamic: false, risk: 'high', reason: 'Execute code only through an authorized isolated runner.' });
   }
   // Pure software work is designed and built in its code stages; a separate
   // generic prototype stage would only duplicate them.
-  const softwareOnly = f.code && !f.invention && !f.physical && !actions.has('invent');
+  const softwareOnly = (f.code || ideaToBuild) && !f.invention && !f.physical && !actions.has('invent');
   if ((f.creation || f.invention || actions.has('create') || actions.has('invent')) && !softwareOnly) {
     add({ id: 'design', category: 'creation', source: 'native', dynamic: false, risk: f.physical ? 'high' : 'medium', reason: 'Produce a concrete design or artifact specification.' });
   }
