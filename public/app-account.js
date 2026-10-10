@@ -133,6 +133,7 @@ export async function loadAudit() {
 const TAB_LOADERS = { runs: loadRuns, explore: async () => renderExplore(), objects: loadObjects, audit: loadAudit };
 
 export async function selectTab(name) {
+  if (state.product?.codingOnly && name === 'explore') name = 'runs';
   document.body.classList.remove('chats-open');
   for (const tab of $('tabs').children) {
     tab.setAttribute('aria-selected', String(tab.dataset.tab === name));
@@ -718,6 +719,14 @@ export async function enterApp() {
         option.disabled = true;
       }
     }
+  } else {
+    const filter = $('chatSurfaceFilter');
+    for (const option of filter?.options ?? []) {
+      option.hidden = false;
+      option.disabled = false;
+    }
+    const label = $('newWork')?.querySelector('.new-work-label');
+    if (label) label.textContent = 'New chat';
   }
   await loadProjects().catch(() => {
     state.projects = [];

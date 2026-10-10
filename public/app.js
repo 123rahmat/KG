@@ -1509,8 +1509,20 @@ $('chatSearch').addEventListener('input',()=>{
 });
 $('chatSurfaceFilter')?.addEventListener('change',()=>loadRuns().catch(()=>{}));
 $('chatStatusFilter')?.addEventListener('change',()=>loadRuns().catch(()=>{}));
-$('newCodeChat')?.addEventListener('click',()=>newChat({surface:'code'}));
-$('newResearchChat')?.addEventListener('click',()=>newChat({surface:'research'}));
+$('newCodeChat')?.addEventListener('click',()=>{
+  newChat({surface:'code'});
+  if (state.product?.codingOnly && !state.activeProjectId)
+    document.dispatchEvent(new Event('kindgleam:open-projects'));
+});
+$('newResearchChat')?.addEventListener('click',()=>{
+  if (!state.product?.codingOnly) newChat({surface:'research'});
+});
+$('sidebarSource')?.addEventListener('click',()=>$('openProjectSources')?.click());
+$('sidebarTerminal')?.addEventListener('click',()=>$('openTerminal')?.click());
+$('sidebarFiles')?.addEventListener('click',()=>{
+  if ($('tab-runs').hidden) selectTab('runs');
+  $('chatViewFiles')?.click();
+});
 
 $('signin').addEventListener('submit', signIn);
 initGate();
@@ -1557,9 +1569,14 @@ $('composer').addEventListener('submit', event => {
   }
   sendMessage($('goal').value);
 });
-$('newWork').addEventListener('click', newChat);
-$('newWorkTop').addEventListener('click', newChat);
-$('newWorkHead').addEventListener('click', newChat);
+function startNewTask() {
+  newChat(state.product?.codingOnly ? { surface: 'code' } : {});
+  if (state.product?.codingOnly && !state.activeProjectId)
+    document.dispatchEvent(new Event('kindgleam:open-projects'));
+}
+$('newWork').addEventListener('click', startNewTask);
+$('newWorkTop').addEventListener('click', startNewTask);
+$('newWorkHead').addEventListener('click', startNewTask);
 
 // On wide screens the sidebar can be hidden; the choice is remembered here.
 // When closed it shrinks to a slim rail of icons rather than disappearing.
@@ -1601,7 +1618,8 @@ $('tabs').addEventListener('click', event => {
 });
 
 function selectChatWorkspaceSurface(surface){
-  const resolved=['code','research'].includes(surface)?surface:'normal-chat';
+  const resolved=state.product?.codingOnly ? 'code'
+    : ['code','research'].includes(surface)?surface:'normal-chat';
   if(!state.chat?.id && state.activeSurface!==resolved){
     saveDraftNow();
     state.activeSurface=resolved;
@@ -1613,10 +1631,11 @@ document.addEventListener('kindgleam:select-surface',event=>{
   const name=event.detail?.name;
   const workspace=event.detail?.workspace;
   if(workspace)selectChatWorkspaceSurface(workspace);
-  else if(name==='explore')selectChatWorkspaceSurface('research');
-  else if(name==='runs')selectChatWorkspaceSurface('normal-chat');
+  else if(name==='explore' && !state.product?.codingOnly)selectChatWorkspaceSurface('research');
+  else if(name==='runs')selectChatWorkspaceSurface(state.product?.codingOnly ? 'code' : 'normal-chat');
   renderThread();
-  if(name&&(name!=='runs'||$('tab-runs').hidden))selectTab(name);
+  if(name&&(!state.product?.codingOnly||name!=='explore')
+    &&(name!=='runs'||$('tab-runs').hidden))selectTab(name);
 });
 
 document.addEventListener('kindgleam:open-code-workspace',()=>{
