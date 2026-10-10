@@ -763,16 +763,23 @@
           tabindex="0" aria-labelledby="chatViewFiles" hidden>
           <header class="chat-files-head">
             <div><h2>Files in this chat</h2>
-              <p class="small muted">Only files attached to or saved from this conversation appear here.</p>
+              <p class="small muted">Upload files from your phone or computer, and see this chat's saved results. GitHub is optional.</p>
             </div>
-            <button type="button" class="small" id="refreshChatFiles">Refresh</button>
+            <div class="chat-files-head-actions">
+              <input id="chatFilesUploadInput" type="file" class="sr-only" multiple
+                aria-label="Choose files from device" tabindex="-1">
+              <button type="button" class="primary small" id="chatFilesUpload">Upload files</button>
+              <button type="button" class="small" id="refreshChatFiles">Refresh</button>
+            </div>
           </header>
+          <div id="chatFilesUploadStatus" class="small muted" role="status" aria-live="polite"></div>
+          <div id="chatFilesPending" class="chat-files-pending" hidden></div>
           <div id="chatFilesContent" class="chat-files-content" aria-live="polite"></div>
         </section>
         <div id="adaptiveWorkspaceBar" class="adaptive-workspace-bar" aria-label="Current workspace"></div>
         <div id="workspaceSourceBar" class="workspace-source-bar" aria-label="Project sources">
-          <button id="openProjectSources" type="button" class="workspace-source-primary">GitHub project</button>
-          <span id="workspaceSourceStatus" class="workspace-source-status" aria-live="polite">GitHub or attached code input</span>
+          <button id="openProjectSources" type="button" class="workspace-source-primary">Connect GitHub (optional)</button>
+          <span id="workspaceSourceStatus" class="workspace-source-status" aria-live="polite">Or upload files directly from your device</span>
           <button id="attachCodeInput" type="button" class="workspace-source-input">ZIP / code file</button>
           <button id="syncWorkspaceSource" type="button" hidden>Sync</button>
           <button id="openTerminal" type="button">Terminal</button>
