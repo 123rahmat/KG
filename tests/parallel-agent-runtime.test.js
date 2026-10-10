@@ -83,3 +83,41 @@ test('healthy high latency does not shrink concurrency and slow the critical pat
     4
   );
 });
+
+test('directory-scoped changes serialize descendant edits and reads', () => {
+  const parent = { id: 'parent', metadata: { writeSet: ['src/routes/'] } };
+  const child = { id: 'child', metadata: { writeSet: ['src/routes/runs.js'] } };
+  const sibling = { id: 'sibling', metadata: { writeSet: ['src/runtime.js'] } };
+  assert.equal(tasksConflict(parent, child), true);
+  assert.equal(tasksConflict(parent, sibling), false);
+  assert.equal(workspaceLanesConflict({
+    projectId: 'p', revisionId: 'r1', writeSet: ['src/routes']
+  }, {
+    projectId: 'p', revisionId: 'r1', readSet: ['src/routes/execution.js']
+  }), true);
+  assert.equal(workspaceLanesConflict({
+    projectId: 'p', revisionId: 'r1', writeSet: ['src/api.js']
+  }, {
+    projectId: 'p', revisionId: 'r1', writeSet: ['src/api-extra.js']
+  }), false);
+});
+
+test('mandatory skipped or unaccepted prerequisites never unlock follow-up work', async () => {
+  const { readyTasks } = await import('../src/parallel-orchestrator.js');
+  const { openWorldFrontier, composeOpenWorldDecision } = await import('../src/open-world-task-graph.js');
+  const skipped = { id: 'test', status: 'skipped', metadata: { required: true } };
+  const pending = { id: 'deliver', status: 'pending', dependsOn: ['test'] };
+  assert.deepEqual(readyTasks([skipped, pending]), []);
+  assert.deepEqual(openWorldFrontier({ nodes: [skipped, pending] }).ready, []);
+  const proposed = composeOpenWorldDecision({
+    situation: { uncertainty: 0.9 }, graph: { nodes: [skipped] },
+    candidates: [{ id: 'deliver', dependsOn: ['test'] }]
+  });
+  assert.notEqual(proposed.action, 'propose-work');
+  const unaccepted = { ...skipped, status: 'complete', metadata: { acceptanceRequired: true } };
+  assert.deepEqual(readyTasks([unaccepted, pending]), []);
+  assert.deepEqual(readyTasks([{ ...unaccepted, acceptance: { status: 'accepted' } }, pending]).map(x => x.id), ['deliver']);
+  const waived = { ...skipped, metadata: { required: false, waiverApproved: true } };
+  assert.deepEqual(readyTasks([waived, pending]).map(x => x.id), ['deliver']);
+  assert.deepEqual(readyTasks([{ ...waived, metadata: { required: false } }, pending]), []);
+});
