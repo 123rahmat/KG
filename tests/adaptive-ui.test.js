@@ -266,6 +266,8 @@ test('multiple Coding and Research chats have scoped filters, drafts and backgro
   assert.match(html,/id="chatStatusFilter"/);
   assert.match(html,/id="chatListSummary"/);
   assert.match(chat,/chatNavigationModel\(enriched/);
+  assert.match(chat,/function clearStagedChatAttachments/);
+  assert.ok((chat.match(/clearStagedChatAttachments\(\);/g)??[]).length>=2);
   assert.match(model,/needsAction/);
   assert.match(settings,/chat-drafts\.v2/);
   assert.match(settings,/saveDraftNow\(/);

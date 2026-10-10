@@ -40,6 +40,15 @@ function releasePreview(file) {
   attachmentPreviewUrls.delete(file);
 }
 
+function clearStagedChatAttachments(){
+  // Local File objects are not a shared project context. Carrying a pending
+  // upload into another conversation could accidentally send the wrong files.
+  for(const file of state.attachments)releasePreview(file);
+  state.attachments=[];
+  state.attachmentScope=null;
+  renderAttachments();
+}
+
 function consumeAttachments(files) {
   const sent = new Set(files);
   state.attachments = state.attachments.filter(file => !sent.has(file));
@@ -265,6 +274,7 @@ let chatListEpoch=0;
 export function newChat(options={}) {
   openChatEpoch++;
   if(options?.skipSave!==true)saveDraftNow();
+  clearStagedChatAttachments();
   if ($('tab-runs').hidden) selectTab('runs');
   state.chat = { id: null, runs: [], pending: null, consent: state.settings.consent, workspaceSourceId: null, projectId: state.activeProjectId ?? null };
   state.workspaceSourceId = null;
@@ -403,6 +413,7 @@ export async function openChat(id){
     const {runs}=await api('GET','/api/conversations/'+encodeURIComponent(id));
     // A slower response from another click cannot steal the visible chat.
     if(epoch!==openChatEpoch||workspace!==state.workspaceId)return;
+    clearStagedChatAttachments();
     const latest=runs.at(-1)??null;
     const latestSource=latest?.adaptation?.attachments?.find(item=>item?.sourceId)
       ??latest?.adaptation?.attachments?.find(item=>item?.sourceKind);

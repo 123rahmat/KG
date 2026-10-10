@@ -354,3 +354,8 @@ All context and project state remain scoped by existing server ownership,
 authorization and project revision controls. Changing a UI filter never
 moves files, grants access, or mixes Research evidence with another project's
 Coding files.
+
+When switching chats, locally selected but unsent File objects are cleared
+from the composer rather than being silently carried into another project's
+request. The user can explicitly reattach them. Pending offline messages
+retain their own saved files and conversation target.
