@@ -354,7 +354,8 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
   }
   const strictRunControlGate = (run, scope, principalId) => verifyControlledRun({
     pool, run, scope, principalId,
-    codingResearchOnly: config.product?.codingResearchOnly === true
+    codingResearchOnly: config.product?.codingResearchOnly === true,
+    codingOnly: config.product?.codingOnly === true
   });
 
   /** Null when the person may use the AI now; otherwise the not-executed result that says when. */
