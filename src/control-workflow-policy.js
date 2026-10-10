@@ -19,7 +19,7 @@ const RESEARCH_WRITE = /\b(?:draft|write|revise|edit|format|prepare|produce|comp
 const RESEARCH_QUANT = /\b(?:statistic\w*|regression|anova|p[- ]values?|confidence interval|hypothes\w* test|simulate|quantitative|equation|derive|mathematic\w*|dataset|data analys\w*|experiment\w*)\b/i;
 const RESEARCH_VISUAL = /\b(?:figures?|plots?|graphs?|charts?|diagram\w*|visuali[sz]\w*|graphical abstract)\b/i;
 const RESEARCH_METHODS = /\b(?:methods?|methodology|experimental design|study design|sampling|protocol|data collection)\b/i;
-const RESEARCH_EXPLORE = /\b(?:brainstorm|alternatives?|possible topics?|hypothes(?:is|es)|research gaps?|novel approaches)\b/i;
+const RESEARCH_EXPLORE = /\b(?:brainstorm|alternatives?|possible topics?|novel approaches|explore|ideat\w*)\b/i;
 
 function stage(id, reason, required = true) {
   return Object.freeze({ id, reason, required });
