@@ -371,7 +371,9 @@ export function loadConfig(env = process.env) {
     // Staged release switch. OFF until project/record migrations and UI are
     // verified; when ON, new work must pass the Coding/Research project gate.
     product: {
-      codingResearchOnly: boolean(env.CODING_RESEARCH_ONLY, false)
+      codingResearchOnly: boolean(env.CODING_RESEARCH_ONLY, false),
+      // Separate staged gate for the coding-only product; OFF by default.
+      codingOnly: boolean(env.KG_CODING_ONLY, false)
     },
 
     security: {
