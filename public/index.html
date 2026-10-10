@@ -747,6 +747,28 @@
             <div class="chat-meta" id="chatMeta"></div>
           </div>
         </header>
+        <!-- Two sliding, keyboard-accessible views of this same conversation. -->
+        <div class="chat-view-nav">
+          <div class="chat-view-switch" id="chatViewSwitch" role="tablist" aria-label="Conversation content" data-view="chat">
+            <span class="chat-view-thumb" aria-hidden="true"></span>
+            <button type="button" class="chat-view-choice" id="chatViewMessages" role="tab"
+              aria-selected="true" aria-controls="thread" tabindex="0">Chat</button>
+            <button type="button" class="chat-view-choice" id="chatViewFiles" role="tab"
+              aria-selected="false" aria-controls="chatFilesPanel" tabindex="-1">Files
+              <span id="chatFilesCount" class="chat-view-count" hidden></span>
+            </button>
+          </div>
+        </div>
+        <section id="chatFilesPanel" class="chat-files-panel" role="tabpanel"
+          tabindex="0" aria-labelledby="chatViewFiles" hidden>
+          <header class="chat-files-head">
+            <div><h2>Files in this chat</h2>
+              <p class="small muted">Only files attached to or saved from this conversation appear here.</p>
+            </div>
+            <button type="button" class="small" id="refreshChatFiles">Refresh</button>
+          </header>
+          <div id="chatFilesContent" class="chat-files-content" aria-live="polite"></div>
+        </section>
         <div id="adaptiveWorkspaceBar" class="adaptive-workspace-bar" aria-label="Current workspace"></div>
         <div id="workspaceSourceBar" class="workspace-source-bar" aria-label="Project sources">
           <button id="openProjectSources" type="button" class="workspace-source-primary">GitHub project</button>
