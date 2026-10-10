@@ -71,7 +71,8 @@ const ANSWER_TASKS = new Set(['respond', 'deliver', 'prototype', 'investigate', 
 /** Steps whose answer is one JSON object the server reads. */
 export function answersInJson(task) {
   return ['verify', 'understand', 'discover-capabilities', 'reassess', 'plan'].includes(task?.type)
-    || task?.id === 'build-code' || Boolean(task?.metadata?.outputSchema);
+    || task?.id === 'build-code' || Boolean(task?.metadata?.outputSchema)
+    || task?.metadata?.ventureDiscovery === true;
 }
 
 /**
@@ -1906,6 +1907,9 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
           config, fetchImpl, modelId: effectiveModelId, allowBackup, effort, signal, beforeCall,
           usageGate,
           usageSource: 'chat',
+          // Idea comparisons are structured evidence for the later approved
+          // build plan, even if a governed tool loop did source retrieval.
+          ...(task.metadata?.ventureDiscovery===true ? {json:true} : {}),
           ...(researchOutputCap ? { maxOutputTokens: researchOutputCap } : {}),
           maxRounds: Math.min(
             Math.max(1, Number(run.adaptation?.effortProfile?.maturity?.level ? ({ light: 2, standard: 4, high: 6, maximum: 8 }[run.adaptation.effortProfile.maturity.level] ?? 4) : 4)),

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readStepAnswer,normalizeVentureDecision} from '../src/step-plan.js';
 import {liveWorkSnapshot} from '../public/live-work-model.js';
 import {systemPromptFor} from '../src/reasoning-context.js';
+import {answersInJson} from '../src/routes/execution.js';
 
 const result={
   result:'Three user-focused ideas assessed; recommend the smallest validated experiment before an MVP.',
@@ -87,4 +88,10 @@ test('ideation instructions request structured options but do not grant build au
   assert.match(rules,/"selectedIdea"/);
   assert.match(rules,/never user approval/);
   assert.match(rules,/"enough":false/);
+});
+
+test('venture-only step requests structured JSON without forcing every generic step',()=>{
+  assert.equal(answersInJson({type:'step',metadata:{ventureDiscovery:true}}),true);
+  assert.equal(answersInJson({type:'step',metadata:{}}),false);
+  assert.equal(answersInJson({type:'plan'}),true);
 });
