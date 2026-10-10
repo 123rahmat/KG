@@ -393,7 +393,13 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
         WHERE workspace_id = $1
           AND (visibility = 'workspace' OR owner_id = $2)
           AND (id = ANY($3::text[])
-            OR (provenance->>'runId') = ANY($4::text[]))
+            OR ((provenance->>'runId') = ANY($4::text[])
+              AND EXISTS (
+                SELECT 1 FROM runs linked
+                 WHERE linked.id::text = objects.provenance->>'runId'
+                   AND linked.workspace_id = objects.workspace_id
+                   AND linked.principal_id = objects.owner_id
+              )))
         ORDER BY created_at DESC, id DESC
         LIMIT 501`,
       [req.scope.workspaceId, req.scope.principalId, candidateIds, refs.runIds]
