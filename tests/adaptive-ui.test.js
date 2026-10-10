@@ -341,3 +341,11 @@ test('per-conversation submission locks and retry scope are preserved in UI wiri
   assert.match(sending,/JSON\.stringify\(\[String\(workspaceId\),String\(conversationId\)\]\)/);
   assert.match(scope,/Object\.hasOwn\(run,'projectId'\)/);
 });
+
+test('late run creation and retry refresh a reopened chat but never cross workspaces',async()=>{
+  const chat=await read('public/app-attachments.js');
+  const actions=await read('public/app-actions.js');
+  assert.match(chat,/run\.workspaceId && run\.workspaceId !== state\.workspaceId/);
+  assert.match(chat,/if \(state\.workspaceId === submission\.workspaceId\) renderRun\(run\)/);
+  assert.match(actions,/if \(state\.workspaceId === workspaceId\) renderRun\(newRun\)/);
+});

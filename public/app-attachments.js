@@ -207,6 +207,9 @@ const chatListRefresh=createChatRefreshCoalescer(()=>loadRuns().catch(()=>{}));
 /** Called with every fresh copy of a run from the server. */
 export function renderRun(run) {
   if (!run) return;
+  // A background request can finish after switching workspaces. Never
+  // render the old workspace's result in the new one.
+  if (run.workspaceId && run.workspaceId !== state.workspaceId) return;
   const active=Boolean(state.chat.id && (
     state.chat.id===run.conversationId
     || (!run.conversationId && state.chat.id===run.id)
@@ -763,7 +766,9 @@ export async function sendMessage(text) {
     if (submission.modelConsent) state.consented.add(run.id);
     chat.runs.push(run);
     state.cancelledRuns?.delete(run.id);
-    renderThread();
+    // Reconcile an in-flight send after its chat was switched away and
+    // reopened. The original chat object may no longer be mounted.
+    if (state.workspaceId === submission.workspaceId) renderRun(run);
     loadRuns().catch(() => {});
     // The newly persisted run drives independently. Waiting for its entire
     // research/coding lifecycle would block another chat's composer for

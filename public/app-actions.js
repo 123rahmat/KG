@@ -6,7 +6,7 @@
 import { renderMarkdown } from './markdown.js';
 import { keepView } from './thread-view.js';
 import { state, $, element, button, api, notify, guard, capabilities, canEdit } from './ui-core.js';
-import { growComposer, loadRuns, newChat, personalContext, renderThread, stopRun } from './app-attachments.js';
+import { growComposer, loadRuns, newChat, personalContext, renderRun, renderThread, stopRun } from './app-attachments.js';
 import { TERMINAL_STATES, autoDrive, copyText, governanceCard, isAutomatic, renderNextStep, resultText, runStatus, saveAnswer, stepsList, svgIcon, timeAgo, toolLabel } from './app.js';
 import { selectTab } from './app-account.js';
 import { renderWorkStatus, workPresentation } from './adaptive-workspace.js';
@@ -467,10 +467,9 @@ async function restartRun(run, mode = 'retry') {
     chat.id = conversationId;
     chat.projectId = newRun.projectId ?? projectId;
     chat.runs.push(newRun);
-    if (state.chat === chat && state.workspaceId === workspaceId) {
-      state.run = newRun;
-      renderThread();
-    }
+    // If the chat was reopened while the retry submitted, refresh the
+    // reopened conversation by identity rather than the stale object.
+    if (state.workspaceId === workspaceId) renderRun(newRun);
     // Long-running retries are independently driven like a normal turn.
     // Chat switching must neither steal their output nor block its composer.
     if (state.workspaceId === workspaceId) {

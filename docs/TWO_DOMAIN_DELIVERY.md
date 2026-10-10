@@ -428,3 +428,11 @@ source ID rather than ambient left-sidebar navigation filters. The creation is
 scoped to the original workspace, and the long automatic run is driven without
 holding the foreground browser composer hostage. These boundaries are covered
 by regression tests, including switching chats during overlapping uploads.
+
+## Late responses after switching away and returning
+
+Normal sends and retry/regenerate reconcile persisted runs by conversation ID,
+even when a user reopens a chat before its slower network submission finishes.
+The old chat object is no longer the sole UI destination. Rendering is also
+denied when a background run belongs to a different workspace, so switching
+organizations never attaches an old response to the new workspace's thread.
