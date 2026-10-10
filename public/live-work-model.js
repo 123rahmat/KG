@@ -111,7 +111,6 @@ export function liveWorkSnapshot(run,{maxItems=6}={}) {
   const limit=Math.max(1,Math.min(8,Number.isInteger(maxItems)?maxItems:6));
   const entries=[];
   for(const task of [...tasks].reverse().slice(0,12)) {
-    const e=rawEvidence(task);
     // Never turn a queued/proposed step into "observed output".
     if (task.status==='pending'||task.status==='queued'||task.status==='skipped')continue;
     const execution=recordOutput(task);
