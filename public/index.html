@@ -645,9 +645,9 @@
       <button class="icon-btn" id="collapseRail" aria-label="Hide sidebar" title="Hide sidebar"><svg class="i"><use href="#i-sidebar"/></svg></button>
       <div class="brand"><svg class="logo" aria-hidden="true"><use href="#i-logo"/></svg> <span>Kindgleam</span></div>
     </div>
-    <button class="new-chat" id="newWork" title="New chat"><svg class="i" aria-hidden="true"><use href="#i-new"/></svg> New chat</button>
+    <button class="new-chat" id="newWork" title="New chat"><svg class="i" aria-hidden="true"><use href="#i-new"/></svg> <span class="new-work-label">New chat</span></button>
     <nav class="rail-nav" id="tabs" role="tablist" aria-label="Pages">
-      <button role="tab" aria-selected="true" data-tab="runs" hidden>Chat</button>
+      <button role="tab" aria-selected="true" data-tab="runs" hidden><svg class="i" aria-hidden="true"><use href="#i-code"/></svg> Coding</button>
       <button role="tab" aria-selected="false" data-tab="explore" title="Explore"><svg class="i" aria-hidden="true"><use href="#i-explore"/></svg> Explore</button>
       <button role="tab" aria-selected="false" data-tab="audit" title="Activity"><svg class="i" aria-hidden="true"><use href="#i-activity"/></svg> Activity</button>
     </nav>
@@ -670,6 +670,17 @@
       <select id="projectSelect" aria-label="Current project"><option value="">All projects</option></select>
     </section>
 
+    <section class="coding-action-dock" id="codingActionDock" aria-label="Coding workspace tools">
+      <span class="coding-action-title">Coding tools</span>
+      <div class="coding-action-grid">
+        <button id="sidebarSource" type="button" title="Connect or inspect a repository"><svg class="i" aria-hidden="true"><use href="#i-code"/></svg> Repository</button>
+        <button id="sidebarFiles" type="button" title="Open files attached to this chat"><svg class="i" aria-hidden="true"><use href="#i-files"/></svg> Chat files</button>
+        <button id="sidebarTerminal" type="button" title="Open the approved sandbox terminal"><svg class="i" aria-hidden="true"><use href="#i-run"/></svg> Terminal</button>
+        <button id="sidebarChanges" type="button" title="Review recorded changed files"><svg class="i" aria-hidden="true"><use href="#i-code"/></svg> Changes</button>
+        <button id="sidebarTests" type="button" title="Review real test results"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg> Tests</button>
+      </div>
+      <p class="coding-action-hint">Project-scoped tasks · tests and code changes require real execution evidence.</p>
+    </section>
     <button class="rail-mini-only rail-chats" id="railChats" title="Chats" aria-label="Show chats"><svg class="i" aria-hidden="true"><use href="#i-chat"/></svg></button>
     <div class="rail-section">
       <div class="rail-heading">
@@ -1254,7 +1265,7 @@
       <button class="icon-btn" id="projectDialogClose" type="button" aria-label="Close" title="Close">×</button>
     </header>
     <section class="project-create-card">
-      <div class="project-section-head"><h3>New project</h3><span class="small muted">A project is an organization boundary, not another AI brain.</span></div>
+      <div class="project-section-head"><h3>New project</h3><span class="small muted">Isolate tasks, repository context, and execution history by project.</span></div>
       <label>Name
         <input id="projectName" type="text" maxlength="120" autocomplete="off" placeholder="e.g. Product website">
       </label>

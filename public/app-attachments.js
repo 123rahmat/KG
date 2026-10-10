@@ -303,7 +303,8 @@ export function newChat(options={}) {
   if(options?.skipSave!==true)saveDraftNow();
   if(['code','research','normal-chat'].includes(options?.surface))
     state.activeSurface=options.surface;
-  if (state.product?.codingResearchOnly && !['code','research'].includes(state.activeSurface)) {
+  if (state.product?.codingOnly) state.activeSurface = 'code';
+  else if (state.product?.codingResearchOnly && !['code','research'].includes(state.activeSurface)) {
     const project = state.projects.find(item => item.id === state.activeProjectId);
     state.activeSurface = ['code','research'].includes(project?.defaultSurface)
       ? project.defaultSurface : 'code';
@@ -388,14 +389,16 @@ export function renderChatList(){
   });
   const summary=$('chatListSummary');
   if(summary)summary.textContent=navigation.shown+' shown · '
-    +navigation.coding+' Code · '+navigation.research+' Research · '
+    +(state.product?.codingOnly ? navigation.coding+' coding chats · '
+      : navigation.coding+' Code · '+navigation.research+' Research · ')
     +navigation.needsAction+' need attention'
     +(navigation.loaded>=100?' · 100 matching chats loaded':'');
   list.replaceChildren();
   if(!navigation.chats.length){
     list.append(element('div',{class:'empty small',text:navigation.isFiltered
       ?'No chats match these filters. Adjust the project, workspace or status.'
-      :'No chats yet. Start a Code or Research conversation.'}));
+      :state.product?.codingOnly ? 'No coding chats yet. Start a new coding task.'
+        : 'No chats yet. Start a Code or Research conversation.'}));
     return;
   }
   let lastGroup='';
@@ -690,11 +693,14 @@ export async function sendMessage(text) {
   if (!goal || chatIsSending(state)) return;
   // Frontend avoids uploads and provider consent for work the owning project
   // cannot accept. The server independently rechecks every authority field.
-  if (state.product?.codingResearchOnly === true) {
+  if (state.product?.codingOnly === true || state.product?.codingResearchOnly === true) {
     const selected = state.projects.find(project =>
       project.id === state.activeProjectId && project.state === 'active');
-    if (!selected || !['code','research'].includes(selected.defaultSurface)) {
-      notify('runNotice', 'warn', 'Select or create a Coding or Research project first.');
+    if (!selected || (state.product?.codingOnly
+      ? selected.defaultSurface !== 'code'
+      : !['code','research'].includes(selected.defaultSurface))) {
+      notify('runNotice', 'warn', state.product?.codingOnly
+        ? 'Select or create a coding project first.' : 'Select or create a Coding or Research project first.');
       document.dispatchEvent(new Event('kindgleam:open-projects'));
       return;
     }
@@ -739,7 +745,8 @@ export async function sendMessage(text) {
       chatSurface:lastSavedRun?.surface??lastSavedRun?.adaptation?.primarySurface,
       chosenSurface:state.activeSurface,hasSavedRuns
     }),
-    creationMode: $('adaptiveCreateStrip')?.dataset.mode ?? null,
+    creationMode: state.product?.codingOnly ? null
+      : $('adaptiveCreateStrip')?.dataset.mode ?? null,
     modelConsent: chat.consent,
     storedAttachmentIds
   };

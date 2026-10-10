@@ -23,14 +23,17 @@ export function renderProjectHub() {
   if (!select || !summary) return;
 
   const projects = Array.isArray(state.projects) ? state.projects : [];
-  const strict = state.product?.codingResearchOnly === true;
+  const codingOnly = state.product?.codingOnly === true;
+  const strict = codingOnly || state.product?.codingResearchOnly === true;
   const active = projects.filter(project => project.state === 'active'
-    && (!strict || ['code','research'].includes(project.defaultSurface)));
-  const selected = state.activeProjectId && projectById(state.activeProjectId) ? state.activeProjectId : '';
+    && (codingOnly ? project.defaultSurface === 'code'
+      : !strict || ['code','research'].includes(project.defaultSurface)));
+  const selected = active.some(project => project.id === state.activeProjectId) ? state.activeProjectId : '';
   state.activeProjectId = selected || null;
 
   select.replaceChildren(
-    element('option', { value: '', text: strict ? 'Choose a Coding or Research project' : 'All projects' }),
+    element('option', { value: '', text: codingOnly ? 'Select a coding project'
+      : strict ? 'Choose a Coding or Research project' : 'All projects' }),
     ...active.map(project => element('option', { value: project.id, text: project.name }))
   );
   select.value = state.activeProjectId ?? '';
@@ -44,7 +47,8 @@ export function renderProjectHub() {
     : active.length
       ? active.length + ' project' + (active.length === 1 ? '' : 's') + ' · ' +
         activeCount + ' active workstream' + (activeCount === 1 ? '' : 's')
-      : 'Keep related chats together without merging their private context.';
+      : codingOnly ? 'Create a coding project to start building.'
+        : 'Keep related chats together without merging their private context.';
 
   renderProjectManageList();
 }
@@ -96,18 +100,18 @@ function closeProjectDialog() {
 
 function openProjectDialog() {
   const dialog = $('projectDialog');
-  const strict = state.product?.codingResearchOnly === true;
-  const obsolete = $('projectSurface')?.querySelector('option[value="normal-chat"]');
-  if (obsolete) {
-    obsolete.disabled = strict;
-    obsolete.hidden = strict;
+  const codingOnly = state.product?.codingOnly === true;
+  const strict = codingOnly || state.product?.codingResearchOnly === true;
+  const field = $('projectSurface');
+  for (const option of field?.options ?? []) {
+    option.disabled = strict && (codingOnly ? option.value !== 'code' : option.value === 'normal-chat');
+    option.hidden = option.disabled;
   }
   if (strict) {
-    const field = $('projectSurface');
-    if (field && !['code','research'].includes(field.value))
-      field.value = state.activeSurface === 'research' ? 'research' : 'code';
+    if (field && (codingOnly || !['code','research'].includes(field.value)))
+      field.value = 'code';
     const title = $('projectDialogTitle');
-    if (title) title.textContent = 'Coding and Research projects';
+    if (title) title.textContent = codingOnly ? 'Coding projects' : 'Coding and Research projects';
   }
   if (dialog && !dialog.open) dialog.showModal();
   renderProjectManageList();
@@ -121,10 +125,12 @@ async function createProject(event) {
   const name = text($('projectName')?.value);
   const description = text($('projectDescription')?.value);
   const defaultSurface = text($('projectSurface')?.value)
-    || (state.product?.codingResearchOnly ? 'code' : 'normal-chat');
+    || (state.product?.codingOnly || state.product?.codingResearchOnly ? 'code' : 'normal-chat');
   const visibility = $('projectShared')?.checked ? 'workspace' : 'private';
-  if (state.product?.codingResearchOnly && !['code','research'].includes(defaultSurface)) {
-    notify('projectNotice', 'warn', 'Choose Coding or Research for a new project.');
+  if ((state.product?.codingOnly && defaultSurface !== 'code')
+    || (state.product?.codingResearchOnly && !['code','research'].includes(defaultSurface))) {
+    notify('projectNotice', 'warn', state.product?.codingOnly
+      ? 'Only coding projects can be created.' : 'Choose Coding or Research for a new project.');
     return;
   }
   if (!name) {
@@ -141,7 +147,7 @@ async function createProject(event) {
     state.activeProjectId = response.project.id;
     renderProjectHub();
     form.reset();
-    if (state.product?.codingResearchOnly && $('projectSurface'))
+    if ((state.product?.codingOnly || state.product?.codingResearchOnly) && $('projectSurface'))
       $('projectSurface').value = 'code';
     closeProjectDialog();
     document.dispatchEvent(new CustomEvent('kindgleam:project-selected', {

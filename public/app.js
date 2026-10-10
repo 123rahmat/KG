@@ -33,6 +33,34 @@ initTerminal();
 initArtifactPreview();
 initChatFilesPanel();
 
+// Before authentication the public product contract still determines which
+// features are advertised. Presentation is never an admission authority.
+async function configureLandingProduct() {
+  try {
+    const response = await fetch('/api/adaptive-contract', { cache: 'no-store' });
+    if (!response.ok) return;
+    const contract = await response.json();
+    if (contract?.product?.codingOnly !== true) return;
+    document.body.classList.add('coding-only');
+    const set = (selector, text) => {
+      const target = document.querySelector(selector);
+      if (target) target.textContent = text;
+    };
+    set('.landing-copy .landing-kicker', 'Coding workspace · plan, build, test');
+    set('.landing-copy .landing-lead',
+      'Understand a repository, implement precise changes, debug failures and verify results in one professional engineering workspace. Tools and coding specialists activate only when needed.');
+    set('#workspaceTitle', 'One coding workspace. Focused tools for engineering.');
+    set('#workspaces .section-heading > p:last-child',
+      'Organize software projects, work with repositories or uploaded code, and review actual test evidence before applying changes.');
+    set('#systemTitle', 'A reliable coding workflow, adapted to each task.');
+    set('#workspaces .workspace-principle span',
+      'One shared runtime. Project-isolated coding context, optional specialists, authentic execution results and explicit write-back.');
+    set('.landing-footer > span', 'Kindgleam — a focused coding workspace from request to verified changes.');
+  } catch {
+    // Network loss must not turn a static public page into a broken shell.
+  }
+}
+void configureLandingProduct();
 
 /* --------------------------------------------------------------- transport */
 
@@ -1509,8 +1537,34 @@ $('chatSearch').addEventListener('input',()=>{
 });
 $('chatSurfaceFilter')?.addEventListener('change',()=>loadRuns().catch(()=>{}));
 $('chatStatusFilter')?.addEventListener('change',()=>loadRuns().catch(()=>{}));
-$('newCodeChat')?.addEventListener('click',()=>newChat({surface:'code'}));
-$('newResearchChat')?.addEventListener('click',()=>newChat({surface:'research'}));
+$('newCodeChat')?.addEventListener('click',()=>{
+  newChat({surface:'code'});
+  if (state.product?.codingOnly && !state.activeProjectId)
+    document.dispatchEvent(new Event('kindgleam:open-projects'));
+});
+$('newResearchChat')?.addEventListener('click',()=>{
+  if (!state.product?.codingOnly) newChat({surface:'research'});
+});
+$('sidebarSource')?.addEventListener('click',()=>$('openProjectSources')?.click());
+$('sidebarTerminal')?.addEventListener('click',()=>$('openTerminal')?.click());
+$('sidebarFiles')?.addEventListener('click',()=>{
+  if ($('tab-runs').hidden) selectTab('runs');
+  $('chatViewFiles')?.click();
+});
+async function openCodingEvidence(area) {
+  if ($('tab-runs').hidden) await selectTab('runs');
+  if (state.chatView === 'files') $('chatViewMessages')?.click();
+  document.dispatchEvent(new Event('kindgleam:open-code-workspace'));
+  const nav = $('deepWorkspaceShell')?.querySelector(`[data-workspace-nav="${area}"]`);
+  if (!nav) {
+    notify('runNotice','warn','Start a coding run to see recorded changes and test results.');
+    return;
+  }
+  nav.click();
+  nav.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+}
+$('sidebarChanges')?.addEventListener('click',()=>void openCodingEvidence('changes'));
+$('sidebarTests')?.addEventListener('click',()=>void openCodingEvidence('tests'));
 
 $('signin').addEventListener('submit', signIn);
 initGate();
@@ -1557,9 +1611,14 @@ $('composer').addEventListener('submit', event => {
   }
   sendMessage($('goal').value);
 });
-$('newWork').addEventListener('click', newChat);
-$('newWorkTop').addEventListener('click', newChat);
-$('newWorkHead').addEventListener('click', newChat);
+function startNewTask() {
+  newChat(state.product?.codingOnly ? { surface: 'code' } : {});
+  if (state.product?.codingOnly && !state.activeProjectId)
+    document.dispatchEvent(new Event('kindgleam:open-projects'));
+}
+$('newWork').addEventListener('click', startNewTask);
+$('newWorkTop').addEventListener('click', startNewTask);
+$('newWorkHead').addEventListener('click', startNewTask);
 
 // On wide screens the sidebar can be hidden; the choice is remembered here.
 // When closed it shrinks to a slim rail of icons rather than disappearing.
@@ -1601,7 +1660,8 @@ $('tabs').addEventListener('click', event => {
 });
 
 function selectChatWorkspaceSurface(surface){
-  const resolved=['code','research'].includes(surface)?surface:'normal-chat';
+  const resolved=state.product?.codingOnly ? 'code'
+    : ['code','research'].includes(surface)?surface:'normal-chat';
   if(!state.chat?.id && state.activeSurface!==resolved){
     saveDraftNow();
     state.activeSurface=resolved;
@@ -1613,10 +1673,11 @@ document.addEventListener('kindgleam:select-surface',event=>{
   const name=event.detail?.name;
   const workspace=event.detail?.workspace;
   if(workspace)selectChatWorkspaceSurface(workspace);
-  else if(name==='explore')selectChatWorkspaceSurface('research');
-  else if(name==='runs')selectChatWorkspaceSurface('normal-chat');
+  else if(name==='explore' && !state.product?.codingOnly)selectChatWorkspaceSurface('research');
+  else if(name==='runs')selectChatWorkspaceSurface(state.product?.codingOnly ? 'code' : 'normal-chat');
   renderThread();
-  if(name&&(name!=='runs'||$('tab-runs').hidden))selectTab(name);
+  if(name&&(!state.product?.codingOnly||name!=='explore')
+    &&(name!=='runs'||$('tab-runs').hidden))selectTab(name);
 });
 
 document.addEventListener('kindgleam:open-code-workspace',()=>{

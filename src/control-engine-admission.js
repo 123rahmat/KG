@@ -27,12 +27,13 @@ export class ControlAdmissionError extends Error {
 
 export async function admitControlEngineRequest({
   pool, scope, principalId, goal, projectId, activeSurface, conversationId,
-  allowMixed = false
+  allowMixed = false, codingOnly = false
 } = {}) {
   const projectKey = text(projectId);
   if (!projectKey) {
     throw new ControlAdmissionError(
-      'Choose a Coding or Research project before beginning new work.',
+      codingOnly ? 'Choose a Coding project before beginning new work.'
+        : 'Choose a Coding or Research project before beginning new work.',
       'control-project-required', 422
     );
   }
@@ -48,6 +49,12 @@ export async function admitControlEngineRequest({
   const project = result.rows?.[0];
   if (!project) throw new ControlAdmissionError('Project not found.', 'control-project-not-found', 404);
   const surface = text(project.default_surface).toLowerCase();
+  if (codingOnly && surface !== 'code') {
+    throw new ControlAdmissionError(
+      'Only Coding projects accept new tasks. Older chats remain viewable.',
+      'control-coding-only', 422
+    );
+  }
   if (!VALID_SURFACES.has(surface)) {
     throw new ControlAdmissionError(
       'Historical Normal Chat projects are read-only; choose Coding or Research.',
@@ -97,6 +104,12 @@ export async function admitControlEngineRequest({
       422);
   }
   const controller = controlEngineForSurface(surface);
+  if (codingOnly && assessment.domain !== 'coding') {
+    throw new ControlAdmissionError(
+      'This workspace accepts software engineering tasks only.',
+      'control-coding-only', 422
+    );
+  }
   if (assessment.domain !== controller) {
     throw new ControlAdmissionError(
       'This work belongs to a different project control engine; choose the matching project.',
@@ -119,12 +132,13 @@ export async function admitControlEngineRequest({
  * alone are not authority: the stored DB row must match the selected project.
  */
 export async function verifyControlledRun({
-  pool, run, scope, principalId, codingResearchOnly = false
+  pool, run, scope, principalId, codingResearchOnly = false, codingOnly = false
 } = {}) {
-  if (!codingResearchOnly) return null;
+  if (!codingResearchOnly && !codingOnly) return null;
   const controller = run?.surface === 'code' ? 'coding'
     : run?.surface === 'research' ? 'research' : null;
-  if (!controller || !run?.projectId || !run?.id || run.principalId !== principalId
+  if ((codingOnly && controller !== 'coding')
+      || !controller || !run?.projectId || !run?.id || run.principalId !== principalId
       || run.adaptation?.controlEngineId !== controller) {
     return { status:409, code:'control-historical-read-only',
       error:'Historical or unowned runs are read-only. Start in a Coding or Research project.' };

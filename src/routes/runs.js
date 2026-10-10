@@ -118,7 +118,7 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
 
   /** A non-safety scope decline: no model/tool spend or abuse strike. */
   async function strictProductAdmission(req, res) {
-    if (config.product?.codingResearchOnly !== true) return null;
+    if (config.product?.codingResearchOnly !== true && config.product?.codingOnly !== true) return null;
     try {
       return await admitControlEngineRequest({
         pool,
@@ -127,7 +127,8 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
         goal: req.body?.goal,
         projectId: req.body?.projectId,
         activeSurface: req.body?.activeSurface,
-        conversationId: req.body?.conversationId
+        conversationId: req.body?.conversationId,
+        codingOnly: config.product?.codingOnly === true
       });
     } catch (error) {
       if (!(error instanceof ControlAdmissionError)) throw error;
@@ -146,7 +147,7 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
   }
 
   async function strictExistingRun(req, res) {
-    if (config.product?.codingResearchOnly !== true) return true;
+    if (config.product?.codingResearchOnly !== true && config.product?.codingOnly !== true) return true;
     const run = await runs.get(req.scope, req.params.id);
     if (!run) {
       res.status(404).json({ error: 'Run not found', code: 'no-run' });
@@ -154,7 +155,8 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
     }
     const blocked = await verifyControlledRun({
       pool, run, scope: req.scope, principalId: req.principal.id,
-      codingResearchOnly: true
+      codingResearchOnly: true,
+      codingOnly: config.product?.codingOnly === true
     });
     if (blocked) {
       res.status(blocked.status).json(blocked);
