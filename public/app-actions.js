@@ -13,6 +13,7 @@ import { renderWorkStatus, workPresentation } from './adaptive-workspace.js';
 import { workspaceOutcomeSummary } from './workspace-outcomes.js';
 import { renderLiveWorkSurface } from './live-work-surface.js';
 import { artifactChip } from './artifact-preview.js';
+import { retrySubmissionScope } from './conversation-submission-scope.js';
 
 const actionsLoading = new Set();
 
@@ -433,28 +434,48 @@ function iconButton(name, label, onclick, className = '') {
 }
 
 async function restartRun(run, mode = 'retry') {
-  if (!run || !canEdit() || state.driving) return;
+  if (!run || !canEdit() || state.busyRuns?.has(run.id) || state.drivingRuns?.has(run.id)) return;
+  // A retry is a new turn in the ORIGINAL conversation and project, even if
+  // the person has since selected a different project in the sidebar.
+  const chat = state.chat;
+  const workspaceId = state.workspaceId;
+  const bound=retrySubmissionScope(run,chat);
+  const conversationId=bound.conversationId??crypto.randomUUID();
+  if (chat.id && chat.id !== conversationId) return;
+  const {projectId,activeSurface}=bound;
+  const sourceId=bound.workspaceSourceId;
+  const modelConsent = chat.consent;
+  const context = personalContext();
   await guard(async () => {
-    const conversationId = state.chat.id ?? run.conversationId ?? crypto.randomUUID();
-    state.chat.id = conversationId;
     const originalAttachments = Array.isArray(run.adaptation?.attachments)
       ? run.adaptation.attachments.map(item => item?.id).filter(Boolean)
       : [];
     const newRun = await api('POST', '/api/runs', {
       goal: run.goal,
       conversationId,
+      projectId,
+      activeSurface,
+      ...(sourceId ? { workspaceSourceId: sourceId } : {}),
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      ...personalContext(),
+      ...context,
       attachments: originalAttachments,
       visibility: run.visibility === 'workspace' ? 'workspace' : ($('shareRun').checked ? 'workspace' : 'private'),
-      privacyConsent: { modelProvider: state.chat.consent },
+      privacyConsent: { modelProvider: modelConsent },
       retryOf: run.id,
       retryMode: mode
-    }, { idempotencyKey: crypto.randomUUID() });
-    state.chat.runs.push(newRun);
-    state.run = newRun;
-    renderThread();
-    await autoDrive(newRun);
+    }, { workspaceId, idempotencyKey: crypto.randomUUID() });
+    chat.id = conversationId;
+    chat.projectId = newRun.projectId ?? projectId;
+    chat.runs.push(newRun);
+    if (state.chat === chat && state.workspaceId === workspaceId) {
+      state.run = newRun;
+      renderThread();
+    }
+    // Long-running retries are independently driven like a normal turn.
+    // Chat switching must neither steal their output nor block its composer.
+    if (state.workspaceId === workspaceId) {
+      void autoDrive(newRun).catch(() => loadRuns().catch(() => {}));
+    }
     await loadRuns();
   }, 'runNotice');
 }

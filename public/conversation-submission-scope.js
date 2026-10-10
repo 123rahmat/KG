@@ -20,3 +20,18 @@ export function submissionWorkspaceSurface({
   }
   return ['code','research'].includes(chosenSurface)?chosenSurface:'normal-chat';
 }
+
+/**
+ * A retry/regeneration is another run in the *original* conversation.
+ * Sidebar project, current UI surface and unrelated foreground chat are
+ * intentionally not consulted. Null project IDs stay null.
+ */
+export function retrySubmissionScope(run={},chat={}){
+  const conversationId=run.conversationId??chat.id??null;
+  const projectId=Object.hasOwn(run,'projectId')?run.projectId:chat.projectId??null;
+  const activeSurface=['code','research'].includes(run.surface)
+    ? run.surface:['code','research'].includes(run.adaptation?.primarySurface)
+      ? run.adaptation.primarySurface:'normal-chat';
+  const workspaceSourceId=run.adaptation?.workspaceSourceId??chat.workspaceSourceId??null;
+  return Object.freeze({conversationId,projectId,activeSurface,workspaceSourceId});
+}

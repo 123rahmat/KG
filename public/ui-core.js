@@ -26,6 +26,9 @@ export const state = {
   manualOpen: new Set(),
   busy: false,
   sendWaiting: false,
+  // A message upload may continue after the person opens another chat.
+  // Only the sending conversation disables its own composer.
+  sendingChats: new Set(),
   // The open chat: its conversation id, runs (oldest first) and a message
   // being sent. `driving` is the run whose AI steps are running on their own.
   chat: { id: null, runs: [], pending: null, consent: false },

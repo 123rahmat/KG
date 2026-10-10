@@ -413,3 +413,18 @@ refreshes, rather than each run polling the expensive conversation-search
 query on every single progress update. Explicit user Refresh and workspace
 filter changes remain immediate. No extra model calls or independent agent
 workers are required to operate this navigation layer.
+
+## Independent chat submissions and retry continuity
+
+A per-workspace **and** per-conversation in-flight submission set now replaces
+the page-global message-upload lock. Starting, reopening, or switching between
+Coding and Research chats updates only the visible composer. A previous chat's
+late network completion cannot unlock or block the current one. Request
+idempotency, persisted task status and policy checks remain server-owned.
+
+Retry/regenerate requests are now also tied to the saved original conversation,
+project ID (including explicitly unassigned projects), Code/Research surface and
+source ID rather than ambient left-sidebar navigation filters. The creation is
+scoped to the original workspace, and the long automatic run is driven without
+holding the foreground browser composer hostage. These boundaries are covered
+by regression tests, including switching chats during overlapping uploads.

@@ -14,6 +14,7 @@ import { clearDraft, readDraft, saveDraftNow, deleteOfflineFiles, loadOfflineFil
 import { chatNavigationModel, chatWorkStatus } from './chat-navigation-model.js';
 import { submissionProjectId, submissionWorkspaceSurface } from './conversation-submission-scope.js';
 import { createChatRefreshCoalescer } from './chat-refresh-coalescer.js';
+import { chatIsSending, markChatSending, syncVisibleChatSending } from './chat-send-state.js';
 import { syncAdaptiveWorkspace } from './adaptive-workspace.js';
 import { syncActiveWorkspaceSource } from './workspace-sources.js';
 import { selectedAttachments } from './attachment-selection.js';
@@ -298,6 +299,8 @@ export function newChat(options={}) {
   clearStagedChatAttachments();
   if ($('tab-runs').hidden) selectTab('runs');
   state.chat = { id: null, runs: [], pending: null, consent: state.settings.consent, workspaceSourceId: null, projectId: state.activeProjectId ?? null };
+  syncVisibleChatSending(state);
+  document.dispatchEvent(new Event('kindgleam:composer-state'));
   state.workspaceSourceId = null;
   state.workspaceSource = null;
   if (state.usage) state.usage.context = null;
@@ -458,6 +461,8 @@ export async function openChat(id){
       projectId:chatProjectId,
       consent:runs.some(run=>run.adaptation?.privacy?.consent?.modelProvider===true)
     };
+    syncVisibleChatSending(state);
+    document.dispatchEvent(new Event('kindgleam:composer-state'));
     state.workspaceSourceId=state.chat.workspaceSourceId;
     state.workspaceSource=state.workspaceSourceId&&latestSource
       ? {id:state.workspaceSourceId,kind:latestSource.sourceKind??'github',
@@ -661,7 +666,7 @@ export async function sendMessage(text) {
   const context = personalContext();
   const goal = String(text ?? '').trim()
     || (files.length ? `Please look at the attached file${files.length > 1 ? 's' : ''}.` : '');
-  if (!goal || state.sendWaiting) return;
+  if (!goal || chatIsSending(state)) return;
   state.chat.consent ||= state.settings.consent;
   if (aiConnected() && !state.chat.consent) {
     // A second message while the consent question is open joins the first,
@@ -701,9 +706,10 @@ export async function sendMessage(text) {
   if (navigator.onLine === false && state.settings.offlineQueue) {
     $('goal').value = '';
     clearDraft({clearNewChat:firstTurn});
-    state.sendWaiting = true;
+    markChatSending(state,chat,submission.workspaceId,true);
+    document.dispatchEvent(new Event('kindgleam:composer-state'));
     try { await queueOfflineMessage(goal, files, visibility, undefined, submission, chat); }
-    finally { state.sendWaiting = false; document.dispatchEvent(new Event('kindgleam:composer-state')); }
+    finally { markChatSending(state,chat,submission.workspaceId,false); document.dispatchEvent(new Event('kindgleam:composer-state')); }
     growComposer();
     return;
   }
@@ -712,7 +718,7 @@ export async function sendMessage(text) {
     goal, reply: '', files: files.map(file => file.name),
     status: files.length ? 'Preparing ' + files.length + ' selected file' + (files.length === 1 ? '' : 's') + '…' : 'Preparing your request…'
   };
-  state.sendWaiting = true;
+  markChatSending(state,chat,submission.workspaceId,true);
   document.dispatchEvent(new Event('kindgleam:composer-state'));
   $('goal').value = '';
   clearDraft({clearNewChat:firstTurn});
@@ -807,7 +813,7 @@ export async function sendMessage(text) {
     };
     renderThread();
   } finally {
-    state.sendWaiting = false;
+    markChatSending(state,chat,submission.workspaceId,false);
     document.dispatchEvent(new Event('kindgleam:composer-state'));
   }
 }

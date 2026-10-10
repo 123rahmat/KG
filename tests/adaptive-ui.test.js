@@ -324,3 +324,20 @@ test('parallel conversations keep their project and draft boundaries while indep
   assert.match(project,/hasSavedRuns/);
   assert.match(refresh,/delayMs=2500/);
 });
+
+test('per-conversation submission locks and retry scope are preserved in UI wiring',async()=>{
+  const app=await read('public/app-attachments.js');
+  const actions=await read('public/app-actions.js');
+  const sending=await read('public/chat-send-state.js');
+  const scope=await read('public/conversation-submission-scope.js');
+  assert.match(app,/chatIsSending\(state\)/);
+  assert.match(app,/markChatSending\(state,chat,submission\.workspaceId,true\)/);
+  assert.match(app,/markChatSending\(state,chat,submission\.workspaceId,false\)/);
+  assert.match(app,/syncVisibleChatSending\(state\)/);
+  assert.doesNotMatch(app,/if \(!goal \|\| state\.sendWaiting\) return/);
+  assert.match(actions,/retrySubmissionScope\(run,chat\)/);
+  assert.match(actions,/\{ workspaceId, idempotencyKey: crypto\.randomUUID\(\) \}/);
+  assert.match(actions,/void autoDrive\(newRun\)/);
+  assert.match(sending,/JSON\.stringify\(\[String\(workspaceId\),String\(conversationId\)\]\)/);
+  assert.match(scope,/Object\.hasOwn\(run,'projectId'\)/);
+});
