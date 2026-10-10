@@ -85,7 +85,7 @@ test('explicitly resolved questions and conflicts do not remain open forever', (
   });
   assert.deepEqual(next.unresolvedQuestions, []);
   assert.deepEqual(next.conflicts, []);
-  assert.equal(next.status, 'evidence-backed');
+  assert.equal(next.status, 'needs-evidence', 'unlinked claims cannot be marked evidence-backed merely because some sources exist');
   assert.equal(next.sourceCount, 1);
 });
 test('unsubstantiated disappearance of a gap does not count as resolution', () => {
@@ -116,4 +116,54 @@ test('saved research source keys remain valid when repeated evidence arrives',()
   assert.deepEqual(noRefs.evidenceLedger[0].sourceKeys,[key],
     'deduplicating the newer claim does not silently erase recorded provenance');
   assert.equal(noRefs.coverage.currentTurnSources,0);
+});
+
+test('canonical source keys survive stored metadata normalization', () => {
+  const key = 'url:https://example.org/study';
+  const state = createResearchWorkspaceState({
+    goal: 'Compare papers',
+    evidence: { sources: [{ key, url: 'https://example.org/study', title: 'Paper' }],
+      claims: [{ id: 'claim', summary: 'Hypothesis only', sourceKeys: [key] }] }
+  });
+  assert.deepEqual(state.evidenceLedger[0].sourceKeys, [key]);
+  assert.equal(state.coverage.linkedClaims, 1);
+  assert.equal(state.coverage.verifiedClaims, 0, 'a URL is not a verified inspected passage');
+});
+
+test('40 new sources do not orphan an older cited source', () => {
+  const key = 'url:https://example.org/older';
+  const first = createResearchWorkspaceState({
+    goal: 'Long literature review',
+    evidence: {
+      sources: [{ url: 'https://example.org/older', title: 'Original inspected source' }],
+      claims: [{ id: 'claim-original', summary: 'Earlier claim', sourceKeys: [key] }]
+    }
+  });
+  const next = createResearchWorkspaceState({
+    prior: first, goal: 'Extend literature review',
+    evidence: { sources: Array.from({ length: 40 }, (_, i) =>
+      ({ url: `https://example.org/new-${i}`, title: `New source ${i}` })) }
+  });
+  assert.equal(next.sourceCount, 40);
+  assert.ok(next.sourceSet.some(source => source.key === key));
+  assert.deepEqual(next.evidenceLedger[0].sourceKeys, [key]);
+  assert.ok(next.evidenceLedger.every(claim => claim.sourceKeys.every(ref =>
+    next.sourceSet.some(source => source.key === ref))));
+  assert.equal(next.coverage.unlinkedClaims, 0);
+});
+
+test('missing or evicted citation keys are explicit gaps, never verified evidence', () => {
+  const state = createResearchWorkspaceState({
+    goal: 'Check trial evidence',
+    evidence: {
+      sources: [{ url: 'https://example.org/unrelated' }],
+      claims: [{ id: 'c1', summary: 'Unsupported claim',
+        sourceKeys: ['url:https://example.org/missing'] }]
+    }
+  });
+  assert.deepEqual(state.evidenceLedger[0].sourceKeys, []);
+  assert.equal(state.coverage.unlinkedClaims, 1);
+  assert.equal(state.coverage.droppedSourceReferences, 1);
+  assert.equal(state.status, 'needs-evidence');
+  assert.ok(state.unresolvedQuestions.some(gap => gap.includes('source reference')));
 });
