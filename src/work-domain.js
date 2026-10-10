@@ -6,6 +6,14 @@
  * permission or a substitute for server-side route enforcement.
  */
 const value = item => String(item ?? '').trim();
+/** Common input misspellings, not a model-powered permission grant. */
+export function normalizeDomainSpelling(input = '') {
+  return value(input)
+    .replace(/\b(?:codong|codnig|codig|codding|codingg|cooding)\b/gi, 'coding')
+    .replace(/\b(?:reasch|reasrch|reasech|reasearch|reserch|reserach|researchh)\b/gi, 'research')
+    .replace(/\b(?:thsis|thessis|thesiss|dissertaion)\b/gi, 'thesis');
+}
+
 const CODE = /\b(?:cod(?:e|ing)|program(?:ming)?|software|application|app|website|webapp|frontend|backend|full[- ]stack|api|endpoint|database|sql|postgres(?:ql)?|script|javascript|typescript|python|java|rust|react|node(?:js)?|git(?:hub)?|repository|repo|commit|pull request|compiler|algorithm|runtime|test suite|unit tests|debug(?:ging)?|software bugs?|refactor|deploy(?:ment)?|docker|kubernetes|microservices|package|dependency|ui|ux|css|html)\b/i;
 const RESEARCH = /\b(?:research|thes(?:is|es)|thsis|dissertation|academi\w*|scholarly|journal|peer[- ]review|literature review|systematic review|meta[- ]analysis|study design|experimental design|experiment|methodology|qualitative|quantitative|mixed[- ]methods?|theoretical framework|conceptual framework|hypothes(?:is|es)|bibliograph\w*|citation\w*|doi|manuscript|abstract|introduction|discussion|results section|scientific paper|research paper|research question|data analys\w*|statistical analys\w*|statistical model|causal inference|fieldwork|ethnograph\w*|interviews? (?:study|coding|analysis)|mathematical proof|formal proof|equations? for (?:a |the )?(?:study|paper|model))\b/i;
 const SCHOLARLY_OUTPUT = /\b(?:research paper|academic paper|scholarly (?:paper|article)|journal (?:article|manuscript)|thesis|thsis|dissertation|literature review|systematic review|research proposal|study protocol)\b/i;
@@ -44,26 +52,28 @@ const decision = (status, domain, supportedRequest, rationaleCode, extras = {}) 
 export function assessWorkDomain({
   request = '', projectContext = {}, conversation = [], modelAssessment = null
 } = {}) {
-  const text = value(request).slice(0, 12000);
+  const rawText = value(request).slice(0, 12000);
+  const text = normalizeDomainSpelling(rawText);
   if (!text) return decision('needs-clarification', null, '', 'missing-request', { reply: CLARIFY });
   if (GREETING.test(text)) return decision('needs-clarification', null, '', 'greeting', {
     reply: 'Welcome. I can help with a coding project or research paper/thesis.'
   });
   const previous = recentAuthorizedDomain({ projectContext, conversation });
   if (SHORT_CONTINUATION.test(text) && previous) {
-    return decision('in-scope', previous, text, 'authorized-project-follow-up');
+    return decision('in-scope', previous, rawText, 'authorized-project-follow-up');
   }
 
   const explicitSoftware = STRONG_CODING.test(text);
   const hasCode = CODE.test(text) && (CODE_ACTION.test(text) || explicitSoftware);
   const hasResearch = RESEARCH.test(text) && (ACADEMIC_ACTION.test(text) || /\b(?:thesis|dissertation|paper|study|research)\b/i.test(text));
   const unrelated = UNRELATED.test(text);
-  const mixedMatch = text.match(MIXED_TAIL);
+  const mixedMatch = rawText.match(MIXED_TAIL);
   if (mixedMatch && (hasCode || hasResearch)) {
-    const supportedRequest = text.slice(0, mixedMatch.index).trim();
-    const domain = RESEARCH.test(supportedRequest) && !STRONG_CODING.test(supportedRequest) ? 'research' : 'coding';
+    const supportedRequest = rawText.slice(0, mixedMatch.index).trim();
+    const normalizedSupported = normalizeDomainSpelling(supportedRequest);
+    const domain = RESEARCH.test(normalizedSupported) && !STRONG_CODING.test(normalizedSupported) ? 'research' : 'coding';
     return decision('mixed', domain, supportedRequest, 'separable-unrelated-request', {
-      unsupportedSummary: text.slice(mixedMatch.index).trim(),
+      unsupportedSummary: rawText.slice(mixedMatch.index).trim(),
       reply: 'I can help with the ' + (domain === 'coding' ? 'coding' : 'research') + ' part, but not the unrelated daily task.'
     });
   }
@@ -72,26 +82,26 @@ export function assessWorkDomain({
   // Research, and a research-lab application build is still Coding.
   if (hasResearch && (SCHOLARLY_OUTPUT.test(text) || (RESEARCH_CONTEXT.test(text)
     && !/\b(?:build|implement|deploy)\b.{0,90}\b(?:application|app|software|api|website)\b/i.test(text)))) {
-    return decision('in-scope', 'research', text, 'scholarly-deliverable');
+    return decision('in-scope', 'research', rawText, 'scholarly-deliverable');
   }
   if (hasCode && (!hasResearch || explicitSoftware)) {
-    return decision('in-scope', 'coding', text, 'software-deliverable');
+    return decision('in-scope', 'coding', rawText, 'software-deliverable');
   }
-  if (hasResearch) return decision('in-scope', 'research', text, 'scholarly-deliverable');
+  if (hasResearch) return decision('in-scope', 'research', rawText, 'scholarly-deliverable');
   if (unrelated) return decision('out-of-scope', null, '', 'unrelated-everyday-task', { reply: DECLINE });
 
   // Project labels by themselves never authorize a new unrelated query.
   // Only an explicitly trusted, previously admitted conversation permits a
   // context-dependent short follow-up.
   if (previous && /^(?:please\s+)?(?:continue|go on|next|what next|why|how|expand|explain|revise|add more)[.!?\s]*$/i.test(text)) {
-    return decision('in-scope', previous, text, 'authorized-conversation-continuation');
+    return decision('in-scope', previous, rawText, 'authorized-conversation-continuation');
   }
   // Missing project specifics should be clarified once, not misclassified by
   // a model or turned into a costly search/agent wave.
   if (modelAssessment?.domain && allowedDomain(modelAssessment.domain)
     && modelAssessment?.status === 'in-scope' && previous
     && modelAssessment.domain === previous && text.length < 60 && !unrelated) {
-    return decision('in-scope', previous, text, 'validated-contextual-assessment');
+    return decision('in-scope', previous, rawText, 'validated-contextual-assessment');
   }
   if (text.length <= 30 || /\b(?:plan|help|do|make|work on)\s+(?:this|it|something|a project)\b/i.test(text)) {
     return decision('needs-clarification', null, '', 'unclear-purpose', { reply: CLARIFY });
