@@ -134,3 +134,42 @@ test('test counts require a nonempty, mathematically consistent report',()=>{
     assert.equal(view.testCounts,null);
   }
 });
+
+test('an evidence-backed red-green-repair cycle becomes verifiable after real retest',()=>{
+  const steps=[
+    {id:'build-code',type:'build-code',status:'complete'},
+    {id:'test-code',type:'test-code',status:'failed',evidence:{
+      result:{output:{testSummary:{total:3,passed:2,failed:1}}}}},
+    {id:'build-code',type:'build-code',status:'complete'},
+    authenticatedPass(),
+    {id:'verify',type:'verify',status:'complete',evidence:{
+      verdict:{verdict:'pass'}}}
+  ];
+  const view=codingProgressSnapshot({state:'complete',tasks:steps});
+  assert.equal(view.verified,true,'historical red step was superseded by a later green receipt');
+  assert.equal(view.testState,'3 passed · 0 failed · 3 total (receipt)');
+  assert.equal(view.failures,1,'recorded historical failures remain visible');
+});
+test('a later failure after green receipt invalidates final pass',()=>{
+  const steps=[
+    {id:'build-code',type:'build-code',status:'complete'},
+    authenticatedPass(),
+    {id:'test-code',type:'test-code',status:'failed'},
+    {id:'verify',type:'verify',status:'complete',evidence:{
+      verdict:{verdict:'pass'}}}
+  ];
+  const view=codingProgressSnapshot({state:'complete',tasks:steps});
+  assert.equal(view.verified,false);
+  assert.match(view.testState,/failed or stale/);
+});
+test('the newest recorded test step must have the authenticated test receipt',()=>{
+  const view=codingProgressSnapshot({state:'complete',tasks:[
+    {id:'build-code',type:'build-code',status:'complete'},
+    authenticatedPass(),
+    {id:'test-code',type:'test-code',status:'complete',evidence:{
+      result:{output:{testSummary:{total:3,passed:3,failed:0}}}}},
+    {id:'verify',type:'verify',status:'complete',evidence:{verdict:{status:'pass'}}}
+  ]});
+  assert.equal(view.verified,false);
+  assert.match(view.testState,/Latest test step recorded/);
+});
