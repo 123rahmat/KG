@@ -132,6 +132,15 @@ export async function loadAudit() {
 
 function configureCodingOnlyNavigation() {
   const only = state.product?.codingOnly === true;
+  if (only) {
+    document.title = 'KG Code — Coding Workspace';
+    const brand = document.querySelector('#chatSidebar .brand span');
+    if (brand) brand.textContent = 'KG Code';
+    const newWork = $('newWork');
+    for (const node of newWork.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE) node.textContent = ' New coding task';
+    }
+  }
   $('codingNav').hidden = !only;
   $('tabs').hidden = only;
   $('newResearchChat').hidden = only;
