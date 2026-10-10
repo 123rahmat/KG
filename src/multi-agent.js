@@ -32,6 +32,7 @@ import { reconcileTaskRecruitment, recruitmentSummary } from './situational-recr
 import { agentWaveEconomy, optionalAgentStopDecision } from './agent-quality-economy.js';
 import { normalizeAgentResourceRequests, summarizeDelegationRequests, distributeSubagentCapacity } from './agent-resource-delegation.js';
 import { peerHandoffsFor } from './agent-peer-handoffs.js';
+import { explainAgentSelection } from './agent-selection-rationale.js';
 import { compileOpenWorldSpecialistBrief, openWorldResearchPriority } from './open-world-specialist-bridge.js';
 
 export const MULTI_AGENT_MODES = Object.freeze(['auto', 'always', 'off']);
@@ -763,6 +764,10 @@ export function rolesFor(run, task, {
       observedResolution: Number(observedSignals.resolution.toFixed(3))
     },
     utilities,
+    selectionRationale: explainAgentSelection({
+      surface:selectedSurface, goal:selectedGoal, task, roles, dynamicSpecialists,
+      topology, decision, signals
+    }),
     reason: 'Task-specific allocation from current workflow state; cognitive roles are domain-agnostic.'
   };
   return { decision, roles, agentCount: roles.length, allocation };

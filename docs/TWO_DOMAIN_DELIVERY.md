@@ -67,3 +67,28 @@ credentialed `npm run smoke:providers`, and full sandbox/build deployment tests.
 Passing mocked tests cannot establish live Vertex calls, correct code execution
 for every language, production isolation, or arbitrary project screenshot
 support. Update this document only as capabilities are verified.
+
+## Adaptive choice: what, when, how and why
+
+The server-owned role allocator now records bounded `selectionRationale`
+for the actual selected Code/Research specialists: the expertise used
+(**what**), the persisted task it belongs to (**when**), why the current
+task matched that specialty (**why**) and its read-only review boundary
+(**how**). Explanations are displayed only alongside recorded specialist
+contributions; selection alone is not execution. Conditional parallel
+capacity is not reported as completed parallel work. Existing wave-level
+evaluation still expands, contracts and stops optional teams only on
+observed evidence, policy and resource budgets.
+
+Subagent lenses are chosen from an extensible skill vocabulary and
+requirement-specific unknowns. The prompt's context-character allowance
+increases with complexity, uncertainty, risk and available budget.
+This controls wasted tokens without imposing a fixed team size or
+silencing required parent-owned verification. Independent subagent calls
+still require separate model-call admission and execution gates.
+
+Both domains show the **actual next server-recorded task** with concise
+why/how guidance. Evidence anchoring is shown only when the referenced
+prior task holds real saved results. No future task is invented for a
+completed or blocked run. These explanations are deterministic and do not
+spend additional Gemini tokens.

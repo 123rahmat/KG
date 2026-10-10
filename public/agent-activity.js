@@ -17,6 +17,8 @@ export function agentActivitySnapshot(run) {
   const sourceTask = [...tasks].reverse().find(task => task?.evidence?.multiAgent) ?? null;
   const multi = sourceTask?.evidence?.multiAgent ?? run?.adaptation?.multiAgent ?? null;
   const allocation = multi?.allocation ?? {};
+  const selectedWhy = new Map(array(allocation?.selectionRationale?.roles)
+    .filter(item => item?.role && item?.why).map(item => [item.role, safe(item.why, 230)]));
   // Only explicitly recorded agent proposals appear; never infer that tools
   // are installed, resources are allocated or terminal sessions are open.
   const admissions = new Map(array(multi?.resourceAdmissions)
@@ -54,6 +56,7 @@ export function agentActivitySnapshot(run) {
         : String(item.role).replaceAll('-', ' '), 100),
       verification: item.subagent === true ? 'unverified-advisory' : '',
       specialty: safe(item.specialty || item.role.replaceAll('-', ' '), 110),
+      selectionWhy: selectedWhy.get(item.role) || '',
       subsystemId: safe(item.subsystemId, 110),
       taskId: safe(item.taskId || sourceTask?.id, 80),
       iteration: positive(item.iteration),

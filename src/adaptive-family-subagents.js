@@ -250,12 +250,26 @@ export function selectFamilySubagents({surface='normal-chat',goal='',role='',sit
  const ranked=playbook.children.map((x,i)=>({x,i,score:childScore(x.id,goalTokens,request,priority,severity)}))
     .sort((a,b)=>b.score-a.score||a.i-b.i);
  const situational=taskSpecificSubagentNeeds({task,situation,observedFindings:focusEvidence});
+ // A large specialty vocabulary must not be copied wholesale into a
+ // prompt. Select just task-relevant child lenses within a context allowance
+ // scaled by actual pressure and remaining budget. This is not a fixed roster.
+ const pressure=Number(severity.uncertain)+Number(severity.complex)
+   +Number(severity.highRisk)+Number(severity.changed||observedFailure);
+ const contextAllowance=budget<0.25?700
+   : Math.round(Math.max(1700,Math.min(11500,
+       (2200+pressure*1700)*(budget<0.45?0.65:budget<0.7?0.85:1))));
  const requestedLimit=maxActive===null || maxActive===undefined ? Infinity
    : Math.max(1,Math.floor(Number(maxActive)||1));
  const selected=[],ids=new Set();
+ let contextUsed=0,contextSkipped=0;
  const add=child=>{
    if(!child||ids.has(child.id)||selected.length>=requestedLimit)return;
-   ids.add(child.id);selected.push(child);
+   const estimated=JSON.stringify(child).length+120;
+   if(selected.length>0&&contextUsed+estimated>contextAllowance){
+     contextSkipped++;
+     return;
+   }
+   ids.add(child.id);selected.push(child);contextUsed+=estimated;
  };
  // The first domain lens is the cheapest meaningful starting point.
  add(ranked[0]?.x);
@@ -293,6 +307,11 @@ export function selectFamilySubagents({surface='normal-chat',goal='',role='',sit
    active:Object.freeze(active),available:playbook.children.length+situational.length,
    availableSeedSkills:playbook.children.length,
    discoveredTaskSkills:situational.length,
+   contextPolicy:Object.freeze({
+     allowanceChars:contextAllowance,selectedChars:contextUsed,
+     omittedForContext:contextSkipped,
+     reason:'adaptive context budget; not a fixed subagent roster'
+   }),
    checks:playbook.checks,
    suggestedCheckpoints:Object.freeze(checkpoints.map(x=>Object.freeze(x))),
    peerConsultations:playbook.neighbors,

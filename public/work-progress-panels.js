@@ -2,6 +2,7 @@
  * Pure, evidence-grounded UI view of an ongoing run. Never controls execution.
  * Counters and stages represent recorded server data, not estimated progress.
  */
+import { nextWorkDecision } from './next-work-decision.js';
 const safe = (value, max = 100) => String(value ?? '').trim().slice(0, max);
 const tasksOf = run => Array.isArray(run?.tasks) ? run.tasks : [];
 const array = value => Array.isArray(value) ? value : [];
@@ -135,6 +136,7 @@ export function workspaceProgressPanel(run, workspace = 'normal-chat') {
   }
   return Object.freeze({
     workspace: mode,
+    nextAction: nextWorkDecision(run),
     cards: Object.freeze(cards),
     fileNames: Object.freeze(fileNames),
     stageContext: stageContext ? Object.freeze(stageContext) : null,

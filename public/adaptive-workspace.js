@@ -517,11 +517,16 @@ export function renderWorkStatus(run) {
     meter,
     checkpointTrailView(run),
     realActivityDetails(run, focus),
-    panel.stageContext && !view.terminal
-      ? element('div', { class: 'work-phase-note', 'aria-label': 'Current task explanation' }, [
-        element('strong', { text: panel.stageContext.title }),
-        element('span', { class: 'small muted', text: panel.stageContext.detail })
-      ]) : null,
+    panel.nextAction && !view.terminal
+      ? element('div', { class: 'work-phase-note', 'aria-label': 'Recorded next action and reason' }, [
+        element('strong', { text: panel.nextAction.action + ' · ' + panel.nextAction.title }),
+        element('span', { class: 'small muted', text: 'Why · ' + panel.nextAction.why }),
+        element('span', { class: 'small muted', text: 'How · ' + panel.nextAction.how })
+      ]) : panel.stageContext && !view.terminal
+        ? element('div', { class: 'work-phase-note', 'aria-label': 'Current task explanation' }, [
+          element('strong', { text: panel.stageContext.title }),
+          element('span', { class: 'small muted', text: panel.stageContext.detail })
+        ]) : null,
     panel.cards.length ? element('dl', {
       class: 'work-focus-grid', 'aria-label': 'Relevant task information'
     }, panel.cards.map(card => element('div', { class: 'work-focus-card' }, [
@@ -808,6 +813,7 @@ function specialistProjectSection(run, workspace) {
         item.specialty && item.specialty.toLowerCase() !== item.role.replaceAll('-', ' ').toLowerCase()
           ? element('span', { class: 'small muted', text: item.specialty }) : null,
         item.subsystemId ? element('span', { class: 'small muted', text: 'Subsystem · ' + item.subsystemId }) : null,
+        item.selectionWhy ? element('span', { class: 'small muted', text: 'Why selected · ' + item.selectionWhy }) : null,
         item.summary ? element('span', { class: 'small workspace-agent-finding', text: item.summary }) : null
       ].filter(Boolean))
     )) : null,
@@ -845,6 +851,13 @@ function workspaceActivitySection(run, workspace) {
       element('span', { class: 'mono', text: 'RECORDED ACTIVITY' }),
       element('span', { class: 'small muted', text: panel.completed + ' completed · ' + panel.stageCount + ' stages' })
     ]),
+    panel.nextAction ? element('div', {
+      class: 'workspace-next-step', 'aria-label': 'Next saved task'
+    }, [
+      element('strong', { text: panel.nextAction.action + ' · ' + panel.nextAction.title }),
+      element('span', { class: 'small muted', text: 'Why · ' + panel.nextAction.why }),
+      element('span', { class: 'small muted', text: 'How · ' + panel.nextAction.how })
+    ]) : null,
     panel.stages.length
       ? element('ol', { class: 'work-stage-list', 'aria-label': 'Project task progress' },
         panel.stages.map(item => element('li', {

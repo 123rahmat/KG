@@ -4949,3 +4949,18 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
 .workspace-outcome-caveats { margin-top: 9px; }
 .workspace-outcome-caveats summary { cursor: pointer; color: var(--muted); }
 .workspace-outcome-caveats p { margin: 6px 0; }
+
+/* Explain the next persisted task without turning the work surface into a
+   second planner or filling the viewport with speculative agent activity. */
+.workspace-next-step {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--softer);
+  overflow-wrap: anywhere;
+}
+.workspace-next-step strong { font-size: .86rem; }
+.workspace-next-step span { line-height: 1.48; }
