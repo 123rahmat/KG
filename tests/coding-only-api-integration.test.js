@@ -48,12 +48,19 @@ test('KG_CODING_ONLY enforces project, request, task owner and revision through 
     assert.equal(preflightCount.rows[0].n,0);
 
     const legal=await call('POST','/api/runs',{...auth,body:{
-      goal:'Implement a Python API endpoint and regression tests',
+      goal:'Implement a Python API endpoint and add rate limiting, and run regression tests without deleting existing routes',
       projectId,activeSurface:'code'
     }});
     assert.equal(legal.status,201,JSON.stringify(legal.body));
     assert.equal(legal.body.surface,'code');
     assert.equal(legal.body.adaptation.controlEngineId,'coding');
+    const persistedCoverage=await pool.query('SELECT requirements, adaptation FROM runs WHERE id=$1',[legal.body.id]);
+    const userNeeds=persistedCoverage.rows[0].adaptation?.codingUserNeeds;
+    const checklist=persistedCoverage.rows[0].requirements?.items
+      ?.filter(item=>item.explicitCoverage===true) ?? [];
+    assert.ok(userNeeds?.explicitCriteria?.length>=3,'server persists explicit user requests');
+    assert.ok(checklist.some(item=>item.requirement==='without deleting existing routes'));
+    assert.ok(checklist.every(item=>item.status!=='satisfied'),'creation cannot pretend the user need was verified');
     const persisted=await pool.query(
       'SELECT project_id,surface,control_engine_id FROM runs WHERE id=$1',[legal.body.id]);
     assert.deepEqual(
