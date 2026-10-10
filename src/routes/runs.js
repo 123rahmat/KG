@@ -144,6 +144,24 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
     }
   }
 
+  async function strictExistingRun(req, res) {
+    if (config.product?.codingResearchOnly !== true) return true;
+    const run = await runs.get(req.scope, req.params.id);
+    if (!run) {
+      res.status(404).json({ error: 'Run not found', code: 'no-run' });
+      return false;
+    }
+    const blocked = await verifyControlledRun({
+      pool, run, scope: req.scope, principalId: req.principal.id,
+      codingResearchOnly: true
+    });
+    if (blocked) {
+      res.status(blocked.status).json(blocked);
+      return false;
+    }
+    return true;
+  }
+
   /* ---------------------------------------------------------- workflow */
 
   // Plan without persisting or executing. Useful for previewing what a goal
