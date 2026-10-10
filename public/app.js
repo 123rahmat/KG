@@ -1259,25 +1259,11 @@ function initLandingWorkflowDemos() {
 
   const controllers = [
     {
-      root: document.querySelector('[data-demo="chat"]'),
-      itemSelector: '[data-chat-step]',
-      progressSelector: '[data-chat-progress]',
-      stepCount: 5,
-      duration: 2300
-    },
-    {
       root: document.querySelector('[data-demo="code"]'),
       itemSelector: '[data-code-step]',
       progressSelector: '[data-code-progress]',
       stepCount: 6,
       duration: 2500
-    },
-    {
-      root: document.querySelector('[data-demo="research"]'),
-      itemSelector: '[data-research-step]',
-      progressSelector: '[data-research-progress]',
-      stepCount: 5,
-      duration: 2400
     }
   ].filter(item => item.root);
 
