@@ -250,7 +250,16 @@ export function failureDistance(failure) {
   if (failure.status === 'syntax-error') return 1_000_000;
   if (failure.timedOut || failure.status === 'timed-out') return 500_000;
   const summary = failure.testSummary;
-  if (summary && Number(summary.total) > 0) return Number(summary.failed) || 0;
+  const total = Number(summary?.total);
+  const failed = Number(summary?.failed);
+  if (summary && summary.failed !== null && summary.failed !== undefined
+    && summary.failed !== '' && Number.isSafeInteger(total) && total > 0
+    && Number.isSafeInteger(failed) && failed >= 0 && failed <= total) {
+    // A failed run reporting zero failing tests still has an unexplained
+    // execution failure; it is NOT closer to completion than a real failing
+    // assertion. The runner's full outcome remains the evidence.
+    return failed === 0 ? 100_000 : failed;
+  }
   return 100_000;
 }
 
