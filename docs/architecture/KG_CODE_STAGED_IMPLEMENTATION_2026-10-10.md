@@ -28,6 +28,16 @@ A normal landing/product remains unchanged until the new mode is fully release-r
 
 **Claims policy:** these changes are code and committed regression tests; full CI and live browser/provider acceptance are still separate. Preserve draft status until they pass.
 
+## Professional developer-workspace refinement
+
+- KG Code (only when `KG_CODING_ONLY` is active) now uses **one focused coding inspector tab at a time** — Overview, Activity, Files, Changes, Tests or Specialists — instead of rendering six always-expanded sections. Selection is scoped to workspace, project and conversation, and does not mutate agent execution state.
+- Inspector tabs have native button interactions, a labelled tablist/tabpanel relationship, roving focus, Arrow Left/Right and Home/End keyboard navigation. The existing non-coding workspace remains in its original multi-card layout. A selected card fills the inspector width, including on small screens.
+- Sidebar links for Code Changes, Checks & Tests and Specialists navigate to **existing evidence-backed workspace panels**, not fabricated editor routes. The top Chat | Files switch still controls conversation attachment history; entering the inspector returns to Chat without altering files.
+- The top engineering progress card now explicitly labels disconnected data **last saved**, offers direct test/change/specialist inspection, and uses a step meter labelled as currently recorded steps rather than percent of unknown future work.
+- **Coding verification claims are consistent across the progress card, adaptive run status and outcome summary.** A plain passing model/verifier verdict does not earn the `Verified` label. The code display requires a server-authenticated, all-passing test summary plus a passing final verification verdict, with no pending/failed/stale checks or subsequent code edits. Later code changes explicitly require retesting.
+- Regression tests cover sidebar routes, focus semantics, test receipt authentication, stale revisions, inconsistent test counts and outcome-report consistency. In-memory source syntax checks of modified JavaScript succeeded; **this is not full browser or CI validation.**
+- Updated offline app shell cache version to avoid mixing the old inspector script and refreshed CSS.
+
 ## Non-negotiable next release gates
 
 1. Full CI, browser smoke and keyboard/mobile/a11y tests. A successful syntax check or isolated model test is not the same as full test evidence.
