@@ -3266,5 +3266,30 @@ export const MIGRATIONS = [
     `
   }
 
+  ,{
+    version: 82,
+    name: 'protect-persisted-control-identity',
+    sql: `
+      CREATE FUNCTION protect_domain_control_identity() RETURNS trigger
+      LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.control_engine_id IS DISTINCT FROM OLD.control_engine_id
+           OR (OLD.control_engine_id IS NOT NULL AND (
+             NEW.project_id IS DISTINCT FROM OLD.project_id
+             OR NEW.surface IS DISTINCT FROM OLD.surface
+             OR NEW.workspace_id IS DISTINCT FROM OLD.workspace_id
+             OR NEW.principal_id IS DISTINCT FROM OLD.principal_id
+           )) THEN
+          RAISE EXCEPTION 'Control identity cannot change'
+            USING ERRCODE = '23514';
+        END IF;
+        RETURN NEW;
+      END;
+      $$;
+      CREATE TRIGGER runs_control_identity_immutable
+      BEFORE UPDATE ON runs FOR EACH ROW
+      EXECUTE FUNCTION protect_domain_control_identity();
+    `
+  }
 
 ];
