@@ -1516,6 +1516,7 @@ $('newResearchChat')?.addEventListener('click',()=>newChat({surface:'research'})
 // parallel client router or a second execution engine. It is visible only
 // after the server reports the staged coding-only product contract.
 const codingNavItems = ['codeNavWork','codeNavProjects','codeNavProgress',
+  'codeNavChanges','codeNavTests','codeNavSpecialists',
   'codeNavTerminal','codeNavFiles','codeNavActivity'];
 function selectCodingNav(itemId) {
   if (state.product?.codingOnly !== true) return;
@@ -1542,6 +1543,19 @@ $('codeNavProgress')?.addEventListener('click', async () => {
   $('codingProgressPanel')?.scrollIntoView({ block:'start', behavior:'auto' });
   selectCodingNav('codeNavProgress');
 });
+async function openCodingInspector(area, activeNav) {
+  await selectTab('runs');
+  // Workspace inspectors belong to the Chat panel, never the conversation's
+  // own Files panel. Switching back preserves its uploads and artifacts.
+  $('chatViewMessages')?.click();
+  document.dispatchEvent(new CustomEvent('kindgleam:open-code-area', {
+    detail:{area}
+  }));
+  selectCodingNav(activeNav);
+}
+$('codeNavChanges')?.addEventListener('click', () => openCodingInspector('changes','codeNavChanges'));
+$('codeNavTests')?.addEventListener('click', () => openCodingInspector('tests','codeNavTests'));
+$('codeNavSpecialists')?.addEventListener('click', () => openCodingInspector('agents','codeNavSpecialists'));
 $('codeNavTerminal')?.addEventListener('click', async () => {
   await selectTab('runs');
   $('openTerminal')?.click();
