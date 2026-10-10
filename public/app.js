@@ -1551,6 +1551,20 @@ $('sidebarFiles')?.addEventListener('click',()=>{
   if ($('tab-runs').hidden) selectTab('runs');
   $('chatViewFiles')?.click();
 });
+async function openCodingEvidence(area) {
+  if ($('tab-runs').hidden) await selectTab('runs');
+  if (state.chatView === 'files') $('chatViewMessages')?.click();
+  document.dispatchEvent(new Event('kindgleam:open-code-workspace'));
+  const nav = $('deepWorkspaceShell')?.querySelector(`[data-workspace-nav="${area}"]`);
+  if (!nav) {
+    notify('runNotice','warn','Start a coding run to see recorded changes and test results.');
+    return;
+  }
+  nav.click();
+  nav.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+}
+$('sidebarChanges')?.addEventListener('click',()=>void openCodingEvidence('changes'));
+$('sidebarTests')?.addEventListener('click',()=>void openCodingEvidence('tests'));
 
 $('signin').addEventListener('submit', signIn);
 initGate();

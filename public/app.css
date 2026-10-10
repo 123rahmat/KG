@@ -1407,7 +1407,7 @@ body.coding-only .new-work-label { font-size: .85rem; }
   body.coding-only .coding-action-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 390px) {
-  body.coding-only .coding-action-grid { grid-template-columns: 1fr; }
+  body.coding-only .coding-action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* Every conversation has the same two sliding, keyboard-accessible views. */
