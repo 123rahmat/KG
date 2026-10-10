@@ -190,3 +190,18 @@ test('shared mode-controller actually projects domain workflow into saved run co
   assert.equal(research.sharedRuntime.runStore,'shared-single-source-of-truth');
   assert.equal(buildModeControllerContract({surface:'normal-chat'}).workflowPolicy,undefined);
 });
+
+test('advisory Coding policy exposes user-defined acceptance gaps but never authorizes completion',()=>{
+  const policy=buildControlWorkflowPolicy({surface:'code',
+    goal:'Build an API and add retries, and run integration tests without deleting old routes',
+    complexity:.65,remainingBudgetRatio:.6});
+  assert.equal(policy.controller,'coding');
+  assert.equal(policy.understanding.intent,'implement');
+  assert.ok(policy.understanding.explicitUserCriteria.some(item=>/without deleting old routes/.test(item)));
+  assert.equal(policy.action,'plan');
+  assert.equal(policy.safety.canDeclareCompletion,false);
+  assert.equal(policy.quality.proposedAcceptanceOnly,true);
+  const vague=buildControlWorkflowPolicy({surface:'code',goal:'Make the best coding agent'});
+  assert.equal(vague.understanding.intent,'implement');
+  assert.equal(vague.understanding.qualityTargetUnspecified,true);
+});
