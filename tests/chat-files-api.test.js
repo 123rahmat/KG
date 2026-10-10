@@ -62,3 +62,26 @@ test('Chat Files respects principal access even for linkable provenance', async 
     assert.equal(isolated.status,404);
   });
 });
+
+test('shared workspace member cannot inject forged artifacts into another owner’s chat', async () => {
+  await withServer(async ({call,seed}) => {
+    const owner=await seed({workspace:'shared-chat',role:'admin'});
+    const colleague=await seed({workspace:'shared-chat',role:'editor'});
+    const chatId='shared-chat-files-12345';
+    const victimRun=await call('POST','/api/runs',{token:owner.token,workspace:owner.workspace,
+      body:{goal:'Explain TypeScript interfaces',activeSurface:'code',conversationId:chatId,
+        privacyConsent:{modelProvider:false},visibility:'workspace'}
+    });
+    assert.equal(victimRun.status,201,JSON.stringify(victimRun.body));
+    const forged=await call('POST','/api/objects',{token:colleague.token,workspace:colleague.workspace,
+      body:{name:'unrelated-fake-artifact.txt',content:'not from this chat',type:'artifact',
+        provenance:{runId:victimRun.body.id},visibility:'workspace'}
+    });
+    assert.equal(forged.status,201,JSON.stringify(forged.body));
+    const listed=await call('GET','/api/conversations/'+chatId+'/files',{
+      token:owner.token,workspace:owner.workspace
+    });
+    assert.equal(listed.status,200,JSON.stringify(listed.body));
+    assert.ok(!listed.body.files.some(file => file.id === forged.body.id));
+  });
+});
