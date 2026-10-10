@@ -5,6 +5,7 @@
 
 import { renderMarkdown } from './markdown.js';
 import { syncThread } from './thread-view.js';
+import { resetChatView, notifyChatFilesChanged } from './chat-files-panel.js';
 import { workPresentation } from './adaptive-workspace.js';
 import { state, $, element, button, api, notify, guard, canEdit, aiConnected, clearNotice, updateConnectionUI } from './ui-core.js';
 import { autoDrive, browserAdaptationContext, bytes, heading, runStatus, svgIcon, timeAgo } from './app.js';
@@ -161,6 +162,7 @@ export function renderThread() {
     ]) });
   }
   syncThread(thread, entries, state.chat.id ?? 'new:' + (state.activeProjectId ?? ''));
+  notifyChatFilesChanged();
   announceWork();
   renderChatHead();
   highlightActiveChat();
@@ -307,6 +309,7 @@ export function newChat(options={}) {
   clearStagedChatAttachments();
   if ($('tab-runs').hidden) selectTab('runs');
   state.chat = { id: null, runs: [], pending: null, consent: state.settings.consent, workspaceSourceId: null, projectId: state.activeProjectId ?? null };
+  resetChatView();
   syncVisibleChatSending(state);
   document.dispatchEvent(new Event('kindgleam:composer-state'));
   state.workspaceSourceId = null;
@@ -469,6 +472,7 @@ export async function openChat(id){
       projectId:chatProjectId,
       consent:runs.some(run=>run.adaptation?.privacy?.consent?.modelProvider===true)
     };
+    resetChatView();
     syncVisibleChatSending(state);
     document.dispatchEvent(new Event('kindgleam:composer-state'));
     state.workspaceSourceId=state.chat.workspaceSourceId;
