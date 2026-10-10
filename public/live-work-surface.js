@@ -93,6 +93,11 @@ export function renderLiveWorkSurface(run,options={}){
           text:step.status==='complete'?'✓':step.status==='failed'?'!':String(index+1)}),
         element('span',{text:step.title})
       ]))),
+    snapshot.progressPoints?.length
+      ?element('ul',{class:'work-output-progress-points','aria-label':'Evidence-based progress summary'},
+        snapshot.progressPoints.map(point=>element('li',{
+          'data-point-kind':point.kind,text:point.text
+        }))):null,
     snapshot.currentStep?element('p',{class:'work-output-current',role:'status'},[
       element('span',{class:'work-output-status-dot','aria-hidden':'true'}),
       element('span',{text:'Current step · '+snapshot.currentStep})

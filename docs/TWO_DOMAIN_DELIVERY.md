@@ -144,3 +144,27 @@ The displayed content is chosen from what the server actually saved:
 The surface does not add another model call, tool, permission or workflow
 engine. It consumes bounded snapshots of the persisted run during the existing
 UI refresh path and preserves accessible table/terminal scrolling on mobile.
+
+## Point-based public explanations, low-waste Research output, and step/main progress
+
+Research final-answer policy is **result first**, followed by only the
+evidence-backed public decision points necessary to answer the user. Citations
+stay adjacent to claims; limits are stated once when material. A full paper,
+thesis, detailed report or expressly lengthy request is not shortened simply
+for cost. This is an explanation of findings, **not internal chain-of-thought**.
+
+The server applies a generous *ceiling*, not a target, on output tokens to
+ordinary Research `respond` / `deliver` model calls. The cap adapts to task
+risk, uncertainty and complexity. Evidence collection, verification, code,
+tool results and requested long forms keep their existing budgets/controls.
+Advisory Research specialists are also asked to send only short, distinct,
+relevant findings, grounded sources and falsifiable next checks, not repetitive
+mini-essays. Security/governance/acceptance work is never dropped to save tokens.
+
+The main project output area now shows at most three short public progress
+points, derived only from saved completed/failed steps and the exact server
+selected next task's why/how policy. The step timeline remains a distinct
+horizontal progress rail. For research, the main evidence reader prioritizes
+source-ledger facts, tables and linked sources while suppressing the duplicate
+prose already represented by the evidence ledger. It does not invent text,
+figures, citations, terminal output or work that did not execute.

@@ -123,3 +123,32 @@ test('verification renders only real completed criterion verdicts',()=>{
   assert.equal(liveWorkSnapshot(run([{...tasks[0],status:'pending'}]))
     .entries.some(x=>x.title==='Recorded verification criteria'),false);
 });
+
+test('main area progress points use recorded steps and a server-selected next task, not fabricated reasoning',()=>{
+  const output=liveWorkSnapshot({
+    surface:'research',state:'running',next:'investigate',tasks:[
+      {id:'understand',type:'understand',status:'complete',
+        metadata:{title:'Clarify research question'},evidence:{text:'Recorded context'}},
+      {id:'investigate',type:'investigate',status:'running',
+        metadata:{title:'Read evidence'},purpose:'Read the primary papers'}
+    ]
+  });
+  assert.ok(output.progressPoints.some(p=>p.text==='Saved step · Clarify research question'));
+  assert.ok(output.progressPoints.some(p=>p.kind==='why'));
+  assert.ok(output.progressPoints.some(p=>p.kind==='how'));
+  assert.ok(output.progressPoints.length<=3);
+  assert.ok(output.progressPoints.every(p=>!p.text.includes('private reasoning')));
+});
+test('research avoids repeated prose already represented in its ledger and bounds extra text',()=>{
+  const summary='The controlled evaluation observed conflicting endpoint latency under heavy usage.';
+  const output=liveWorkSnapshot({
+    surface:'research',state:'complete',tasks:[
+      {id:'investigate',type:'investigate',status:'complete',evidence:{
+        findings:summary+' Follow-up details.'.repeat(800)}}
+    ],adaptation:{researchWorkspace:{evidenceLedger:[
+      {summary,sourceKeys:[]}
+    ]}}
+  });
+  assert.ok(output.entries.some(x=>x.type==='text'&&x.title==='Latest recorded evidence'));
+  assert.equal(output.entries.filter(x=>x.type==='text').length,1);
+});

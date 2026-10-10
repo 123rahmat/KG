@@ -29,6 +29,7 @@ import { bindAgentResourceScope, triageAgentResourceRequests } from '../agent-re
 import { executionSafetyGate } from '../adaptive-safety.js';
 import { situationGovernanceExecutionGate } from '../situation-governance.js';
 import { systemPromptFor, situationBrief, previousAttempts, normalizeVerdict, GENERIC_CRITERION } from '../reasoning-context.js';
+import { researchResponseTokenCap } from '../response-economy-policy.js';
 import { gradedCriteria } from '../requirements.js';
 import { groundedCheckDecision, verificationBrief, groundVerdict } from '../verification.js';
 import { reviewDecision, reviewerModelFor, reviewMessages, readReview, mergeReview, REVIEW_MAX_OUTPUT_TOKENS } from '../agents.js';
@@ -1774,6 +1775,9 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
       verification: verificationContext
     });
     const effort = thinkingFor(task, run);
+    // Limit only ordinary Research final answer verbosity. Never squeeze
+    // verification, evidence retrieval, code packages or requested full works.
+    const researchOutputCap = researchResponseTokenCap({run,task});
     const effectiveModelId = modelForStep(selection, {
       run, task, effort, hasImages: attached.images.length > 0, fallback: model,
       allows: id => modelPolicyAllows(run, id, 'medium')
@@ -1900,6 +1904,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
           config, fetchImpl, modelId: effectiveModelId, allowBackup, effort, signal, beforeCall,
           usageGate,
           usageSource: 'chat',
+          ...(researchOutputCap ? { maxOutputTokens: researchOutputCap } : {}),
           maxRounds: Math.min(
             Math.max(1, Number(run.adaptation?.effortProfile?.maturity?.level ? ({ light: 2, standard: 4, high: 6, maximum: 8 }[run.adaptation.effortProfile.maturity.level] ?? 4) : 4)),
             Math.max(1, Number(run.adaptation?.resourcePlan?.budget?.maxDiscoveryRounds ?? run.adaptation?.resourcePlan?.budget?.maxToolCalls ?? 6))
@@ -1915,6 +1920,7 @@ export function registerExecutionRoutes(app, { config, pool, audit, governance, 
           webSearch: grounding?.grounded === true,
           effort,
           json: answersInJson(task),
+          ...(researchOutputCap ? { maxOutputTokens: researchOutputCap } : {}),
           usageGate,
           usageSource: 'chat'
         });

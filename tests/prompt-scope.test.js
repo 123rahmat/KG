@@ -51,9 +51,10 @@ test('each step is sent only the rules that apply to it', () => {
   // Every rule still reaches the steps it is for: none is dropped for everyone.
   const all = ['respond', 'verify', 'understand', 'discover-capabilities', 'plan', 'step', 'reassess', 'prototype', 'code']
     .map(type => systemPromptFor({ task: { type, id: type === 'code' ? 'build-code' : type, method: 'invention' }, run: { workflow: 'full', situation: { risk: 'crisis', ethics: {} }, adaptation: { notAvailableHere: ['simulation'], codeNotRun: { language: 'go', reason: 'Not run: Go is not turned on' } } }, payload: { adaptation: { codeNotRun: { language: 'go' } }, attachments: [1], conversation: [1], previousAttempts: [1], remembered: [1], codeRepair: {} } })).join(' ');
+  const researchAnswer = systemPromptFor({task:{type:'deliver'},run:{surface:'research',workflow:'full'},payload:{}});
   const buildPlan = systemPromptFor({ task: { type: 'plan', buildPlan: true }, run: {}, payload: {} });
   assert.doesNotMatch(buildPlan, /at most ONE first useful work step/, 'a build plan is not a workflow plan');
-  for (const [when, rule] of PROMPT_RULES) assert.ok(`${all} ${buildPlan}`.includes(rule), `rule "${when}" reaches no step: ${rule.slice(0, 60)}`);
+  for (const [when, rule] of PROMPT_RULES) assert.ok(`${all} ${researchAnswer} ${buildPlan}`.includes(rule), `rule "${when}" reaches no step: ${rule.slice(0, 60)}`);
 });
 
 test('answers the person reads are result first with main points; working steps stay brief', () => {
@@ -84,4 +85,16 @@ test('understanding asks only what the person must decide, and picks sensible de
 test('the final answer keeps a "not checked against current sources" caveat from earlier steps', () => {
   assert.match(systemPromptFor({ task: { type: 'deliver' }, run: {} }), /could not be checked against current sources/);
   assert.doesNotMatch(systemPromptFor({ task: { type: 'understand' }, run: {} }), /could not be checked against current sources/);
+});
+
+test('Research output guidance favors concise public points with evidence instead of verbose internal reasoning',()=>{
+  const brief=systemPromptFor({task:{type:'deliver'},run:{surface:'research',workflow:'full',situation:{}},payload:{}});
+  const code=systemPromptFor({task:{type:'deliver'},run:{surface:'code',workflow:'full',situation:{}},payload:{}});
+  assert.match(brief,/Research answer economy/);
+  assert.match(brief,/evidence-backed bullet points/);
+  assert.match(brief,/internal chain of thought/);
+  assert.doesNotMatch(code,/Research answer economy/);
+  assert.match(code,/public reasoning points/);
+  const verify=systemPromptFor({task:{type:'verify'},run:{surface:'research',workflow:'full',situation:{}},payload:{}});
+  assert.doesNotMatch(verify,/Research answer economy/);
 });

@@ -1,6 +1,7 @@
 /** Strictly read-only projection of task evidence for the main work surface. */
 import { safeHref } from './markdown.js';
 import { tablePreviewModel } from './table-preview-model.js';
+import { nextWorkDecision } from './next-work-decision.js';
 
 const arr = v => Array.isArray(v) ? v : [];
 const object = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
@@ -138,7 +139,11 @@ export function liveWorkSnapshot(run,{maxItems=6}={}) {
   if(!domain || !tasks.length) return null;
   const terminal=DONE.has(run?.state);
   const current=terminal?null:tasks.find(task=>task.id===run?.next)??null;
-  const limit=Math.max(1,Math.min(8,Number.isInteger(maxItems)?maxItems:6));
+  const limit=Math.max(1,Math.min(8,Number.isInteger(maxItems)?maxItems:(domain==='research'?4:6)));
+  const evidenceLedger=arr(run?.adaptation?.researchWorkspace?.evidenceLedger);
+  const knownFindings=evidenceLedger
+    .map(item=>clip(item?.summary??item?.finding??item?.text,160).toLowerCase().trim())
+    .filter(Boolean);
   const entries=[];
   for(const task of [...tasks].reverse().slice(0,12)) {
     // Never turn a queued/proposed step into "observed output".
@@ -149,7 +154,13 @@ export function liveWorkSnapshot(run,{maxItems=6}={}) {
     const verified=verificationRecord(task);
     if(verified)entries.push(verified);
     const prose=recordText(task);
-    if(prose)entries.push(prose);
+    if(prose && !(domain==='research' && knownFindings.some(finding=>
+      finding.length>24 && prose.text.toLowerCase().includes(finding)))) {
+      // A compact research observation is useful as a point. The full
+      // answer, complete citations and provenance remain in the final result.
+      entries.push(domain==='research'
+        ? {...prose,text:prose.text.slice(0,540)} : prose);
+    }
   }
   if(domain==='code')entries.push(...changedPathRecords(run));
   if(domain==='research')entries.push(...researchRecords(run));
@@ -163,6 +174,17 @@ export function liveWorkSnapshot(run,{maxItems=6}={}) {
     unique.add(key);return true;
   }).sort((a,b)=>(priority[a.type]??8)-(priority[b.type]??8)).slice(0,limit);
   const completed=tasks.filter(task=>task.status==='complete').length;
+  const latestRecorded=[...tasks].reverse().find(task=>
+    task && ['complete','failed','blocked'].includes(task.status)
+    && task.type!=='respond' && task.type!=='deliver');
+  const next=terminal?null:nextWorkDecision(run);
+  const progressPoints=[];
+  if(latestRecorded)progressPoints.push({
+    kind:latestRecorded.status==='complete'?'recorded':'attention',
+    text:(latestRecorded.status==='complete'?'Saved step · ':'Needs attention · ')+taskName(latestRecorded)
+  });
+  if(next?.why)progressPoints.push({kind:'why',text:'Why now · '+clip(next.why,190)});
+  if(next?.how)progressPoints.push({kind:'how',text:'How · '+clip(next.how,190)});
   return Object.freeze({
     domain,
     title:domain==='code'?'Coding output':'Research output',
@@ -172,6 +194,7 @@ export function liveWorkSnapshot(run,{maxItems=6}={}) {
     terminal,
     state:name(run.state),
     entries:Object.freeze(selected),
+    progressPoints:Object.freeze(progressPoints.map(point=>Object.freeze(point))),
     steps:Object.freeze(tasks.slice(-7).map(task=>Object.freeze({
       title:taskName(task),status:name(task.status||'pending'),
       current:Boolean(current && current.id===task.id)

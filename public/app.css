@@ -5178,3 +5178,23 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
   overflow-wrap: anywhere;
   font-size: .79rem;
 }
+
+/* Public, short decision points; source is persisted run tasks, never raw
+   model chain-of-thought. Keep compact on phones and in the project pane. */
+.work-output-progress-points {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 10px 12px 10px 27px;
+  background: var(--softer);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink-2);
+  font-size: .78rem;
+}
+.work-output-progress-points li { padding-inline-start: 3px; overflow-wrap: anywhere; }
+.work-output-progress-points li::marker { color: var(--accent); }
+.work-output-progress-points [data-point-kind="attention"] { color: var(--bad); }
+@media (max-width: 700px) {
+  .work-output-progress-points { font-size: .76rem; padding: 9px 10px 9px 25px; }
+}
