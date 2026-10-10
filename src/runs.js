@@ -35,6 +35,7 @@ import { MAX_CODE_REPAIRS, canRepair, builtCode, staleAfterRepair, repairRecord,
 import { normalizeNextStep } from './step-plan.js';
 import { ventureIntent, ventureDiscoveryStep } from './venture-ideation.js';
 import { evidenceNextTaskGate } from './evidence-next-task-gate.js';
+import { enforceRequiredProgression } from './progression-integrity.js';
 import { buildRequirementModel, normalizeRequirementModel, reconcileRequirements, nextRequirement, requirementAction, gradedCriteria } from './requirements.js';
 import { insertTask, insertTasks, loadTasks } from './run-graph.js';
 import { present, summarize, encodeCursor, decodeCursor, normalizeUnderstanding, isEmpty } from './run-view.js';
@@ -2326,6 +2327,13 @@ export class RunStore {
         admittedExpansion = evidenceDecision;
       }
     }
+    // This final source-of-truth gate reconciles the model suggestion, the
+    // "enough" shortcut, requirement expansion and prior progress against
+    // persisted mandatory stages. Optional tasks do not become compulsory.
+    const protectedStage=enforceRequiredProgression({
+      run,tasks,target,candidate,planRequired:codePlanApprovalRequired(run)
+    });
+    candidate=protectedStage.candidate;
     if (!candidate) return;
     // Executed work is reassessed before it is verified: the evidence may call
     // for a new capability or a changed plan. Clean evidence is recorded by
@@ -2445,6 +2453,10 @@ export class RunStore {
       ...(candidate.ventureDiscovery===true ? { ventureDiscovery:true,
         ventureMode:candidate.ventureMode??'divergent',
         venturePhase:'explore-before-build' } : {}),
+      ...(candidate.progressionReason ? {
+        progressionReason:candidate.progressionReason,
+        selectedBy:'server-required-stage-gate'
+      } : {}),
       ...(candidate.type === 'reassess' && candidate.sourceTask ? { sourceTask: candidate.sourceTask } : {}),
       ...(candidate.humanInput ? { humanInput: true } : {}),
       ...(admittedExpansion?.evidenceTaskId ? { evidenceAnchorTaskId: admittedExpansion.evidenceTaskId, admission: admittedExpansion.reason } : {}),

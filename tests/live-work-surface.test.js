@@ -152,3 +152,24 @@ test('research avoids repeated prose already represented in its ledger and bound
   assert.ok(output.entries.some(x=>x.type==='text'&&x.title==='Latest recorded evidence'));
   assert.equal(output.entries.filter(x=>x.type==='text').length,1);
 });
+
+test('waiting/blocked progression reports saved requirement rather than claiming execution',()=>{
+  const output=liveWorkSnapshot({
+    id:'run-blocked',surface:'research',state:'waiting',next:null,
+    tasks:[{id:'investigate',type:'investigate',status:'complete',evidence:{}}],
+    requirements:{items:[{required:true,status:'waiting-for-user',
+      requirement:'Which dataset is approved for comparison?'}]}
+  });
+  assert.ok(output.progressPoints.some(p=>p.text.includes('Workflow status')));
+  assert.ok(output.progressPoints.some(p=>p.text.includes('Which dataset is approved')));
+  assert.match(output.emptyMessage,/No active task/);
+  assert.equal(output.currentStep,'');
+  assert.equal(output.progressPoints.length<=3);
+  const blocked=liveWorkSnapshot({
+    surface:'code',state:'blocked',tasks:[
+      {id:'build-code',type:'code',status:'failed',metadata:{title:'Generate source code'}}
+    ],adaptation:{lastBlockedAdaptiveStep:{type:'code',reason:'policy'}}
+  });
+  assert.ok(blocked.progressPoints.some(p=>p.kind==='attention'));
+  assert.ok(blocked.progressPoints.some(p=>p.text.includes('policy')));
+});

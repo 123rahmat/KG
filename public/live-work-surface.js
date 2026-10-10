@@ -4,19 +4,20 @@ import { renderMarkdown } from './markdown.js';
 import { artifactChip } from './artifact-preview.js';
 import { liveWorkSnapshot } from './live-work-model.js';
 import { codingMilestoneSuggestion } from './coding-milestone-suggestions.js';
+import { researchMilestoneSuggestion } from './research-milestone-suggestions.js';
 
 // A suggestion is not an action or a new AI call. Dismissal lasts for this
 // tab session and is keyed to the recorded milestone; later checkpoints can
 // offer fresh, distinct guidance without repeating the same suggestion.
 const dismissedMilestones=new Set();
 function suggestionView(run){
-  const suggestion=codingMilestoneSuggestion(run);
+  const suggestion=codingMilestoneSuggestion(run) ?? researchMilestoneSuggestion(run);
   if(!suggestion || dismissedMilestones.has(suggestion.id))return null;
   const card=element('aside',{class:'work-milestone-suggestion',
-    'aria-label':'Optional coding suggestion',
+    'aria-label':'Optional '+(String(run?.surface??run?.adaptation?.primarySurface)==='research'?'Research':'Coding')+' suggestion',
     'data-suggestion-kind':suggestion.kind},[
     element('div',{class:'work-suggestion-body'},[
-      element('span',{class:'work-output-eyebrow',text:'OPTIONAL PROJECT SUGGESTION'}),
+      element('span',{class:'work-output-eyebrow',text:'OPTIONAL '+(String(run?.surface??run?.adaptation?.primarySurface)==='research'?'RESEARCH':'PROJECT')+' SUGGESTION'}),
       element('strong',{text:suggestion.title}),
       element('p',{class:'small muted',text:suggestion.why}),
       element('p',{class:'small',text:suggestion.provenance})

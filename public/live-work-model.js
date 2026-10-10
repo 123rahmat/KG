@@ -185,6 +185,25 @@ export function liveWorkSnapshot(run,{maxItems=6}={}) {
   });
   if(next?.why)progressPoints.push({kind:'why',text:'Why now · '+clip(next.why,190)});
   if(next?.how)progressPoints.push({kind:'how',text:'How · '+clip(next.how,190)});
+  // No invented percent or "running" claim when the server says the graph
+  // is waiting/blocked. Use a recorded requirement or policy block only.
+  const blockedState=['waiting','blocked','exhausted','iterate'].includes(run?.state);
+  if(blockedState && !next) {
+    const requirements=arr(run?.requirements?.items);
+    const unresolved=requirements.find(item=>item?.required!==false &&
+      ['blocked','waiting-for-user','waiting-for-resource','failed','unknown','in-progress'].includes(item?.status));
+    const policyBlock=object(run?.adaptation?.lastBlockedAdaptiveStep);
+    const reason=unresolved?.requirement||unresolved?.title||unresolved?.description
+      || policyBlock.reason || null;
+    const stateText=run.state==='exhausted'?'The run reached its bounded recovery or work limit.'
+      :run.state==='iterate'?'A recorded failure is at a recovery checkpoint.'
+      :run.state==='blocked'?'The workflow is blocked until its requirement or policy issue is addressed.'
+      :'The workflow has no currently eligible task and is waiting for a justified next step.';
+    progressPoints.push({kind:'attention',text:'Workflow status · '+stateText});
+    if(reason && progressPoints.length<3)progressPoints.push({
+      kind:'why',text:'Recorded blocker · '+name(reason).slice(0,140)
+    });
+  }
   return Object.freeze({
     domain,
     title:domain==='code'?'Coding output':'Research output',
@@ -201,7 +220,9 @@ export function liveWorkSnapshot(run,{maxItems=6}={}) {
     }))),
     emptyMessage:current
       ? 'Working on '+taskName(current)+'. Captured output will appear here after the server records it.'
-      : 'No execution output, figures, tables or source evidence have been recorded yet.',
+      : blockedState
+        ? 'No active task. The saved workflow status and recorded blockers appear above; no further work is claimed.'
+        : 'No execution output, figures, tables or source evidence have been recorded yet.',
     provenance:'Only saved task evidence and authorized artifact references appear here. A progress step alone does not prove execution.'
   });
 }

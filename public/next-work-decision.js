@@ -4,6 +4,14 @@
  */
 const safe=(v,max=160)=>String(v??'').replace(/[\p{Cc}]/gu,' ').trim().slice(0,max);
 const terminal=new Set(['complete','failed','blocked','exhausted','iterate']);
+const REQUIRED_REASON=Object.freeze({
+  'planned-capability-discovery-before-work':'A capability check was included in the recorded plan and has not run.',
+  'planned-evidence-gathering-before-conclusion':'The research stage was planned, but no investigation step has been recorded.',
+  'implementation-plan-not-yet-reviewed':'The project requires a scoped build plan before code generation.',
+  'build-plan-requires-user-agreement':'A build plan was recorded, but its user-approval checkpoint is still missing.',
+  'implementation-required-before-final-checks':'The recorded work plan includes software implementation that is not yet complete.',
+  'record-test-results-before-verification':'The code-writing step is recorded, but the planned test stage is missing.'
+});
 const GUIDE=Object.freeze({
   understand:['The requested outcome and constraints must be established.','Identify the acceptance criteria before selecting capabilities.'],
   discover:['Needed context or a capability is not yet established.','Inspect only the authorized, relevant evidence.'],
@@ -34,6 +42,9 @@ export function nextWorkDecision(run){
     'The server selected this next recorded task.',
     'Work within the task permissions and verify the resulting evidence.'
   ];
+  const progressionReason=next.metadata?.selectedBy==='server-required-stage-gate'
+    ? safe(next.metadata?.progressionReason,100) : '';
+  const recordedWhy=REQUIRED_REASON[progressionReason]??why;
   const anchor=safe(next.metadata?.evidenceAnchorTaskId,80);
   const previous=anchor&&tasks.find(t=>t?.id===anchor
     &&['complete','failed'].includes(t?.status)
@@ -43,7 +54,7 @@ export function nextWorkDecision(run){
     title:safe(next.metadata?.title||next.purpose||next.id,105),
     action:next.status==='waiting'||['approval','clarify'].includes(kind)
       ?'Action needed':next.status==='running'?'Working now':'Up next',
-    why:safe(previous?'Following evidence from '+safe(previous.metadata?.title||previous.purpose||previous.id,85)+': '+why:why,250),
+    why:safe(previous?'Following evidence from '+safe(previous.metadata?.title||previous.purpose||previous.id,85)+': '+recordedWhy:recordedWhy,250),
     how:safe(how,230),
     evidenceAnchor:previous?anchor:null,
     source:'persisted-run-next-task',speculative:false

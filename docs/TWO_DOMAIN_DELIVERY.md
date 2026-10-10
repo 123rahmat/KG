@@ -282,3 +282,42 @@ and normal coding history. This eliminates repeated large payloads in
 optional specialist calls without claiming that sources have been verified
 or work executed. The choices are deterministic, measured in regression
 tests, and do not introduce another agent or provider call.
+
+## Server-controlled progression integrity across changing situations
+
+The system can brainstorm, validate an existing idea, discover a tool,
+retrieve Research evidence, scope Code work, ask for approval, implement,
+test, verify and deliver. These are **conditional milestones**, not a fixed
+sequence of extra agents or a promise to run tools. Progression is based on
+the capabilities selected for this run, actual saved task statuses, remaining
+acceptance gaps and current governance.
+
+A cheap deterministic `enforceRequiredProgression` check protects the
+server-owned one-task-at-a-time graph after model proposals, early
+`enough:true` decisions and evidence-expansion handling. If the actual plan
+requires capability discovery or evidence retrieval, the check inserts that
+stage before a premature answer/build. For a Code project that requires scope
+agreement, it inserts the plan, then the **explicit user-agreement** gate,
+then implementation. It will not permit skipping an unscheduled Code build or
+its test stage and going directly to verification. Small Code requests without
+a required plan, ordinary questions, clarification, optional investigation,
+and authorized governance approval retain their existing conditional paths.
+The check does not overwrite an in-progress plan or approval with a duplicate.
+It never claims source retrieval, code changes or tests occurred; a
+`codeNotRun` runner limitation remains a limitation.
+
+Mandatory transitions carry bounded saved `progressionReason` metadata that
+the read-only UI uses to explain **why this next step**, distinct from the
+latest completed step or any model narrative. No extra model call or
+speculative percentage is needed. When a saved run is waiting, blocked,
+exhausted or entering recovery, the main area shows that exact status and an
+available recorded blocker instead of pretending the previous operation is
+still running.
+
+Research projects have the same optional milestone-guidance surface as
+Coding. Suggestions are selected from recorded conflict entries, missing
+sources, unresolved questions, claim/source links, and saved findings. Only
+one suggestion is shown at a time; it can be dismissed or copied into the
+composer by the user. These are **not facts or automatic research actions**,
+and do not authorize a new provider call. Source links alone are not treated
+as independent proof.

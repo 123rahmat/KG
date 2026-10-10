@@ -128,3 +128,41 @@ test('saved venture phase mode travels into the server-owned step metadata',asyn
   assert.equal(saved.at(-1).metadata.ventureMode,'validate-selected');
   assert.match(saved.at(-1).purpose,/Keep the user-selected idea/);
 });
+
+test('server does not let an early enough:true skip ordinary Code build or approval',async()=>{
+  const {saved,client}=makeDb();
+  const store=new RunStore(null);
+  const understood={id:'understand',type:'understand',status:'complete',
+    metadata:{},dependsOn:[],requires:['reasoning'],purpose:'Understand existing code'};
+  saved.push(understood);
+  const run={...baseRun(),goal:'Build a new inventory dashboard application'};
+  await store.adaptSteps(client,run,understood,{
+    enough:true,next:{type:'verify',purpose:'Claim the dashboard already works'}
+  },emptyRequirements);
+  assert.equal(saved.at(-1).type,'plan');
+  assert.equal(saved.at(-1).metadata.buildPlan,true);
+  assert.equal(saved.at(-1).metadata.selectedBy,'server-required-stage-gate');
+  const planned=saved.at(-1);
+  planned.status='complete';
+  await store.adaptSteps(client,run,planned,{
+    enough:true,next:{type:'code',purpose:'Skip user approval'}
+  },emptyRequirements);
+  assert.equal(saved.at(-1).type,'approval');
+  assert.equal(saved.at(-1).metadata.planAgreement,true);
+});
+test('server does not let an early answer skip explicitly planned Research retrieval',async()=>{
+  const {saved,client}=makeDb();
+  const store=new RunStore(null);
+  const understood={id:'understand',type:'understand',status:'complete',
+    metadata:{},dependsOn:[],requires:['reasoning'],purpose:'Understand research question'};
+  saved.push(understood);
+  const run={...baseRun(),surface:'research',
+    goal:'Review the strongest sources for software supply chain security',
+    capabilities:{required:['evidence-retrieval'],
+      granted:['evidence-retrieval','verification']}};
+  await store.adaptSteps(client,run,understood,{enough:true,
+    next:{type:'respond',purpose:'Produce answer without research'}},emptyRequirements);
+  assert.equal(saved.at(-1).type,'investigate');
+  assert.equal(saved.at(-1).metadata.progressionReason,
+    'planned-evidence-gathering-before-conclusion');
+});

@@ -45,3 +45,18 @@ test('venture discovery progress explains decision and approach before any build
   assert.match(decision.how,/customer needs/);
   assert.equal(decision.speculative,false);
 });
+
+test('only server-tagged mandatory stage reasons override generic next-task hints',()=>{
+  const task={id:'plan',type:'plan',status:'pending',
+    metadata:{title:'Plan selected by controller',
+      selectedBy:'server-required-stage-gate',
+      progressionReason:'implementation-plan-not-yet-reviewed'}};
+  const forced=nextWorkDecision({surface:'code',state:'plan',next:'plan',tasks:[task]});
+  assert.match(forced.why,/requires a scoped build plan/);
+  assert.equal(forced.source,'persisted-run-next-task');
+  assert.equal(forced.speculative,false);
+  const untagged=nextWorkDecision({surface:'code',state:'plan',next:'plan',
+    tasks:[{...task,metadata:{title:'Plan selected by controller',
+      progressionReason:'implementation-plan-not-yet-reviewed'}}]});
+  assert.doesNotMatch(untagged.why,/requires a scoped build plan/);
+});
