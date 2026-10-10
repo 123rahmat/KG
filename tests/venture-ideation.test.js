@@ -33,7 +33,7 @@ test('only explicit idea- or venture-led projects start a discovery phase',()=>{
   assert.equal(step.type,'step');
   assert.equal(step.ventureDiscovery,true);
   assert.match(step.purpose,/three meaningfully different solutions/);
-  assert.match(step.purpose,/Do not invent market numbers/);
+  assert.match(step.purpose,/Never invent market numbers/);
 });
 
 test('idea agents have domain-specific advisory subagent skills and no fixed active team',()=>{
