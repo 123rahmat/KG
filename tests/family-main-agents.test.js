@@ -6,17 +6,21 @@ import { selectFamilySubagents } from '../src/adaptive-family-subagents.js';
 import { domainSpecialistMatch } from '../src/domain-specialists.js';
 import { rolesFor } from '../src/multi-agent.js';
 
-test('registered main-agent families each have eight scoped subagent lenses',()=>{
+test('main agents own expandable specialist skill pools, not a fixed eight-role team',()=>{
   const counts=familyMainAgentStats();
-  assert.deepEqual(counts['normal-chat'],{mainAgents:30,subagents:240});
-  assert.deepEqual(counts.code,{mainAgents:63,subagents:504});
-  assert.deepEqual(counts.research,{mainAgents:57,subagents:456});
+  assert.equal(counts['normal-chat'].mainAgents,30);
+  assert.equal(counts.code.mainAgents,63);
+  assert.equal(counts.research.mainAgents,57);
+  for(const value of Object.values(counts))assert.ok(value.subagents>value.mainAgents*8);
   assert.equal(Object.keys(FAMILY_MAIN_AGENTS).length,150);
+  const lengths=new Set();
   for(const role of Object.values(FAMILY_MAIN_AGENTS)){
-    assert.equal(role.subagents.length,8,role.role);
-    assert.equal(new Set(role.subagents).size,8,role.role);
+    assert.ok(role.subagents.length>8,role.role);
+    assert.equal(new Set(role.subagents).size,role.subagents.length,role.role);
+    lengths.add(role.subagents.length);
     assert.ok(Object.isFrozen(role));
   }
+  assert.ok(lengths.size>4);
 });
 test('scoped main agents do not activate from an unrelated or empty request',()=>{
   assert.ok(familyMainAgentMatch('code-ui-engineering-lead',{surface:'code',

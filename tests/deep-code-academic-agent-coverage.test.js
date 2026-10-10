@@ -29,13 +29,14 @@ const cases=[
 
 test('specific Coding and thesis/paper main agents are registered, matched, and isolated by workspace',()=>{
  const counts=familyMainAgentStats();
- assert.deepEqual(counts['normal-chat'],{mainAgents:30,subagents:240});
- assert.deepEqual(counts.code,{mainAgents:63,subagents:504});
- assert.deepEqual(counts.research,{mainAgents:57,subagents:456});
+ assert.equal(counts['normal-chat'].mainAgents,30);
+ assert.equal(counts.code.mainAgents,63);
+ assert.equal(counts.research.mainAgents,57);
+ for(const n of Object.values(counts))assert.ok(n.subagents>n.mainAgents*8);
  for(const [surface,family,goal] of cases){
    const role=surface+'-'+family+'-lead';
    assert.equal(FAMILY_MAIN_AGENTS[role]?.surface,surface,role);
-   assert.equal(FAMILY_MAIN_AGENTS[role]?.subagents?.length,8,role);
+   assert.ok(FAMILY_MAIN_AGENTS[role]?.subagents?.length>8,role);
    assert.ok(familyMainAgentMatch(role,{surface,goal,task:{type:'plan'}})>=.89,role);
    assert.equal(familyMainAgentMatch(role,{surface:surface==='code'?'research':'code',goal}),0,role);
    assert.equal(specialistFocusFor({surface,goal,role}).family,family,role);

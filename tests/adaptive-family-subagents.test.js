@@ -14,19 +14,23 @@ const model={text:JSON.stringify({summary:'A possible evidence gap',gaps:['Missi
   proposedChecks:['Check a primary source'],confidence:.72}),
   usage:{inputTokens:15,outputTokens:25},provider:'mock',model:'mock',usageRecorded:false};
 
-test('every registered family has 8 owned, nonexecuting subagent contracts',()=>{
+test('every domain has open-ended, distinct child skill pools, not eight fixed subagents',()=>{
   let families=0,children=0;
+  const lengths=new Set();
   for(const [surface,entries] of Object.entries(SPECIALIST_FAMILIES)){
     for(const family of Object.keys(entries)){
       const item=familyPlaybook(surface,family);
-      assert.equal(item.children.length,8,surface+'/'+family);
+      assert.ok(item.children.length>8,surface+'/'+family);
+      assert.equal(new Set(item.children.map(c=>c.id)).size,item.children.length);
       assert.ok(item.children.every(c=>c.authority==='read-only-advisory'));
       assert.ok(item.checks.length>=1);
+      lengths.add(item.children.length);
       families++;children+=item.children.length;
     }
   }
   assert.equal(families,150);
-  assert.equal(children,1200);
+  assert.ok(children>1200);
+  assert.ok(lengths.size>4,'different specialties need different skill vocabularies');
 });
 test('everyday simple chat stays a single free subskill lens',()=>{
  const p=selectFamilySubagents({surface:'normal-chat',goal:'Hi',role:'communicator',

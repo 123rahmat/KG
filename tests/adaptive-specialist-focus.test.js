@@ -5,9 +5,10 @@ import { agentMessages } from '../src/multi-agent.js';
 
 test('V4 capability taxonomy is retained as advisory definitions', () => {
   const stats = specialistCatalogStats();
-  assert.deepEqual(stats['normal-chat'], {families:30,subskills:240});
-  assert.deepEqual(stats.code, {families:63,subskills:504});
-  assert.deepEqual(stats.research, {families:57,subskills:456});
+  assert.equal(stats['normal-chat'].families,30);
+  assert.equal(stats.code.families,63);
+  assert.equal(stats.research.families,57);
+  for(const state of Object.values(stats))assert.ok(state.subskills>state.families*8);
   assert.equal(Object.isFrozen(SPECIALIST_FAMILIES), true);
 });
 test('everyday chat uses domain focus without spawning agents', () => {

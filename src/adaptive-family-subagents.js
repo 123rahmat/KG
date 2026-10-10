@@ -274,8 +274,8 @@ export function selectFamilySubagents({surface='normal-chat',goal='',role='',sit
  // The first domain lens is the cheapest meaningful starting point.
  add(ranked[0]?.x);
  if(budget>=0.25){
-   // Required acceptance criteria and observed gaps are not restricted to the
-   // eight seed subskills; every distinct task need can introduce a new lens.
+   // Acceptance criteria, capability packs and observed gaps are not limited
+   // to a fixed number of subskills; every material need can add a scoped lens.
    for(const child of situational)add(child);
    if(budget>=0.45){
      for(const candidate of ranked)if(candidate.score>=2)add(candidate.x);

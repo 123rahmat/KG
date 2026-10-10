@@ -839,7 +839,26 @@ function specialistProjectSection(run, workspace) {
       element('p', { class: 'small muted', text: (change.action === 'recruit' ? 'Recruited' : 'Reduced') +
         ' advisory capacity' + (change.wave ? ' · wave ' + change.wave : '') +
         (change.reason ? ' · ' + change.reason.replaceAll('-', ' ') : '') })
-    )) : null
+    )) : null,
+    recorded.lifecycleChanges?.length ? element('details', {
+      class: 'workspace-specialist-adjustments',
+      'aria-label': 'Recorded specialist admission and retirement'
+    }, [
+      element('summary', { class: 'small', text: 'Agent and subagent changes · ' +
+        recorded.lifecycleChanges.length + ' saved checkpoints' }),
+      element('p', { class: 'small muted', text:
+        'Recruited and retired means task-scoped advisory selection only. Actual model execution is shown separately in recorded specialist contributions.' }),
+      ...recorded.lifecycleChanges.map(change => element('p', {
+        class: 'small muted',
+        text: [
+          change.wave ? 'Wave ' + change.wave : 'Checkpoint',
+          change.recruitedRoles.length ? 'admitted ' + change.recruitedRoles.join(', ') : '',
+          change.retiredRoles.length ? 'retired ' + change.retiredRoles.join(', ') : '',
+          change.recruitedChildren ? '+' + change.recruitedChildren + ' child lenses' : '',
+          change.retiredChildren ? '-' + change.retiredChildren + ' child lenses' : ''
+        ].filter(Boolean).join(' · ')
+      }))
+    ]) : null
   ].filter(Boolean));
 }
 

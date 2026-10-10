@@ -1,4 +1,5 @@
 import { EXTRA_SPECIALIST_FAMILIES, EXTRA_SPECIALIST_KEYWORDS } from './expanded-family-catalog.js';
+import { capabilitySkillsForFamily } from './specialist-capability-packs.js';
 /**
  * Kindgleam task-scoped sub-specialty guidance.
  * This is advisory metadata, not an agent scheduler or authorization service.
@@ -67,11 +68,20 @@ const DEFINITIONS = {
     'data-source-engineering':'data-collection|data-provenance|data-quality|schema|dataset-joining|extraction|data-governance|reproducible-pipelines'
   }
 };
-export const SPECIALIST_FAMILIES = Object.freeze(Object.fromEntries(
+export const BASE_SPECIALIST_FAMILIES = Object.freeze(Object.fromEntries(
   Object.entries(DEFINITIONS).map(([workspace, entries]) => [
     workspace, Object.freeze(Object.fromEntries(Object.entries({...entries,...(EXTRA_SPECIALIST_FAMILIES[workspace] ?? {})}).map(
       ([family, values]) => [family, Object.freeze(Array.isArray(values) ? values : values.split('|'))]
     )))
+  ])
+));
+// Discovery uses the original domain-discriminating seeds, not the shared
+// foundations. Otherwise "source provenance" would recruit every Research
+// family, or a generic test phrase every Coding family.
+export const SPECIALIST_FAMILIES = Object.freeze(Object.fromEntries(
+  Object.entries(BASE_SPECIALIST_FAMILIES).map(([workspace,entries]) => [workspace,
+    Object.freeze(Object.fromEntries(Object.entries(entries).map(([family,skills]) =>
+      [family,Object.freeze([...new Set([...skills,...capabilitySkillsForFamily(workspace,family)])])])))
   ])
 ));
 const normalize = value => String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -146,7 +156,7 @@ export function specialistFamilyMatches({surface='normal-chat',goal=''}={}) {
     .map(([family,children]) => {
       const keyword = KEYWORDS[family]?.test(request) || EXTRA_SPECIALIST_KEYWORDS[family]?.test(request);
       const direct = request.includes(normalize(family));
-      const subskillHits = children.reduce((n,subskill) =>
+      const subskillHits = BASE_SPECIALIST_FAMILIES[workspace][family].reduce((n,subskill) =>
         n + (request.includes(normalize(subskill)) ? 1 : 0), 0);
       return Object.freeze({family,score:(keyword ? 3 : 0) + (direct ? 2 : 0) + 2*subskillHits});
     })
@@ -163,7 +173,7 @@ export function specialistFocusFor({surface='normal-chat',goal='',role='',maxSub
     ? roleFamilyMatch[1] : null;
   const scored = Object.entries(entries).map(([family, children]) => {
     const phrase = normalize(family);
-    const keywordHits = children.reduce((count, sub) => count + (request.includes(normalize(sub)) ? 1 : 0), 0);
+    const keywordHits = BASE_SPECIALIST_FAMILIES[workspace][family].reduce((count, sub) => count + (request.includes(normalize(sub)) ? 1 : 0), 0);
     const matched = KEYWORDS[family]?.test(request) || EXTRA_SPECIALIST_KEYWORDS[family]?.test(request) ? 3 : 0;
     const roleMatch = ROLE_HINTS[roleId] === family || hintedFamily === family ? 12 : 0;
     return {family,children,score:roleMatch + matched + keywordHits * 2 + (request.includes(phrase) ? 2 : 0)};

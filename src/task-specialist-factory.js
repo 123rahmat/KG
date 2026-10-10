@@ -24,7 +24,7 @@ const immutable = v=>Object.freeze(v);
  * the configured task budget. The user's text is an untrusted assignment.
  */
 export function taskSpecialistCandidates({
-  surface='normal-chat',goal='',task={},situation={},maxCandidates=6
+  surface='normal-chat',goal='',task={},situation={},observedFindings=[],maxCandidates=6
 }={}){
   const workspace=SUPPORTED.has(surface)?surface:'normal-chat';
   const budget=Math.max(0,Math.floor(Number(maxCandidates)||0));
@@ -35,13 +35,23 @@ export function taskSpecialistCandidates({
     ['requirement',metadata.requirements??task?.requirements],
     ['criterion',situation?.successCriteria],
     ['output',situation?.outputs],
-    ['unknown',situation?.unknowns]
+    ['unknown',situation?.unknowns],
+    // New unresolved work can surface after a specialist's first wave.
+    // These are still UNVERIFIED advisory candidates; no tools or authority.
+    ['observed-gap',Array.isArray(observedFindings)
+      ? observedFindings.filter(item=>item && item.status!=='failed'
+        && ['investigate','revise','stop'].includes(String(item.recommendation ?? '').toLowerCase()))
+        .flatMap(item=>[...(Array.isArray(item.unknowns)?item.unknowns:[]),
+          ...(Array.isArray(item.risks)?item.risks:[])])
+      : []]
   ];
   const result=[],seen=new Set();
   for(const [origin,values] of lists){
     if(!Array.isArray(values))continue;
     for(const item of values){
       if(result.length>=budget)break;
+      if(item && typeof item==='object'
+        && ['satisfied','superseded','resolved','verified'].includes(String(item.status??'').toLowerCase()))continue;
       const need=textOf(item).slice(0,220);
       const words=distinctWords(need);
       if(need.length<20||words.size<4||generic.test(need))continue;
@@ -55,7 +65,8 @@ export function taskSpecialistCandidates({
       if(known)continue;
       result.push(immutable({
         role:roleId(workspace,need),surface:workspace,source:origin,
-        requirement:need,confidence:'user-specified-not-verified',
+        requirement:need,confidence:origin==='observed-gap'
+          ? 'agent-observation-unverified' : 'user-specified-not-verified',
         purpose:'Focus on this unmet '+origin+' of the user task: '+need+
           '. Provide precise deliverables, evidence gaps, integration handoffs and falsifiable checks. Do not invent expertise, execute tools or alter the approved scope.',
         authority:'read-only-advisory',

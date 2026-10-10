@@ -11,7 +11,7 @@ export function agentActivitySnapshot(run) {
     return {roles:[],groups:[],sourceTask:null,completed:0,active:[],
       mode:'direct',maxParallel:1,
       reason:'direct-conversation-no-agent-recruitment',
-      waves:0,observedParallel:false,adaptations:[],delegationRequests:[]};
+      waves:0,observedParallel:false,adaptations:[],lifecycleChanges:[],delegationRequests:[]};
   }
   const tasks = array(run?.tasks);
   const sourceTask = [...tasks].reverse().find(task => task?.evidence?.multiAgent) ?? null;
@@ -84,6 +84,20 @@ export function agentActivitySnapshot(run) {
     });
   }
 
+  // Admissions and retirements are saved *selection* events at safe
+  // wave boundaries; they do not prove the selected model was called.
+  const lifecycleChanges = array(allocation?.recruitmentHistory)
+    .filter(item => item && (
+      array(item.recruitRoles).length || array(item.retireRoles).length
+      || array(item.recruitSubagents).length || array(item.retireSubagents).length
+    )).slice(-6).map(item => ({
+      wave: Number.isInteger(item.waveIndex) && item.waveIndex>=0 ? item.waveIndex+1 : null,
+      recruitedRoles: array(item.recruitRoles).slice(0,6).map(x=>safe(x,75)),
+      retiredRoles: array(item.retireRoles).slice(0,6).map(x=>safe(x,75)),
+      recruitedChildren: array(item.recruitSubagents).length,
+      retiredChildren: array(item.retireSubagents).length,
+      reason: safe(item.reason,115), status:'saved-advisory-selection'
+    }));
   // A subsystem appears only after an actual iteration and at least one
   // recorded specialist. The capability flags are needs, never tool receipts.
   const recordedPanels = array(allocation.subsystemPanels)
@@ -136,6 +150,7 @@ export function agentActivitySnapshot(run) {
     waves: waves.length,
     observedParallel,
     adaptations,
+    lifecycleChanges,
     delegationRequests
   };
 }

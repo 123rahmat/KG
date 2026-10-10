@@ -45,9 +45,9 @@ test('backend and database specialists retain specialized owned subagents and no
   const backend=familyPlaybook('code','backend-engineering');
   const database=familyPlaybook('code','database-engineering');
   const security=familyPlaybook('code','security-engineering');
-  assert.equal(backend.children.length,8);
-  assert.equal(database.children.length,8);
-  assert.equal(security.children.length,8);
+  assert.ok(backend.children.length>8);
+  assert.ok(database.children.length>8);
+  assert.ok(security.children.length>8);
   assert.ok(backend.children.some(child=>child.id==='background-jobs'));
   assert.ok(database.children.some(child=>child.id==='migrations'));
   assert.ok(security.children.some(child=>child.id==='authorization'));

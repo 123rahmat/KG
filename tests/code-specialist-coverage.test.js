@@ -21,11 +21,11 @@ const cases=[
 test('Coding has distinct main-agent families for UI, UX, APIs, backend, data, DB, identity, files and security',()=>{
  const summary=familyMainAgentStats();
  assert.equal(summary.code.mainAgents,63);
- assert.equal(summary.code.subagents,63*8);
+ assert.ok(summary.code.subagents>63*8);
  for(const [family,path,goal,focus] of cases){
    const role='code-'+family+'-lead';
    assert.ok(FAMILY_MAIN_AGENTS[role],role);
-   assert.equal(FAMILY_MAIN_AGENTS[role].subagents.length,8,role);
+   assert.ok(FAMILY_MAIN_AGENTS[role].subagents.length>8,role);
    const sub={id:family,roots:[path],files:[path+'/index.js']};
    assert.equal(codeExpertFocus(sub,goal),focus,path);
    const plan=codeSpecialistTeam(sub,{goal,maxRoles:4});

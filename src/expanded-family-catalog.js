@@ -1,6 +1,7 @@
 /** 
  * Declarative extension to the same task-scoped main/subagent catalog.
- * Each family has eight available skill lenses, selected only if needed.
+ * Families start with focused seed skills and expand through contextual capability packs.
+ * These are available vocabularies, not fixed team sizes or active agents.
  */
 const DEFINITIONS = {
   "normal-chat": [

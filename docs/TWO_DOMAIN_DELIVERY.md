@@ -92,3 +92,27 @@ why/how guidance. Evidence anchoring is shown only when the referenced
 prior task holds real saved results. No future task is invented for a
 completed or blocked run. These explanations are deterministic and do not
 spend additional Gemini tokens.
+
+## Elastic family expertise, not eight subagents per lead
+
+The established main-agent families in Coding and Research now have expanding,
+domain-specific skill vocabularies instead of a fixed eight-skill contract.
+Shared foundational checks are excluded from family *discovery* scores so
+generic correctness, provenance or revision words never recruit every lead.
+Domain capability packs provide deeper coding roles (UI, API, databases,
+security, AI-agent runtime, systems, testing, DevOps and more) and research
+roles (source review, quantitative/qualitative methods, academic manuscripts,
+data provenance, figures, ethics and more). New, uncovered task requirements
+and later observed unknowns can still create temporary read-only expert roles.
+
+At each settled specialist wave, the parent supervisor recomputes *both*
+active main roles and selected child lenses. New justified work is admitted,
+satisfied user/task criteria retire their corresponding lenses, and budget,
+completed work or policy can retire the whole task team. No model output is
+trusted to certify completion: original criteria require server/task-recorded
+resolution; model findings can propose only further read-only investigation.
+Newly emerging temporary main roles receive their observed specific mission,
+not a generic fallback. The UI labels saved admission/retirement events as
+advisory selection, separate from actual model-call receipts. No in-flight
+agent is silently canceled, no child executes tools and no selected role
+gains permissions or an unlimited Gemini budget.

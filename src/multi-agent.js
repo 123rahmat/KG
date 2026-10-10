@@ -602,7 +602,8 @@ export function rolesFor(run, task, {
   }
   const dynamicSpecialists = taskSpecialistCandidates({
     surface:selectedSurface,goal:selectedGoal,task,
-    situation:run?.situation??{},maxCandidates:maximum
+    situation:run?.situation??{},observedFindings:progress?.findings??[],
+    maxCandidates:maximum
   });
   if (dynamicSpecialists.length >= 2) {
     // Distinct, uncovered explicit requirements justify a wider task team,
@@ -674,7 +675,8 @@ export function rolesFor(run, task, {
     [signals.frontendFocus && signals.executable, 'frontend-engineer', 1.8],
     [signals.backendFocus && signals.executable, 'backend-engineer', 1.8],
     ...matchingLeads.map(item=>[true,item.role,1.65 + item.score * 0.12]),
-    ...dynamicSpecialists.map(item=>[true,item.role,1.62]),
+    ...dynamicSpecialists.map(item=>[true,item.role,
+      item.source==='observed-gap' ? 2.16 : 1.62]),
     [signals.flags.ideation, 'idea-explorer', 1.7],
     [signals.visualWork && !signals.frontendFocus, 'visual-designer', 1.6],
     [signals.performanceFocus, 'performance-reviewer', 1.5],
@@ -885,7 +887,8 @@ function rolePrompt(role,basePayload={}) {
   const temporary = taskSpecialistForRole(role,{
     surface:basePayload?.specialistSurface??basePayload?.surface??'normal-chat',
     goal:basePayload?.goal??'',task:basePayload?.task??{},
-    situation:basePayload?.situation??{},maxCandidates:64
+    situation:basePayload?.situation??{},
+    observedFindings:basePayload?.observedFindings??[],maxCandidates:64
   });
   const definition = ROLE_CATALOG[role] ?? temporary ?? ROLE_CATALOG.critic;
   return [
@@ -3007,6 +3010,10 @@ export async function runAdaptiveAgentPanel({
         familyBudgetRatio: remainingBudgetRatio(),
         discoveredCapabilities: run?.capabilities?.discovered ?? [],
         situation: basePayload?.situation ?? run?.situation ?? {},
+        // Observations can justify a new read-only specialist in a later
+        // wave. Pass the bounded observed need so it receives its actual
+        // mission, rather than falling back to an unrelated generic critic.
+        observedFindings: findings.slice(-12),
         peerHandoffs: peerHandoffsFor({
           runId: run?.id, taskId: task?.id, toRole: job.role,
           findings, maxMessages: 3

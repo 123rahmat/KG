@@ -17,6 +17,8 @@ const slug = value => {
   const fingerprint=createHash('sha256').update(value).digest('hex').slice(0,8);
   return prefix+'-'+fingerprint;
 };
+const resolvedStatus = item => typeof item === 'object' && item !== null
+  && ['satisfied','superseded','resolved','verified'].includes(String(item.status ?? '').toLowerCase());
 const operationFor = value =>
   /\b(test|check|verify|audit|validate|assert|quality|acceptance|security)\b/i.test(value) ? 'verify'
     : /\b(source|citation|evidence|research|investigate|unknown|unresolved)\b/i.test(value) ? 'investigate'
@@ -42,6 +44,9 @@ export function taskSpecificSubagentNeeds({task={},situation={},observedFindings
   for(const [kind,items] of collections){
     if(!Array.isArray(items))continue;
     for(const value of items){
+      // Only server/task-authored completion status retires an original
+      // requirement. Unverified advisor optimism is never completion proof.
+      if(resolvedStatus(value))continue;
       const label = normalize(typeof value==='string' ? value
         : (value?.description ?? value?.text ?? value?.title ?? ''));
       if(label.length<8)continue;

@@ -3,6 +3,7 @@
  * User content remains task data, never a source of new authority.
  */
 import { DOMAIN_SPECIALISTS } from './domain-specialists.js';
+import { taskSpecialistForRole } from './task-specialist-factory.js';
 
 const clean = (value, limit = 320) => String(value ?? '').trim().slice(0, limit);
 const unique = (items, limit) => [...new Set((Array.isArray(items) ? items : [])
@@ -40,7 +41,14 @@ const ROLE_FOCUS = Object.freeze({
 });
 
 export function taskSpecialization(role, payload = {}) {
-  const focus = ROLE_FOCUS[role] ?? ['Domain-specific review', 'Apply assigned expertise to the current task only.'];
+  const discovered = taskSpecialistForRole(role,{
+    surface:payload.specialistSurface??payload.surface??'normal-chat',
+    goal:payload.goal??'',task:payload.task??{},
+    situation:payload.situation??{},observedFindings:payload.observedFindings??[]
+  });
+  const focus = ROLE_FOCUS[role] ?? (discovered
+    ? ['Observed task-specific gap', discovered.purpose]
+    : ['Domain-specific review', 'Apply assigned expertise to the current task only.']);
   const task = payload.task ?? {};
   const panel = payload.workspacePanel ?? {};
   const subsystem = (payload.subsystemPlan?.subsystems ?? [])[0] ?? null;
