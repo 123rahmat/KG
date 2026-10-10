@@ -27,7 +27,7 @@ export class ControlAdmissionError extends Error {
 
 export async function admitControlEngineRequest({
   pool, scope, principalId, goal, projectId, activeSurface, conversationId,
-  allowMixed = false
+  allowMixed = false, codingOnly = false
 } = {}) {
   const projectKey = text(projectId);
   if (!projectKey) {
@@ -52,6 +52,12 @@ export async function admitControlEngineRequest({
     throw new ControlAdmissionError(
       'Historical Normal Chat projects are read-only; choose Coding or Research.',
       'control-historical-project', 422
+    );
+  }
+  if (codingOnly && surface !== 'code') {
+    throw new ControlAdmissionError(
+      'This is a historical project. New work belongs in a Coding project.',
+      'code-only-project-required', 422
     );
   }
   // Keep domain switching explicit. Never silently attach Research work to
@@ -84,6 +90,12 @@ export async function admitControlEngineRequest({
     }));
   }
   const assessment = assessWorkDomain({ request: goal, conversation });
+  if (codingOnly && assessment.domain === 'research') {
+    throw new ControlAdmissionError(
+      'KG Code accepts software engineering tasks only. Open a Coding project to work on code.',
+      'code-only-task-required', 422
+    );
+  }
   if (assessment.status === 'mixed' && !allowMixed) {
     throw new ControlAdmissionError(
       assessment.reply || 'Separate the Coding/Research task from unrelated requests.',
@@ -119,9 +131,13 @@ export async function admitControlEngineRequest({
  * alone are not authority: the stored DB row must match the selected project.
  */
 export async function verifyControlledRun({
-  pool, run, scope, principalId, codingResearchOnly = false
+  pool, run, scope, principalId, codingResearchOnly = false, codingOnly = false
 } = {}) {
-  if (!codingResearchOnly) return null;
+  if (!codingResearchOnly && !codingOnly) return null;
+  if (codingOnly && run?.surface !== 'code') {
+    return { status:409, code:'code-only-historical-read-only',
+      error:'Historical Research or general chat runs are read-only in KG Code.' };
+  }
   const controller = run?.surface === 'code' ? 'coding'
     : run?.surface === 'research' ? 'research' : null;
   if (!controller || !run?.projectId || !run?.id || run.principalId !== principalId
