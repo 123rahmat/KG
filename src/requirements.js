@@ -205,6 +205,10 @@ export function reconcileRequirements(current, {
       const idMatch = superseded.includes(target.id);
       const labelMatch = superseded.some(value => normalizeLabel(value).toLowerCase() === target.requirement.toLowerCase());
       if (!idMatch && !labelMatch) continue;
+      // A model-produced reassessment cannot silently drop an explicit user
+      // promise. An amended user request starts a separately authorized run;
+      // this ledger has no authenticated requirement-removal operation.
+      if (target.explicitCoverage === true) continue;
       target.status = 'superseded';
       target.required = false;
       target.lastUpdated = now;
