@@ -1440,6 +1440,29 @@ main > #notice { margin: 14px auto 0; width: min(var(--read), calc(100% - 32px))
   margin: 8px 0 18px;
 }
 .chat-files-head h2 { font-size: 1.1rem; font-weight: 680; margin: 0 0 5px; }
+.chat-files-head-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.chat-files-pending:not([hidden]) {
+  display: grid;
+  gap: 8px;
+  padding: 13px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--soft);
+}
+.chat-files-pending h3 { margin: 0; font-size: .87rem; }
+.chat-files-pending p { margin: 0; }
+.chat-pending-file { overflow-wrap: anywhere; }
+.chat-files-pending button { justify-self: start; }
+#chatFilesUploadStatus:not(:empty) { padding: 0 0 10px; overflow-wrap: anywhere; }
+#chatFilesUploadStatus.bad { color: var(--bad, var(--warn)); }
+.chat-file-use { display: inline-flex; align-items: center; gap: 5px; font-size: .74rem; white-space: nowrap; cursor: pointer; }
+.chat-file-use input { accent-color: var(--accent); margin: 0; }
+@media(max-width:600px) {
+  .chat-files-head { flex-wrap: wrap; }
+  .chat-files-head-actions { justify-content: flex-start; }
+  .chat-file-use { white-space: normal; }
+}
 .chat-files-head p { margin: 0; line-height: 1.45; }
 .chat-files-content { display: grid; gap: 22px; }
 .chat-file-group { display: grid; align-content: start; gap: 8px; }
