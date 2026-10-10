@@ -153,7 +153,7 @@ export function specialistFamilyMatches({surface='normal-chat',goal=''}={}) {
   const workspace = SPECIALIST_FAMILIES[surface] ? surface : 'normal-chat';
   const request = normalize(goal).slice(0,2000);
   return Object.freeze(Object.entries(SPECIALIST_FAMILIES[workspace])
-    .map(([family,children]) => {
+    .map(([family]) => {
       const keyword = KEYWORDS[family]?.test(request) || EXTRA_SPECIALIST_KEYWORDS[family]?.test(request);
       const direct = request.includes(normalize(family));
       const subskillHits = BASE_SPECIALIST_FAMILIES[workspace][family].reduce((n,subskill) =>

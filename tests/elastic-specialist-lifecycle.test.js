@@ -19,6 +19,11 @@ test('main agent families own a variable number of domain-specific subagent skil
     }
   }
   assert.ok(sizes.size>=5);
+  const selected=selectFamilySubagents({surface:'code',role:'code-ui-engineering-lead',
+    goal:'Build a responsive, accessible UI',task:{type:'plan'},
+    situation:{complexity:.9},remainingBudgetRatio:.9});
+  assert.ok(selected.available>8);
+  assert.ok(selected.active.length<selected.available);
   assert.ok(SPECIALIST_FAMILIES.code['ui-engineering'].includes('screenshot-provenance'));
   assert.ok(SPECIALIST_FAMILIES.code['database-engineering'].includes('transaction-integrity'));
   assert.ok(SPECIALIST_FAMILIES.code['agent-runtime-engineering'].includes('adaptive-agent-retirement'));
