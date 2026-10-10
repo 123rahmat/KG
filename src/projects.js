@@ -140,6 +140,13 @@ export class ProjectStore {
   async update(scope, id, patch = {}) {
     const current = await this.get(scope, id);
     if (!current) return null;
+    // A shared project is visible, not implicitly writable. In KG Code
+    // only its owner may retarget the revision, source or access policy.
+    if (this.codingOnly && current.principalId !== scope.principalId) {
+      throw new ProjectError('Only the project owner can modify this coding project.', {
+        status: 403, code: 'code-project-owner-required'
+      });
+    }
     if ((this.codingResearchOnly || this.codingOnly) && ((this.codingOnly && current.defaultSurface !== 'code') || current.defaultSurface === 'normal-chat'
         || (patch?.defaultSurface && patch.defaultSurface !== current.defaultSurface)
         || (patch?.surface && patch.surface !== current.defaultSurface))) {
@@ -170,10 +177,20 @@ export class ProjectStore {
   }
 
   async archive(scope, id) {
-    const { rows: [row] } = await this.pool.query(
-      'UPDATE projects SET state=\'archived\', updated_at=now() WHERE id=$1 AND workspace_id=$2 AND (visibility=\'workspace\' OR principal_id=$3) RETURNING *',
-      [id, scope.workspaceId, scope.principalId]
-    );
+    if (this.codingOnly) {
+      const current = await this.get(scope, id);
+      if (!current) return null;
+      if (current.principalId !== scope.principalId) {
+        throw new ProjectError('Only the project owner can archive this coding project.', {
+          status: 403, code: 'code-project-owner-required'
+        });
+      }
+    }
+    const sql = this.codingOnly
+      ? "UPDATE projects SET state='archived', updated_at=now() WHERE id=$1 AND workspace_id=$2 AND principal_id=$3 RETURNING *"
+      : "UPDATE projects SET state='archived', updated_at=now() WHERE id=$1 AND workspace_id=$2 AND (visibility='workspace' OR principal_id=$3) RETURNING *";
+    const { rows: [row] } = await this.pool.query(sql,
+      [id, scope.workspaceId, scope.principalId]);
     return present(row);
   }
 }
