@@ -1,5 +1,7 @@
 # One runtime, two specialist domains: Code and Research
 
+> **Architecture clarified 2026-10-10:** KG remains **one shared AI system**. CodingControlEngine and ResearchControlEngine are **separate domain decision/control layers** with isolated agentic work and workflows, not duplicated infrastructure or independently deployed complete products. See [the controlling architecture decision](architecture/SHARED_KG_DOMAIN_CONTROLLERS.md). The code below describes existing functionality where implemented; control-scope contracts are foundational, and full server-side admission, storage/queue isolation and legacy UI removal remain pending validation.
+
 Kindgleam has a **single** server-owned RunStore, approval gate, Gemini/Vertex
 inference boundary, usage accounting and task verification contract. Code and
 Research are the two agentic domains built on top of that runtime. Normal Chat
