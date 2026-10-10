@@ -162,6 +162,7 @@ export async function selectTab(name) {
   for (const tab of ['runs', 'explore', 'objects', 'audit']) {
     $(`tab-${tab}`).hidden = tab !== name;
   }
+  document.dispatchEvent(new CustomEvent('kindgleam:tab-changed', { detail: { name } }));
   await guard(() => TAB_LOADERS[name]());
 }
 
