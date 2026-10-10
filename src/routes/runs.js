@@ -507,11 +507,13 @@ export function registerRunsRoutes(app, { config, governance, runs, objects, fet
 
   // Record a real outcome for one task. The client names the task and supplies
   // evidence; the server decides whether that task may complete.
-  app.post('/api/runs/:id/advance', scoped('editor'), route(async (req, res) =>
+  app.post('/api/runs/:id/advance', scoped('editor'), route(async (req, res) => {
+    if (!(await strictExistingRun(req, res))) return;
     res.json(await runs.advance(
       req.scope, req.principal, req.params.id, req.body?.taskId, req.body ?? {},
       { requestId: req.requestId }
-    ))));
+    ));
+  }));
 
   app.post('/api/runs/:id/fail', scoped('editor'), route(async (req, res) => {
     const run = await runs.fail(req.scope, req.principal, req.params.id, req.body?.reason, {
