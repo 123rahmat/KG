@@ -67,7 +67,9 @@ function renderProjectManageList() {
         ]),
         project.state === 'archived'
           ? element('span', { class: 'small muted', text: 'Archived' })
-          : button('Archive', () => archiveProject(project), 'small')
+          : state.product?.codingOnly && project.principalId !== state.principal?.id
+            ? element('span', { class: 'small muted', text: 'Shared · view only' })
+            : button('Archive', () => archiveProject(project), 'small')
       ]))
     : [element('div', { class: 'empty small', text: 'No projects yet.' })]));
 }
