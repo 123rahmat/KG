@@ -46,12 +46,19 @@ export function registerProjectRoutes(app, { pool, audit, route, scoped, project
   }));
 
   app.post('/api/projects/:id/archive', scoped('editor'), route(async (req, res) => {
-    const project = await projects.archive(req.scope, req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project not found', code: 'project-not-found' });
-    await audit?.record({
-      principalId: req.principal.id, workspaceId: req.scope.workspaceId,
-      action: 'project.archive', target: project.id, outcome: 'allowed', requestId: req.requestId
-    });
-    res.json({ project });
+    try {
+      const project = await projects.archive(req.scope, req.params.id);
+      if (!project) return res.status(404).json({ error: 'Project not found', code: 'project-not-found' });
+      await audit?.record({
+        principalId: req.principal.id, workspaceId: req.scope.workspaceId,
+        action: 'project.archive', target: project.id, outcome: 'allowed', requestId: req.requestId
+      });
+      res.json({ project });
+    } catch (error) {
+      if (error instanceof ProjectError) return res.status(error.status).json({
+        error: error.message, code: error.code
+      });
+      throw error;
+    }
   }));
 }
