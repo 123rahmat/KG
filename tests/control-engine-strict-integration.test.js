@@ -79,6 +79,32 @@ test('strict Coding and Research routes prevent off-topic work before model, fil
     assert.equal(research.status,201,JSON.stringify(research.body));
     assert.equal(research.body.surface,'research');
     assert.equal(research.body.adaptation.controlEngineId,'research');
+    // Active project identity is immutable for a run: a moving revision
+    // must suspend task execution until a new checked run is created.
+    const updated=await call('PATCH',`/api/projects/${codeProject}`,{
+      ...auth,body:{currentRevision:'changed-after-run'}
+    });
+    assert.equal(updated.status,200,JSON.stringify(updated.body));
+    const stale=await call('POST',`/api/runs/${legal.body.id}/execute`,{...auth,body:{}});
+    assert.equal(stale.status,409,JSON.stringify(stale.body));
+    assert.equal(stale.body.code,'control-stale-revision');
+
+    // Database insertion must not accept a forged controller run with an
+    // adaptation snapshot differing from the serialized project revision.
+    await assert.rejects(pool.query(`
+      INSERT INTO runs (
+        id, workspace_id, principal_id, goal, surface, state,
+        intent, capabilities, governance, adaptation, situation, requirements,
+        project_id, visibility, attempt, max_attempts, max_tokens,
+        conversation_id, control_engine_id
+      )
+      SELECT gen_random_uuid(), workspace_id, principal_id, goal, surface, state,
+        intent, capabilities, governance, adaptation, situation, requirements,
+        project_id, visibility, attempt, max_attempts, max_tokens,
+        NULL, control_engine_id
+      FROM runs WHERE id=$1
+    `,[legal.body.id]), {code:'23514'});
+
     const archived=await call('POST',`/api/projects/${codeProject}/archive`,auth);
     assert.equal(archived.status,200);
     const unavailable=await call('POST',`/api/runs/${legal.body.id}/execute`,{...auth,body:{}});
