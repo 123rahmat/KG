@@ -2,7 +2,7 @@
   "name": "kindgleam",
   "version": "10.4.2",
   "private": true,
-  "description": "Adaptive AI for everyday work, software projects, and evidence-driven research.",
+  "description": "KG Code: adaptive AI software development with repository context, controlled patches, recorded tests, and review.",
   "type": "module",
   "engines": {
     "node": ">=22.0.0"
