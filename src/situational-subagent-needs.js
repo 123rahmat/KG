@@ -39,6 +39,15 @@ export function taskSpecificSubagentNeeds({task={},situation={},observedFindings
     ['observed-risk',(Array.isArray(observedFindings)?observedFindings:[])
       .filter(f=>f && f.status!=='failed').flatMap(f=>f.risks??[])]
   ];
+  // A verified requirement may also appear as a bare string elsewhere in
+  // the saved task context. Reconcile by its normalized full text so a
+  // resolved criterion does not keep an identical child lens artificially
+  // recruited. Only structured task/situation status can mark it resolved.
+  const completedNeeds=new Set(collections.slice(0,6)
+    .flatMap(([,items])=>Array.isArray(items)?items:[])
+    .filter(resolvedStatus)
+    .map(item=>normalize(item.description ?? item.text ?? item.title ?? '').toLowerCase())
+    .filter(Boolean));
   const unique = new Set();
   const results = [];
   for(const [kind,items] of collections){
@@ -49,7 +58,7 @@ export function taskSpecificSubagentNeeds({task={},situation={},observedFindings
       if(resolvedStatus(value))continue;
       const label = normalize(typeof value==='string' ? value
         : (value?.description ?? value?.text ?? value?.title ?? ''));
-      if(label.length<8)continue;
+      if(label.length<8 || completedNeeds.has(label.toLowerCase()))continue;
       const bounded=label.slice(0,180);
       const key=slug(bounded);
       if(!key || unique.has(key))continue;

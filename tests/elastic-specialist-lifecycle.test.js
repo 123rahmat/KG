@@ -6,6 +6,7 @@ import { selectFamilySubagents } from '../src/adaptive-family-subagents.js';
 import { taskSpecialistCandidates } from '../src/task-specialist-factory.js';
 import { reconcileTaskRecruitment } from '../src/situational-recruitment-supervisor.js';
 import { agentMessages } from '../src/multi-agent.js';
+import { taskSpecificSubagentNeeds } from '../src/situational-subagent-needs.js';
 import { agentActivitySnapshot } from '../public/agent-activity.js';
 
 test('main agent families own a variable number of domain-specific subagent skills',()=>{
@@ -74,6 +75,16 @@ test('specialists and child lenses admit and retire at evidence-driven safe wave
   assert.deepEqual(finished.activeRoles,[]);
   assert.deepEqual(finished.subagents,[]);
   assert.ok(finished.lifecycle.retireRoles.includes('security-reviewer'));
+});
+
+test('verified criteria retire matching child lenses even when repeated as plain text',()=>{
+  const requirement='Verify tooltip keyboard focus after profile layout changes';
+  const result=taskSpecificSubagentNeeds({
+    situation:{successCriteria:[requirement]},
+    task:{metadata:{acceptanceCriteria:[{description:requirement,status:'verified'}]}}
+  });
+  assert.ok(!result.some(child=>child.requirement===requirement));
+  assert.equal(result.length,0);
 });
 
 test('newly observed unknown can create a temporary main agent with its actual mission',()=>{
