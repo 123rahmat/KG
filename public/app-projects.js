@@ -23,12 +23,14 @@ export function renderProjectHub() {
   if (!select || !summary) return;
 
   const projects = Array.isArray(state.projects) ? state.projects : [];
-  const active = projects.filter(project => project.state === 'active');
+  const strict = state.product?.codingResearchOnly === true;
+  const active = projects.filter(project => project.state === 'active'
+    && (!strict || ['code','research'].includes(project.defaultSurface)));
   const selected = state.activeProjectId && projectById(state.activeProjectId) ? state.activeProjectId : '';
   state.activeProjectId = selected || null;
 
   select.replaceChildren(
-    element('option', { value: '', text: 'All projects' }),
+    element('option', { value: '', text: strict ? 'Choose a Coding or Research project' : 'All projects' }),
     ...active.map(project => element('option', { value: project.id, text: project.name }))
   );
   select.value = state.activeProjectId ?? '';
@@ -94,6 +96,19 @@ function closeProjectDialog() {
 
 function openProjectDialog() {
   const dialog = $('projectDialog');
+  const strict = state.product?.codingResearchOnly === true;
+  const obsolete = $('projectSurface')?.querySelector('option[value="normal-chat"]');
+  if (obsolete) {
+    obsolete.disabled = strict;
+    obsolete.hidden = strict;
+  }
+  if (strict) {
+    const field = $('projectSurface');
+    if (field && !['code','research'].includes(field.value))
+      field.value = state.activeSurface === 'research' ? 'research' : 'code';
+    const title = $('projectDialogTitle');
+    if (title) title.textContent = 'Coding and Research projects';
+  }
   if (dialog && !dialog.open) dialog.showModal();
   renderProjectManageList();
   $('projectName')?.focus({ preventScroll: true });
@@ -105,8 +120,13 @@ async function createProject(event) {
   const submit = $('projectCreate');
   const name = text($('projectName')?.value);
   const description = text($('projectDescription')?.value);
-  const defaultSurface = text($('projectSurface')?.value) || 'normal-chat';
+  const defaultSurface = text($('projectSurface')?.value)
+    || (state.product?.codingResearchOnly ? 'code' : 'normal-chat');
   const visibility = $('projectShared')?.checked ? 'workspace' : 'private';
+  if (state.product?.codingResearchOnly && !['code','research'].includes(defaultSurface)) {
+    notify('projectNotice', 'warn', 'Choose Coding or Research for a new project.');
+    return;
+  }
   if (!name) {
     notify('projectNotice', 'warn', 'Give the project a name.');
     $('projectName')?.focus();
@@ -121,6 +141,8 @@ async function createProject(event) {
     state.activeProjectId = response.project.id;
     renderProjectHub();
     form.reset();
+    if (state.product?.codingResearchOnly && $('projectSurface'))
+      $('projectSurface').value = 'code';
     closeProjectDialog();
     document.dispatchEvent(new CustomEvent('kindgleam:project-selected', {
       detail: { projectId: response.project.id }
@@ -133,6 +155,7 @@ async function createProject(event) {
 }
 
 export function initProjectHub() {
+  document.addEventListener('kindgleam:open-projects', openProjectDialog);
   $('newProject')?.addEventListener('click', openProjectDialog);
   $('projectManage')?.addEventListener('click', openProjectDialog);
   $('projectDialogClose')?.addEventListener('click', closeProjectDialog);
