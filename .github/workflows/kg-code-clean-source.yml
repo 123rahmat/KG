@@ -2,6 +2,7 @@ name: KG Code clean source ZIP
 on:
   push:
     branches:
+      - main
       - codex/kg-code-clean-export-20261010
   workflow_dispatch:
 permissions:
