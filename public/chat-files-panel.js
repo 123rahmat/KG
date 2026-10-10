@@ -139,8 +139,9 @@ export function setChatView(view) {
   if (!['chat','files'].includes(view)) return;
   if (state.chatView !== view) ++activeRequest;
   state.chatView = view;
+  if (view === 'files') lastLoaded = '';
   syncChatView();
-  if (view === 'files') void fetchFiles({ force:true });
+  // syncChatView already loads the selected Files panel exactly once.
 }
 
 export function initChatFilesPanel() {
