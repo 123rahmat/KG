@@ -299,6 +299,11 @@ export function newChat(options={}) {
   if(options?.skipSave!==true)saveDraftNow();
   if(['code','research','normal-chat'].includes(options?.surface))
     state.activeSurface=options.surface;
+  if (state.product?.codingResearchOnly && !['code','research'].includes(state.activeSurface)) {
+    const project = state.projects.find(item => item.id === state.activeProjectId);
+    state.activeSurface = ['code','research'].includes(project?.defaultSurface)
+      ? project.defaultSurface : 'code';
+  }
   clearStagedChatAttachments();
   if ($('tab-runs').hidden) selectTab('runs');
   state.chat = { id: null, runs: [], pending: null, consent: state.settings.consent, workspaceSourceId: null, projectId: state.activeProjectId ?? null };
@@ -670,6 +675,25 @@ export async function sendMessage(text) {
   const goal = String(text ?? '').trim()
     || (files.length ? `Please look at the attached file${files.length > 1 ? 's' : ''}.` : '');
   if (!goal || chatIsSending(state)) return;
+  // Frontend avoids uploads and provider consent for work the owning project
+  // cannot accept. The server independently rechecks every authority field.
+  if (state.product?.codingResearchOnly === true) {
+    const selected = state.projects.find(project =>
+      project.id === state.activeProjectId && project.state === 'active');
+    if (!selected || !['code','research'].includes(selected.defaultSurface)) {
+      notify('runNotice', 'warn', 'Select or create a Coding or Research project first.');
+      document.dispatchEvent(new Event('kindgleam:open-projects'));
+      return;
+    }
+    const run = state.chat?.runs?.at(-1);
+    const effectiveSurface = run?.surface ?? state.activeSurface;
+    if (selected.defaultSurface !== effectiveSurface
+      || (run && run.projectId !== selected.id)) {
+      notify('runNotice', 'warn',
+        'This conversation belongs to a different project or control engine. Start a new project chat.');
+      return;
+    }
+  }
   state.chat.consent ||= state.settings.consent;
   if (aiConnected() && !state.chat.consent) {
     // A second message while the consent question is open joins the first,
