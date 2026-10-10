@@ -4964,3 +4964,200 @@ body.rail-collapsed .thread-jump { left: calc(50% + 32px); }
 }
 .workspace-next-step strong { font-size: .86rem; }
 .workspace-next-step span { line-height: 1.48; }
+
+/* Evidence-first main work output: the steps remain a compact disclosure,
+   while the usable terminal, text, tables and artifacts stay visible. */
+.work-live-surface {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 12px 0 16px;
+  padding: clamp(12px, 2.1vw, 19px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  overflow: hidden;
+}
+.deep-workspace-grid > .work-live-surface {
+  grid-column: 1 / -1;
+  margin: 0;
+  background: var(--panel);
+}
+.work-output-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.work-output-head > div { display: flex; flex-direction: column; gap: 2px; }
+.work-output-head strong { font-size: 1rem; letter-spacing: -.012em; }
+.work-output-eyebrow {
+  font-size: .68rem;
+  font-weight: 750;
+  letter-spacing: .09em;
+  color: var(--muted);
+}
+.work-output-head > .small { text-align: end; flex-shrink: 0; }
+.work-output-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: .82rem;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.work-output-status-dot {
+  width: 8px; height: 8px; flex: 0 0 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.work-output-items { display: grid; gap: 10px; min-width: 0; }
+.work-output-item {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--softer);
+  overflow: hidden;
+}
+.work-output-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+.work-output-item-head strong { font-size: .84rem; overflow-wrap: anywhere; }
+.work-output-item-head span { max-width: 100%; }
+.work-output-item .md { min-width: 0; font-size: .9rem; }
+.work-output-item .md > :first-child { margin-top: 0; }
+.work-output-item .md > :last-child { margin-bottom: 0; }
+.work-output-console {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+}
+.work-output-console.is-error { border-color: var(--bad); }
+.work-output-stream-label {
+  display: block;
+  padding: 7px 11px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font: 700 .71rem var(--mono);
+}
+.work-output-console pre {
+  overflow: auto;
+  max-height: 360px;
+  margin: 0;
+  padding: 11px;
+  font: .78rem/1.55 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  overscroll-behavior: contain;
+}
+.work-output-tests { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.work-output-tests strong { color: var(--ok); font-size: .82rem; }
+.work-output-test-track {
+  flex: 1 1 100%;
+  height: 5px;
+  border-radius: 4px;
+  background: var(--line-strong);
+  overflow: hidden;
+}
+.work-output-test-track i { display: block; height: 100%; background: var(--ok); }
+.work-output-table { max-width: 100%; overflow-x: auto; }
+.work-output-table table { min-width: 280px; width: 100%; border-collapse: collapse; }
+.work-output-table th, .work-output-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: .81rem; text-align: start;
+  overflow-wrap: anywhere;
+}
+.work-output-table th { font-weight: 700; background: var(--soft); }
+.work-output-source-list { padding-inline-start: 20px; margin: 0; }
+.work-output-source-list li { margin: 5px 0; overflow-wrap: anywhere; }
+.work-output-empty { margin: 0; line-height: 1.55; }
+.work-output-provenance { margin: 0; font-size: .73rem; }
+@media (max-width: 700px) {
+  .work-live-surface { padding: 11px; border-radius: var(--radius); }
+  .work-output-head { flex-wrap: wrap; }
+  .work-output-head > .small { text-align: start; }
+  .work-output-item { padding: 10px; }
+  .work-output-console pre { font-size: .74rem; }
+}
+
+/* Lightweight step timeline is separate from the actual work output. */
+.work-output-timeline {
+  display: flex;
+  gap: 7px;
+  padding: 0 0 4px;
+  margin: 0;
+  overflow-x: auto;
+  list-style: none;
+  scrollbar-width: thin;
+  overscroll-behavior-inline: contain;
+}
+.work-output-timeline-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  max-width: min(255px, 82vw);
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--softer);
+  font-size: .75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.work-output-timeline-step > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.work-output-step-mark {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--soft);
+  color: var(--ink-2);
+  font-size: .7rem;
+  font-weight: 800;
+}
+.work-output-timeline-step[data-step-status="complete"] .work-output-step-mark {
+  background: var(--ok-soft); color: var(--ok);
+}
+.work-output-timeline-step[data-step-status="failed"] .work-output-step-mark {
+  background: var(--bad-soft); color: var(--bad);
+}
+.work-output-timeline-step[data-step-current="true"] {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+.work-output-image {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  margin-inline: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  object-fit: contain;
+  background: var(--panel);
+}
+.work-output-image[hidden] { display: none; }

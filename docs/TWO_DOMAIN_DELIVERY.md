@@ -116,3 +116,31 @@ not a generic fallback. The UI labels saved admission/retirement events as
 advisory selection, separate from actual model-call receipts. No in-flight
 agent is silently canceled, no child executes tools and no selected role
 gains permissions or an unlimited Gemini budget.
+
+## Main answer/output surface, separately from workflow steps
+
+Coding and Research now show an adaptive **Work Output** area in the conversation
+and at the top of the dedicated project overview, while recorded progress
+steps remain visible as a compact status timeline or optional detailed list.
+The displayed content is chosen from what the server actually saved:
+
+- Recorded isolated runner `stdout`/`stderr` and test counts appear in an
+  accessible, scrollable terminal-style view. The UI clearly distinguishes
+  authenticated execution receipts from result data without confirmed receipt.
+  It is a *snapshot of saved execution*, not a fabricated live shell stream.
+- Real structured table samples are shown as bounded, read-only data tables.
+  A table is not generated from speculative agent prose.
+- Stored image artifacts with authorized object IDs can appear as inline,
+  same-origin image previews, with the existing preview action alongside.
+  Other saved artifacts stay accessible through their preview chips.
+- Research uses saved evidence-ledger entries, source links and unresolved
+  questions. Several recorded evidence rows become a comparison-friendly
+  table; a single item becomes prose. No chart or figure is invented.
+- Recorded findings are rendered through the existing safe Markdown component
+  with paragraphs, headings, bullets, code and tables. The final assistant
+  answer still appears in full and is not redundantly copied into the work
+  area. Missing outputs produce an explicit empty/waiting state.
+
+The surface does not add another model call, tool, permission or workflow
+engine. It consumes bounded snapshots of the persisted run during the existing
+UI refresh path and preserves accessible table/terminal scrolling on mobile.

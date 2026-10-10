@@ -12,6 +12,7 @@ import { workspaceCapabilities } from './normal-chat-capabilities.js';
 import { workspaceProgressPanel, recordedCheckpointTrail } from './work-progress-panels.js';
 import { liveWorkFocus } from './live-work-focus.js';
 import { workspaceOutcomeSummary } from './workspace-outcomes.js';
+import { renderLiveWorkSurface } from './live-work-surface.js';
 
 const SURFACE_META = {
   runs: { label: 'Normal Chat', icon: 'chat', kind: 'normal-chat' },
@@ -959,6 +960,7 @@ function codeWorkspaceProject(data) {
     ]),
     workspaceNavigation('code', [['overview', 'Overview'], ['activity', 'Activity'], ['files', 'Files'], ['changes', 'Changes'], ['tests', 'Tests'], ['agents', 'Specialists']]),
     element('div', workspaceArea('code', 'overview', 'deep-workspace-grid'), [
+      ...(run ? [renderLiveWorkSurface(run)] : []),
       ...(workspaceOutcomeSummary(run, 'code') ? [outcomeSummaryCard(run, 'code')] : []),
       element('section', { class: 'deep-workspace-card project-card' }, [
         element('div', { class: 'deep-workspace-card-head' }, [
@@ -1068,6 +1070,7 @@ function researchWorkspaceProject(data) {
     ]),
     workspaceNavigation('research', [['overview', 'Overview'], ['activity', 'Activity'], ['sources', 'Sources'], ['evidence', 'Evidence'], ['gaps', 'Gaps'], ['team', 'Team']]),
     element('div', workspaceArea('research', 'overview', 'deep-workspace-grid'), [
+      ...(run ? [renderLiveWorkSurface(run)] : []),
       ...(workspaceOutcomeSummary(run, 'research') ? [outcomeSummaryCard(run, 'research')] : []),
       element('section', { class: 'deep-workspace-card project-card' }, [
         element('div', { class: 'deep-workspace-card-head' }, [

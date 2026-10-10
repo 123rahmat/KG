@@ -11,6 +11,7 @@ import { TERMINAL_STATES, autoDrive, copyText, governanceCard, isAutomatic, rend
 import { selectTab } from './app-account.js';
 import { renderWorkStatus, workPresentation } from './adaptive-workspace.js';
 import { workspaceOutcomeSummary } from './workspace-outcomes.js';
+import { renderLiveWorkSurface } from './live-work-surface.js';
 import { artifactChip } from './artifact-preview.js';
 
 const actionsLoading = new Set();
@@ -859,6 +860,10 @@ export function assistantMessage(run, active) {
   }
   const context = parts.splice(0);
   if (run.workflow !== 'direct' || !text || run.state !== 'complete') parts.push(workStatusCard(run, context));
+  // Steps stay in their concise fold above; actual saved terminal output,
+  // research evidence, tables and visual artifacts belong in the main answer.
+  const liveOutput = renderLiveWorkSurface(run);
+  if (liveOutput) parts.push(liveOutput);
   if (text) parts.push(answerBlock(text));
   const outcome = outcomeReceipt(run);
   if (outcome) parts.push(outcome);
