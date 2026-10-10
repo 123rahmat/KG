@@ -71,7 +71,7 @@ export function assessWorkDomain({
   // The actual deliverable wins over subject words: a paper on an API is
   // Research, and a research-lab application build is still Coding.
   if (hasResearch && (SCHOLARLY_OUTPUT.test(text) || (RESEARCH_CONTEXT.test(text)
-    && !/\\b(?:build|implement|deploy)\\b.{0,90}\\b(?:application|app|software|api|website)\\b/i.test(text)))) {
+    && !/\b(?:build|implement|deploy)\b.{0,90}\b(?:application|app|software|api|website)\b/i.test(text)))) {
     return decision('in-scope', 'research', text, 'scholarly-deliverable');
   }
   if (hasCode && (!hasResearch || explicitSoftware)) {
