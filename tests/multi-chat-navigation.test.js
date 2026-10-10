@@ -60,3 +60,11 @@ test('draft keys isolate conversations, new project surfaces, workspaces and use
     chatDraftKey({...initial,conversationId:null,surface:'research'}));
   assert.ok(key.includes('chat:code-1'));
 });
+
+test('chat-title search matches server semantics rather than transient project-name matches',()=>{
+  const view=chatNavigationModel([
+    {id:'a',title:'Tests for backend',projectName:'Website launch',surface:'code'},
+    {id:'b',title:'Research Website launch risks',surface:'research'}
+  ],{query:'Website launch'});
+  assert.deepEqual(view.chats.map(item=>item.id),['b']);
+});

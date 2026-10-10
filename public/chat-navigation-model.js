@@ -28,7 +28,10 @@ export function chatNavigationModel(chats,{
     if(project && chat.projectId!==project)return false;
     if(normalizedSurface!=='all'&&chatSurface(chat)!==normalizedSurface)return false;
     if(normalizedStatus!=='all'&&chatWorkStatus(chat)!==normalizedStatus)return false;
-    return !text || [chat.title,chat.projectName].some(value=>clean(value).includes(text));
+    // The server uses the same literal chat-title search over the full
+    // authorized conversation history. A project-name match here alone
+    // would flash and disappear once the server response arrived.
+    return !text || clean(chat.title).includes(text);
   });
   // Server list is most recently updated first. Preserve the source ordering
   // to avoid optimistic reorders and false date/status assumptions.

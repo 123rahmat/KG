@@ -300,3 +300,11 @@ test('multiple workspaces search server history and start scoped Coding/Research
   assert.match(server,/POSITION\(\$7 IN LOWER\(title\)\)>0/);
   assert.match(server,/targetSurface\|\|targetStatus\|\|searchText/);
 });
+
+test('active conversation header identifies authorized project, workspace, and saved status',async()=>{
+  const chat=await read('public/app-attachments.js');
+  assert.match(chat,/title:'Current conversation workspace'/);
+  assert.match(chat,/title:'Project for this conversation'/);
+  assert.match(chat,/title:'Latest recorded workflow status'/);
+  assert.match(chat,/state\.projects\.find\(item=>item\.id===displayProjectId\)/);
+});

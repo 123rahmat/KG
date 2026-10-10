@@ -234,11 +234,24 @@ export function renderChatHead() {
   const shared = runs.some(run => run.visibility === 'workspace');
   const updated = runs.at(-1)?.updatedAt ?? runs.at(-1)?.createdAt ?? listed?.updatedAt;
   const [statusText, tone] = runs.length ? runStatus(runs.at(-1)) : ['', ''];
+  const last=runs.at(-1);
+  const displaySurface=last?.surface??listed?.surface??state.activeSurface;
+  const displayProjectId=last?.projectId??state.chat.projectId??listed?.projectId;
+  // Label only projects this person can see through their existing
+  // authorized Project Hub list; never infer another project's name.
+  const projectName=state.projects.find(item=>item.id===displayProjectId)?.name??null;
+  const surfaceName=displaySurface==='code'?'Coding'
+    :displaySurface==='research'?'Research':'Normal Chat';
   $('chatMeta').replaceChildren(...[
+    element('span', { class:'chat-meta-item',
+      title:'Current conversation workspace',text:surfaceName }),
+    projectName?element('span',{class:'chat-meta-item',
+      title:'Project for this conversation',text:projectName}):null,
     element('span', { class: 'chat-meta-item' }, [svgIcon('chat'), element('span', { text: `${count} message${count === 1 ? '' : 's'}` })]),
     element('span', { class: 'chat-meta-item' }, [svgIcon(shared ? 'users' : 'lock'), element('span', { text: shared ? 'Shared' : 'Private' })]),
     updated ? element('span', { class: 'chat-meta-item', text: timeAgo(updated) }) : null,
-    tone === 'warn' ? element('span', { class: 'pill warn', text: statusText }) : null,
+    statusText?element('span',{class:tone==='warn'?'pill warn':tone==='bad'?'pill bad':'small muted',
+      title:'Latest recorded workflow status',text:statusText}):null,
     contextChip()
   ].filter(Boolean));
 }

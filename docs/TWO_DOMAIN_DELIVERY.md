@@ -378,3 +378,9 @@ file attachment, evidence or execution run. Changing a workspace or opening
 another chat does not pause already-authorized background jobs. The project
 selector remains a navigation filter, not a permission grant or an implicit
 copying instruction.
+
+The current conversation header also displays its actual Coding/Research
+surface, visible Project Hub project name, and latest recorded server status.
+Only authorized project metadata is labeled; missing project names are not
+guessed. Browser-local search semantics match the server's literal chat-title
+search, avoiding a misleading flash of project-name-only search results.
