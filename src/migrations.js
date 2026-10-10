@@ -3251,5 +3251,20 @@ export const MIGRATIONS = [
           AND r.principal_id = current_setting('app.principal_id', true))
       );
     `
+  }  ,{
+    version: 81,
+    name: 'domain-control-run-owner',
+    sql: `
+      ALTER TABLE runs ADD COLUMN control_engine_id TEXT NULL;
+      ALTER TABLE runs ADD CONSTRAINT runs_domain_control_scope
+        CHECK (control_engine_id IS NULL OR
+          (control_engine_id = 'coding' AND surface = 'code' AND project_id IS NOT NULL) OR
+          (control_engine_id = 'research' AND surface = 'research' AND project_id IS NOT NULL));
+      CREATE INDEX runs_domain_control_idx
+        ON runs(workspace_id, principal_id, control_engine_id, project_id)
+        WHERE control_engine_id IS NOT NULL;
+    `
   }
+
+
 ];
