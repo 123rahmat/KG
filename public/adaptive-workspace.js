@@ -13,6 +13,7 @@ import { workspaceProgressPanel, recordedCheckpointTrail } from './work-progress
 import { liveWorkFocus } from './live-work-focus.js';
 import { workspaceOutcomeSummary } from './workspace-outcomes.js';
 import { renderLiveWorkSurface } from './live-work-surface.js';
+import { controlWorkflowChatView } from './control-workflow-view.js';
 
 const SURFACE_META = {
   runs: { label: 'Normal Chat', icon: 'chat', kind: 'normal-chat' },
@@ -1263,6 +1264,24 @@ function runControlStrip(data) {
   ]);
 }
 
+/** Controller suggestions are separate from recorded task/execution status. */
+function controlPolicySummary(data) {
+  const view = controlWorkflowChatView(data.run, data.workspace);
+  if (!view) return null;
+  return element('aside', {
+    class: 'control-workflow-summary',
+    'aria-label': 'Adaptive domain control suggestions'
+  }, [
+    element('div', { class: 'row wrap' }, [
+      element('strong', { text: view.engineLabel + ' · ' + view.title }),
+      element('span', { class: 'muted small', text: view.effort })
+    ]),
+    element('p', { class: 'muted small', text: view.suggestion }),
+    element('p', { class: 'small', text: view.verification + ' · ' + view.cost }),
+    element('p', { class: 'muted small', text: view.evidence + '. ' + view.footer })
+  ]);
+}
+
 export function renderAdaptiveWorkspace(host, mode = 'chat') {
   if (!host) return;
   const data = adaptiveWorkspaceState();
@@ -1297,6 +1316,7 @@ export function renderAdaptiveWorkspace(host, mode = 'chat') {
     ]),
     controls,
     oneLineWork,
+    controlPolicySummary(data),
     normalChatToolStrip(data),
     adaptiveNextActions(data)
   );
