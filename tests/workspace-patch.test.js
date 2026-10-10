@@ -154,3 +154,21 @@ test('independent descending line-range patches retain deterministic diff and ot
   assert.equal(applied.files.find(x=>x.path==='README.md').content,'not touched');
   assert.deepEqual(applied.changed,['src/main.js']);
 });
+
+test('AI patches cannot write credential aliases even when the extension is JSON',()=>{
+  for(const path of [
+    '.env.production','config/.npmrc','config/.netrc','keys/id_rsa',
+    'keys/deploy.pem','private/client.p12','config/credentials.json',
+    'config/secret.json','config/secrets.yaml','keys/service-account.json',
+    'keys/keystore.jks'
+  ]){
+    assert.throws(()=>applySurgicalChanges([],[{path,kind:'upsert',content:'secret'}]),
+      /credential or private-key/,path);
+  }
+  for(const path of ['.env.example','.env.sample','.env.template',
+    'config/credentials.example','src/main.js','docs/README.md']){
+    assert.doesNotThrow(()=>applySurgicalChanges([],[{
+      path,kind:'upsert',content:'documented template'
+    }]),path);
+  }
+});
