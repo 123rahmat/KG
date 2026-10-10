@@ -131,7 +131,7 @@ export async function verifyControlledRun({
   }
   const { rows } = await pool.query(
     `SELECT r.id, r.control_engine_id, r.surface, r.project_id,
-            p.id AS active_project
+            p.id AS active_project, p.current_revision AS active_revision
        FROM runs r
        LEFT JOIN projects p ON p.id = r.project_id
          AND p.workspace_id = r.workspace_id AND p.default_surface = r.surface
@@ -150,6 +150,13 @@ export async function verifyControlledRun({
   if (!stored.active_project) {
     return { status:409, code:'control-project-changed',
       error:'The project was archived or no longer matches this run’s controller.' };
+  }
+  const snapshot = run.adaptation?.controlWorkIdentity;
+  if (snapshot?.projectId !== stored.project_id
+      || snapshot?.controlEngineId !== stored.control_engine_id
+      || text(snapshot?.projectRevision) !== text(stored.active_revision)) {
+    return { status:409, code:'control-stale-revision',
+      error:'The project revision or owner changed after this run started. Revalidate before continuing.' };
   }
   return null;
 }
