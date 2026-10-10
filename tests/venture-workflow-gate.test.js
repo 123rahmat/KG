@@ -162,7 +162,12 @@ test('server does not let an early answer skip explicitly planned Research retri
       granted:['evidence-retrieval','verification']}};
   await store.adaptSteps(client,run,understood,{enough:true,
     next:{type:'respond',purpose:'Produce answer without research'}},emptyRequirements);
+  // Source retrieval goes through the ordinary governed approval boundary,
+  // not straight to the external research tool.
+  assert.equal(saved.at(-1).type,'approval');
+  assert.equal(saved.at(-1).metadata.approvalFor.type,'investigate');
+  const approval=saved.at(-1);approval.status='complete';
+  await store.adaptSteps(client,run,approval,{approved:true},emptyRequirements);
   assert.equal(saved.at(-1).type,'investigate');
-  assert.equal(saved.at(-1).metadata.progressionReason,
-    'planned-evidence-gathering-before-conclusion');
+  assert.match(saved.at(-1).purpose,/Gather authorized sources/);
 });
