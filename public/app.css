@@ -1377,7 +1377,7 @@ main > #notice { margin: 14px auto 0; width: min(var(--read), calc(100% - 32px))
 .chat-view-thumb {
   pointer-events: none;
   position: absolute;
-  z-index: -1;
+  z-index: 0;
   inset: 4px auto 4px 4px;
   width: calc((100% - 8px) / 2);
   border-radius: 999px;
@@ -1388,6 +1388,8 @@ main > #notice { margin: 14px auto 0; width: min(var(--read), calc(100% - 32px))
 }
 .chat-view-switch[data-view="files"] .chat-view-thumb { transform: translateX(100%); }
 .chat-view-choice {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1467,8 +1469,11 @@ main > #notice { margin: 14px auto 0; width: min(var(--read), calc(100% - 32px))
 .chat-file-name { overflow-wrap: anywhere; font-size: .83rem; }
 .chat-file-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .chat-file-empty { display: grid; justify-items: center; padding: 36px 12px; text-align: center; }
+@media (max-width: 860px) {
+  .chat-view-nav { top: 54px; }
+}
 @media (max-width: 760px) {
-  .chat-view-nav { top: 0; width: calc(100% - 20px); padding: 7px 0; }
+  .chat-view-nav { width: calc(100% - 20px); padding: 7px 0; }
   .chat-view-switch { width: min(310px, 100%); }
   .chat-files-panel { width: calc(100% - 22px); }
   .chat-file-item { flex-wrap: wrap; }
