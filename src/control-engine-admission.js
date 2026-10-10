@@ -110,3 +110,44 @@ export async function admitControlEngineRequest({
     scopeDecision: assessment
   });
 }
+
+/**
+ * Revalidate the *persisted* immutable controller before advance, execution,
+ * queued work or a submitted execution receipt. Presentation/adaptation fields
+ * alone are not authority: the stored DB row must match the selected project.
+ */
+export async function verifyControlledRun({
+  pool, run, scope, principalId, codingResearchOnly = false
+} = {}) {
+  if (!codingResearchOnly) return null;
+  const controller = run?.surface === 'code' ? 'coding'
+    : run?.surface === 'research' ? 'research' : null;
+  if (!controller || !run?.projectId || !run?.id || run.principalId !== principalId
+      || run.adaptation?.controlEngineId !== controller) {
+    return { status:409, code:'control-historical-read-only',
+      error:'Historical or unowned runs are read-only. Start in a Coding or Research project.' };
+  }
+  const { rows } = await pool.query(
+    `SELECT r.id, r.control_engine_id, r.surface, r.project_id,
+            p.id AS active_project
+       FROM runs r
+       LEFT JOIN projects p ON p.id = r.project_id
+         AND p.workspace_id = r.workspace_id AND p.default_surface = r.surface
+         AND p.state = 'active'
+         AND (p.principal_id = $3 OR p.visibility = 'workspace')
+      WHERE r.id = $1 AND r.workspace_id = $2 AND r.principal_id = $3
+      LIMIT 1`,
+    [run.id,scope.workspaceId,principalId]
+  );
+  const stored=rows?.[0];
+  if (!stored || stored.control_engine_id !== controller
+      || stored.surface !== run.surface || stored.project_id !== run.projectId) {
+    return { status:409, code:'control-run-owner-mismatch',
+      error:'The persisted run controller/project ownership is invalid.' };
+  }
+  if (!stored.active_project) {
+    return { status:409, code:'control-project-changed',
+      error:'The project was archived or no longer matches this run’s controller.' };
+  }
+  return null;
+}
