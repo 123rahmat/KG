@@ -3,8 +3,9 @@
  * Files are fetched only from the authenticated, conversation-scoped API.
  * A global workspace file list is NEVER used as a shortcut.
  */
-import { $, state, api, element, downloadUrl } from './ui-core.js';
+import { $, state, api, element, downloadUrl, canEdit } from './ui-core.js';
 import { previewButton, previewKind } from './artifact-preview.js';
+import { addAttachments, fileToBase64 } from './app-attachments.js';
 
 const group = Object.freeze([
   { id:'attachment', label:'Attached files', empty:'No attachments in this conversation.' },
@@ -14,6 +15,126 @@ let activeRequest = 0;
 let lastLoaded = '';
 let pendingKey = '';
 let lastConversation = '';
+let uploading = false;
+const MAX_FILES_AT_ONCE = 10;
+const MAX_DEVICE_FILE_BYTES = 5 * 1024 * 1024;
+const staged = () => Array.isArray(state.attachments) ? state.attachments : [];
+const selected = () => state.chat?.chatFileIds instanceof Set
+  ? state.chat.chatFileIds : new Set();
+export const selectedChatUploadIds = () => [...selected()];
+
+function fileSelection() {
+  if (!(state.chat?.chatFileIds instanceof Set)) state.chat.chatFileIds = new Set();
+  return state.chat.chatFileIds;
+}
+
+function uploadStatus(message, bad = false) {
+  const node = $('chatFilesUploadStatus');
+  if (node) {
+    node.textContent = message || '';
+    node.classList.toggle('bad', bad);
+  }
+}
+
+function renderPending() {
+  const pane = $('chatFilesPending');
+  if (!pane) return;
+  const files = staged();
+  pane.hidden = !files.length;
+  if (!files.length) {
+    pane.replaceChildren();
+    return;
+  }
+  pane.replaceChildren(
+    element('h3', { text:'Selected for the next message · ' + files.length }),
+    element('p', { class:'small muted',
+      text:'These files are selected on this device. They will upload when you send your next message.' }),
+    ...files.map(file => element('div', {class:'small chat-pending-file',text:
+      file.name + ' · ' + sizeLabel(file.size)})),
+    element('button', {type:'button',class:'small',text:'Go to Chat and send',
+      onclick:() => {
+        setChatView('chat');
+        $('goal')?.focus({preventScroll:true});
+      }})
+  );
+}
+
+/**
+ * Upload local PDFs, docs, images, datasets, code, ZIPs, or other supported
+ * byte files. GitHub is not required. Existing owned chats save at once.
+ * New chats stage until the first message creates an authoritative run ID.
+ */
+async function uploadFromDevice(fileList) {
+  if (uploading) return;
+  const all = [...(fileList ?? [])];
+  if (!all.length) return;
+  if (!canEdit() || !state.principal || !state.workspaceId) {
+    uploadStatus('You need editing permission to upload files.', true);
+    return;
+  }
+  if (all.length > MAX_FILES_AT_ONCE) {
+    uploadStatus('Choose no more than 10 files at a time.', true);
+    return;
+  }
+  const tooBig = all.find(file => file.size > MAX_DEVICE_FILE_BYTES);
+  if (tooBig) {
+    uploadStatus(tooBig.name + ' exceeds the current 5 MB per-file limit.', true);
+    return;
+  }
+  const run = state.chat?.runs?.at(-1);
+  if (!run) {
+    addAttachments(all, { focus:false });
+    renderPending();
+    uploadStatus('Selected on your device. Write and send a chat message to upload these files.');
+    return;
+  }
+  if (run.principalId !== state.principal.id || run.workspaceId !== state.workspaceId) {
+    uploadStatus('Only the owner can upload files into this conversation. Open your own chat.', true);
+    return;
+  }
+  uploading = true;
+  const uploadButton = $('chatFilesUpload');
+  if (uploadButton) uploadButton.disabled = true;
+  const chatId = state.chat.id;
+  const workspaceId = state.workspaceId;
+  const saved = [];
+  try {
+    for (const file of all) {
+      uploadStatus('Uploading ' + file.name + '…');
+      const object = await api('POST','/api/objects',{
+        type:'attachment',
+        name:file.name,
+        contentType:file.type || 'application/octet-stream',
+        content: await fileToBase64(file),
+        encoding:'base64',
+        visibility:run.visibility === 'workspace' ? 'workspace' : 'private',
+        provenance:{source:'chat-upload',runId:run.id}
+      },{workspaceId,idempotencyKey:crypto.randomUUID(),timeoutMs:120_000});
+      saved.push(object.id);
+    }
+    // An in-flight upload must never add a selected file to a different chat.
+    if (state.workspaceId === workspaceId && state.chat?.id === chatId) {
+      for (const id of saved) fileSelection().add(id);
+      lastLoaded = '';
+      uploadStatus(saved.length + ' file' + (saved.length === 1 ? '' : 's')
+        + ' uploaded to this chat. Selected for your next AI message.');
+      if (state.chatView === 'files') await fetchFiles({force:true});
+    }
+  } catch (error) {
+    uploadStatus((saved.length ? saved.length + ' uploaded; ' : '')
+      + (error.message || 'Upload failed'), true);
+    // A partial batch still has persistent files; never make them invisible.
+    if (state.workspaceId === workspaceId && state.chat?.id === chatId) {
+      for (const id of saved) fileSelection().add(id);
+      lastLoaded = '';
+      if (state.chatView === 'files') await fetchFiles({force:true});
+    }
+  } finally {
+    uploading = false;
+    if (uploadButton) uploadButton.disabled = false;
+  }
+}
+
 const text = value => String(value ?? '').trim();
 const sizeLabel = size => {
   const n = Math.max(0, Number(size) || 0);
@@ -42,6 +163,19 @@ function itemRow(item) {
       ].filter(Boolean).join(' · ') })
     ]),
     element('div', { class:'chat-file-actions' }, [
+      item.category === 'attachment'
+        ? element('label', {class:'chat-file-use'}, [
+            element('input', {
+              type:'checkbox',checked:selected().has(item.id),
+              'aria-label':'Use ' + title + ' with the next AI message',
+              onchange:event => {
+                if (event.currentTarget.checked) fileSelection().add(item.id);
+                else selected().delete(item.id);
+              }
+            }),
+            element('span', {text:'Use with next message'})
+          ])
+        : null,
       previewKind(item) ? previewButton(item) : null,
       element('a', {
         class:'btn small', href:downloadUrl('/api/objects/' + encodeURIComponent(item.id) + '/content'),
@@ -114,6 +248,7 @@ async function fetchFiles({ force = false } = {}) {
 /** Keep switches and panel semantics synchronized with the visible chat. */
 export function syncChatView() {
   const view = state.chatView === 'files' ? 'files' : 'chat';
+  renderPending();
   const switcher = $('chatViewSwitch');
   if (!switcher) return;
   switcher.dataset.view = view;
@@ -153,6 +288,13 @@ export function initChatFilesPanel() {
   $('chatViewMessages')?.addEventListener('click', () => setChatView('chat'));
   $('chatViewFiles')?.addEventListener('click', () => setChatView('files'));
   $('refreshChatFiles')?.addEventListener('click', () => fetchFiles({ force:true }));
+  $('chatFilesUpload')?.addEventListener('click', () => $('chatFilesUploadInput')?.click());
+  $('chatFilesUploadInput')?.addEventListener('change', event => {
+    const files = [...(event.currentTarget.files ?? [])];
+    event.currentTarget.value = '';
+    void uploadFromDevice(files);
+  });
+  document.addEventListener('kindgleam:staged-files-changed', renderPending);
   $('chatViewSwitch')?.addEventListener('keydown', event => {
     if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
     event.preventDefault();
