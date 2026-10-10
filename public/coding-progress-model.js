@@ -34,12 +34,28 @@ export function codingProgressSnapshot(run) {
     || tasks.find(task => ['pending','queued','waiting'].includes(task.status)) || null;
   const label = task => safe(task?.metadata?.title || LABELS[task?.id] || LABELS[task?.type]
     || task?.purpose || task?.id || 'Recorded step', 110);
-  const verified = tasks.some(task => {
-    const verdict = task?.evidence?.verdict;
-    return task?.type === 'verify' && task?.status === 'complete'
-      && (verdict?.verdict === 'pass' || verdict?.status === 'pass');
-  });
+  // A passing verdict on an earlier revision is not certification for
+  // subsequent changes. Also never celebrate a terminal state that still
+  // contains failed, running or pending mandatory code checks.
+  const lastWorkIndex = tasks.reduce((index, task, i) =>
+    ['build-code','test-code'].includes(task?.id) ||
+    ['build-code','test-code'].includes(task?.type) ? i : index, -1);
+  const lastVerifyIndex = tasks.reduce((index, task, i) =>
+    task?.type === 'verify' || task?.id === 'verify' ? i : index, -1);
+  const candidate = tasks[lastVerifyIndex];
+  const verdict = candidate?.evidence?.verdict;
+  const requiredChecks = tasks.filter(task =>
+    task?.id === 'test-code' || task?.type === 'test-code');
   const runState = safe(run.state,24);
+  const verified = runState === 'complete'
+    && lastVerifyIndex >= 0 && lastVerifyIndex >= lastWorkIndex
+    && candidate.status === 'complete'
+    && (verdict?.verdict === 'pass' || verdict?.status === 'pass')
+    && !tasks.some(task => ['failed','blocked','stale','running'].includes(task?.status))
+    && requiredChecks.every(task => task.status === 'complete')
+    && !tasks.slice(lastVerifyIndex+1).some(task =>
+      ['build-code','test-code'].includes(task?.id) ||
+      ['build-code','test-code'].includes(task?.type));
   let headline = next ? label(next) : 'Review your coding task';
   let status = 'Ready';
   let tone = 'neutral';
