@@ -14,7 +14,7 @@ import { resolveModelSelection } from '../model-routing.js';
 import { FeedbackStore } from '../feedback.js';
 import { EvolutionStore } from '../evolution.js';
 import { SkillLearningStore, skillContextSignature } from '../skills.js';
-import { admitControlEngineRequest, ControlAdmissionError } from '../control-engine-admission.js';
+import { admitControlEngineRequest, ControlAdmissionError, verifyControlledRun } from '../control-engine-admission.js';
 
 // Files the AI reads for itself: text and code, CSV, PDF, Word, Excel and
 // PowerPoint become text; images are shown to the model. Anything else stays
