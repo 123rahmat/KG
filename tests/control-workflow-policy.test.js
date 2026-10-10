@@ -131,6 +131,37 @@ test('budget gate or human authorization cannot be bypassed by agent suggestions
   }).action,'approval-required');
 });
 
+test('full paper with figures and statistics requires all three evidence classes', () => {
+  const p=buildControlWorkflowPolicy({
+    surface:'research',
+    goal:'Write a full research thesis with regression statistics, confidence intervals, experimental figures and bibliography'
+  });
+  for (const condition of [
+    'reproducible-computation',
+    'units-and-assumptions-checked',
+    'data-provenance-and-axis-integrity',
+    'complete-requested-sections',
+    'citation-integrity',
+    'method-limitations'
+  ]) {
+    assert.ok(p.quality.requirements.includes(condition), condition);
+    assert.ok(p.quality.missingEvidence.includes(condition), condition);
+  }
+});
+test('signed computational receipts alone cannot imply valid figure or manuscript', () => {
+  const p=buildControlWorkflowPolicy({
+    surface:'research',goal:'Write a full thesis with regression analysis and charts',
+    runtimeEvidence:{
+      computationReceiptAuthenticated:true,
+      unitsAndAssumptionsVerified:true,
+      requestedSectionsVerified:true
+    }
+  });
+  assert.ok(!p.quality.missingEvidence.includes('reproducible-computation'));
+  assert.ok(p.quality.missingEvidence.includes('data-provenance-and-axis-integrity'));
+  assert.ok(p.quality.missingEvidence.includes('citation-integrity'));
+});
+
 test('test results and research links are not self-authenticating evidence', () => {
   let checks=controlQualityRequirements({
     surface:'code',taskKind:'implement',runtimeEvidence:{testsPassed:true}
