@@ -111,7 +111,8 @@ Turn it on in Settings. It lives beside the editor on the **Code** page:
   policy (red), lines a planted bug changed without any test noticing (amber), and code no test runs (grey).
 - As you type, it suggests the next lines in grey when you pause at the end of a line (Tab accepts, Esc or
   typing dismisses; Ctrl+Space asks anywhere). Turn it off in Settings with **Suggest code as you type**.
-- Click a marker to ask the assistant to fix that line, or use **Fix this file**, **Explain**, **Review last run**,
+- Click a marker to ask the assistant to fix that line, or use **Fix this file**, **Optimize** (faster, smaller,
+  clearer code that behaves exactly the same), **Explain**, **Review last run**,
   or describe what to write (in the open file or a **New file**). After each run it can review the results in the
   background and put its suggestions on the exact lines (accent colour).
 - Every code proposal is built and checked with gates G0-G4 on a scratch copy, failures go back to it automatically

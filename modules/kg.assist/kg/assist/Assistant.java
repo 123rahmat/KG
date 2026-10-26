@@ -34,6 +34,7 @@ public final class Assistant {
     public enum Task {
         FIX("Fix a failed check"),
         WRITE("Write code for a requirement"),
+        OPTIMIZE("Make a firmware file faster and smaller"),
         EXPLAIN("Explain a firmware file"),
         VECTOR("Write a test vector for a requirement"),
         PYTEST("Write a Python test generator for a requirement"),
@@ -271,7 +272,7 @@ public final class Assistant {
         if (regs != null) {
             section(c, "registers.cfg (the only register addresses that exist)", regs);
         }
-        if (r.task() == Task.FIX) {
+        if (r.task() == Task.FIX || r.task() == Task.OPTIMIZE) {
             section(c, "last run (digest)", RunDigest.build(project, RunDigest.latest(project)));
         }
         if (r.task() == Task.WRITE && before == null) {
@@ -335,6 +336,10 @@ public final class Assistant {
                     : "Update " + rel + " so the firmware meets " + (r.requirement() == null ? "the requirements" : r.requirement())
                     + ". Keep everything that already works. ")
                     + (r.requirement() != null && read(rel) == null ? "It must help meet " + r.requirement() + ". " : "") + note;
+            case OPTIMIZE -> "Improve " + rel + " for a small microcontroller without changing what it does: fewer CPU "
+                    + "cycles per step, less stack and code size, simpler logic, clearer names and comments. Keep the interface, "
+                    + "every output value and all safety behaviour exactly the same, and keep every loop bounded. If the code is "
+                    + "already good, change nothing and say so. Start the answer with one line per change saying why it helps." + note;
             case EXPLAIN -> "Explain what " + rel + " does in plain words for an engineer new to the project: inputs, outputs, "
                     + "states, safety behaviour, and anything that looks risky. Do not write code." + note;
             case VECTOR -> "Write one test vector file that checks " + r.requirement()

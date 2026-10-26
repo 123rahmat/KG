@@ -113,7 +113,7 @@ final class AssistPage {
 
         // ---------------------------------------------------------------- request form
         JPanel form = Ui.column();
-        Widgets.Segmented task = new Widgets.Segmented(new String[] {"Fix", "Write", "Explain", "Vector", "Python", "Review"}, "Fix");
+        Widgets.Segmented task = new Widgets.Segmented(new String[] {"Fix", "Write", "Optimize", "Explain", "Vector", "Python", "Review"}, "Fix");
         List<String> files = Assistant.firmwareFiles(app.data.project);
         JComboBox<String> file = new JComboBox<>(files.toArray(new String[0]));
         List<String> reqIds = new ArrayList<>();
@@ -137,11 +137,12 @@ final class AssistPage {
         JLabel hint = Ui.muted("");
         Runnable sync = () -> {
             String v = task.value();
-            file.setEnabled(v.equals("Fix") || v.equals("Write") || v.equals("Explain"));
+            file.setEnabled(v.equals("Fix") || v.equals("Write") || v.equals("Optimize") || v.equals("Explain"));
             req.setEnabled(v.equals("Write") || v.equals("Vector") || v.equals("Python"));
             hint.setText(switch (v) {
                 case "Fix" -> "Reads the last failed run and proposes a fix to the chosen file, checked by gates G0-G4.";
                 case "Write" -> "Updates the chosen file to meet the chosen requirement, checked by gates G0-G4.";
+                case "Optimize" -> "Makes the chosen file faster, smaller and clearer without changing what it does, checked by gates G0-G4.";
                 case "Explain" -> "Explains the chosen file in plain words. Changes nothing.";
                 case "Python" -> "Writes a Python generator (tests/gen_*.py) that sweeps the requirement's range; Kindgleam runs it "
                         + "twice in the sandbox and checks every vector it prints.";
@@ -204,6 +205,7 @@ final class AssistPage {
             Assistant.Task tk = switch (v) {
                 case "Fix" -> Assistant.Task.FIX;
                 case "Write" -> Assistant.Task.WRITE;
+                case "Optimize" -> Assistant.Task.OPTIMIZE;
                 case "Explain" -> Assistant.Task.EXPLAIN;
                 case "Python" -> Assistant.Task.PYTEST;
                 case "Review" -> Assistant.Task.REVIEW;

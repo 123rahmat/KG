@@ -528,6 +528,8 @@ final class CodePage extends JPanel {
         Ui.Btn fix = new Ui.Btn("Fix this file", Ui.Kind.SECONDARY);
         Ui.Btn explain = new Ui.Btn("Explain", Ui.Kind.SECONDARY);
         Ui.Btn review = new Ui.Btn("Review last run", Ui.Kind.SECONDARY);
+        Ui.Btn optimize = new Ui.Btn("Optimize", Ui.Kind.SECONDARY);
+        optimize.setToolTipText("Faster, smaller, clearer code that does exactly the same; you see the diff first");
         fix.addActionListener(e -> {
             StringBuilder note = new StringBuilder();
             for (Diagnostics.Diag d : allDiags()) {
@@ -539,10 +541,12 @@ final class CodePage extends JPanel {
         });
         explain.addActionListener(e -> ask(Assistant.Task.EXPLAIN, "", null));
         review.addActionListener(e -> ask(Assistant.Task.REVIEW, "", null));
+        optimize.addActionListener(e -> ask(Assistant.Task.OPTIMIZE, "", null));
         Ui.Btn test = new Ui.Btn("Write a test", Ui.Kind.SECONDARY);
         test.setToolTipText("Write a test vector for the requirement chosen below");
         q1.add(fix);
         q1.add(explain);
+        q1.add(optimize);
         q1.add(review);
         q1.add(test);
         assistBody.add(Ui.left(q1));
