@@ -20,6 +20,7 @@ final class AppSettings {
     boolean confirmHil = true;
     boolean assistantEnabled;
     boolean autoReview = true;
+    boolean liveComplete = true;
     final List<String> recent = new ArrayList<>();
 
     static Path file() {
@@ -58,6 +59,7 @@ final class AppSettings {
                     case "confirm_hil" -> s.confirmHil = !v.equals("false");
                     case "assistant" -> s.assistantEnabled = v.equals("on");
                     case "auto_review" -> s.autoReview = !v.equals("off");
+                    case "live_complete" -> s.liveComplete = !v.equals("off");
                     case "recent" -> {
                         if (s.recent.size() < 200 && !s.recent.contains(v)) {
                             s.recent.add(v);
@@ -83,6 +85,7 @@ final class AppSettings {
         sb.append("confirm_hil ").append(confirmHil).append('\n');
         sb.append("assistant ").append(assistantEnabled ? "on" : "off").append('\n');
         sb.append("auto_review ").append(autoReview ? "on" : "off").append('\n');
+        sb.append("live_complete ").append(liveComplete ? "on" : "off").append('\n');
         for (String r : recent) {
             sb.append("recent ").append(r).append('\n');
         }

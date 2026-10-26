@@ -945,6 +945,13 @@ final class Pages {
         });
         runs.add(settingRow("Review every run automatically", "After each Check or Verify the assistant reads the results in the "
                 + "background and puts suggestions on your code.", auto));
+        Widgets.Switch live = new Widgets.Switch(s.liveComplete);
+        live.onChange(v -> {
+            s.liveComplete = v;
+            s.save();
+        });
+        runs.add(settingRow("Suggest code as you type", "When you pause typing, the assistant offers the next lines in grey. "
+                + "Tab accepts, Esc or typing dismisses. Ctrl+Space asks at any time.", live));
         col.add(card("Runs", runs));
 
         if (app.data != null) {

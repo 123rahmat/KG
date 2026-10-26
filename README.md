@@ -109,6 +109,8 @@ Turn it on in Settings. It lives beside the editor on the **Code** page:
 
 - Kindgleam's own checks mark problems on your code as you type and after every run: compiler errors and source
   policy (red), lines a planted bug changed without any test noticing (amber), and code no test runs (grey).
+- As you type, it suggests the next lines in grey when you pause at the end of a line (Tab accepts, Esc or
+  typing dismisses; Ctrl+Space asks anywhere). Turn it off in Settings with **Suggest code as you type**.
 - Click a marker to ask the assistant to fix that line, or use **Fix this file**, **Explain**, **Review last run**,
   or describe what to write (in the open file or a **New file**). After each run it can review the results in the
   background and put its suggestions on the exact lines (accent colour).

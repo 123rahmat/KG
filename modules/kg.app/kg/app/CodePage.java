@@ -59,6 +59,7 @@ final class CodePage extends JPanel {
     private final JPanel proposalBox = Ui.column();
     private final JPanel suggestBox = Ui.column();
     private final Timer liveTimer;
+    private final Timer suggestTimer;
     private final transient Map<String, String> unsaved = new LinkedHashMap<>();
     private transient List<Diagnostics.Diag> live = List.of();
     private transient List<Diagnostics.Diag> fromRun = List.of();
@@ -83,6 +84,8 @@ final class CodePage extends JPanel {
         stream.setRows(8);
         liveTimer = new Timer(900, e -> runLive());
         liveTimer.setRepeats(false);
+        suggestTimer = new Timer(700, e -> suggest());
+        suggestTimer.setRepeats(false);
         editor.onEdit(() -> {
             if (current != null) {
                 unsaved.put(current, editor.getText());
@@ -90,6 +93,7 @@ final class CodePage extends JPanel {
                 if (isFirmware(current)) {
                     liveState.setText("checking...");
                     liveTimer.restart();
+                    suggestTimer.restart();
                 }
             }
         });
@@ -100,7 +104,7 @@ final class CodePage extends JPanel {
 
             @Override
             public void actionPerformed(java.awt.event.ActionEvent e) {
-                complete();
+                complete(false);
             }
         });
         editor.getInputMap().put(CodeEditor.save(), "kg-save");
@@ -686,8 +690,26 @@ final class CodePage extends JPanel {
         w.start();
     }
 
-    /** Ctrl+Space: the model fills in code at the cursor, using what comes before and after it. */
-    private void complete() {
+    /**
+     * Live suggestion after a pause in typing: only at the end of a line, with nothing selected and no
+     * suggestion already showing, so it never interrupts. Stays quiet when it has nothing to offer.
+     */
+    private void suggest() {
+        if (!app.settings.liveComplete || !app.settings.assistantEnabled || !isFirmware(current) || busy
+                || editor.hasGhost() || editor.getSelectionStart() != editor.getSelectionEnd()) {
+            return;
+        }
+        String text = editor.getText();
+        int at = editor.getCaretPosition();
+        int eol = text.indexOf('\n', at);
+        if (!text.substring(at, eol < 0 ? text.length() : eol).isBlank() || !new ModelStore(app.home).status().ready()) {
+            return;
+        }
+        complete(true);
+    }
+
+    /** Ctrl+Space (or a pause in typing): the model fills in code at the cursor, using what comes before and after it. */
+    private void complete(boolean quiet) {
         if (!isFirmware(current) || busy) {
             return;
         }
@@ -700,12 +722,13 @@ final class CodePage extends JPanel {
         String before = text.substring(Math.max(0, at - 6000), at);
         String after = text.substring(at, Math.min(text.length(), at + 2000));
         busy = true;
-        liveState.setText("completing...");
+        liveState.setText(quiet ? "suggesting..." : "completing...");
         Thread w = new Thread(() -> {
             String got = null;
             String err = null;
             try {
-                EngineClient.Result r = engine().complete(before, after, 96, 90);
+                EngineClient.Result r = quiet ? engine().complete(before, after, 48, 20)
+                        : engine().complete(before, after, 96, 90);
                 got = r.text();
             } catch (IOException ex) {
                 err = ex.getMessage();
@@ -716,19 +739,26 @@ final class CodePage extends JPanel {
                 busy = false;
                 liveState.setText("");
                 if (fe != null) {
-                    app.toast("Completion: " + fe, "FAIL");
+                    if (!quiet) {
+                        app.toast("Completion: " + fe, "FAIL");
+                    }
                     return;
                 }
                 List<String> bad = Guard.checkReply(fg);
                 if (!bad.isEmpty()) {
-                    app.toast("Completion withheld: " + bad.get(0), "BLOCKED");
+                    if (!quiet) {
+                        app.toast("Completion withheld: " + bad.get(0), "BLOCKED");
+                    }
                     return;
                 }
                 if (fg.isBlank()) {
-                    app.toast("No completion here.", "OK");
+                    if (!quiet) {
+                        app.toast("No completion here.", "OK");
+                    }
                     return;
                 }
-                if (editor.getCaretPosition() == at) {
+                // Typing while the model worked makes the suggestion stale: drop it.
+                if (editor.getCaretPosition() == at && editor.getText().equals(text)) {
                     editor.showGhost(fg, at);
                 }
             });
