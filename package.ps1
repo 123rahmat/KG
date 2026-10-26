@@ -57,3 +57,4 @@ No output means every file is exactly as packaged.
 Write-Host '== compressing'
 Compress-Archive -Path $out -DestinationPath "dist\$name.zip"
 Write-Host "done: dist\$name.zip"
+exit 0

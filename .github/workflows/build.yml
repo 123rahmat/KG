@@ -38,6 +38,9 @@ jobs:
         run: |
           EXE=engine/build/kg-infer; [ "$RUNNER_OS" = Windows ] && EXE=engine/build/kg-infer.exe
           python -I engine/test/check_engine.py "$EXE" "$RUNNER_TEMP/eng"
+      - name: Allow the network-isolation sandbox (Ubuntu 24.04 restricts user namespaces)
+        if: runner.os == 'Linux'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Fresh package passes a full verify on the demo project
         shell: bash
         run: |
