@@ -3,12 +3,14 @@
 # fingerprint pinned in model/MODEL.txt; a wrong file stops the build. Users then install one
 # file and everything works offline.
 #
-# Run it from the Actions tab ("Run workflow"), or push a tag like v3.0.0 to also publish a release.
+# Run it from the Actions tab ("Run workflow"), push to the development branch, or push a tag like
+# v3.0.0 to also publish a release.
 name: release
 on:
   workflow_dispatch:
   push:
     tags: ['v*']
+    branches: ['claude/blissful-bohr-1xqc4n']
 permissions:
   contents: write
 jobs:
