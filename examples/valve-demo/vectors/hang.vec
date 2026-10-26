@@ -1,0 +1,5 @@
+REQ REQ-004
+TICKS 1500
+SET 0 target 50
+FAULT 800 hang
+ASSERT from fault+3 always drive == 0

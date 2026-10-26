@@ -1,0 +1,15 @@
+# Spring-return valve: underdamped second-order mechanism, position and velocity.
+MODEL second_order
+OUTPUT pos %   0 TOL 0.01
+OUTPUT vel %/s 0 TOL 0.1
+DRIVE drive
+DISTURB
+SENSOR position pos
+PARAM WN 30
+PARAM ZETA 0.2
+PARAM GAIN 150
+PARAM OFFSET 0
+# Mechanical end stops of the valve body.
+PARAM LIMIT_MIN 0
+PARAM LIMIT_MAX 100
+CALIBRATION none

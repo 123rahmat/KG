@@ -1,0 +1,10 @@
+SKILL calibrate-plant  v1
+Turn the plant model from UNCALIBRATED into evidence.
+
+1. On the bench, record a step response of the real device: apply a fixed output, log
+   temperature every tick until it settles. Keep the raw file under models/.
+2. Fit TAU_S, GAIN_C and AMBIENT_C to the measurement.
+3. Set CALIBRATION in the model file to the measurement file name.
+4. Set CALIBRATION required in profile.cfg so an uncalibrated model can no longer pass.
+5. Run kindgleam verify and record the fit:
+   kindgleam memory add facts <source> "thermal model fitted: tau ..., gain ..., error ..."

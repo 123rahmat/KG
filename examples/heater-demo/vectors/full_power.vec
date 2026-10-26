@@ -1,0 +1,6 @@
+# Heat-up must use the full heater: a capped output (e.g. 90%) is a real defect.
+REQ REQ-008
+TICKS 4000
+SET 0 setpoint 85
+ASSERT always setpoint - sensor > 10 -> heater == 1
+ASSERT eventually by 3999 setpoint - sensor <= 10

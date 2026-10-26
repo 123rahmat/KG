@@ -1,0 +1,4 @@
+REQ REQ-001
+TICKS 4000
+SET 0 setpoint 60
+ASSERT from 2000 always abs(temp - setpoint) <= 0.5

@@ -1,0 +1,5 @@
+REQ REQ-005
+TICKS 4000
+FAULT 1500 disturb 40
+ASSERT always sensor >= 90 -> heater == 0
+ASSERT eventually by 3999 sensor >= 90

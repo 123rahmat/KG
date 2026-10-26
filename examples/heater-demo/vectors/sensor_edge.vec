@@ -1,0 +1,5 @@
+# Boundary: a reading of exactly -40 C must count as open circuit.
+REQ REQ-004
+TICKS 3000
+FAULT 1500 stuck sensor -40
+ASSERT from fault+1 always heater == 0

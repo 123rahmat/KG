@@ -1,0 +1,10 @@
+SKILL add-fault-case  v1
+Add a fault the firmware must survive, on every tier.
+
+1. Pick the fault from the shared catalog: hang, sensor_open, sensor_stuck <value>, ext_heat <rate>.
+2. Write a vector: FAULT <tick> <kind> [value] and an ASSERT that states the safe reaction,
+   usually: ASSERT safe_after_fault <ticks>   or   ASSERT cutoff <temperature>.
+3. Inject the fault well after settling (for example tick 1500) so the reaction is clear.
+4. Run kindgleam verify. G8 proves the reaction in SIL; with --tier=pil the same vector
+   runs on the target and G10 compares both tiers tick by tick.
+5. If G7 reports a surviving planted bug near the fault code, add a boundary vector.

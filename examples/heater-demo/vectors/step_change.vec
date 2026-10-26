@@ -1,0 +1,6 @@
+REQ REQ-007
+TICKS 6000
+SET 0 setpoint 50
+SET 2000 setpoint 70
+ASSERT from 3500 always abs(temp - 70) <= 0.5
+ASSERT always temp <= 70.5

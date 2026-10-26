@@ -1,0 +1,5 @@
+REQ REQ-006
+TICKS 3000
+SET 0 target 50
+FAULT 500 disturb 300
+ASSERT from 1500 always abs(pos - 50) <= 2

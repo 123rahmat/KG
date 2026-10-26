@@ -1,0 +1,7 @@
+#include <stdint.h>
+#include "fw_ctrl.h"
+/* malloc and free are banned here; goto too */
+// printf is not allowed either
+static const char *msg = "never call malloc or free";
+static int freedom_level = 3; /* contains 'free' but is not free */
+int fw_tricky(void) { return freedom_level + (msg != 0); }

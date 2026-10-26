@@ -1,0 +1,5 @@
+REQ REQ-006
+SEED 7
+TICKS 4000
+FAULT 0 noise sensor 0.5
+ASSERT from 2000 always abs(temp - setpoint) <= 1.0

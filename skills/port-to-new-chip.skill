@@ -1,0 +1,9 @@
+SKILL port-to-new-chip  v1
+Move the firmware to a different microcontroller.
+
+1. New board.cfg with the new CHIP_ID, PROBE, FLASH_APP and FLASH_PROTECTED regions.
+2. New limits.cfg if the hardware ratings changed; the hardware owner signs it:
+   kindgleam sign-limits
+3. Keep the SIL vectors unchanged: they are the contract the new chip must meet.
+4. kindgleam verify (SIL first), then kindgleam verify --tier=pil on the new board.
+5. G10 must show SIL and PIL identical; any difference points at the port, not the tests.

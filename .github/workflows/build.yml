@@ -1,0 +1,62 @@
+# Builds and tests Kindgleam on Linux, macOS and Windows, then uploads each package.
+# The packages are built without the model file; it is added at packaging time on a release
+# machine (see docs/ASSISTANT.md) because it is 1 GB.
+name: build
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test tools for the engine reference check
+        run: python -m pip install numpy regex gguf
+      - name: Build and package (Linux, macOS)
+        if: runner.os != 'Windows'
+        run: ./package.sh
+      - name: Build and package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./package.ps1
+      - name: Engine matches the reference implementation
+        shell: bash
+        run: |
+          EXE=engine/build/kg-infer; [ "$RUNNER_OS" = Windows ] && EXE=engine/build/kg-infer.exe
+          python -I engine/test/check_engine.py "$EXE" "$RUNNER_TEMP/eng"
+      - name: Fresh package passes a full verify on the demo project
+        shell: bash
+        run: |
+          cd dist/kindgleam-*/ 
+          export KINDGLEAM_KEYS="$RUNNER_TEMP/keys"
+          if [ "$RUNNER_OS" = Windows ]; then KG="cmd //c bin\\kindgleam.cmd"; else KG=bin/kindgleam; fi
+          FP=$($KG keygen | tail -1)
+          $KG baseline
+          cp -r examples/heater-demo "$RUNNER_TEMP/heater"
+          sed -i.bak "s/^LEDGER_KEY_FP .*/$FP/" "$RUNNER_TEMP/heater/profile.cfg"
+          # Network-namespace isolation exists only on Linux; elsewhere the demo runs best-effort
+          # and the report says so.
+          [ "$RUNNER_OS" = Linux ] || sed -i.bak "s/^SANDBOX required/SANDBOX best-effort/" "$RUNNER_TEMP/heater/profile.cfg"
+          $KG sign-limits --project="$RUNNER_TEMP/heater"
+          $KG verify --project="$RUNNER_TEMP/heater" | tee "$RUNNER_TEMP/verify.txt"
+          grep -q "VERDICT PASS" "$RUNNER_TEMP/verify.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kindgleam-${{ matrix.os }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip

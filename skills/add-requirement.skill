@@ -1,0 +1,13 @@
+SKILL add-requirement  v1
+Add a new requirement and prove it, without weakening any existing evidence.
+
+1. Write the requirement in spec/spec.req as: REQ-NNN | text with a measurable number | tiers
+   It must contain a number (a limit, a time, a tolerance). "Works well" is rejected by G0.
+2. Add at least one vector in vectors/ with "REQ REQ-NNN" and an ASSERT that checks the number.
+3. Add a boundary vector: test exactly at the limit (for example sensor_stuck at the threshold).
+4. Check every value is inside limits.cfg (G14). If the board limit is too tight, ask the
+   hardware owner; only they can re-sign limits.cfg.
+5. Run:  kindgleam check        (fast: spec, coverage, build)
+6. Run:  kindgleam verify      (full chain; G7 shows whether the new test catches planted bugs)
+7. Record why the requirement exists:
+   kindgleam memory add decisions <source> "REQ-NNN added because ..."

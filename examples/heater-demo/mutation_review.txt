@@ -1,0 +1,9 @@
+# Reviewed equivalent mutants. Each was measured against the correct firmware over all vectors.
+# Rule: an entry must match a current survivor exactly, needs a reason, and at most 30% may be excused.
+fw_ctrl.c:25:16 '0.0f' -> '0.5f' | initial integrator 0.5 instead of 0: max 0.058 C temperature change, 0.010 duty; below every requirement tolerance (0.5 C)
+fw_ctrl.c:51:61 '0.0f' -> '0.5f' | integrator floor 0.5 instead of 0: max 0.054 C temperature change; below every requirement tolerance
+fw_ctrl.c:52:33 '+' -> '-' | sign flip in the anti-windup test value only: max 0.062 C change, 0.011 duty; integration decision differs only near saturation
+fw_ctrl.c:53:41 '0.0f' -> '0.5f' | true equivalent: 0.000 C change in all vectors (err > 0 and err > 0.5 never differ while u > 1)
+fw_ctrl.c:53:57 '0.0f' -> '0.5f' | anti-windup lower threshold 0.5: max 0.057 C change; below every requirement tolerance
+fw_ctrl.c:53:73 '0.0f' -> '0.5f' | true equivalent: 0.000 C change in all vectors (branch unreachable while u < 0)
+fw_ctrl.c:53:25 '1.0f' -> '0.9f' | anti-windup upper threshold 0.9: max 0.039 C change; below every requirement tolerance

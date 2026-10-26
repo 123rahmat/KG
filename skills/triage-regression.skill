@@ -1,0 +1,10 @@
+SKILL triage-regression  v1
+A run that passed before now fails. Find out why without guessing.
+
+1. kindgleam status          shows the Triage agent's first failing gate and log tail.
+2. kindgleam report run-NNNN for the failing run and the last passing run.
+3. Compare the "changed:" lines from Intake: which inputs changed between the two runs.
+4. For G8 failures, the message gives the vector, the requirement and the exact tick.
+5. For G10 failures, the first diverging tick and signal are named; check that tier's log.
+6. Fix the cause, never the test. Deleting or loosening a test fails G5 or G7.
+7. Record the cause: kindgleam memory add decisions <run-id> "regression caused by ..."

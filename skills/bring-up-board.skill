@@ -1,0 +1,14 @@
+SKILL bring-up-board  v1
+Connect a real board for PIL safely.
+
+1. Describe the board in board.cfg: BOARD, CHIP_ID, PROBE vid:pid, PORT, OPENOCD files,
+   FLASH_APP region and every FLASH_PROTECTED region (bootloader, option bytes, OTP).
+2. Port firmware-support/kg_pil_target.c: implement the five kg_port_* hooks for the board.
+   kg_port_outputs_safe() must drive every output to its de-energised level.
+3. Bench setup before power: current-limited supply below the damage level, load disconnected,
+   emergency stop within reach.
+4. Run: kindgleam verify --tier=pil
+   Detection must match BOARD, CHIP_ID and the firmware hash (G15) or nothing runs.
+5. Read the link line (G16): retries and corrupted frames should be near zero on a good cable.
+6. Record the board and probe serial numbers:
+   kindgleam memory add facts <source> "board rev-A serial ... probe serial ..."

@@ -1,0 +1,6 @@
+REQ REQ-008
+TICKS 2000
+SET 0 target 80
+SET 1000 target 10
+ASSERT from 1000 always target == 10
+ASSERT eventually by 1200 pos <= 11 and target == 10

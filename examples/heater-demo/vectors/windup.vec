@@ -1,0 +1,6 @@
+# Long full-power heat-up (25 -> 85 C): exercises integrator anti-windup.
+REQ REQ-002
+TICKS 6000
+SET 0 setpoint 85
+ASSERT always temp <= 85.5
+ASSERT from 3000 always abs(temp - setpoint) <= 0.5

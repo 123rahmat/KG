@@ -1,0 +1,8 @@
+REQ-001 | A step from 0 to 50 % shall settle within 1 % by 500 ms and never overshoot above 55 % | SIL PIL
+REQ-002 | When enable goes to 0, drive shall be 0 within 1 ms (1 tick) and stay 0 | SIL HIL
+REQ-003 | If the position reading leaves -10..110 %, drive shall be 0 within 1 tick and stay 0 | SIL HIL
+REQ-004 | If the controller hangs, drive shall be 0 within 3 ms (3 ticks) and stay 0 | SIL HIL
+REQ-005 | A step from 20 to 80 % shall settle within 1 % by 600 ms after the step | SIL PIL
+REQ-006 | With a steady disturbance of 300 %/s^2, the valve shall still hold 50 % within 2 % after 1 s | SIL PIL
+REQ-007 | After disable and re-enable, the valve shall return to its target within 1 % by 500 ms and never exceed it by more than 5 % | SIL PIL
+REQ-008 | Full travel shall use full drive: 20 to 80 % shall reach 79 % within 170 ms, and 80 to 10 % shall reach 11 % within 200 ms | SIL PIL

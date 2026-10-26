@@ -1,0 +1,6 @@
+#!/bin/sh
+# Desktop app launcher. No logic lives here.
+set -eu
+KG_HOME=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+unset JAVA_TOOL_OPTIONS _JAVA_OPTIONS JDK_JAVA_OPTIONS
+exec java --enable-preview -Xshare:off -Dkg.home="$KG_HOME" -p "$KG_HOME/build/mods" -m kg.app/kg.app.App "$@"

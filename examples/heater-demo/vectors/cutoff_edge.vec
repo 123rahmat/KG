@@ -1,0 +1,7 @@
+# Boundary: a reading of exactly 90 C must switch the heater off.
+REQ REQ-005
+TICKS 3000
+SET 0 setpoint 100
+FAULT 1500 stuck sensor 90
+ASSERT always sensor >= 90 -> heater == 0
+ASSERT from fault always heater == 0

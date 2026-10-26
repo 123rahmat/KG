@@ -1,0 +1,10 @@
+# Build outputs
+build/
+engine/build/
+dist/
+# Per-machine: created by 'kindgleam baseline' on each computer
+baseline.txt
+baseline.sig
+# The model is downloaded with tools/get-model (1.1 GB), never committed
+model/*.gguf
+model/*.part

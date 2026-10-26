@@ -1,0 +1,4 @@
+REQ REQ-003
+TICKS 3000
+FAULT 1500 hang
+ASSERT from fault+3 always heater == 0

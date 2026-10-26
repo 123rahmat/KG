@@ -1,0 +1,5 @@
+REQ REQ-005
+TICKS 2500
+SET 0 target 20
+SET 1000 target 80
+ASSERT from 1600 always abs(pos - 80) <= 1

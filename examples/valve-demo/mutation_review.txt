@@ -1,0 +1,6 @@
+# Reviewed equivalent mutants, each measured against the correct firmware over all vectors.
+fw_valve.c:23:19 '0.0f' -> '0.5f' | true equivalent: last_pos is never read before the first step sets it (guarded by 'started'); 0.000 % change
+fw_valve.c:44:74 '0.0f' -> '0.5f' | velocity estimate on the very first tick only: 0.001 drive change for one tick, 0.000 % position change
+fw_valve.c:54:29 '1.0f' -> '0.9f' | lower drive limit -0.9: travel 80->10 % takes 186 ms either way; mechanics, not the last 10 % of drive, limit speed
+fw_valve.c:54:35 '1.0f' -> '0.9f' | upper drive limit 0.9: 20->80 % takes 157 ms instead of 156 ms; max 0.59 % position change, below every tolerance
+fw_valve.c:60:18 '+' -> '-' | progress token (tick-1) instead of (tick+1): still unique every tick with the same task bits, so the watchdog accepts both

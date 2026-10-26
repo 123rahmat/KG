@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fmiModelDescription fmiVersion="2.0" modelName="thermal" guid="{kindgleam-thermal-0001}" numberOfEventIndicators="0">
+  <CoSimulation modelIdentifier="thermal_fmu" canHandleVariableCommunicationStepSize="true"/>
+  <ModelVariables>
+    <ScalarVariable name="u" valueReference="0" causality="input" variability="continuous"><Real start="0"/></ScalarVariable>
+    <ScalarVariable name="d" valueReference="1" causality="input" variability="continuous"><Real start="0"/></ScalarVariable>
+    <ScalarVariable name="T" valueReference="2" causality="output" variability="continuous" initial="exact"><Real start="25"/></ScalarVariable>
+  </ModelVariables>
+  <ModelStructure><Outputs><Unknown index="3"/></Outputs></ModelStructure>
+</fmiModelDescription>

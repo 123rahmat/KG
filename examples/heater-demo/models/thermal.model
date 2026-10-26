@@ -1,0 +1,11 @@
+# Heater plant: first-order thermal model, used by SIL and by the PC side of PIL.
+MODEL first_order
+OUTPUT temp C 25 TOL 0.01
+DRIVE heater
+DISTURB
+SENSOR sensor temp
+PARAM TAU_S 10
+PARAM GAIN 200
+PARAM AMBIENT 25
+# Set to the calibration record file once measured on the real heater.
+CALIBRATION none

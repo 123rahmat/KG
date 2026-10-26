@@ -1,0 +1,2 @@
+REQ-002 | Level shall never exceed 300 | SIL
+REQ-099 | Output shall be 0 within 5 ticks of a fault | SIL

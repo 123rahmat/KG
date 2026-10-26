@@ -1,0 +1,87 @@
+# Builds the desktop installers for Windows, macOS and Linux WITH the assistant model inside.
+# GitHub's build machines download the model from its official address and check it against the
+# fingerprint pinned in model/MODEL.txt; a wrong file stops the build. Users then install one
+# file and everything works offline.
+#
+# Run it from the Actions tab ("Run workflow"), or push a tag like v3.0.0 to also publish a release.
+name: release
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  installers:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+          - os: windows-2022
+          - os: macos-14        # Apple Silicon
+          - os: macos-13        # Intel Mac
+    runs-on: ${{ matrix.os }}
+    env:
+      KG_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '3.0.0' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Version number
+        shell: bash
+        run: echo "KG_VERSION=${KG_VERSION#v}" >> "$GITHUB_ENV"
+
+      - name: Cache the model between builds
+        uses: actions/cache@v4
+        with:
+          path: model/kindgleam-coder.gguf
+          key: kindgleam-model-${{ hashFiles('model/MODEL.txt') }}
+
+      - name: Get the model and check its fingerprint (Linux, macOS)
+        if: runner.os != 'Windows'
+        run: sh tools/get-model.sh model
+
+      - name: Get the model and check its fingerprint (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tools/get-model.ps1 model
+
+      - name: Linux packaging tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y fakeroot
+
+      - name: Build the app (Linux, macOS)
+        if: runner.os != 'Windows'
+        run: ./packaging/make-app.sh
+
+      - name: Build the app (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./packaging/make-app.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kindgleam-${{ matrix.os }}
+          path: |
+            dist/app/*.deb
+            dist/app/*.tar.gz
+            dist/app/*.dmg
+            dist/app/*.msi
+            dist/app/*.exe
+            dist/app/*.zip
+          compression-level: 0
+
+      - name: Publish to the release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/app/*.deb
+            dist/app/*.tar.gz
+            dist/app/*.dmg
+            dist/app/*.msi
+            dist/app/*.exe
+            dist/app/*.zip

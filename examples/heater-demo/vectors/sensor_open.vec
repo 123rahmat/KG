@@ -1,0 +1,4 @@
+REQ REQ-004
+TICKS 3000
+FAULT 1500 stuck sensor -50
+ASSERT from fault+1 always heater == 0

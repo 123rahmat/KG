@@ -1,0 +1,7 @@
+REQ REQ-007
+TICKS 2500
+SET 0 target 50
+SET 800 enable 0
+SET 1200 enable 1
+ASSERT from 1700 always abs(pos - 50) <= 1
+ASSERT from 1200 always pos <= 55

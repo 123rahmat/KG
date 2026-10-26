@@ -1,0 +1,2 @@
+#include <stdint.h>
+void leak(void) { uint8_t *p = malloc(10u); free(p); }

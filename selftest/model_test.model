@@ -1,0 +1,8 @@
+MODEL first_order
+OUTPUT level - 0
+DRIVE act
+SENSOR meas level
+PARAM TAU_S 1
+PARAM GAIN 1
+PARAM AMBIENT 0
+CALIBRATION none

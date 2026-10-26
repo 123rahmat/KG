@@ -1,0 +1,3 @@
+REQ REQ-001
+TICKS 100
+ASSERT always level <= 1; System.exit(0)

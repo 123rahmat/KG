@@ -1,0 +1,9 @@
+# id | requirement with a measurable limit | tiers that must verify it
+REQ-001 | From 25 C, temperature shall settle within 0.5 C of the 60 C setpoint by tick 2000 (10 s) and stay there | SIL PIL
+REQ-002 | For any setpoint up to 85 C, temperature shall never exceed the setpoint by more than 0.5 C and shall settle within 0.5 C by tick 3000 | SIL PIL
+REQ-003 | If the firmware hangs, heater output shall reach 0 within 3 ticks (15 ms) and stay 0 | SIL HIL
+REQ-004 | If the sensor reads at or below -40 C (open circuit), heater output shall be 0 within 1 tick and stay 0, including exactly -40 C | SIL HIL
+REQ-005 | Whenever measured temperature is at or above 90 C, including exactly 90 C, heater output shall be 0 | SIL HIL
+REQ-006 | With 0.5 C sensor noise, temperature shall settle within 1.0 C of setpoint by tick 2000 | SIL PIL
+REQ-007 | After a setpoint change from 50 C to 70 C at tick 2000, temperature shall settle within 0.5 C of 70 C by tick 3500 and never exceed 70.5 C | SIL PIL
+REQ-008 | While the temperature is more than 10 C below the setpoint, heater output shall be at full power (1.0) | SIL PIL

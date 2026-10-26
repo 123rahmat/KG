@@ -1,0 +1,8 @@
+# The one model Kindgleam's assistant runs. Kept byte-for-byte as published.
+NAME Qwen2.5-Coder-1.5B-Instruct (Q4_K_M, GGUF)
+FILE kindgleam-coder.gguf
+SHA256 cc324af070c2ecbfd324a30884d2f951a7ff756aba85cb811a6ec436933bb046
+LICENSE Apache-2.0 (see LICENSE-MODEL.txt)
+SOURCE https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/blob/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf
+# Also accepted: the same model at 8-bit (higher precision, 1.9 GB, about 2.5 GB RAM, slower on most CPUs).
+ALSO 507de59046601282ba768a9789900e6ccf60ed93ddf346730b7c68eb0715bc47 qwen2.5-coder-1.5b-instruct-q8_0.gguf

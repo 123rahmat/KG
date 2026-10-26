@@ -1,0 +1,4 @@
+# kindgleam-trace v2
+tick,cmd,meas,act,level,wd,exec_ns,state_hash
+0,1.0,0.0,0.5,0.1,0,0,0000abcd
+2,1.0,0.0,0.5,0.2,0,0,0000abcd

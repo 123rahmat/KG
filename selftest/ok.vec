@@ -1,0 +1,4 @@
+REQ REQ-002
+TICKS 100
+SET 0 cmd 2
+ASSERT always level <= 300

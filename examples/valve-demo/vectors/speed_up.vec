@@ -1,0 +1,5 @@
+REQ REQ-008
+TICKS 1500
+SET 0 target 20
+SET 600 target 80
+ASSERT eventually by 770 pos >= 79
