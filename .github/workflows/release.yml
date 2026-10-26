@@ -59,6 +59,19 @@ jobs:
           path: model/kindgleam-coder.gguf
           compression-level: 0
 
+      - name: Keep the model file in this repository's Releases
+        if: runner.os == 'Linux'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: model-qwen2.5-coder-1.5b-q4_k_m
+          target_commitish: ${{ github.sha }}
+          name: Qwen2.5-Coder-1.5B-Instruct (Q4_K_M) model
+          body: |
+            The assistant model, downloaded from its official address and checked against the
+            SHA256 pinned in model/MODEL.txt. Apache-2.0 (see model/LICENSE-MODEL.txt).
+            Install: bin/kindgleam model install kindgleam-coder.gguf
+          files: model/kindgleam-coder.gguf
+
       - name: Linux packaging tools
         if: runner.os == 'Linux'
         run: sudo apt-get install -y fakeroot
