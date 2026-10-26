@@ -51,6 +51,14 @@ jobs:
         shell: pwsh
         run: ./tools/get-model.ps1 model
 
+      - name: The model file itself, for direct download
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: qwen2.5-coder-1.5b-instruct-q4_k_m.gguf
+          path: model/kindgleam-coder.gguf
+          compression-level: 0
+
       - name: Linux packaging tools
         if: runner.os == 'Linux'
         run: sudo apt-get install -y fakeroot
